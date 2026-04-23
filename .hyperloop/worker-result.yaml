@@ -1,0 +1,40 @@
+---
+verdict: pass
+---
+All requirements from specs/prototype/godot-application.spec.md implemented and
+both check scripts pass (godot --headless --quit + extractor lint/tests).
+
+Files created / modified:
+
+  godot/scripts/camera_controller.gd
+    Extends Camera3D. Implements middle-mouse orbit, scroll-wheel zoom, and
+    right-mouse pan around a configurable pivot. Defaults to a near-top-down
+    view (theta = 0.15 rad) so the full system is visible on startup.
+    Exposes set_pivot(pivot, distance) for programmatic camera framing.
+
+  godot/scripts/main.gd
+    Loads the JSON scene graph from res://data/scene_graph.json (exported,
+    so users can override it). Handles missing file gracefully (push_warning,
+    no crash). Builds the 3D scene:
+      • bounded_context nodes → flat translucent BoxMesh (alpha 0.18)
+      • module nodes          → taller opaque BoxMesh nested in their parent
+      • Both carry a billboard Label3D with no_depth_test so labels stay readable
+      • size field maps directly to box dimensions (spec: size encoding)
+      • edges → ImmediateMesh PRIMITIVE_LINES; orange for cross_context,
+        grey for internal; world positions computed manually (no deferred
+        global-transform dependency)
+    Calls camera.set_pivot() after building the scene to frame all nodes.
+
+  godot/scenes/main.tscn
+    Attaches camera_controller.gd to the Camera3D node (load_steps bumped to 3).
+
+  godot/data/.gitkeep
+    Placeholder directory where users drop the extractor's scene_graph.json.
+
+Spec requirements covered:
+  ✓ JSON Scene Graph Loading   — _load_and_build reads and parses JSON
+  ✓ Containment Rendering      — children parented to parent anchors, translucent parent vs opaque child
+  ✓ Dependency Rendering       — ImmediateMesh lines per edge, orange vs grey
+  ✓ Size Encoding              — box dimensions = f(node["size"])
+  ✓ Camera Controls            — top-down default, scroll zoom, orbit, pan
+  ✓ Godot 4 / GDScript         — project.godot feature "4.6", all scripts GDScript
