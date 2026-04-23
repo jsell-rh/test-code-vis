@@ -38,6 +38,9 @@ func _init() -> void:
 	# --- task-020: Moldable Views — question input UI panel ---
 	_run_suite(preload("res://tests/test_question_panel.gd").new())
 
+	# --- task-012: Readable Labels at all zoom levels (prototype-scope spec) ---
+	_run_suite(preload("res://tests/test_readable_labels.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
