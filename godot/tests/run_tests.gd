@@ -34,6 +34,9 @@ func _init() -> void:
 	_run_suite(preload("res://tests/test_size_encoding.gd").new())
 	_run_suite(preload("res://tests/test_camera_controls.gd").new())
 
+	# --- task-011: Engine version scenario + FileAccess.open() coverage ---
+	_run_suite(preload("res://tests/test_engine_version.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
