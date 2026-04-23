@@ -1,0 +1,117 @@
+---
+verdict: pass
+---
+
+## Spec Alignment Review — task-019
+### Spec: specs/interaction/moldable-views.spec.md
+### Branch: hyperloop/task-019
+
+All three SHALL requirements are implemented and have corresponding GDScript
+behavioral tests in godot/tests/ that exercise Given/When/Then conditions with
+known fixture data and assert runtime outputs (scene-tree nodes, property
+values, positions).
+
+---
+
+### Requirement: Question-Driven View Generation — COVERED
+
+**Implementation:**
+- `godot/scripts/view_spec_renderer.gd` — `ViewSpecRenderer.apply()` accepts a
+  parsed view spec and graph, then builds a spatial scene under a Node3D root.
+  The `show` op restricts which nodes are rendered; the `hide` op removes
+  listed ids from the scene; the `arrange` op overrides positions; the
+  `connect` op creates a connector Node3D at the midpoint between two nodes.
+
+**Scenario: Architectural question** — COVERED
+- `test_show_op_includes_listed_node_in_scene_tree` — THEN: auth-related node
+  appears after `show` op with question "how does authentication work?"
+- `test_show_op_excludes_non_listed_nodes_from_scene_tree` — AND: irrelevant
+  nodes (payment_service, user_db) are absent when `show` restricts to
+  auth_service
+- `test_hide_op_removes_node_from_scene_tree` — AND: de-emphasis via `hide` op
+  removes payment_service from scene tree
+- `test_arrange_op_overrides_node_position_x/y/z` — AND: `arrange` op
+  overrides the node's 3D position to spec-provided coordinates
+
+**Scenario: Impact question** — COVERED
+- `test_show_multiple_ids_all_appear_in_scene_tree` — THEN: user_db and
+  auth_service (its dependent) both appear in scene tree with question
+  "what depends on the user database?"
+- `test_connect_op_creates_connector_node_in_scene_tree` — AND: `connect` op
+  creates a Node3D named "conn_auth_service_user_db" making the dependency
+  spatially visible
+- `test_connect_op_connector_position_is_midpoint_x/y` — AND: connector is
+  placed at the geometric midpoint between the two nodes, making the
+  relationship spatially clear
+
+---
+
+### Requirement: View Specs as Intermediate Representation — COVERED
+
+**Implementation:**
+- `godot/scripts/view_spec.gd` — `ViewSpec.from_dict()` parses a raw
+  Dictionary into a normalised view spec (structured intermediate
+  representation, not raw 3D geometry). The spec carries a `question` string
+  and an `operations` array.
+- `godot/scripts/view_spec_renderer.gd` — `ViewSpecRenderer.apply()` is the
+  sole entry point that interprets the view spec into MeshInstance3D nodes,
+  highlights, labels, and connector nodes under the provided root.
+
+**Scenario: LLM produces view spec** — COVERED
+- `test_view_spec_from_dict_returns_dictionary` — THEN: `ViewSpec.from_dict()`
+  returns a plain Dictionary, not a Node or geometry object (not raw 3D
+  geometry)
+- `test_view_spec_has_operations_key` — AND: spec has `operations` Array key
+  that controls which elements are shown, hidden, highlighted, and arranged
+- `test_renderer_creates_mesh_instance_3d_for_each_shown_node` — AND: 3D
+  renderer (ViewSpecRenderer) interprets the spec into a spatial scene
+  (MeshInstance3D children under root)
+- `test_renderer_nodes_are_mesh_instance_3d` — AND: rendered nodes are
+  MeshInstance3D (3D geometry objects produced by the renderer, not by the
+  spec itself)
+- `test_renderer_uses_json_position_when_no_arrange_op` — AND: spec controls
+  arrangement; without an arrange op, the graph's JSON position is used
+
+---
+
+### Requirement: Fixed Visual Primitive Set — COVERED
+
+**Implementation:**
+- `godot/scripts/view_spec.gd` — `VALID_OPS: Array = ["show", "hide",
+  "highlight", "arrange", "annotate", "connect"]` declares a fixed, finite
+  constant at class level. `from_dict()` silently drops any op whose `op` key
+  is not in VALID_OPS, preventing new rendering logic from being injected at
+  runtime. `get_valid_ops()` returns a duplicate (copy-on-read), preventing
+  external mutation of the canonical set.
+
+**Scenario: LLM uses existing primitives** — COVERED
+- `test_valid_ops_contains_show/hide/highlight/arrange/annotate/connect` (6
+  individual tests) — THEN: each of the six required primitives is present in
+  VALID_OPS
+- `test_valid_ops_has_exactly_six_primitives` — AND: the set is fixed and
+  finite (exactly 6 entries; no extras)
+- `test_unknown_op_is_filtered_out` — AND: an unknown op "invent_new_thing" is
+  silently dropped by `from_dict()`, confirming no new rendering logic is
+  generated at runtime
+- `test_all_valid_ops_pass_through` — AND: all six valid primitives survive
+  `from_dict()` without alteration
+- `test_get_valid_ops_returns_a_copy` — AND: VALID_OPS cannot be mutated from
+  outside the class (immutability of the canonical primitive set)
+
+---
+
+### Notes
+
+- The spec's "WHEN the LLM processes the question" clause implies full LLM
+  integration, which is not part of this task (task title: "Godot: view-spec
+  interpreter"). This task implements the renderer side of the intermediate-
+  representation contract. The LLM-to-spec pipeline is a separate concern and
+  its absence does not constitute a failure here.
+- `specs/prototype/prototype-scope.spec.md` lists moldable views as out of
+  prototype scope, but the implementer has correctly built only the interpreter
+  layer (ViewSpec + ViewSpecRenderer) without coupling to an LLM runtime,
+  which is consistent with the task scope and the spirit of the prototype-
+  scope restriction.
+- Both `test_view_spec.gd` and `test_view_spec_renderer.gd` are registered and
+  executed by `godot/tests/run_tests.gd` (lines 27–28), confirming these are
+  active runtime behavioral tests, not dead code.
