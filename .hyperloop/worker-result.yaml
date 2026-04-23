@@ -1,0 +1,102 @@
+---
+verdict: pass
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+## Review Summary
+
+All check scripts pass. All spec scenarios have corresponding GDScript test files
+with runtime assertions on real Node3D instances. The implementation is complete
+and matches the spec.
+
+## Check Results
+
+| Check | Result |
+|-------|--------|
+| check-not-in-scope.sh | PASS |
+| check-kartograph-integration-test.sh | PASS — OK: Integration test referencing kartograph codebase with expected-context assertions found. |
+| extractor-lint.sh | PASS — 90 pytest tests pass, ruff clean |
+| godot-compile.sh | PASS — Godot 4.6.2 compiles successfully |
+| godot-tests.sh | PASS — All 9 test files, all GDScript tests pass |
+| godot-fileaccess-tested.sh | PASS — FileAccess.open() exercised in 2 test files |
+| godot-label3d.sh | PASS — billboard and pixel_size set and tested |
+
+## Commit Trailers
+
+All implementation commits carry:
+- `Spec-Ref: specs/prototype/prototype-scope.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384`
+- `Task-Ref: task-012`
+
+## Spec Scenario Coverage
+
+### Loading kartograph
+COVERED. `__main__.py` accepts `src_path` as a CLI argument (no hardcoded paths).
+`_ready()` in main.gd reads JSON via `FileAccess.open()` + `get_as_text()`.
+Tested by `test_scene_graph_loading.gd` and `test_node_renderer.gd`.
+
+### Extraction then visualization
+COVERED. Python extractor produces JSON schema; Godot application loads it.
+`test_scene_graph_loader.gd` covers all JSON schema fields.
+
+### Viewing kartograph from above
+COVERED. Camera initial `_theta = 0.15 rad < PI/4` (top-down). Bounded contexts
+rendered as distinct translucent volumes. `test_camera_controls.gd` asserts
+`_theta < PI/4`.
+
+### Zooming into IAM
+COVERED. Scroll-up decreases `_distance`, scroll-down increases it.
+`test_camera_controls.gd` tests `test_scroll_up_decreases_distance` and
+`test_scroll_down_increases_distance`. Module anchors are parented inside
+context anchors (visible as camera zooms).
+
+### Visual representation
+COVERED. BoxMesh used for all nodes; size derived from LOC; position from JSON.
+`test_size_encoding.gd` asserts proportional mesh sizes.
+`test_containment_rendering.gd` asserts nesting (module parented inside context).
+
+### Identifying a module
+COVERED. Label3D nodes with `BILLBOARD_ENABLED`, `pixel_size = 0.012 > 0`,
+`no_depth_test = true`. `test_readable_labels.gd` asserts all three properties
+on instantiated Node3D anchors.
+
+### Cross-context dependency
+COVERED. `_create_edge()` adds an `ImmediateMesh` line plus a `CylinderMesh`
+arrowhead cone (`top_radius == 0`) at the target end.
+`test_dependency_rendering.gd` asserts cone existence, proximity to target,
+and orange colour for cross-context edges. Direction is visually indicated by
+an explicit arrowhead cone — satisfies "direction is discernible."
+
+### Moving through the space
+COVERED. Camera supports pan (`test_set_pivot_updates_state`), zoom
+(`test_scroll_up/down`), and orbit (`test_orbit_horizontal/vertical_drag`).
+Minimum zoom clamp tested.
+
+### Engine version (Godot 4.6.x)
+COVERED. `test_engine_version.gd` reads `project.godot` via `FileAccess.open()`
+and asserts "4.6" and `"4.6"` feature tag presence.
+
+## Not-In-Scope Audit
+
+Grepped all source files (*.py, *.gd) for:
+- conformance, spec_extract, spec-extract -> NOT found
+- evaluation_mode, simulation -> NOT found
+- data_flow, moldable, question_panel, view_spec -> NOT found
+- first_person, FirstPerson -> NOT found
+- LLM -> NOT found
+
+`check-not-in-scope.sh` confirms: "OK: No prohibited (not-in-scope) features detected."
+
+## Schema Verification
+
+`extractor/schema.py` NodeType = Literal["bounded_context", "module"] -- no
+"spec" or other prohibited literal. Schema matches what Godot tests exercise.
+
+## Conclusion
+
+The implementation fully satisfies the prototype-scope spec. All checks pass,
+all scenarios are covered by runtime GDScript tests with property-level
+assertions on instantiated Node3D objects, prohibited features are absent, and
+commit trailers are correct.
