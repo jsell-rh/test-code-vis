@@ -134,3 +134,51 @@ func test_zoom_clamped_at_minimum() -> bool:
 	for _i: int in range(200):
 		cam._handle_button(event)
 	return cam._distance >= cam.min_distance
+
+
+## _theta must not go below 0.01 (lower pole guard) —
+## driving _theta toward zero with an extreme drag must leave it >= 0.01.
+## camera_controller.gd line 73: _theta = clamp(_theta - delta.y * orbit_speed, 0.01, PI - 0.01)
+## A large positive delta.y reduces _theta; clamp must prevent it going below 0.01.
+func test_orbit_theta_clamped_at_lower_bound() -> bool:
+	var cam = CameraScript.new()
+	cam._theta = 0.05  # Start just above the lower bound.
+
+	# Begin middle-mouse orbit.
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_MIDDLE
+	press.pressed = true
+	press.position = Vector2(100.0, 100.0)
+	cam._handle_button(press)
+
+	# Move 5000 pixels downward on screen: delta.y = +5000 → theta decreases by 25 rad.
+	var motion := InputEventMouseMotion.new()
+	motion.position = Vector2(100.0, 5100.0)
+	cam._handle_motion(motion)
+
+	# Clamp must hold _theta at its lower limit.
+	return cam._theta >= 0.01
+
+
+## _theta must not exceed PI - 0.01 (upper pole guard) —
+## driving _theta toward PI with an extreme drag must leave it <= PI - 0.01.
+## camera_controller.gd line 73: _theta = clamp(_theta - delta.y * orbit_speed, 0.01, PI - 0.01)
+## A large negative delta.y increases _theta; clamp must prevent it exceeding PI - 0.01.
+func test_orbit_theta_clamped_at_upper_bound() -> bool:
+	var cam = CameraScript.new()
+	cam._theta = PI - 0.05  # Start just below the upper bound.
+
+	# Begin middle-mouse orbit.
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_MIDDLE
+	press.pressed = true
+	press.position = Vector2(100.0, 100.0)
+	cam._handle_button(press)
+
+	# Move 5000 pixels upward on screen: delta.y = -5000 → theta increases by 25 rad.
+	var motion := InputEventMouseMotion.new()
+	motion.position = Vector2(100.0, -4900.0)
+	cam._handle_motion(motion)
+
+	# Clamp must hold _theta at its upper limit.
+	return cam._theta <= PI - 0.01
