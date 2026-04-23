@@ -1,0 +1,36 @@
+---
+verdict: pass
+---
+
+## Review Summary: task-002 — Python Module Discovery & Scene Graph Extraction
+
+### Checks Run
+- `bash .hyperloop/checks/extractor-lint.sh` → **PASS** (ruff clean, format clean, 93 tests, 0 failures)
+- `bash .hyperloop/checks/godot-compile.sh` → **PASS** (Godot 4.6.2 headless exits cleanly)
+
+### Commit Trailers
+- `Spec-Ref: specs/extraction/code-extraction.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384` ✅ (SHA resolves to a valid commit)
+- `Task-Ref: task-002` ✅
+
+### Spec Coverage (code-extraction.spec.md)
+
+| Requirement | Verdict | Notes |
+|---|---|---|
+| Module Discovery — bounded contexts | ✅ | `discover_bounded_contexts` iterates `src_path`, filters by `__init__.py` + exclusion list |
+| Module Discovery — nested modules | ✅ | `discover_submodules` walks one level inside each BC; `parent` field encodes containment |
+| Dependency Extraction — cross-context | ✅ | Edges normalised to BC level; type=`cross_context`; direction encoded via source/target |
+| Dependency Extraction — internal | ✅ | Module-level edges only; type=`internal`; `iam.application→iam.domain` confirmed in tests |
+| Complexity Metrics — LOC | ✅ | `compute_loc` rglobs `*.py`; result stored in `metrics.loc`; `size_from_loc` drives visual size |
+| JSON Scene Graph Output | ✅ | Top-level keys `nodes`, `edges`, `metadata`; all fields present; JSON-serialisable confirmed |
+| Spec Extraction | ✅ | `extract_spec_nodes` reads `specs/`; type=`spec` distinguishes from code nodes; `--specs` CLI flag |
+
+### Extractor Quality
+- No hardcoded paths — `src_path` is a required CLI argument (`python -m extractor <src_path>`).
+- Type hints present on every function in `extractor.py`, `__main__.py`, and `schema.py`.
+- Self-edges are explicitly skipped; edges are deduplicated via a `set`.
+- `extract_imports_from_file` skips relative imports (`level == 0` guard) and handles `SyntaxError` gracefully.
+
+### Minor Observations (non-blocking)
+1. **`path` field not in Node schema**: The Module Discovery scenario says nodes should have "a name, path, and type". The output format scenario says "id, name, type, parent, metrics" — no `path`. The implementation follows the output format scenario (using `id` as the canonical path-like identifier). The spec is internally inconsistent here; the implemented schema is self-consistent and the Godot consumer receives unambiguous node IDs.
+2. **Godot scene is a skeleton**: `scripts/main.gd` is an empty `_ready`/`_process` stub. This task (task-002) is scoped to extraction; the Godot visualization is a separate deliverable. The scene structure is correct and the project compiles without errors.
+3. **`_NON_CONTEXT_DIRS` is a static exclusion list**: If a new codebase has differently-named non-context directories, they'd be treated as bounded contexts. Acceptable for a prototype; could be made configurable in a follow-on task.
