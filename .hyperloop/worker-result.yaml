@@ -1,0 +1,63 @@
+---
+verdict: pass
+---
+## Review Summary — task-005 (scene-graph-schema: pre-computed layout, Godot rendering)
+
+Branch: hyperloop/task-005
+Commit under review: 0893544 (feat(godot): render nodes at pre-computed JSON positions in main.gd)
+
+### Commit Trailers
+Both required trailers are present:
+- `Spec-Ref: specs/extraction/scene-graph-schema.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384`
+- `Task-Ref: task-005`
+
+### Checks
+- `extractor-lint.sh`: PASS — ruff clean, 96 Python tests pass
+- `godot-compile.sh`: PASS — Godot 4.6.2 compiles without errors
+- `godot-tests.sh`: PASS — 28/28 GDScript tests pass (24 loader + 4 renderer)
+
+### Spec Alignment
+
+All 8 spec requirements are now COVERED.
+
+#### Previously MISSING item: Pre-Computed Layout / Godot renders at positions
+**Now COVERED.**
+
+1. **`main.gd` is no longer an empty stub.** `_ready()` loads the JSON, parses it
+   via `SceneGraphLoader`, and calls `build_from_graph()`. `build_from_graph()` iterates
+   the node list and calls `_spawn_node()` per entry. `_spawn_node()` creates a real
+   `MeshInstance3D`, names it from the node's `id`, and sets `mesh_instance.position =
+   Vector3(pos.x, pos.y, pos.z)` directly from the JSON — no layout computation in
+   GDScript.
+
+2. **`test_node_renderer.gd` satisfies behavioral test requirements.** Four tests:
+   - `test_node_rendered_at_json_position`: instantiates `Main`, calls
+     `build_from_graph(fixture)`, walks the scene tree, asserts
+     `iam.position.x == 1.0`, `.y == 0.0`, `.z == 0.0` using `is_equal_approx`.
+   - `test_second_node_rendered_at_json_position`: same pattern for `shared_kernel`
+     at `(-3.0, 2.0, 5.0)`.
+   - `test_no_layout_recomputed_in_godot`: bespoke fixture at `(7.0, 3.0, -2.0)`,
+     confirms position passes through verbatim.
+   - `test_each_json_node_becomes_a_scene_tree_child`: asserts `get_child_count() == 2`
+     for a 2-node fixture (no silent drops).
+   All four assert actual `.position.x/y/z` properties on real scene-tree `Node3D`
+   instances — not dict-key checks. This satisfies the guideline requirement.
+
+3. **`run_tests.gd`** registers `test_node_renderer.gd` via `preload`, so it is
+   discovered and executed by the headless runner.
+
+#### Extractor-side layout improvements (also new in this commit)
+- `_order_by_coupling()` greedy heuristic correctly ensures coupled BC pairs are
+  adjacent in the ring, satisfying "tightly coupled nodes have smaller distances".
+- Child node positions are now offset by the parent BC's absolute position, keeping
+  them within the parent's spatial bounds.
+- `compute_layout(nodes, edges)` signature change is backward-compatible (`edges`
+  defaults to `None`).
+- Tests `test_coupled_bcs_are_closer_than_uncoupled`,
+  `test_order_by_coupling_places_coupled_adjacent`, and
+  `test_child_nodes_are_near_parent_position` cover these sub-clauses.
+
+### No Issues Found
+Implementation is correct, tests are behavioral (not superficial), all checks pass,
+commit trailers are present. No spec mismatches, no empty stubs, no dict-key-only
+assertions.
