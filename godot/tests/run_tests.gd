@@ -27,12 +27,13 @@ func _init() -> void:
 	_run_suite(preload("res://tests/test_view_spec.gd").new())
 	_run_suite(preload("res://tests/test_view_spec_renderer.gd").new())
 
-	# --- task-007: Godot Application spec ---
+	# --- task-009: Godot Application spec ---
 	_run_suite(preload("res://tests/test_scene_graph_loading.gd").new())
 	_run_suite(preload("res://tests/test_containment_rendering.gd").new())
 	_run_suite(preload("res://tests/test_dependency_rendering.gd").new())
 	_run_suite(preload("res://tests/test_size_encoding.gd").new())
 	_run_suite(preload("res://tests/test_camera_controls.gd").new())
+	_run_suite(preload("res://tests/test_engine_version.gd").new())
 
 	# --- task-020: Moldable Views — question input UI panel ---
 	_run_suite(preload("res://tests/test_question_panel.gd").new())
