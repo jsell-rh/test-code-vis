@@ -2,7 +2,7 @@
 CLI entry point for the code-vis extractor.
 
 Usage:
-    python -m extractor <src_path> [--output <output.json>] [--specs]
+    python -m extractor <src_path> [--output <output.json>]
 
 Arguments:
     src_path    Path to the Python source tree to analyse.
@@ -11,8 +11,6 @@ Arguments:
 Options:
     --output    Path for the output JSON file.  Defaults to ``scene_graph.json``
                 in the current directory.
-    --specs     Also extract spec-defined components from a specs/ directory
-                found relative to src_path.
 """
 
 from __future__ import annotations
@@ -42,12 +40,6 @@ def main(argv: list[str] | None = None) -> int:
         default=Path("scene_graph.json"),
         help="Path to write the output JSON file (default: scene_graph.json).",
     )
-    parser.add_argument(
-        "--specs",
-        action="store_true",
-        help="Also extract spec-defined components from a specs/ directory.",
-    )
-
     args = parser.parse_args(argv)
 
     src_path: Path = args.src_path.resolve()
@@ -59,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(f"Extracting scene graph from: {src_path}", file=sys.stderr)
-    graph = build_scene_graph(src_path, include_specs=args.specs)
+    graph = build_scene_graph(src_path)
 
     output_path: Path = args.output
     output_path.parent.mkdir(parents=True, exist_ok=True)
