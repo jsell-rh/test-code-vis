@@ -34,6 +34,14 @@ guidelines: |
   - Specs are in `specs/`. Read the relevant spec thoroughly before implementing.
   - This is a prototype — prefer simple and working over clever and flexible.
   - Do not add dependencies beyond what the spec requires.
+  - **Empty `_ready()` / `_process()` stubs are never a complete implementation.** If a
+    spec scenario says Godot renders, positions, or instantiates something, the relevant
+    script must contain code that creates nodes and sets their properties — `pass` alone fails.
+  - **Dict-key assertions do not satisfy rendering THEN clauses.** A test that only checks
+    `dict.has("position")` or `dict["position"].has("x")` does NOT cover a scenario that
+    says "renders nodes at pre-computed positions." The test must instantiate the Node3D,
+    call the function under test, and assert the actual `.position.x`, `.position.y`,
+    `.position.z` values on the scene-tree node — not on an intermediate dictionary.
   - **Before submitting your verdict**, run all check scripts in `.hyperloop/checks/`.
     Both the Godot compile check and the extractor lint check must pass.
     If a check SKIPs (because the relevant component doesn't exist yet), that's fine.
