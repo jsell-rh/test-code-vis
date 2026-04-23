@@ -21,6 +21,9 @@ var _anchors: Dictionary = {}
 ## Node id → world-space centre Vector3 (computed from relative positions).
 var _world_positions: Dictionary = {}
 
+## The parsed scene graph.
+var _graph: Dictionary = {}
+
 @onready var _camera: Camera3D = $Camera3D
 
 
@@ -40,11 +43,10 @@ func _ready() -> void:
 		if json.parse(json_text) != OK:
 			push_error("JSON parse error: " + json.get_error_message())
 			return
-		var graph := SceneGraphLoader.load_from_dict(json.data)
-		build_from_graph(graph)
+		_graph = SceneGraphLoader.load_from_dict(json.data)
+		build_from_graph(_graph)
 	else:
 		push_warning("CodeVis: scene graph not found at '%s'." % scene_graph_path)
-
 
 ## Build the 3D scene from a parsed scene-graph dictionary.
 ## Called from _ready() at startup and from tests directly.
@@ -247,5 +249,5 @@ func _frame_camera() -> void:
 	var span: float = maxf((max_pos - min_pos).length(), 10.0)
 	var distance: float = span * 1.5
 
-	if _camera != null and _camera.has_method("set_pivot"):
-		_camera.set_pivot(centre, distance)
+	if _camera.has_method("set_pivot"):
+		_camera.call("set_pivot", centre, distance)
