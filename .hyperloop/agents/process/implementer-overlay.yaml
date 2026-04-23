@@ -23,6 +23,10 @@ guidelines: |
   - Keep scenes composable — one scene per logical visual element.
   - Do not hardcode paths to the kartograph codebase in the Godot project. The JSON file
     is the sole interface between the extractor and the Godot app.
+  - **GDScript tests are required for every Godot spec scenario.** A compile check (`godot --headless --quit`) is NOT a test — it only confirms the project parses, not that any behavior is correct.
+  - Write GDScript tests in `godot/tests/` (filenames: `test_*.gd`). Each test must instantiate the relevant node/script, call its functions with a known fixture dictionary, and assert the resulting scene-tree structure or property values.
+  - Use a headless test runner: either the GUT addon (`addons/gut/`) or a minimal custom `godot/tests/run_tests.gd` script that prints PASS/FAIL and exits non-zero on failure.
+  - Before marking a scenario complete, quote each THEN clause verbatim and confirm exactly which line of code implements it. Vague phrases like "direction is visually indicated" or "size is encoded" are implementation requirements — add the specific rendering element (arrowhead, cone, scaled mesh, etc.) and assert it in a test.
 
   ### General
   - The JSON scene graph is the interface contract between the two components.

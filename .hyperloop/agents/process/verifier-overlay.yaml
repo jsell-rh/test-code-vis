@@ -15,8 +15,10 @@ guidelines: |
   - Verify type hints are present on all functions.
 
   ### Godot Application (`godot/`)
-  - Open the project in Godot 4.x and verify it runs without errors.
-  - Verify it loads the JSON scene graph and renders volumes.
+  - `godot-compile.sh` passing confirms compilation only — it does NOT satisfy test coverage for any scenario. Treat compile success and behavioral test coverage as two separate requirements.
+  - For each Godot spec scenario, confirm a GDScript test file exists in `godot/tests/` that exercises it with fixture data and asserts specific runtime outputs (node counts, property values, positions). A scenario with no corresponding test file is PARTIAL/MISSING, not COVERED.
+  - Verify `godot/tests/` exists and contains at least one `test_*.gd` file per Godot spec scenario. Fail if either is absent.
+  - Phrases like "visually indicated" or "visually represented" require an explicit rendering element in code (arrowhead, cone, separate mesh, etc.). A plain line or colour difference alone does not satisfy "direction is visually indicated."
   - Verify camera controls work (pan, zoom, orbit).
   - Verify labels are readable.
   - Verify containment is visually represented (child volumes inside parent volumes).

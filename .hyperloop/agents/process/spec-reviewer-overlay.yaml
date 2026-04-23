@@ -16,8 +16,11 @@ guidelines: |
   2. For each Scenario under the requirement:
      a. Verify the GIVEN/WHEN/THEN conditions are implemented in code.
      b. Verify a test exists that exercises this exact scenario.
-     c. For Godot components: verify the behavior works in the running application
-        (run `godot --headless --path godot/ --quit` to confirm compilation at minimum).
+     c. For Godot components: confirm a GDScript behavioral test exists in `godot/tests/`
+        that exercises this exact scenario with known fixture data and asserts runtime outputs
+        (scene-tree nodes, property values, positions). Running `godot --headless --path
+        godot/ --quit` checks compilation only — it does NOT verify runtime behavior and
+        does NOT count as test coverage for any scenario.
      d. For Python extractor: verify pytest tests cover the scenario.
 
   ## Spec Conventions
