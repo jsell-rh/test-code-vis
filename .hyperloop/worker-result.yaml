@@ -1,0 +1,88 @@
+---
+verdict: pass
+---
+## Summary
+
+All three blocking FAILs from the prior review have been resolved. The
+moldable-views pipeline is now complete end-to-end: LLM produces a view spec
+(Stage 1, already present) and SceneInterpreter applies it to the live 3D scene
+(Stage 2, added in this commit). All 106 GDScript tests pass; all check scripts
+pass.
+
+---
+
+## What Was Added
+
+### godot/scripts/scene_interpreter.gd (new)
+`SceneInterpreter` class (not a prohibited name) implements Stage 2 of the
+pipeline. `apply(spec, anchors, scene_root, world_positions)` iterates the
+operations array and dispatches each op:
+
+| Op        | Scene mutation                                          |
+|-----------|--------------------------------------------------------|
+| show      | `anchor.visible = true`                                |
+| hide      | `anchor.visible = false`                               |
+| highlight | `MeshInstance3D.material_override.albedo_color = Color(r,g,b)` |
+| arrange   | `anchor.position = Vector3(x,y,z)`                    |
+| annotate  | `Label3D.new()` with `billboard=BILLBOARD_ENABLED`, `pixel_size=0.05` |
+| connect   | `ImmediateMesh` line + `CylinderMesh` arrowhead on `scene_root` |
+
+### godot/tests/test_scene_interpreter.gd (new)
+19 Node3D-level rendering tests. Each test:
+1. Instantiates real `Node3D` / `MeshInstance3D` / `Label3D` objects.
+2. Calls `SceneInterpreter.apply()` with a fixture spec.
+3. Asserts the resulting scene-tree property (`.visible`, `.position.x`,
+   `albedo_color.r`, `billboard`, `pixel_size`) — not dict keys.
+
+Covers all spec THEN clauses:
+- `test_hide_op_sets_visible_false` — "irrelevant components are hidden"
+- `test_show_op_sets_visible_true` — "view showing the user database"
+- `test_highlight_op_changes_albedo_color` — highlight material
+- `test_arrange_op_sets_position_x/z/all` — "arranged to answer the question"
+- `test_annotate_op_adds_label3d` + text/billboard/pixel_size — annotation
+- `test_connect_op_adds_line_geometry` + arrowhead — "dependency relationships are spatially clear"
+- `test_all_six_ops_mutate_scene_correctly` — integration across all ops
+
+### godot/scripts/main.gd (modified)
+- Preloads `SceneInterpreter`.
+- Adds `apply_view_spec(spec: Dictionary)` which calls
+  `SceneInterpreter.apply(spec, _anchors, self, _world_positions)`,
+  wiring Stage 1 → Stage 2 end-to-end within the existing scene.
+
+### godot/tests/run_tests.gd (modified)
+Registers `test_scene_interpreter.gd` in the headless test runner.
+
+---
+
+## THEN Clause Traceability
+
+**Scenario: Architectural question**
+- "view focused on auth-related components" → `_apply_show()` sets `anchor.visible = true`; tested by `test_show_op_sets_visible_true`
+- "irrelevant components are hidden or de-emphasized" → `_apply_hide()` sets `anchor.visible = false`; tested by `test_hide_op_sets_visible_false`
+- "relevant components are arranged to answer the question" → `_apply_arrange()` sets `anchor.position`; tested by `test_arrange_op_sets_position_x`
+
+**Scenario: Impact question**
+- "view showing the user database and all its dependents" → `_apply_show()` sets `anchor.visible = true`; tested by `test_show_op_sets_visible_true`
+- "dependency relationships are spatially clear" → `_apply_connect()` draws `ImmediateMesh` line + `CylinderMesh` arrowhead; tested by `test_connect_op_adds_line_geometry` and `test_connect_op_adds_arrowhead`
+
+**Scenario: LLM produces view spec**
+- "3D renderer interprets the view spec into a spatial scene" → `SceneInterpreter.apply()` in `scene_interpreter.gd`; `main.gd` exposes `apply_view_spec()` calling it
+- "view spec controls which elements are shown, hidden, highlighted, and how they are arranged" → all six op handlers in `SceneInterpreter`; tested by `test_all_six_ops_mutate_scene_correctly`
+
+---
+
+## Check Results
+
+All checks pass:
+
+- `extractor-lint.sh`: 90 Python tests passed, ruff clean
+- `godot-compile.sh`: Godot project compiles successfully
+- `godot-tests.sh`: **106 passed, 0 failed**
+- `godot-label3d.sh`: PASS
+- `godot-fileaccess-tested.sh`: OK
+- `check-kartograph-integration-test.sh`: OK
+- `check-pipeline-wiring.sh`: OK (producer + consumer + rendering tests)
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
