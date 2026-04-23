@@ -1,86 +1,40 @@
 ---
 verdict: pass
 ---
-## Task-007: Godot Application — Implementation Verified
+## Task-007: Godot Application — Spec Review
 
-All checks passed on fresh run (branch reset from prior rebase conflicts).
+Independent review confirms implementation is complete and correct.
 
 ### Check Results
-- **godot-compile.sh**: PASS — `godot --headless --path godot --quit` succeeds
-- **extractor-lint.sh**: PASS — ruff lint+format clean; 93 pytest tests pass
+- **extractor-lint.sh**: PASS — ruff clean; 93 pytest tests pass
+- **godot-compile.sh**: PASS — Godot 4.6.2 compiles cleanly (expected warning: no scene graph JSON at startup)
 - **godot-tests.sh**: PASS — 23/23 GDScript behavioral tests pass
 
-### GDScript Test Summary (23/23 PASS)
-
-**test_scene_graph_loading.gd (4 tests)**
-- test_volumes_created_for_each_node — PASS
-- test_mesh_instances_exist_in_anchors — PASS
-- test_edge_mesh_instances_created — PASS
-- test_anchor_positions_match_json — PASS
-
-**test_containment_rendering.gd (5 tests)**
-- test_bounded_context_is_translucent — PASS
-- test_module_is_opaque — PASS
-- test_module_parented_inside_context — PASS
-- test_bounded_context_larger_than_module — PASS
-- test_bounded_context_cull_disabled — PASS
-
-**test_dependency_rendering.gd (4 tests)**
-- test_edge_line_mesh_created — PASS
-- test_cross_context_cone_is_orange — PASS
-- test_direction_indicator_cone_created — PASS
-- test_direction_cone_near_target — PASS
-
-**test_size_encoding.gd (2 tests)**
-- test_large_module_has_bigger_mesh — PASS
-- test_mesh_sizes_proportional_to_metric — PASS
-
-**test_camera_controls.gd (7 tests)**
-- test_initial_theta_is_near_top_down — PASS
-- test_initial_distance_is_positive — PASS
-- test_scroll_up_decreases_distance — PASS
-- test_scroll_down_increases_distance — PASS
-- test_orbit_horizontal_drag_changes_phi — PASS
-- test_orbit_vertical_drag_changes_theta — PASS
-- test_set_pivot_updates_state — PASS
-- test_zoom_clamped_at_minimum — PASS
+### Commit Trailers
+Present on all implementation commits:
+- `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384`
+- `Task-Ref: task-007`
 
 ### Spec Coverage
 
-| Requirement               | Code                          | Tests        | Status  |
-|---------------------------|-------------------------------|--------------|---------|
-| JSON Scene Graph Loading  | main.gd → _load_and_build()   | ✓ 4 tests    | COVERED |
-| Containment Rendering     | main.gd → _create_volume()    | ✓ 5 tests    | COVERED |
-| Dependency Rendering      | main.gd → _create_edge()      | ✓ 4 tests    | COVERED |
-| Size Encoding             | main.gd → _create_volume()    | ✓ 2 tests    | COVERED |
-| Camera Controls           | camera_controller.gd          | ✓ 7 tests    | COVERED |
-| Godot 4                   | project.godot (4.6)           | compile check| COVERED |
+| Requirement               | Scenarios | Tests                          | Status  |
+|---------------------------|-----------|--------------------------------|---------|
+| JSON Scene Graph Loading  | 1         | test_scene_graph_loading.gd (4)| COVERED |
+| Containment Rendering     | 1         | test_containment_rendering.gd (5) | COVERED |
+| Dependency Rendering      | 1         | test_dependency_rendering.gd (4)  | COVERED |
+| Size Encoding             | 1         | test_size_encoding.gd (2)      | COVERED |
+| Camera Controls           | 3         | test_camera_controls.gd (8)    | COVERED |
+| Godot 4                   | 1         | compile + project.godot config | COVERED |
 
-### THEN Clause Implementation Details
+### Key Findings
 
-**JSON Scene Graph Loading:**
-- THEN reads the JSON file → `FileAccess.open()` + `JSON.parse()` in `_load_and_build()`
-- AND generates 3D volumes → `_create_volume()` called for every node in `graph["nodes"]`
-- AND generates connections → `_create_edge()` called for every edge in `graph["edges"]`
-- AND positions elements → `anchor.position = Vector3(p["x"], p["y"], p["z"])` per node
+**Direction indicator** satisfies the "visually indicated" requirement: `_create_edge()` places a `CylinderMesh` (top_radius=0 = pointed cone) at the target end, oriented along the edge direction via `Basis(Quaternion(Vector3.UP, dir))`. This is an explicit rendering element, not merely a colour difference.
 
-**Containment Rendering:**
-- THEN bounded context appears as larger translucent volume → `BoxMesh(sz, sz*0.2, sz)` with `TRANSPARENCY_ALPHA`, alpha=0.18
-- AND child modules appear as smaller opaque volumes inside → child anchor parented to parent anchor; `BoxMesh(sz, sz*0.6, sz)`, alpha=1.0
-- AND boundary visually distinct → `CULL_DISABLED` on context material; different color (blue-ish vs green)
+**Containment** is rendered with child anchors parented to parent anchors in the scene tree, and the bounded-context BoxMesh is larger and translucent (alpha=0.18, TRANSPARENCY_ALPHA, CULL_DISABLED) vs child modules which are opaque (alpha=1.0).
 
-**Dependency Rendering:**
-- THEN a line connects the two context volumes → `ImmediateMesh` with `PRIMITIVE_LINES`
-- AND the line's direction is visually indicated → `CylinderMesh` (top_radius=0, cone arrowhead) placed at target end, oriented along edge direction via `Basis(Quaternion(Vector3.UP, dir))`
+**Camera** defaults to theta=0.15 rad (~8.6° from vertical = near top-down). Middle-mouse drag orbits, scroll wheel zooms (clamped), right-mouse drag pans. `look_at(_pivot, Vector3.UP)` keeps up-vector consistent. Labels use `BILLBOARD_ENABLED` so they remain readable at any distance or angle.
 
-**Size Encoding:**
-- THEN module with more code appears as larger volume → `sz = float(nd["size"])` drives `BoxMesh.size`
-- AND relative sizes are proportional → linear mapping: ratio of sizes == ratio of metrics (verified by test at 3:1 ratio)
+**Size encoding** maps `nd["size"]` linearly to BoxMesh dimensions; the 3:1 ratio test confirms proportionality.
 
-**Camera Controls:**
-- THEN camera defaults to top-down → `_theta = 0.15` rad (≈8.6° from vertical)
-- THEN camera moves closer on scroll → `MOUSE_BUTTON_WHEEL_UP` decreases `_distance`
-- AND internal structure becomes visible → distance clamped to `[min_distance=2, max_distance=500]`
-- AND labels scale to remain readable → `Label3D.billboard = BILLBOARD_ENABLED`
-- THEN camera rotates around focal point → middle-mouse drag updates `_phi` (azimuth) and `_theta` (polar)
-- AND orientation remains intuitive → `look_at(_pivot, Vector3.UP)` keeps up-vector consistent
+### Note on State Files
+The branch diff vs main includes changes to `.hyperloop/state/` files. These are not from implementation commits — they result from the branch diverging from main at a point where orchestrator state differed. The two implementation commits (`a02ffac`, `12ac742`) touch only `godot/` and `.hyperloop/worker-result.yaml`. The state file divergence is what caused the prior 3 merge failures; the implementation itself is clean.
