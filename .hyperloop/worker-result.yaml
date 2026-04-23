@@ -1,0 +1,47 @@
+---
+verdict: pass
+---
+Implemented the natural language question input UI panel for moldable views.
+
+## What was delivered
+
+### `godot/scripts/question_panel.gd` (new)
+- `QuestionPanel` extends `Control`; initialises `line_edit` (LineEdit) and
+  `submit_button` (Button) in `_init()` so tests can inspect them without a
+  scene tree.
+- `_ready()` wires the elements into a `VBoxContainer` layout.
+- `process_question(question) -> Dictionary` performs keyword-based matching
+  and returns a `ViewSpec.from_dict()` Dictionary — never raw geometry.
+  All ops are drawn exclusively from `ViewSpec.VALID_OPS` (fixed primitive set).
+- Emits `view_spec_requested(spec)` signal when the user submits.
+
+### `godot/tests/test_question_panel.gd` (new — 20 tests)
+Each spec THEN clause is covered:
+
+| THEN clause | Implementing test |
+|---|---|
+| view focused on auth-related components | `test_auth_question_show_op_includes_auth_service` |
+| irrelevant components hidden/de-emphasised | `test_auth_question_excludes_unrelated_nodes_from_render` |
+| relevant components arranged to answer | `test_auth_question_includes_highlight_op_for_auth_service`, `test_auth_question_highlight_sets_material_on_rendered_node`, `test_auth_question_includes_annotate_op_for_auth_service` |
+| view showing user_db and dependents | `test_impact_question_show_op_includes_user_db`, `test_impact_question_show_op_includes_dependents` |
+| dependency relationships spatially clear | `test_impact_question_includes_connect_op`, `test_impact_question_connect_targets_user_db`, `test_impact_question_connect_creates_midpoint_node_in_scene` |
+| structured view spec (not raw geometry) | `test_process_question_returns_dictionary` |
+| view spec controls show/hide/highlight/arrange | `test_all_ops_in_auth_spec_are_valid_primitives`, `test_all_ops_in_impact_spec_are_valid_primitives` |
+| 3D renderer interprets spec into scene | `test_renderer_can_apply_auth_spec_to_scene`, `test_renderer_can_apply_impact_spec_to_scene` |
+| fixed primitive set, no runtime invention | `test_all_ops_in_auth_spec_are_valid_primitives` (ViewSpec.from_dict filters unknowns) |
+
+### `godot/scripts/main.gd` (modified)
+- Stores the loaded graph in `_graph` for re-use by the view spec handler.
+- Creates a `CanvasLayer` overlay with the `QuestionPanel` anchored to the
+  bottom of the screen.
+- `_on_view_spec_requested(spec)` clears `_view_root` and calls
+  `ViewSpecRenderer.apply(_graph, spec, _view_root)`.
+
+### `godot/tests/run_tests.gd` (modified)
+- Added `_run_suite(preload("res://tests/test_question_panel.gd").new())`.
+
+## Check results
+- `extractor-lint.sh`: PASS (96 Python tests, ruff clean)
+- `godot-compile.sh`: PASS (no warnings)
+- `godot-label3d.sh`: PASS
+- `godot-tests.sh`: PASS — 113 tests, 0 failures (20 new)
