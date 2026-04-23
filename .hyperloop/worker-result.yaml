@@ -1,86 +1,173 @@
 ---
-verdict: pass
+verdict: fail
 ---
 
-## Independent Spec Alignment Review — specs/interaction/moldable-views.spec.md
+## Code Review — specs/interaction/moldable-views.spec.md
 
 Branch: hyperloop/task-021
 
 ---
 
-### Requirement: Question-Driven View Generation — COVERED
+## Check Script Outputs
 
-The system MUST accept natural language questions and generate a spatial view tailored to answering that specific question.
+### check-not-in-scope.sh
+```
+OK: No prohibited (not-in-scope) features detected.
+```
 
-**Implementation:**
-- `godot/scripts/llm_view_generator.gd` — `build_prompt(question, graph)` embeds the natural-language question and the graph's node list in a prompt string. `parse_response(llm_text)` converts the LLM's JSON response into a validated ViewSpec dictionary.
-- `godot/scripts/scene_interpreter.gd` — `apply(spec, anchors, scene_root, world_positions)` maps each operation in the spec to live Node3D mutations.
-- `godot/scripts/main.gd` — `apply_view_spec(spec)` wires the two stages; `_ready()` loads the JSON scene graph (not a stub).
+### check-pipeline-wiring.sh
+```
+Stage 1 (view-spec producer) found in: godot/scripts/llm_view_generator.gd
+godot/scripts/main.gd
+godot/scripts/scene_interpreter.gd
+Stage 2 (scene consumer) evidence — pattern '\.visible\s*=' found in: godot/scripts/scene_interpreter.gd
+Stage 2 rendering tests found: godot/tests/test_containment_rendering.gd
+godot/tests/test_dependency_rendering.gd
+godot/tests/test_node_renderer.gd
+godot/tests/test_scene_graph_loading.gd
+godot/tests/test_scene_interpreter.gd
 
-**Scenario: Architectural question — COVERED**
+OK: View-spec pipeline appears wired end-to-end (producer + consumer + rendering tests).
+```
 
-| THEN clause | Code | Test |
-|---|---|---|
-| View focused on auth-related components (show/highlight) | `_apply_show()` sets `anchor.visible = true`; `_apply_highlight()` sets `mat.albedo_color` | `test_show_op_sets_visible_true`, `test_highlight_op_changes_albedo_color` |
-| Irrelevant components hidden or de-emphasized | `_apply_hide()` sets `anchor.visible = false` | `test_hide_op_sets_visible_false`, `test_hide_op_leaves_other_nodes_unchanged` |
-| Relevant components arranged to answer the question | `_apply_arrange()` sets `anchor.position = Vector3(x, y, z)` | `test_arrange_op_sets_position_x`, `test_arrange_op_sets_position_z`, `test_arrange_op_sets_all_three_axes` |
+### check-kartograph-integration-test.sh
+```
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+```
 
-All tests instantiate real Node3D objects and assert observable scene-tree properties.
+### check-report-scope-section.sh
+```
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+```
 
-**Scenario: Impact question — COVERED**
+### check-clamp-boundary-tests.sh (fetched from main — absent from this worktree)
+```
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+FAIL: '_theta' is assigned via clamp() in godot/scripts/camera_controller.gd
+      but no test file asserts a boundary value (>= or <=) on '_theta'.
+      Add a test that sets '_theta' near the limit, applies an extreme
+      input, and asserts '_theta >= lower_bound' or '_theta <= upper_bound'.
+Exit: 1
+```
 
-| THEN clause | Code | Test |
-|---|---|---|
-| View shows the user database and all its dependents | `_apply_show()` sets `anchor.visible = true` | `test_show_op_sets_visible_true` (question fixture: "what depends on the user database?") |
-| Dependency relationships spatially clear | `_apply_connect()` adds ImmediateMesh line + CylinderMesh arrowhead (top_radius=0) to scene_root | `test_connect_op_adds_line_geometry` (≥1 MeshInstance3D on root), `test_connect_op_adds_arrowhead` (≥2 MeshInstance3D) |
+### godot-fileaccess-tested.sh
+```
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 2 test file(s).
+```
+
+### godot-label3d.sh
+```
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+```
+
+### godot-compile.sh
+```
+Godot project compiles successfully.
+```
 
 ---
 
-### Requirement: View Specs as Intermediate Representation — COVERED
+## Commit Trailers
 
-The system MUST use a structured view specification as the intermediate representation between the LLM and the 3D renderer.
-
-**Implementation:**
-- `parse_response()` returns a plain `Dictionary` with "question" and "operations" keys — never raw 3D geometry.
-- `scene_interpreter.gd::apply()` is the sole consumer of this dict; it emits scene-tree mutations, not geometry instructions.
-
-**Scenario: LLM produces view spec — COVERED**
-
-| THEN clause | Code | Test |
-|---|---|---|
-| Emits structured view spec (not raw 3D geometry) | `parse_response()` returns `Dictionary` | `test_parse_response_returns_dictionary` |
-| View spec controls show/hide/highlight/arrange/annotate/connect | `_make_spec()` filters and passes ops through | 6 `test_parse_response_passes_through_*_op` tests |
-| 3D renderer interprets the view spec into a spatial scene | `SceneInterpreter.apply()` dispatches each op to `_apply_*` method | `test_all_six_ops_mutate_scene_correctly` — all 6 ops applied, asserts `.visible`, `.position.x`, `albedo_color.g`, `label.text`, MeshInstance3D presence |
+Present on implementation commits:
+- `Spec-Ref: specs/interaction/moldable-views.spec.md@6bed97ab44f1e1e464b566f807f5168951259b4e`
+- `Task-Ref: task-021`
 
 ---
 
-### Requirement: Fixed Visual Primitive Set — COVERED
+## Python Extractor
 
-The set of visual primitives MUST be fixed and finite. The LLM selects from available primitives; it does not invent new ones.
+- `ruff check extractor/`: **all checks passed**
+- `ruff format --check extractor/`: **7 files already formatted**
+- `pytest extractor/tests/`: **90 passed**
 
-**Implementation:**
-- `VALID_OPS: Array = ["show", "hide", "highlight", "arrange", "annotate", "connect"]` declared as a constant in `llm_view_generator.gd`.
-- `_make_spec()` silently drops any op whose "op" key is not in VALID_OPS — unknown LLM-invented operations cannot reach the renderer.
-- `scene_interpreter.gd::apply()` uses a `match` block that only handles the same 6 ops; any unknown op in the dict is a no-op at the renderer level as well.
+The extractor diff removes the previously-added (prohibited) `extract_spec_nodes` / `--specs` / `include_specs` code and its tests — correct cleanup.
 
-**Scenario: LLM uses existing primitives — COVERED**
+---
 
-| THEN clause | Code | Test |
-|---|---|---|
-| Composes from existing set of 6 primitives | `build_prompt()` lists all VALID_OPS in the prompt; `_make_spec()` enforces the set | `test_build_prompt_contains_{show,hide,highlight,arrange,annotate,connect}_primitive` (6 tests); `test_parse_response_all_six_ops_pass_through` |
-| No new rendering logic generated at runtime | Unknown ops silently dropped by `_make_spec()` | `test_parse_response_filters_unknown_ops` ("invent_new_renderer"), `test_parse_response_with_all_unknown_ops_returns_empty_operations` ("render_as_graph", "explode_view"), `test_unknown_op_is_ignored` ("teleport") |
+## GDScript Tests
+
+All 10 test files ran; all tests PASS. Highlights:
+
+- `test_llm_view_generator.gd` — 30 tests covering `build_prompt()` and `parse_response()`.
+- `test_scene_interpreter.gd` — 16 tests covering all 6 ops on real `Node3D` instances with property assertions (`.visible`, `.position.x/.y/.z`, `albedo_color`, `Label3D.text/.billboard/.pixel_size`, `MeshInstance3D` presence in scene root).
+
+---
+
+## THEN-Clause Mapping
+
+| Scenario | THEN clause | Code | Test | Status |
+|---|---|---|---|---|
+| Architectural question | View focused on auth-related components | `_apply_show()` / `_apply_highlight()` sets `anchor.visible` / `mat.albedo_color` | `test_show_op_sets_visible_true`, `test_highlight_op_changes_albedo_color` | COVERED |
+| Architectural question | Irrelevant components hidden or de-emphasized | `_apply_hide()` sets `anchor.visible = false` | `test_hide_op_sets_visible_false` asserts `anchor.visible == false` on real Node3D | COVERED |
+| Architectural question | Relevant components arranged to answer question | `_apply_arrange()` sets `anchor.position = Vector3(x,y,z)` | `test_arrange_op_sets_position_x`, `_z`, `_all_three_axes` assert `.position.x/.y/.z` | COVERED |
+| Impact question | View shows user DB and all dependents | `_apply_show()` sets `anchor.visible = true` | `test_show_op_sets_visible_true` (fixture: "what depends on the user database?") | COVERED |
+| Impact question | Dependency relationships spatially clear | `_apply_connect()` adds ImmediateMesh line + CylinderMesh arrowhead (`top_radius=0`) | `test_connect_op_adds_line_geometry` (≥1 MeshInstance3D), `test_connect_op_adds_arrowhead` (≥2 MeshInstance3D) | COVERED |
+| LLM produces view spec | Emits structured view spec (not raw geometry) | `parse_response()` returns `Dictionary` | `test_parse_response_returns_dictionary` | COVERED |
+| LLM produces view spec | View spec controls show/hide/highlight/arrange/annotate/connect | `_make_spec()` filters and passes all 6 ops | 6 `test_parse_response_passes_through_*_op` + `test_parse_response_all_six_ops_pass_through` | COVERED |
+| LLM produces view spec | 3D renderer interprets view spec into spatial scene | `SceneInterpreter.apply()` dispatched via `main.gd::apply_view_spec()` | `test_all_six_ops_mutate_scene_correctly` asserts `.visible`, `.position.x`, `albedo_color.g`, `label.text`, MeshInstance3D | COVERED |
+| LLM uses existing primitives | Composes from fixed set of 6 primitives | `VALID_OPS` constant; `build_prompt()` lists them; `_make_spec()` enforces | 6 `test_build_prompt_contains_*_primitive` tests; `test_parse_response_all_six_ops_pass_through` | COVERED |
+| LLM uses existing primitives | No new rendering logic generated at runtime | `_make_spec()` drops unknown ops; `match` block is exhaustive | `test_parse_response_filters_unknown_ops`, `test_parse_response_with_all_unknown_ops_returns_empty_operations`, `test_unknown_op_is_ignored` | COVERED |
+
+All spec THEN-clauses are COVERED with real property assertions on live scene-tree objects.
+
+---
+
+## Blocking Finding: _theta Clamp Has No Boundary Test
+
+**Finding:** `check-clamp-boundary-tests.sh` (present on `main` as of commit `13a7ef3`, absent from this worktree) exits **non-zero**. Per guidelines, this is blocking.
+
+`godot/scripts/camera_controller.gd` line 73 clamps `_theta`:
+```gdscript
+_theta = clamp(_theta - delta.y * orbit_speed, 0.01, PI - 0.01)
+```
+
+`test_camera_controls.gd` has `test_zoom_clamped_at_minimum` for `_distance` but **no test** that:
+1. Applies a large extreme upward drag to push `_theta` below `0.01`, and asserts `_theta >= 0.01`; or
+2. Applies a large extreme downward drag to push `_theta` above `PI - 0.01`, and asserts `_theta <= PI - 0.01`.
+
+**Note:** This issue pre-exists on `main` and was not introduced by this branch (camera_controller.gd is unchanged in this PR). However, the guideline is unambiguous: "A FAIL from this check is blocking."
+
+**Required fix** — add to `godot/tests/test_camera_controls.gd`:
+
+```gdscript
+## _theta is clamped to [0.01, PI - 0.01] to prevent camera flip.
+## Drive input past the upper and lower limits and assert the clamped result.
+func test_orbit_theta_clamped_at_lower_bound() -> bool:
+    var cam = CameraScript.new()
+    cam._theta = 0.02  # just above lower limit
+    var press := InputEventMouseButton.new()
+    press.button_index = MOUSE_BUTTON_MIDDLE
+    press.pressed = true
+    press.position = Vector2(100.0, 100.0)
+    cam._handle_button(press)
+    # Large upward drag (negative delta.y) tries to push _theta below 0.01.
+    var motion := InputEventMouseMotion.new()
+    motion.position = Vector2(100.0, -10000.0)
+    cam._handle_motion(motion)
+    return cam._theta >= 0.01
+
+func test_orbit_theta_clamped_at_upper_bound() -> bool:
+    var cam = CameraScript.new()
+    cam._theta = PI - 0.02  # just below upper limit
+    var press := InputEventMouseButton.new()
+    press.button_index = MOUSE_BUTTON_MIDDLE
+    press.pressed = true
+    press.position = Vector2(100.0, 100.0)
+    cam._handle_button(press)
+    # Large downward drag (positive delta.y) tries to push _theta above PI - 0.01.
+    var motion := InputEventMouseMotion.new()
+    motion.position = Vector2(100.0, 10100.0)
+    cam._handle_motion(motion)
+    return cam._theta <= PI - 0.01
+```
 
 ---
 
 ## Summary
 
-All three SHALL requirements are implemented in code and each scenario's THEN clauses are
-exercised by GDScript behavioral tests in `godot/tests/` that instantiate real Node3D objects
-and assert actual scene-tree property values (not intermediate dict keys). The two-stage
-pipeline (LLMViewGenerator → ViewSpec dict → SceneInterpreter → Node3D mutations) is
-fully wired in main.gd and tested end-to-end.
-
-**Verdict: PASS**
+The moldable-views implementation is **correct and complete** for its spec: all three requirements are implemented, all THEN-clauses are mapped to behavioral GDScript tests that assert real scene-tree properties, and all automated checks pass except one. The sole blocker is the missing `_theta` boundary-clamping test in `test_camera_controls.gd` (pre-existing on main, caught by `check-clamp-boundary-tests.sh`). Add the two tests above and resubmit.
 
 ## Scope Check Output
 
