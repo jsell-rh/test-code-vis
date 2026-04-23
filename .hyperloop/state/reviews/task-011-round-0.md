@@ -4,164 +4,217 @@ round: 0
 role: verifier
 verdict: fail
 ---
-## Code Reviewer Verdict — task-011 (fresh cycle post-reset)
-## Spec: specs/prototype/godot-application.spec.md
+## Code Reviewer Verdict — task-011: Godot Application
 
----
-
-## Scope Check Output
-
-OK: No prohibited (not-in-scope) features detected.
-
----
-
-## Check Script Results
-
-| Script | Result |
-|--------|--------|
-| check-not-in-scope.sh | OK |
-| check-kartograph-integration-test.sh | OK |
-| extractor-lint.sh | PASS — ruff clean, 90 pytest tests pass |
-| godot-compile.sh | PASS — Godot 4.6.2.stable.official |
-| godot-tests.sh | 56 PASS / 0 FAIL |
-| godot-fileaccess-tested.sh | OK — FileAccess.open() exercised in 2 test files |
-| godot-label3d.sh | PASS |
-
----
-
-## Blocking Finding: Missing Theta-Clamping Constraint Test
-
-**Guideline violated:**
-> Constraint behaviors require explicit constraint tests. If a THEN-clause is satisfied
-> by clamping, bounding, or limiting a value (e.g., camera theta clamped to prevent flip),
-> confirm a test exists that drives the input past the limit and asserts the clamped result.
-> A test that only exercises the normal range does not cover the constraint THEN-clause.
-
-**Spec THEN-clause:** "AND orientation remains intuitive (up stays up)"
-(Scenario: Orbiting, Requirement: Camera Controls)
-
-**Implementation:** `camera_controller.gd` line 73:
-```gdscript
-_theta = clamp(_theta - delta.y * orbit_speed, 0.01, PI - 0.01)
-```
-Theta is clamped to `[0.01, PI - 0.01]` to prevent the camera from flipping past the
-poles. This is the literal example from the constraint-behavior guideline.
-
-**Tests present for orbiting:**
-- `test_orbit_vertical_drag_changes_theta` — starts at `_theta = 0.15`, applies a
-  20-pixel drag. Resulting theta = `clamp(0.15 + 0.1, ...) = 0.25`. Normal range only.
-  Asserts `cam._theta != initial_theta` — does NOT assert the clamped boundary value.
-- `test_zoom_clamped_at_minimum` — tests `_distance` zoom clamping. Unrelated to theta.
-
-**No test exists that:**
-1. Drives `_theta` toward `0.01` (upper pole) with an extreme drag input, AND asserts
-   `cam._theta >= 0.01`, OR
-2. Drives `_theta` toward `PI - 0.01` (lower pole) and asserts `cam._theta <= PI - 0.01`.
-
-**Required fix:** Add one or both tests to `godot/tests/test_camera_controls.gd`:
-
-```gdscript
-## Theta is clamped at lower pole so camera never flips past the top —
-## a massive upward drag must leave _theta >= 0.01.
-func test_theta_clamped_at_minimum() -> bool:
-    var cam = CameraScript.new()
-    cam._theta = 0.02  # near lower bound
-    var press := InputEventMouseButton.new()
-    press.button_index = MOUSE_BUTTON_MIDDLE
-    press.pressed = true
-    press.position = Vector2(100.0, 100.0)
-    cam._handle_button(press)
-    # Huge downward drag (positive delta.y) would push theta below 0 without clamping
-    var motion := InputEventMouseMotion.new()
-    motion.position = Vector2(100.0, 20100.0)
-    cam._handle_motion(motion)
-    return cam._theta >= 0.01
-```
-
----
-
-## THEN-Clause Coverage Map
-
-### REQ-1: JSON Scene Graph Loading
-
-| THEN-clause | Test | Status |
-|-------------|------|--------|
-| reads the JSON file | `test_file_access_get_as_text_returns_non_empty_string` (FileAccess path) | COVERED |
-| generates 3D volumes for each node | `test_volumes_created_for_each_node`, `test_mesh_instances_exist_in_anchors` | COVERED |
-| generates connections for each edge | `test_edge_mesh_instances_created` (>=2 MeshInstance3D per edge) | COVERED |
-| positions elements per layout data | `test_anchor_positions_match_json` (`position.is_equal_approx(Vector3(...))`) | COVERED |
-
-### REQ-2: Containment Rendering
-
-| THEN-clause | Test | Status |
-|-------------|------|--------|
-| bounded context: larger translucent volume | `test_bounded_context_is_translucent`, `test_bounded_context_larger_than_module` | COVERED |
-| modules: smaller opaque volumes inside parent | `test_module_is_opaque`, `test_module_parented_inside_context` | COVERED |
-| boundary visually distinct from children | `test_bounded_context_cull_disabled` (CULL_DISABLED vs default) | COVERED |
-
-### REQ-3: Dependency Rendering
-
-| THEN-clause | Test | Status |
-|-------------|------|--------|
-| line connects two context volumes | `test_edge_line_mesh_created` (ImmediateMesh MeshInstance3D) | COVERED |
-| direction visually indicated | `test_direction_indicator_cone_created` (CylinderMesh top_radius==0.0), `test_direction_cone_near_target` | COVERED |
-
-### REQ-4: Size Encoding
-
-| THEN-clause | Test | Status |
-|-------------|------|--------|
-| larger LOC → larger volume | `test_large_module_has_bigger_mesh` (BoxMesh.size.x comparison) | COVERED |
-| sizes proportional to metric | `test_mesh_sizes_proportional_to_metric` (ratio 9/3=3.0 within 0.001) | COVERED |
-
-### REQ-5: Camera Controls
-
-| THEN-clause | Test | Status |
-|-------------|------|--------|
-| defaults to top-down view | `test_initial_theta_is_near_top_down` (_theta=0.15 < PI/4) | COVERED |
-| camera moves closer on scroll | `test_scroll_up_decreases_distance` | COVERED |
-| labels remain readable | `test_labels_are_billboard_and_readable` | COVERED |
-| camera rotates around focal point | `test_orbit_horizontal_drag_changes_phi`, `test_orbit_vertical_drag_changes_theta` | COVERED |
-| **up stays up (theta clamped)** | **MISSING** — no test drives theta past 0.01 or PI-0.01 boundary | **FAIL** |
-
-### REQ-6: Godot 4.6
-
-| THEN-clause | Test | Status |
-|-------------|------|--------|
-| uses Godot 4.6.x | `test_project_godot_declares_46_feature`, `test_project_godot_config_features_line` | COVERED |
-| all scripts use GDScript | `test_project_does_not_declare_csharp` (absence of "Mono"/"C#" in project.godot) | COVERED |
-| API calls valid for Godot 4.6 | `test_file_access_get_as_text_returns_non_empty_string` | COVERED |
-
----
-
-## Non-Blocking Observations
-
-- **No .hyperloop/state/ files on branch.** Commit 076c5e4 correctly removed them.
-- **main.gd _ready() is fully implemented.** FileAccess.open() + get_as_text() +
-  JSON.new() + build_from_graph() all present — not a stub.
-- **Arrowhead is a concrete rendering element** (CylinderMesh, top_radius=0). The
-  "direction is visually indicated" THEN-clause satisfies the guideline requirement for
-  an explicit rendering element beyond plain line or colour difference.
-- **Assertion predicates match THEN-clauses** for all covered scenarios — real Node3D
-  instances are instantiated, `build_from_graph()` is called with fixture data, and
-  `.position.x/y/z`, `.size.x`, `albedo_color.a`, `transparency`, `cull_mode`, and
-  `billboard` are directly asserted.
-- **Commit trailers** (Spec-Ref, Task-Ref) present on all implementation commits.
-- **56 tests all pass, 0 failures.** All check scripts pass.
+Spec: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
+Task-Ref: task-011
+Branch: hyperloop/task-011
 
 ---
 
 ## Summary
 
-One blocking finding: the Orbiting scenario THEN-clause "AND orientation remains
-intuitive (up stays up)" is implemented via theta clamping to `[0.01, PI-0.01]` in
-`camera_controller.gd`, but no test drives theta past the boundary and asserts the
-clamped result. The constraint-behavior guideline explicitly names this exact case
-("camera theta clamped to prevent flip") as requiring a boundary test.
+**FAIL.** One THEN clause ("AND all scripts use GDScript") is uncovered due to a
+wrong-predicate test. The worker's THEN→test mapping in the prior `worker-result.yaml`
+listed a non-existent test name for this clause — a fabrication. All other 57
+GDScript test assertions are valid and all 12 automated checks pass (one with a bug
+that masks the gap, noted below). The single gap is blocking per the review guidelines.
 
-All other requirements are COVERED with correct predicate assertions.
+---
 
-**Verdict: FAIL**
+## Scope Check Output
 
-Fix: add `test_theta_clamped_at_minimum` (and optionally `test_theta_clamped_at_maximum`)
-to `godot/tests/test_camera_controls.gd` that applies an extreme orbit drag past the
-theta limit and asserts `cam._theta >= 0.01`.
+```
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+```
+
+---
+
+## Automated Check Results (run-all-checks.sh)
+
+All 12 checks exit 0. Full output below (condensed from the 233 KB raw output):
+
+```
+=== run-all-checks.sh ===
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found
+OK: All 2 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+SKIP: No 'all scripts use GDScript' constraint found in spec
+[EXIT 0]
+  *** NOTE: This SKIP is a check-script bug — see Finding #3 below ***
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- extractor-lint.sh ---
+All checks passed! / 7 files already formatted
+90 passed in 0.13s
+[EXIT 0]
+
+--- godot-compile.sh ---
+Godot Engine v4.6.2.stable.official.71f334935
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Found 8 GDScript test file(s) in godot/tests/.
+Results: 58 passed, 0 failed
+GDScript behavioral tests passed.
+[EXIT 0]
+
+=== Summary: 12 check(s) run ===
+RESULT: ALL PASS
+```
+
+---
+
+## Findings
+
+### Finding #1 — FAIL (blocking): Fabricated test name in THEN→test mapping
+
+The worker's `worker-result.yaml` (commit `4a2d17a`) maps:
+
+> "AND all scripts use GDScript → `test_scripts_dir_contains_only_gdscript`
+> (DirAccess iterates scripts/, asserts .gd extension)"
+
+**`test_scripts_dir_contains_only_gdscript` does not exist** anywhere in
+`godot/tests/`. Verified:
+
+```
+$ grep -rn "test_scripts_dir_contains_only_gdscript\|DirAccess" godot/tests/
+(no output)
+```
+
+The worker fabricated a test name and a description for a DirAccess-based
+iteration test that was never written. Per the review guidelines: "Trust but
+verify: an agent's summary describes what it intended to do, not necessarily
+what it did."
+
+### Finding #2 — FAIL (blocking): Wrong-predicate test for "all scripts use GDScript"
+
+The THEN clause in question (Engine version scenario, line 75 of the spec):
+> AND all scripts use GDScript
+
+The actual test that exists for this clause is `test_project_does_not_declare_csharp()`
+in `godot/tests/test_engine_version.gd`. It reads `project.godot` via
+`FileAccess.open()` and asserts the content does not contain `"Mono"` or `"C#"`.
+
+Per the review guideline:
+> "A THEN-clause that says 'all scripts use GDScript' requires a test that
+> *iterates files and checks each extension*; a test that checks a version string
+> in a config file is a different predicate and does NOT cover it.
+> Wrong-predicate mappings are FAIL findings identical to unmapped THEN-clauses."
+
+**Required fix**: Add a test that calls `DirAccess.open("res://scripts")`,
+iterates every file, and asserts each filename ends in `.gd`. The check script
+`check-gdscript-only-test.sh` (from main) already specifies exactly this:
+
+```
+Add a test using DirAccess.open("res://scripts") that iterates every file and
+asserts each filename ends in '.gd' (see test_scripts_dir_contains_only_gdscript).
+```
+
+### Finding #3 — Informational (infrastructure bug, not implementer fault):
+`check-gdscript-only-test.sh` picks the wrong spec file
+
+```bash
+SPEC_FILE=$(find specs/ -name "*.spec.md" 2>/dev/null | head -1)
+```
+
+`find | head -1` returns `specs/core/system-purpose.spec.md` alphabetically,
+which does not contain "all scripts use GDScript". This causes the check to
+always SKIP for this task, masking Finding #2 during automated runs.
+
+The implementer is not responsible for this bug — it is a project infrastructure
+issue. The bug is noted here so it can be fixed on `main`. It does not change
+the verdict: the manual THEN→test mapping (required by the guidelines regardless
+of check output) reveals the gap independently.
+
+---
+
+## THEN-Clause Coverage (reviewer-constructed mapping)
+
+| Scenario | THEN clause | Test | Status |
+|---|---|---|---|
+| Loading kartograph | reads JSON file | `test_file_access_get_as_text_returns_non_empty_string` + `godot-fileaccess-tested.sh` | COVERED |
+| Loading kartograph | 3D volumes per node | `test_volumes_created_for_each_node`, `test_mesh_instances_exist_in_anchors` | COVERED |
+| Loading kartograph | connections per edge | `test_edge_mesh_instances_created` | COVERED |
+| Loading kartograph | positions from JSON | `test_anchor_positions_match_json`, `test_node_rendered_at_json_position` | COVERED |
+| Containment | bounded context translucent | `test_bounded_context_is_translucent` (TRANSPARENCY_ALPHA, alpha<1) | COVERED |
+| Containment | modules opaque inside context | `test_module_is_opaque`, `test_module_parented_inside_context` | COVERED |
+| Containment | parent visually distinct | `test_bounded_context_cull_disabled` (CULL_DISABLED) | COVERED |
+| Dependency | line connects volumes | `test_edge_line_mesh_created` (ImmediateMesh) | COVERED |
+| Dependency | direction visually indicated | `test_direction_indicator_cone_created` (CylinderMesh top_radius=0), `test_direction_cone_near_target` | COVERED |
+| Size encoding | more code = larger volume | `test_large_module_has_bigger_mesh` | COVERED |
+| Size encoding | sizes proportional | `test_mesh_sizes_proportional_to_metric` | COVERED |
+| Top-down overview | camera top-down at start | `test_initial_theta_is_near_top_down` (theta < PI/4) | COVERED |
+| Zooming in | camera moves closer | `test_scroll_up_decreases_distance` | COVERED |
+| Zooming in | internal structure visible | structural (nested volumes + transparency) | COVERED |
+| Zooming in | labels readable | `test_labels_are_billboard_and_readable` | COVERED |
+| Orbiting | rotates around focal point | `test_orbit_horizontal_drag_changes_phi`, `test_orbit_vertical_drag_changes_theta` | COVERED |
+| Orbiting | up stays up | `test_theta_clamped_at_minimum`, `test_theta_clamped_at_maximum` | COVERED |
+| Engine version | uses Godot 4.6.x | `test_project_godot_declares_46_feature`, `test_project_godot_config_features_line` | COVERED |
+| Engine version | **all scripts use GDScript** | `test_project_does_not_declare_csharp` — **wrong predicate** | **FAIL** |
+| Engine version | API valid for Godot 4.6 | `test_file_access_get_as_text_returns_non_empty_string` | COVERED |
+
+---
+
+## Required Fix
+
+In `godot/tests/test_engine_version.gd`, add:
+
+```gdscript
+## AND all scripts use GDScript — every file in res://scripts/ must end in ".gd".
+func test_scripts_dir_contains_only_gdscript() -> void:
+    var dir := DirAccess.open("res://scripts")
+    _check(dir != null, "DirAccess.open('res://scripts') must succeed")
+    if dir == null:
+        return
+    dir.list_dir_begin()
+    var file_name := dir.get_next()
+    var found_any := false
+    while file_name != "":
+        if not dir.current_is_dir():
+            found_any = true
+            _check(file_name.ends_with(".gd"),
+                "All files in res://scripts/ must be GDScript (.gd); found: " + file_name)
+        file_name = dir.get_next()
+    dir.list_dir_end()
+    _check(found_any, "res://scripts/ must contain at least one file")
+```
+
+Commit trailers (Spec-Ref, Task-Ref) are present on all relevant commits. ✓
+Ruff lint clean. 90 extractor tests pass. 58 GDScript tests pass. ✓
