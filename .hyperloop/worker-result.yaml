@@ -1,0 +1,127 @@
+---
+verdict: pass
+---
+## Spec Alignment Review — scene-graph-schema.spec.md (Round 2)
+
+Branch: hyperloop/task-005
+Reviewed at: 8ab1638 (after feat commit 8ce381b)
+
+---
+
+### Requirement: Schema Structure / Top-level structure
+**Status: COVERED** (unchanged from prior round)
+
+`extractor/schema.py` `SceneGraph` TypedDict has exactly `nodes`, `edges`, `metadata`.
+Tests: `test_schema.py::TestSchemaStructure` (8 tests), `test_extractor.py::TestSceneGraphOutput`,
+GDScript `test_scene_graph_loader.gd::test_{nodes,edges,metadata}_*`.
+
+---
+
+### Requirement: Node Schema / Bounded context node
+**Status: COVERED** (unchanged)
+
+`extractor.py::discover_bounded_contexts` populates `id`, `name`, `type="bounded_context"`,
+`position` (x/y/z), `size` (from LOC metric), `parent=None`.
+Tests: `test_schema.py::TestNodeSchema` (8 tests), `test_extractor.py::TestModuleDiscovery`,
+GDScript `test_scene_graph_loader.gd::test_node_*`.
+
+---
+
+### Requirement: Node Schema / Module node inside a bounded context
+**Status: COVERED** (unchanged)
+
+`extractor.py::discover_submodules` emits `id="bc.module"`, `parent="bc"`, `type="module"`,
+with child positions offset relative to parent BC.
+Tests: `test_schema.py::TestNodeSchema` (module fixtures), `test_extractor.py::TestModuleDiscovery`,
+GDScript `test_scene_graph_loader.gd::test_node_module_parent_references_bounded_context`.
+
+---
+
+### Requirement: Edge Schema / Cross-context dependency edge
+**Status: COVERED** (unchanged)
+
+`build_dependency_edges` emits `(source_bc, target_bc, "cross_context")` for inter-context deps.
+Tests: `test_schema.py::TestEdgeSchema`, `test_extractor.py::TestDependencyExtraction`,
+GDScript `test_scene_graph_loader.gd::test_cross_context_edge_type_is_cross_context`.
+
+---
+
+### Requirement: Edge Schema / Internal dependency edge
+**Status: COVERED** (unchanged)
+
+`build_dependency_edges` emits `(source_module, target_module, "internal")` for same-context deps.
+Tests: `test_schema.py::TestEdgeSchema`, `test_extractor.py::TestDependencyExtraction`,
+GDScript `test_scene_graph_loader.gd::test_internal_edge_type_is_internal`.
+
+---
+
+### Requirement: Metadata / Extraction metadata
+**Status: COVERED** (unchanged)
+
+`Metadata` TypedDict has `source_path` and `timestamp`; `build_scene_graph` sets both.
+Tests: `test_schema.py::TestMetadataSchema`, `test_extractor.py::TestSceneGraphOutput`,
+GDScript `test_scene_graph_loader.gd::test_metadata_is_returned`.
+
+---
+
+### Requirement: Pre-Computed Layout / Layout in JSON — sub-clauses 1–3
+**Status: COVERED** (unchanged)
+
+`compute_layout` sets all node positions via `_circular_positions`; `_order_by_coupling`
+places coupled BCs adjacent; child positions offset by parent BC's absolute position.
+Tests: `test_extractor.py::TestLayout` (coupled-closer, child-near-parent),
+`test_extractor.py::TestSceneGraphOutput::test_every_node_has_position`,
+GDScript `test_scene_graph_loader.gd::test_node_has_position_field`.
+
+---
+
+### Requirement: Pre-Computed Layout / Godot renders at positions (sub-clause 4)
+**Status: COVERED** (was MISSING in prior round — now resolved)
+
+**Implementation** (`godot/scripts/main.gd` commit 8ce381b):
+- `build_from_graph(graph)` iterates `graph.get("nodes", [])` and calls `_spawn_node`.
+- `_spawn_node(node_data)` creates a `MeshInstance3D`, names it `node_data["id"]`, and
+  sets `mesh_instance.position = Vector3(pos.get("x"), pos.get("y"), pos.get("z"))` —
+  using extractor-computed coordinates verbatim.  No layout algorithm runs in GDScript.
+
+**Tests** (`godot/tests/test_node_renderer.gd`, registered in `run_tests.gd` line 19):
+
+1. `test_node_rendered_at_json_position`: instantiates `Main`, calls `build_from_graph`
+   with fixture (iam at x=1.0, y=0.0, z=0.0), asserts `iam_node.position.x == 1.0`,
+   `position.y == 0.0`, `position.z == 0.0` using `is_equal_approx`.
+
+2. `test_second_node_rendered_at_json_position`: same fixture, asserts `shared_kernel`
+   node at position x=-3.0, y=2.0, z=5.0 exactly.
+
+3. `test_no_layout_recomputed_in_godot`: arbitrary coordinates (7.0, 3.0, -2.0) fed in;
+   asserts scene-tree node matches exactly — confirms no Godot-side recomputation.
+
+4. `test_each_json_node_becomes_a_scene_tree_child`: verifies `root.get_child_count() == 2`
+   for a 2-node fixture — every JSON node must produce exactly one Node3D child.
+
+All four tests:
+- Instantiate `Main` directly (not via scene file).
+- Assert actual `.position` property values on `Node3D` children in the scene tree.
+- Do NOT invoke any layout function; the only position source is the JSON fixture.
+
+This satisfies the guideline: "Verify a test exists that exercises this exact scenario
+with known fixture data and asserts runtime outputs (scene-tree nodes, property values,
+positions)."
+
+---
+
+## Summary
+
+| Requirement                                         | Status  |
+|-----------------------------------------------------|---------|
+| Schema Structure / Top-level structure              | COVERED |
+| Node Schema / Bounded context node                  | COVERED |
+| Node Schema / Module node inside BC                 | COVERED |
+| Edge Schema / Cross-context dependency edge         | COVERED |
+| Edge Schema / Internal dependency edge              | COVERED |
+| Metadata / Extraction metadata                      | COVERED |
+| Pre-Computed Layout / positions in JSON (1–3)       | COVERED |
+| Pre-Computed Layout / Godot renders at positions (4)| COVERED |
+
+All SHALL/MUST requirements are implemented and have test coverage.
+Verdict: **PASS**.
