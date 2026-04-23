@@ -1,155 +1,145 @@
 ---
 verdict: pass
 ---
-## task-007: Godot Application Spec — Independent Review (2026-04-23)
+## task-007: Godot Application Spec — Code Review (2026-04-23)
 
-Reviewed `specs/prototype/godot-application.spec.md` on branch `hyperloop/task-007`.
-Every SHALL/MUST requirement was verified against implementation code and GDScript
-behavioral tests.
+Reviewed implementation on branch `hyperloop/task-007` against
+`specs/prototype/godot-application.spec.md`.
+
+---
+
+### Check Scripts
+
+| Script | Result |
+|---|---|
+| `extractor-lint.sh` | PASS (ruff clean, 96 pytest tests) |
+| `godot-compile.sh` | PASS (Godot 4.6.2 headless exit 0) |
+| `godot-tests.sh` | PASS (91/91 tests, 0 failures) |
+| `godot-label3d.sh` | PASS (billboard + pixel_size set and tested) |
+
+---
+
+### Commit Trailers
+
+All three implementation commits carry correct trailers:
+
+- `a02ffac` feat(godot): implement 3D scene graph visualiser
+  — `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3` ✅ `Task-Ref: task-007` ✅
+- `12ac742` feat(godot): add GDScript test suite and edge direction indicator
+  — `Spec-Ref` ✅ `Task-Ref` ✅
+- `11960e4` test(godot): add label property test for readability at all zoom levels
+  — `Spec-Ref` ✅ `Task-Ref` ✅
 
 ---
 
 ### Requirement: JSON Scene Graph Loading — COVERED
 
-**Spec**: Application MUST load a JSON scene graph file and generate the 3D scene from it.
+`_ready()` is NOT an empty stub. It opens the JSON file via `FileAccess`,
+parses with `JSON.new()`, and calls `build_from_graph()` which iterates
+nodes → `_create_volume()` and edges → `_create_edge()`. World positions
+are read directly from JSON `position.{x,y,z}` — no Godot-side layout.
 
-**Scenario**: Loading kartograph's scene graph (reads JSON, generates 3D volumes, connections, positions)
-
-**Implementation** (`godot/scripts/main.gd`):
-- `_ready()`: opens file via `FileAccess`, parses with `JSON.new()`, calls
-  `SceneGraphLoader.load_from_dict()` then `build_from_graph()`.
-- `build_from_graph()`: iterates nodes → `_create_volume()`, iterates edges → `_create_edge()`.
-- `_resolve_world_pos()`: reads `position.{x,y,z}` directly from JSON; no Godot-side
-  layout recomputation.
-
-**Tests** (`godot/tests/test_scene_graph_loading.gd`, 5 behavioral tests):
-- `test_volumes_created_for_each_node()`: asserts `_anchors` dict contains entry for every node id.
-- `test_mesh_instances_exist_in_anchors()`: asserts MeshInstance3D child present in each anchor.
-- `test_edge_mesh_instances_created()`: asserts ≥ 2 MeshInstance3D children on main node
-  (1 ImmediateMesh line + 1 CylinderMesh arrowhead per edge).
-- `test_anchor_positions_match_json()`: asserts `anchor.position` equals fixture
-  coordinates exactly (Vector3(0,0,0) and Vector3(2,0,2)).
-- `test_labels_are_billboard_and_readable()`: asserts `BILLBOARD_ENABLED`, `pixel_size > 0`,
-  `no_depth_test == true` on Label3D — covers the "labels scale to remain readable"
-  clause from the Zooming in camera scenario.
-
-All four GIVEN/WHEN/THEN/AND clauses exercised by real Node3D instantiation.
+Tests (`test_scene_graph_loading.gd`, 5 tests): instantiate real `Node3D`,
+assert `_anchors` has entries for every node id, assert `MeshInstance3D`
+children exist, assert edge produces ≥ 2 `MeshInstance3D` children (line +
+cone), assert `anchor.position.is_equal_approx(Vector3(x,y,z))` for each node.
+Dict-key checks are NOT used — positions are asserted on the node's `.position`
+property. ✅
 
 ---
 
 ### Requirement: Containment Rendering — COVERED
 
-**Spec**: Application MUST render containment relationships as nested volumes.
+`_create_volume()` creates bounded-context nodes as translucent
+(`TRANSPARENCY_ALPHA`, `albedo_color.a = 0.18`, `CULL_DISABLED`) and module
+nodes as opaque (`albedo_color.a = 1.0`). Module anchor is `add_child`-ed to
+the parent context anchor, placing it inside the parent in the scene tree.
 
-**Scenario**: Modules inside a bounded context (translucent parent, opaque nested children,
-visually distinct boundary)
-
-**Implementation** (`godot/scripts/main.gd → _create_volume()`):
-- `bounded_context`: `TRANSPARENCY_ALPHA`, `albedo_color.a = 0.18`, `CULL_DISABLED`,
-  box `Vector3(sz, sz*0.2, sz)`.
-- `module`: opaque (`albedo_color.a = 1.0`), box `Vector3(sz, sz*0.6, sz)`.
-- Module anchor is scene-tree-parented directly to its parent context anchor (lines 71–73),
-  placing it spatially inside the parent volume.
-
-**Tests** (`godot/tests/test_containment_rendering.gd`, 5 behavioral tests):
-- `test_bounded_context_is_translucent()`: `transparency != TRANSPARENCY_DISABLED` and `a < 1.0`.
-- `test_module_is_opaque()`: `albedo_color.a >= 1.0`.
-- `test_module_parented_inside_context()`: `mod_anchor.get_parent() == ctx_anchor`.
-- `test_bounded_context_larger_than_module()`: `ctx_mesh.size.x > mod_mesh.size.x` (10 vs 3).
-- `test_bounded_context_cull_disabled()`: `cull_mode == CULL_DISABLED` — distinguishes
-  parent boundary from children's default back-face culling.
+Tests (`test_containment_rendering.gd`, 5 tests): assert translucency,
+opacity, parent relationship via `mod_anchor.get_parent() == ctx_anchor`,
+size comparison (`ctx_mesh.size.x > mod_mesh.size.x`), and
+`cull_mode == CULL_DISABLED` on the boundary. All node property assertions
+made on instantiated `Node3D` objects, not dictionary key checks. ✅
 
 ---
 
 ### Requirement: Dependency Rendering — COVERED
 
-**Spec**: Application MUST render dependency edges as visible lines between connected nodes.
+Direction indicator is an explicit geometric element: `CylinderMesh` with
+`top_radius = 0.0` (pointed cone) placed at the target end of each edge.
+A plain line alone is not used — the cone satisfies "direction is visually
+indicated." Color difference (orange cross-context vs grey internal) is
+additional, not the primary directional indicator.
 
-**Scenario**: Cross-context dependency with visually indicated direction.
-
-**Implementation** (`godot/scripts/main.gd → _create_edge()`):
-- `ImmediateMesh` with `PRIMITIVE_LINES` between `from_pos` and `to_pos`.
-- `CylinderMesh` with `top_radius = 0.0` (pointed cone) placed at `to_pos - dir * (height*0.5)`,
-  oriented via `Basis(Quaternion(Vector3.UP, dir))` — explicit arrowhead geometry indicating direction.
-- Orange (`Color(1.0, 0.50, 0.10)`) for cross-context, grey for internal.
-
-**Tests** (`godot/tests/test_dependency_rendering.gd`, 4 behavioral tests):
-- `test_edge_line_mesh_created()`: ImmediateMesh MeshInstance3D child exists after build.
-- `test_direction_indicator_cone_created()`: CylinderMesh with `top_radius == 0.0` exists.
-- `test_direction_cone_near_target()`: cone position within 2 units of target Vector3(20,0,0).
-- `test_cross_context_cone_is_orange()`: cone material `r > 0.8` and `b < 0.3`.
+Tests (`test_dependency_rendering.gd`, 4 tests): assert `ImmediateMesh`
+line exists, assert `CylinderMesh` with `top_radius == 0.0` exists, assert
+cone position within 2 units of target `Vector3(20,0,0)`, assert cross-context
+cone `r > 0.8 and b < 0.3`. ✅
 
 ---
 
 ### Requirement: Size Encoding — COVERED
 
-**Spec**: Application MUST encode complexity metrics as the visual size of volumes.
+`sz = float(nd["size"])` drives `BoxMesh.size = Vector3(sz, sz*0.6, sz)`.
+X/Z mesh dimensions are linearly proportional to the JSON `size` field.
 
-**Scenario**: Large module vs small module — proportional sizes.
-
-**Implementation** (`godot/scripts/main.gd → _create_volume()`):
-- `sz = float(nd["size"])` → `BoxMesh.size = Vector3(sz, sz*0.6, sz)`.
-- X/Z dimensions are linearly proportional to JSON `size` field. The Python extractor
-  is responsible for mapping `metrics.loc` → `size`; Godot renders it directly.
-
-**Tests** (`godot/tests/test_size_encoding.gd`, 2 behavioral tests):
-- `test_large_module_has_bigger_mesh()`: `large_mesh.size.x > small_mesh.size.x` (9.0 vs 3.0).
-- `test_mesh_sizes_proportional_to_metric()`:
-  `abs(9.0/3.0 - actual_ratio) < 0.001` — exact proportionality verified.
+Tests (`test_size_encoding.gd`, 2 tests): assert `large_mesh.size.x >
+small_mesh.size.x` and verify exact proportionality (`abs(9.0/3.0 -
+actual_ratio) < 0.001`). ✅
 
 ---
 
 ### Requirement: Camera Controls — COVERED
 
-**Spec**: Application MUST provide camera controls for navigating the scene.
+`camera_controller.gd`: top-down default (`_theta = 0.15` < `PI/4`), scroll
+zoom (`WHEEL_UP`/`WHEEL_DOWN` modify `_distance`, clamped), middle-mouse orbit
+(modifies `_phi` azimuth and `_theta` polar), `look_at(_pivot, Vector3.UP)`
+keeps up-vector intuitive. `set_pivot()` allows programmatic reframing.
 
-**Scenarios**: Top-down overview, Zooming in, Orbiting.
+"Labels scale to remain readable" is covered by `test_labels_are_billboard_and_readable()`
+in `test_scene_graph_loading.gd`: asserts `BILLBOARD_ENABLED`, `pixel_size > 0.0`,
+and `no_depth_test == true` on the `Label3D` node instantiated in a real `Node3D` scene.
 
-**Implementation** (`godot/scripts/camera_controller.gd`):
-- Top-down default: `_theta = 0.15` (≈ 8.6° from vertical, < PI/4 = 45°).
-- Zoom: `WHEEL_UP` decreases `_distance`, `WHEEL_DOWN` increases it, clamped to
-  `[min_distance, max_distance]`.
-- Orbit: middle-mouse drag modifies `_phi` (azimuth) and `_theta` (polar).
-- `look_at(_pivot, Vector3.UP)` in `_update_transform()` keeps up-vector intuitive.
-- `set_pivot(pivot, distance)` allows programmatic re-framing (called from `main.gd`
-  after graph load).
-
-**Tests** (`godot/tests/test_camera_controls.gd`, 8 behavioral tests):
-- `test_initial_theta_is_near_top_down()`: `_theta < PI/4` — top-down default.
-- `test_initial_distance_is_positive()`: `_distance > 0.0`.
-- `test_scroll_up_decreases_distance()`: `WHEEL_UP` event reduces `_distance`.
-- `test_scroll_down_increases_distance()`: `WHEEL_DOWN` event increases `_distance`.
-- `test_orbit_horizontal_drag_changes_phi()`: 50px horizontal drag mutates `_phi`.
-- `test_orbit_vertical_drag_changes_theta()`: 20px vertical drag mutates `_theta`.
-- `test_set_pivot_updates_state()`: `set_pivot()` updates both `_pivot` and `_distance`.
-- `test_zoom_clamped_at_minimum()`: 200 scroll-ups do not push `_distance < min_distance`.
-
-Label readability (Zooming in — "AND labels scale to remain readable") is covered
-by `test_labels_are_billboard_and_readable()` in `test_scene_graph_loading.gd`.
+Tests (`test_camera_controls.gd`, 8 tests): top-down theta, positive distance,
+scroll up/down, horizontal/vertical orbit drag, `set_pivot()` state, zoom clamp. ✅
 
 ---
 
 ### Requirement: Godot 4 — COVERED
 
-**Spec**: Application MUST be built using Godot 4.x with GDScript.
+`godot/project.godot` declares `config/features=PackedStringArray("4.6")`.
+All scripts use `.gd` extension and GDScript 2.0 syntax. ✅
 
-**Evidence**:
-- `godot/project.godot` line 19: `config/features=PackedStringArray("4.6")` — Godot 4.6.
-- All 5 scripts (`main.gd`, `camera_controller.gd`, `scene_graph_loader.gd`,
-  `view_spec.gd`, `view_spec_renderer.gd`) use `.gd` extension and GDScript 2.0 syntax
-  (typed variables, `@export`, `@onready`, `class_name`, return-type annotations).
-- Test runner (`run_tests.gd extends SceneTree`) and all 9 test files are GDScript.
+---
 
-This is a structural/configuration property; the project file is the authoritative
-implementation artifact. The entire test suite executing as GDScript proves the
-GDScript requirement in practice.
+### Warning: State Files on Branch
+
+The merge commit `4296c79` introduced `.hyperloop/state/` files that diverge
+from `main`. Compared to `main`, this branch has:
+
+- `.hyperloop/state/intake-2026-04-23.md` — different text (truncated version,
+  missing "ORCHESTRATOR: STOP RE-QUEUEING" warning and re-review table)
+- `.hyperloop/state/tasks/task-007.md` — `phase: implementer`, `pr: null`
+  (main has `phase: verifier`, PR link present)
+- `.hyperloop/state/tasks/task-023.md` — deleted on this branch, exists on main
+
+These divergences will cause merge conflicts when the orchestrator tries to
+merge this branch to trunk — exactly the pattern that caused the three previous
+branch resets. The implementation commits themselves (`a02ffac`, `12ac742`,
+`11960e4`) do NOT touch state files; the divergence came in via the merge commit.
+
+**Orchestrator action required before merging:** rebase this branch onto main
+using only the three implementation commits (`a02ffac`, `12ac742`, `11960e4`)
+without carrying the state file diffs. The state files should be left to whatever
+main currently has. A `git rebase --onto main <base> HEAD` selecting only those
+three commits (plus the test runner update) is sufficient.
 
 ---
 
 ### Summary
 
-| Requirement             | Status  |
-|-------------------------|---------|
+| Requirement              | Status  |
+|--------------------------|---------|
 | JSON Scene Graph Loading | COVERED |
 | Containment Rendering    | COVERED |
 | Dependency Rendering     | COVERED |
@@ -157,9 +147,11 @@ GDScript requirement in practice.
 | Camera Controls          | COVERED |
 | Godot 4                  | COVERED |
 
-All six MUST requirements are fully implemented in GDScript and covered by behavioral
-tests in `godot/tests/` that instantiate real Node3D objects, supply known fixture data,
-and assert concrete runtime property values (positions, mesh dimensions, material
-transparency, cull mode, color channels, camera state variables).
+All six MUST requirements are fully implemented and covered by 91 behavioral
+GDScript tests that instantiate real `Node3D` objects and assert concrete
+property values. All four check scripts exit 0. Commit trailers are present.
 
-**Verdict: PASS**
+**The implementation is complete and correct. Verdict: PASS.**
+
+The state file divergence is a branch hygiene issue for the orchestrator to
+resolve at merge time — it does not affect the correctness of the implementation.
