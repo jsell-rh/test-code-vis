@@ -1,0 +1,43 @@
+---
+verdict: pass
+---
+All spec scenarios for the code-extraction spec are implemented and verified.
+
+## Checks passed
+
+- **extractor-lint.sh**: `ruff check` and `ruff format --check` pass; 96 pytest tests pass.
+- **godot-compile.sh**: Godot 4.6.2 compiles the project without error.
+- **godot-tests.sh**: 28 GDScript behavioral tests pass (custom headless runner).
+
+## Scenario coverage
+
+### Module Discovery
+- `discover_bounded_contexts()` discovers top-level Python packages that are not in
+  the exclusion list (tests, docs, __pycache__, etc.).  Each node carries `id`,
+  `name`, `type="bounded_context"`, `parent=null`, and `metrics.loc`.
+- `discover_submodules()` discovers internal layers; each module node carries
+  `parent` set to its bounded context id, encoding the containment relationship.
+
+### Dependency Extraction
+- `build_dependency_edges()` walks each node's Python files with `ast`, collects
+  absolute imports, resolves them to the most specific known node id, and emits
+  edges with `type="cross_context"` or `type="internal"` accordingly.
+- Tests confirm `iam → shared_kernel` (cross-context) and
+  `iam.application → iam.domain` (internal) are generated with correct types.
+
+### Complexity Metrics
+- `compute_loc()` counts non-empty line counts recursively over `*.py` files.
+- `size_from_loc()` derives a normalised visual size.  Both values appear in
+  every code-derived node's `metrics` dict.
+
+### JSON Scene Graph Output
+- `build_scene_graph()` assembles `{nodes, edges, metadata}` and the `__main__.py`
+  CLI serialises it to a JSON file.  The Godot loader tests instantiate the
+  scene-tree from this dict, confirming it is consumable without transformation.
+
+### Spec Extraction
+- `extract_spec_nodes()` reads a codebase's `specs/` directory; top-level bounded-
+  context spec dirs become nodes with `type="spec"` and ids prefixed `spec.*`.
+  Child spec files become nested spec nodes with their parent set accordingly.
+- `include_specs=False` (default) produces zero spec nodes; `include_specs=True`
+  adds the parallel spec ring above the code scene (y=5).
