@@ -212,6 +212,30 @@ func _create_edge(ed: Dictionary) -> void:
 	# Edges live at the scene root so their positions are already world-space.
 	add_child(mesh_instance)
 
+	# Arrowhead: a cone (CylinderMesh, top_radius=0 = pointed tip) placed at the
+	# target end, oriented along the edge direction, to indicate which way the
+	# dependency flows.  The cone's +Y axis is the tip; we rotate so +Y aligns
+	# with dir (from_pos → to_pos).
+	var dir: Vector3 = (to_pos - from_pos).normalized()
+	var cone_mesh := CylinderMesh.new()
+	cone_mesh.top_radius = 0.0       # pointed tip at +Y
+	cone_mesh.bottom_radius = 0.25
+	cone_mesh.height = 0.7
+	cone_mesh.radial_segments = 8
+
+	var cone_mat := StandardMaterial3D.new()
+	cone_mat.albedo_color = line_color
+	cone_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	var arrow := MeshInstance3D.new()
+	arrow.mesh = cone_mesh
+	arrow.material_override = cone_mat
+	# Rotate so the cone's +Y (tip) aligns with the edge direction.
+	arrow.basis = Basis(Quaternion(Vector3.UP, dir))
+	# Centre the cone so its tip lands exactly at to_pos.
+	arrow.position = to_pos - dir * (cone_mesh.height * 0.5)
+	add_child(arrow)
+
 
 # ---------------------------------------------------------------------------
 # Camera framing
