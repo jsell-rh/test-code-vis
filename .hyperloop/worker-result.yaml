@@ -1,0 +1,75 @@
+---
+verdict: pass
+---
+## Spec Alignment Review: prototype-scope.spec.md
+
+Branch: hyperloop/task-012
+
+---
+
+### check-not-in-scope.sh
+
+```
+OK: No prohibited (not-in-scope) features detected.
+EXIT:0
+```
+
+---
+
+### All Check Scripts
+
+| Check | Result |
+|-------|--------|
+| check-not-in-scope.sh | PASS |
+| extractor-lint.sh (ruff + 90 pytest) | PASS |
+| godot-compile.sh | PASS |
+| godot-tests.sh (66 GDScript tests) | PASS |
+| godot-label3d.sh | PASS |
+| godot-fileaccess-tested.sh | PASS |
+| check-kartograph-integration-test.sh | PASS |
+
+---
+
+### Prohibited Feature Removal
+
+A previous iteration (caught by an earlier worker round) had fully implemented two
+spec-prohibited features. Commit `5a67f83` removes them completely:
+
+- **Moldable views**: `question_panel.gd`, `view_spec.gd`, `view_spec_renderer.gd`,
+  all three test files, and all `main.gd` wiring deleted (−1 718 lines).
+- **Spec extraction**: `extract_spec_nodes()`, `_layout_spec_nodes()`, `include_specs`
+  parameter, `--specs` CLI flag, and `TestSpecExtraction` class deleted.
+
+Post-removal grep for `question_panel`, `view_spec`, `QuestionPanel`, `ViewSpec`,
+`spec_extraction`, `extract_spec`, `include_specs`, `--specs` across `godot/` and
+`extractor/` returns zero matches.
+
+---
+
+### Requirement Coverage
+
+| Requirement | Status |
+|---|---|
+| Target Codebase (Loading kartograph) | COVERED |
+| Two-Stage Pipeline (Extraction then visualization) | COVERED |
+| Top-Down Architectural View | COVERED |
+| Zoom to Detail (Zooming into IAM) | COVERED |
+| Abstract Visual Language | COVERED |
+| Readable Labels | COVERED |
+| Dependency Visualization (direction via arrowhead cone) | COVERED |
+| Navigation (pan, zoom, orbit) | COVERED |
+| Not In Scope — moldable views absent | COVERED |
+| Not In Scope — spec extraction absent | COVERED |
+| Not In Scope — conformance/evaluation/simulation/data-flow/first-person absent | COVERED |
+
+### Commit Trailers
+
+`Spec-Ref` and `Task-Ref` trailers are present on all feature/fix commits on this
+branch (verified via `git log` inspection).
+
+---
+
+**Overall verdict: PASS**
+
+All spec requirements are met, all automated checks pass, and both previously
+prohibited features are fully excised with no remaining artifacts.
