@@ -1,0 +1,98 @@
+---
+verdict: pass
+---
+All six SHALL requirements in specs/prototype/godot-application.spec.md are implemented
+in code and covered by GDScript behavioral tests in godot/tests/.
+
+## Requirement: JSON Scene Graph Loading — COVERED
+
+Implementation: godot/scripts/main.gd
+  - _ready() opens the JSON file with FileAccess.open() + get_as_text() (Godot 4.6 API)
+  - build_from_graph() creates a Node3D anchor per node (_anchors dict), a MeshInstance3D
+    per anchor, and ImmediateMesh+arrowhead MeshInstance3D per edge.
+  - Anchor positions are set directly from the JSON "position" field.
+
+Tests: godot/tests/test_scene_graph_loading.gd
+  - test_volumes_created_for_each_node   — _anchors contains every node id
+  - test_mesh_instances_exist_in_anchors — each anchor has a MeshInstance3D child
+  - test_edge_mesh_instances_created     — at least 2 root MeshInstance3D per edge
+                                           (line + arrowhead)
+  - test_anchor_positions_match_json     — anchor.position == JSON position field
+  - test_labels_are_billboard_and_readable — Label3D has BILLBOARD_ENABLED,
+                                             pixel_size > 0, no_depth_test=true
+
+## Requirement: Containment Rendering — COVERED
+
+Implementation: main.gd::_create_volume()
+  - bounded_context: BoxMesh with TRANSPARENCY_ALPHA, alpha=0.18, CULL_DISABLED.
+  - module: BoxMesh, alpha=1.0 (fully opaque), default cull mode.
+  - Child nodes are added to their parent anchor (Node3D hierarchy = visual nesting).
+
+Tests: godot/tests/test_containment_rendering.gd
+  - test_bounded_context_is_translucent    — TRANSPARENCY_ALPHA + albedo_color.a < 1
+  - test_module_is_opaque                  — module material albedo_color.a >= 1.0
+  - test_module_parented_inside_context    — mod_anchor.get_parent() == ctx_anchor
+  - test_bounded_context_larger_than_module — ctx BoxMesh.size.x > mod BoxMesh.size.x
+  - test_bounded_context_cull_disabled     — mat.cull_mode == CULL_DISABLED
+
+## Requirement: Dependency Rendering — COVERED
+
+Implementation: main.gd::_create_edge()
+  - ImmediateMesh (PRIMITIVE_LINES, two vertices) is the line connecting source and target.
+  - CylinderMesh (top_radius=0, bottom_radius=0.25) is the arrowhead cone at the target end.
+  - Cross-context edges are colored orange; internal edges are grey.
+
+Tests: godot/tests/test_dependency_rendering.gd
+  - test_edge_line_mesh_created          — ImmediateMesh child exists on main node
+  - test_direction_indicator_cone_created — CylinderMesh with top_radius==0 exists
+  - test_direction_cone_near_target      — cone is within 2 units of target position
+  - test_cross_context_cone_is_orange    — mat.albedo_color.r > 0.8, .b < 0.3
+
+## Requirement: Size Encoding — COVERED
+
+Implementation: main.gd::_create_volume()
+  - sz = float(nd["size"]) is used directly as BoxMesh size dimensions; both
+    width (x) and depth (z) equal sz, so larger size → larger volume.
+
+Tests: godot/tests/test_size_encoding.gd
+  - test_large_module_has_bigger_mesh      — large_mesh.size.x > small_mesh.size.x
+  - test_mesh_sizes_proportional_to_metric — ratio 9.0/3.0 == 3.0 within tolerance
+
+## Requirement: Camera Controls — COVERED
+
+Implementation: godot/scripts/camera_controller.gd
+  - Spherical-coordinate camera: _theta (polar, 0 = top-down), _phi (azimuth),
+    _distance. Initial _theta = 0.15 rad ≈ 8.6° (near top-down).
+  - WHEEL_UP/WHEEL_DOWN zoom; middle-mouse drag orbits (phi, theta);
+    right-mouse drag pans pivot.
+  - look_at(_pivot, Vector3.UP) keeps "up stays up".
+  - set_pivot() called from main.gd::_frame_camera() after graph loads.
+
+Tests: godot/tests/test_camera_controls.gd
+  - test_initial_theta_is_near_top_down    — _theta < PI/4
+  - test_initial_distance_is_positive      — _distance > 0
+  - test_scroll_up_decreases_distance      — WHEEL_UP decreases _distance
+  - test_scroll_down_increases_distance    — WHEEL_DOWN increases _distance
+  - test_orbit_horizontal_drag_changes_phi — horizontal drag changes _phi
+  - test_orbit_vertical_drag_changes_theta — vertical drag changes _theta
+  - test_set_pivot_updates_state           — set_pivot() stores pivot and distance
+  - test_zoom_clamped_at_minimum           — 200× WHEEL_UP never drops below min_distance
+
+## Requirement: Godot 4.6 — COVERED
+
+Implementation:
+  - godot/project.godot: config/features=PackedStringArray("4.6")
+  - All scripts are .gd (GDScript) files; no .cs files exist.
+  - main.gd uses FileAccess.open() + get_as_text() (Godot 4.x API);
+    deprecated Godot-3-style File.new() / read_as_text() are absent.
+
+Tests: godot/tests/test_engine_version.gd + godot/tests/test_godot_version.gd
+  - test_project_godot_declares_version_4_6 — project.godot content contains "4.6"
+  - test_project_features_include_4_6       — content contains "\"4.6\""
+  - test_main_script_is_gdscript            — project references main.tscn, no .cs
+  - test_project_declares_godot_46 (v2)     — redundant but explicit re-verification
+  - test_main_script_is_gdscript (v2)       — reads main.gd via FileAccess, confirms
+                                              non-empty .gd file
+  - test_main_uses_godot4_fileaccess_api    — asserts FileAccess.open() and
+                                              get_as_text() present; File.new() and
+                                              read_as_text() absent
