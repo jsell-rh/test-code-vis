@@ -36,6 +36,9 @@ func _init() -> void:
 	# --- task-013: Godot 4.6 / Engine version scenario ---
 	_run_suite(preload("res://tests/test_godot_version.gd").new())
 
+	# --- task-014: Spatial structure spec ---
+	_run_suite(preload("res://tests/test_spatial_structure.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 

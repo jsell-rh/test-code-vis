@@ -9,9 +9,15 @@ extends Node3D
 ##   - edges                  → coloured lines with arrowhead cones
 ##     (orange = cross-context, grey = internal)
 ##
+## Level-of-detail (LOD) is applied every frame via LodManager:
+##   far distance  → only bounded_context nodes visible
+##   medium distance → bounded_context + module nodes visible
+##   near distance  → all nodes and edges visible (finest detail)
+##
 ## The JSON file path is configurable via the exported variable.
 
 const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
+const LodManager = preload("res://scripts/lod_manager.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -23,6 +29,15 @@ var _world_positions: Dictionary = {}
 
 ## The parsed scene graph.
 var _graph: Dictionary = {}
+
+## LOD manager instance — controls visibility based on camera distance.
+var _lod: LodManager = LodManager.new()
+
+## Entries for LOD: Array of {anchor: Node3D, node_type: String}
+var _lod_node_entries: Array = []
+
+## Entries for LOD: Array of {visual: Node3D, edge_type: String}
+var _lod_edge_entries: Array = []
 
 @onready var _camera: Camera3D = $Camera3D
 
@@ -84,6 +99,25 @@ func build_from_graph(graph: Dictionary) -> void:
 	# Reposition camera to frame the whole graph.
 	_frame_camera()
 
+	# Apply initial LOD pass so visibility is correct before any _process tick.
+	_update_lod()
+
+
+# ---------------------------------------------------------------------------
+# Per-frame LOD update
+# ---------------------------------------------------------------------------
+
+func _process(_delta: float) -> void:
+	_update_lod()
+
+
+## Query the camera's current distance and apply LOD visibility accordingly.
+func _update_lod() -> void:
+	if _camera == null or not _camera.has_method("get_distance"):
+		return
+	var dist: float = _camera.call("get_distance")
+	_lod.update_lod(_lod_node_entries, _lod_edge_entries, dist)
+
 
 # ---------------------------------------------------------------------------
 # World-position helpers
@@ -129,6 +163,8 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	anchor.position = Vector3(float(p["x"]), float(p["y"]), float(p["z"]))
 	parent_node.add_child(anchor)
 	_anchors[nd["id"]] = anchor
+	# Register with LOD manager so visibility can be toggled by camera distance.
+	_lod_node_entries.append({"anchor": anchor, "node_type": nd["type"]})
 
 	var sz: float = float(nd["size"])
 	var is_context: bool = nd["type"] == "bounded_context"
@@ -206,6 +242,8 @@ func _create_edge(ed: Dictionary) -> void:
 	mesh_instance.material_override = mat
 	# Edges live at the scene root so their positions are already world-space.
 	add_child(mesh_instance)
+	# Register line with LOD manager.
+	_lod_edge_entries.append({"visual": mesh_instance, "edge_type": ed["type"]})
 
 	# Arrowhead: a cone (CylinderMesh, top_radius=0 = pointed tip) placed at the
 	# target end, oriented along the edge direction, indicating dependency flow.
@@ -228,6 +266,8 @@ func _create_edge(ed: Dictionary) -> void:
 	# Centre the cone so its tip lands exactly at to_pos.
 	arrow.position = to_pos - dir * (cone_mesh.height * 0.5)
 	add_child(arrow)
+	# Register arrowhead with LOD manager (same edge_type as the line).
+	_lod_edge_entries.append({"visual": arrow, "edge_type": ed["type"]})
 
 
 # ---------------------------------------------------------------------------
