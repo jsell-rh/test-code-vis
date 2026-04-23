@@ -1,0 +1,100 @@
+---
+verdict: pass
+---
+
+## Summary
+
+All three SHALL requirements in `specs/interaction/moldable-views.spec.md` are fully
+implemented and tested. The previous FAIL (missing view-spec renderer) is resolved:
+`godot/scripts/scene_interpreter.gd` was added in commit `cd569e4`, and its companion
+test suite `godot/tests/test_scene_interpreter.gd` provides real Node3D behavioral
+coverage for all 6 ops. Both are registered in `run_tests.gd`.
+
+---
+
+## Findings
+
+### Requirement: Question-Driven View Generation — COVERED
+
+Implementation:
+- `godot/scripts/llm_view_generator.gd` — `build_prompt(question, graph)` constructs an
+  LLM prompt embedding the question and all node ids from the graph.
+- `godot/scripts/scene_interpreter.gd` — `_apply_show()`, `_apply_hide()`,
+  `_apply_arrange()` mutate anchor visibility and position in the live scene.
+- `godot/scripts/main.gd` — `apply_view_spec(spec)` wires SceneInterpreter to the
+  real `_anchors` and `_world_positions` maps built at startup.
+
+Scenario: Architectural question ("how does authentication work?")
+- THEN the system generates a view focused on auth-related components
+  → show op: `SceneInterpreter._apply_show()` sets `anchor.visible = true`
+  → Test: `test_show_op_sets_visible_true` (test_scene_interpreter.gd) ✓
+- AND irrelevant components are hidden or de-emphasized
+  → hide op: `SceneInterpreter._apply_hide()` sets `anchor.visible = false`
+  → Tests: `test_hide_op_sets_visible_false`, `test_hide_op_leaves_other_nodes_unchanged` ✓
+- AND the relevant components are arranged to answer the question
+  → arrange op: `SceneInterpreter._apply_arrange()` sets `anchor.position`
+  → Tests: `test_arrange_op_sets_position_x`, `test_arrange_op_sets_position_z`,
+           `test_arrange_op_sets_all_three_axes` ✓
+
+Scenario: Impact question ("what depends on the user database?")
+- THEN the system generates a view showing the user database and all its dependents
+  → show op tested above ✓
+- AND the dependency relationships are spatially clear
+  → connect op: `SceneInterpreter._apply_connect()` draws ImmediateMesh line +
+    CylinderMesh arrowhead on scene_root
+  → Tests: `test_connect_op_adds_line_geometry`, `test_connect_op_adds_arrowhead`,
+           `test_connect_op_skips_coincident_positions` ✓
+
+### Requirement: View Specs as Intermediate Representation — COVERED
+
+Implementation:
+- `LLMViewGenerator.parse_response()` returns a Dictionary (not Node3D or geometry).
+- `SceneInterpreter.apply(spec, anchors, scene_root, world_positions)` consumes that
+  Dictionary and mutates actual Node3D scene-tree properties.
+- `main.gd.apply_view_spec()` connects the two halves end-to-end.
+
+Scenario: LLM produces view spec
+- THEN it emits a structured view specification (not raw 3D geometry)
+  → Test: `test_parse_response_returns_dictionary` ✓
+- AND the view spec controls which elements are shown, hidden, highlighted, arranged
+  → Tests: `test_parse_response_passes_through_show_op`, `..._hide_op`, `..._arrange_op`,
+           `..._highlight_op`, `..._annotate_op`, `..._connect_op`,
+           `test_parse_response_all_six_ops_pass_through` ✓
+- AND the 3D renderer interprets the view spec into a spatial scene
+  → Node3D behavioral tests instantiate real anchors, call apply(), assert properties:
+    highlight: `test_highlight_op_changes_albedo_color` — asserts mat.albedo_color ✓
+    annotate:  `test_annotate_op_adds_label3d`, `test_annotate_op_sets_label_text`,
+               `test_annotate_label_billboard_enabled`, `test_annotate_label_pixel_size_positive` ✓
+    all 6 ops: `test_all_six_ops_mutate_scene_correctly` — integration assertion ✓
+
+### Requirement: Fixed Visual Primitive Set — COVERED
+
+Implementation:
+- `VALID_OPS: Array = ["show", "hide", "highlight", "arrange", "annotate", "connect"]`
+  is a compile-time constant in `llm_view_generator.gd`.
+- `parse_response()` calls `_make_spec()` which drops any op not in VALID_OPS.
+- `SceneInterpreter.apply()` uses a `match` statement — only the fixed 6 ops are handled;
+  all others fall through silently.
+
+Scenario: LLM uses existing primitives
+- THEN it composes the answer from the existing set of primitives
+  → Tests: `test_build_prompt_contains_show_primitive` through `..._connect_primitive`
+           (all 6 primitives checked individually) ✓
+- AND no new rendering logic is generated at runtime
+  → Tests: `test_parse_response_filters_unknown_ops` (unknown op dropped from array),
+           `test_parse_response_with_all_unknown_ops_returns_empty_operations`,
+           `test_unknown_op_is_ignored` (SceneInterpreter ignores "teleport") ✓
+
+---
+
+## Test Registration
+
+Both new suites are registered in `run_tests.gd` (lines 37-40):
+  - `test_llm_view_generator.gd` — uses _check()/_test_failed pattern
+  - `test_scene_interpreter.gd` — uses bool-return pattern
+
+All `test_scene_interpreter.gd` tests instantiate real `Node3D` / `MeshInstance3D` /
+`Label3D` objects, call `SceneInterpreter.apply()` with fixture specs, and assert
+observable scene-tree properties (visible, position, albedo_color, label.text,
+billboard, pixel_size, child_count). This satisfies the guideline requirement for
+"GDScript behavioral test with known fixture data asserting runtime outputs."
