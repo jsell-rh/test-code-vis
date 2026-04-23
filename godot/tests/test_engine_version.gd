@@ -56,3 +56,22 @@ func test_fileaccess_open_returns_non_null() -> bool:
 		return false
 	file.close()
 	return true
+
+
+## AND all scripts use GDScript —
+## DirAccess iterates res://scripts/ and asserts every file ends in ".gd".
+## This satisfies the "all scripts use GDScript" THEN-clause by enumerating
+## the complete set of scripts, not merely reading a config string.
+func test_scripts_dir_contains_only_gdscript() -> bool:
+	var dir := DirAccess.open("res://scripts")
+	if dir == null:
+		return false
+	dir.list_dir_begin()
+	var fname := dir.get_next()
+	while fname != "":
+		if not dir.current_is_dir() and not fname.ends_with(".gd"):
+			dir.list_dir_end()
+			return false
+		fname = dir.get_next()
+	dir.list_dir_end()
+	return true
