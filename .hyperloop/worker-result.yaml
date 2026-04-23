@@ -2,24 +2,22 @@
 verdict: pass
 ---
 
-## Worker Result — task-011
+## Reviewer Verdict — task-011
 
-### Fix Applied
+### Check Script Sync Note — Process Violation (Non-Blocking)
 
-Added two theta-clamping boundary tests to `godot/tests/test_camera_controls.gd` to
-cover the "AND orientation remains intuitive (up stays up)" THEN-clause from the
-Orbiting scenario (Requirement: Camera Controls).
+Before running the master check runner, I synced `.hyperloop/checks/` from `main`
+(`git checkout main -- .hyperloop/checks/`). Four check scripts present on `main` were
+absent from the worktree before the sync:
 
-**Root cause of prior FAIL:** `camera_controller.gd` clamps `_theta` to `[0.01, PI-0.01]`
-to prevent camera flipping past the poles, but no test drove theta past either boundary
-to assert the clamped result. The constraint-behavior guideline explicitly names this as
-requiring a boundary test.
+- `check-checks-in-sync.sh`
+- `check-clamp-boundary-tests.sh`
+- `check-gdscript-only-test.sh`
+- `check-pipeline-wiring.sh`
 
-**Tests added:**
-- `test_theta_clamped_at_minimum`: starts `_theta = 0.02`, applies extreme downward drag
-  (delta.y = +20000), asserts `cam._theta >= 0.01` (top-pole clamp holds).
-- `test_theta_clamped_at_maximum`: starts `_theta = PI - 0.02`, applies extreme upward
-  drag (delta.y = −20000), asserts `cam._theta <= PI - 0.01` (bottom-pole clamp holds).
+The implementer's prior findings table listed only 7 checks, missing these four. This is a
+process violation: the implementer did not sync `.hyperloop/checks/` from `main` before
+submitting. All four new checks exited 0 after syncing — no underlying FAIL exists.
 
 ---
 
@@ -29,17 +27,80 @@ OK: No prohibited (not-in-scope) features detected.
 
 ---
 
-## Check Script Results
+## run-all-checks.sh Output (verbatim, post-sync)
 
-| Script | Result |
-|--------|--------|
-| check-not-in-scope.sh | OK: No prohibited (not-in-scope) features detected. |
-| check-kartograph-integration-test.sh | OK: Integration test referencing kartograph codebase with expected-context assertions found. |
-| extractor-lint.sh | PASS — ruff clean, 90 pytest tests pass |
-| godot-compile.sh | PASS — Godot 4.6.2.stable.official |
-| godot-tests.sh | 58 PASS / 0 FAIL |
-| godot-fileaccess-tested.sh | OK — FileAccess.open() exercised in 2 test files |
-| godot-label3d.sh | PASS — All Label3D nodes have billboard and pixel_size set and tested |
+```
+=== run-all-checks.sh ===
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: All 2 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+SKIP: No 'all scripts use GDScript' constraint found in spec
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM->view-spec pipeline.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- extractor-lint.sh ---
+All checks passed!
+7 files already formatted
+90 passed in 0.12s
+Extractor checks passed.
+[EXIT 0]
+
+--- godot-compile.sh ---
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Found 8 GDScript test file(s) in godot/tests/.
+[58 PASS / 0 FAIL]
+GDScript behavioral tests passed.
+[EXIT 0]
+
+=== Summary: 12 check(s) run ===
+RESULT: ALL PASS
+```
+
+---
+
+## Commit Trailer Verification
+
+HEAD commit `d5dabd97` ("test(godot): add theta-clamp boundary tests for camera orbit stability"):
+- `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384` PRESENT
+- `Task-Ref: task-011` PRESENT
 
 ---
 
@@ -84,7 +145,7 @@ OK: No prohibited (not-in-scope) features detected.
 | camera moves closer on scroll | `test_scroll_up_decreases_distance` | COVERED |
 | labels scale to remain readable | `test_labels_are_billboard_and_readable` | COVERED |
 | camera rotates around focal point | `test_orbit_horizontal_drag_changes_phi`, `test_orbit_vertical_drag_changes_theta` | COVERED |
-| orientation remains intuitive (up stays up) | `test_theta_clamped_at_minimum` (asserts `_theta >= 0.01`), `test_theta_clamped_at_maximum` (asserts `_theta <= PI - 0.01`) | COVERED |
+| orientation remains intuitive (up stays up) | `test_theta_clamped_at_minimum` (asserts `_theta >= 0.01`), `test_theta_clamped_at_maximum` (asserts `_theta <= PI-0.01`) | COVERED |
 
 ### REQ-6: Godot 4.6
 
@@ -98,7 +159,9 @@ OK: No prohibited (not-in-scope) features detected.
 
 ## Summary
 
-All THEN-clauses are now COVERED with direct behavioral tests. The one blocking finding
-from the previous review (missing theta-clamp boundary test) has been resolved by adding
-`test_theta_clamped_at_minimum` and `test_theta_clamped_at_maximum`. All 58 GDScript
-tests pass; all check scripts exit 0.
+All 12 check scripts exit 0 (including 4 new checks synced from main that were missing
+from the implementer's branch). All 58 GDScript behavioral tests pass. Every spec
+THEN-clause maps to a named test that directly asserts the predicate. Commit trailers
+(Spec-Ref, Task-Ref) are present. The process violation (4 checks absent from implementer's
+findings table because they were not synced from main) is recorded but non-blocking — all
+four new checks pass. Implementation is complete and correct.
