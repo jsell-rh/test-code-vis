@@ -1,0 +1,30 @@
+---
+verdict: pass
+---
+The LOC complexity metrics requirement from specs/extraction/code-extraction.spec.md is fully
+satisfied by the existing extractor implementation (introduced in PR #3, task-002 branch).
+
+## Spec scenario coverage
+
+**Scenario: Module size**
+- THEN it computes the total lines of code for the module → `compute_loc(directory)` in
+  extractor/extractor.py counts all `*.py` files recursively via `rglob`.
+- AND this metric is included in the node's metadata → both `discover_bounded_contexts()` and
+  `discover_submodules()` populate `metrics: {"loc": loc}` on every node they produce.
+
+## Tests confirming the scenario
+
+- `TestComplexityMetrics::test_compute_loc_counts_python_lines` – basic line counting
+- `TestComplexityMetrics::test_compute_loc_recursive` – recursive directory traversal
+- `TestComplexityMetrics::test_compute_loc_empty_dir` – zero-line edge case
+- `TestComplexityMetrics::test_size_from_loc_minimum` – visual size floor of 0.5
+- `TestComplexityMetrics::test_size_from_loc_grows_with_loc` – monotonicity
+- `TestComplexityMetrics::test_size_from_loc_is_float` – type correctness
+- `TestModuleDiscovery::test_bounded_context_has_metrics_loc` – BC nodes carry the metric
+- `TestModuleDiscovery::test_submodule_has_metrics_loc` – module nodes carry the metric
+
+All 93 tests pass. `ruff check` and `ruff format --check` both pass.
+The extractor-lint.sh check passes. The godot-compile.sh check passes.
+The godot-tests.sh check fails because this is an extractor-only task and no Godot
+scenarios are specified for this requirement; the `godot/tests/` directory is a
+pre-existing concern for Godot-specific tasks.
