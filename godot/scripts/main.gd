@@ -38,6 +38,24 @@ func _spawn_node(node_data: Dictionary) -> void:
 		float(pos.get("y", 0.0)),
 		float(pos.get("z", 0.0))
 	)
+	var s: float = float(node_data.get("size", 1.0))
+	var box: BoxMesh = BoxMesh.new()
+	box.size = Vector3(s, s * 0.4, s)
+	mesh_instance.mesh = box
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	if node_data.get("type", "") == "bounded_context":
+		mat.albedo_color = Color(0.2, 0.5, 0.8, 0.4)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	else:
+		mat.albedo_color = Color(0.6, 0.3, 0.7, 0.9)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mesh_instance.material_override = mat
+	var label: Label3D = Label3D.new()
+	label.text = node_data.get("name", "")
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.pixel_size = 0.05
+	label.position = Vector3(0, s * 0.3, 0)
+	mesh_instance.add_child(label)
 	add_child(mesh_instance)
 
 

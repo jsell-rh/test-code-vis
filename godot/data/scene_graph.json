@@ -1,0 +1,855 @@
+{
+  "nodes": [
+    {
+      "id": "graph",
+      "name": "Graph",
+      "type": "bounded_context",
+      "position": {
+        "x": 15.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "size": 3.760648619581356,
+      "parent": null,
+      "metrics": {
+        "loc": 5762
+      }
+    },
+    {
+      "id": "iam",
+      "name": "Iam",
+      "type": "bounded_context",
+      "position": {
+        "x": -7.4999999999999964,
+        "y": 0.0,
+        "z": 12.99038105676658
+      },
+      "size": 4.150510832907967,
+      "parent": null,
+      "metrics": {
+        "loc": 14141
+      }
+    },
+    {
+      "id": "infrastructure",
+      "name": "Infrastructure",
+      "type": "bounded_context",
+      "position": {
+        "x": 7.500000000000002,
+        "y": 0.0,
+        "z": 12.990381056766578
+      },
+      "size": 3.595716619943424,
+      "parent": null,
+      "metrics": {
+        "loc": 3941
+      }
+    },
+    {
+      "id": "management",
+      "name": "Management",
+      "type": "bounded_context",
+      "position": {
+        "x": -15.0,
+        "y": 0.0,
+        "z": 1.83697019872103e-15
+      },
+      "size": 3.7304592600457687,
+      "parent": null,
+      "metrics": {
+        "loc": 5375
+      }
+    },
+    {
+      "id": "query",
+      "name": "Query",
+      "type": "bounded_context",
+      "position": {
+        "x": 7.500000000000002,
+        "y": 0.0,
+        "z": -12.990381056766578
+      },
+      "size": 3.2817149700272954,
+      "parent": null,
+      "metrics": {
+        "loc": 1912
+      }
+    },
+    {
+      "id": "shared_kernel",
+      "name": "Shared Kernel",
+      "type": "bounded_context",
+      "position": {
+        "x": -7.500000000000007,
+        "y": 0.0,
+        "z": -12.990381056766577
+      },
+      "size": 3.699924402742476,
+      "parent": null,
+      "metrics": {
+        "loc": 5010
+      }
+    },
+    {
+      "id": "graph.application",
+      "name": "Application",
+      "type": "module",
+      "position": {
+        "x": 19.5,
+        "y": 1.0,
+        "z": 0.0
+      },
+      "size": 3.010723865391773,
+      "parent": "graph",
+      "metrics": {
+        "loc": 1024
+      }
+    },
+    {
+      "id": "graph.domain",
+      "name": "Domain",
+      "type": "module",
+      "position": {
+        "x": 16.390576474687265,
+        "y": 1.0,
+        "z": 4.2797543233281905
+      },
+      "size": 2.5763413502057926,
+      "parent": "graph",
+      "metrics": {
+        "loc": 376
+      }
+    },
+    {
+      "id": "graph.infrastructure",
+      "name": "Infrastructure",
+      "type": "module",
+      "position": {
+        "x": 11.359423525312737,
+        "y": 1.0,
+        "z": 2.6450336353161297
+      },
+      "size": 3.5031094366713686,
+      "parent": "graph",
+      "metrics": {
+        "loc": 3184
+      }
+    },
+    {
+      "id": "graph.ports",
+      "name": "Ports",
+      "type": "module",
+      "position": {
+        "x": 11.359423525312735,
+        "y": 1.0,
+        "z": -2.645033635316129
+      },
+      "size": 2.8567288903828825,
+      "parent": "graph",
+      "metrics": {
+        "loc": 718
+      }
+    },
+    {
+      "id": "graph.presentation",
+      "name": "Presentation",
+      "type": "module",
+      "position": {
+        "x": 16.39057647468726,
+        "y": 1.0,
+        "z": -4.279754323328191
+      },
+      "size": 2.4199557484897576,
+      "parent": "graph",
+      "metrics": {
+        "loc": 262
+      }
+    },
+    {
+      "id": "iam.application",
+      "name": "Application",
+      "type": "module",
+      "position": {
+        "x": -2.099999999999996,
+        "y": 1.0,
+        "z": 12.99038105676658
+      },
+      "size": 3.620968435644289,
+      "parent": "iam",
+      "metrics": {
+        "loc": 4177
+      }
+    },
+    {
+      "id": "iam.dependencies",
+      "name": "Dependencies",
+      "type": "module",
+      "position": {
+        "x": -4.799999999999995,
+        "y": 1.0,
+        "z": 17.666918237202548
+      },
+      "size": 3.117602691690084,
+      "parent": "iam",
+      "metrics": {
+        "loc": 1310
+      }
+    },
+    {
+      "id": "iam.domain",
+      "name": "Domain",
+      "type": "module",
+      "position": {
+        "x": -10.199999999999996,
+        "y": 1.0,
+        "z": 17.666918237202548
+      },
+      "size": 3.346157302232008,
+      "parent": "iam",
+      "metrics": {
+        "loc": 2218
+      }
+    },
+    {
+      "id": "iam.infrastructure",
+      "name": "Infrastructure",
+      "type": "module",
+      "position": {
+        "x": -12.899999999999997,
+        "y": 1.0,
+        "z": 12.99038105676658
+      },
+      "size": 3.5240064455573723,
+      "parent": "iam",
+      "metrics": {
+        "loc": 3341
+      }
+    },
+    {
+      "id": "iam.ports",
+      "name": "Ports",
+      "type": "module",
+      "position": {
+        "x": -10.2,
+        "y": 1.0,
+        "z": 8.313843876330612
+      },
+      "size": 2.736396502276642,
+      "parent": "iam",
+      "metrics": {
+        "loc": 544
+      }
+    },
+    {
+      "id": "iam.presentation",
+      "name": "Presentation",
+      "type": "module",
+      "position": {
+        "x": -4.799999999999995,
+        "y": 1.0,
+        "z": 8.313843876330612
+      },
+      "size": 3.4068806700491243,
+      "parent": "iam",
+      "metrics": {
+        "loc": 2551
+      }
+    },
+    {
+      "id": "infrastructure.database",
+      "name": "Database",
+      "type": "module",
+      "position": {
+        "x": 10.200000000000003,
+        "y": 1.0,
+        "z": 12.990381056766578
+      },
+      "size": 2.7916906490201177,
+      "parent": "infrastructure",
+      "metrics": {
+        "loc": 618
+      }
+    },
+    {
+      "id": "infrastructure.observability",
+      "name": "Observability",
+      "type": "module",
+      "position": {
+        "x": 6.150000000000002,
+        "y": 1.0,
+        "z": 15.328649646984562
+      },
+      "size": 2.5763413502057926,
+      "parent": "infrastructure",
+      "metrics": {
+        "loc": 376
+      }
+    },
+    {
+      "id": "infrastructure.outbox",
+      "name": "Outbox",
+      "type": "module",
+      "position": {
+        "x": 6.15,
+        "y": 1.0,
+        "z": 10.652112466548594
+      },
+      "size": 2.9599948383284156,
+      "parent": "infrastructure",
+      "metrics": {
+        "loc": 911
+      }
+    },
+    {
+      "id": "management.application",
+      "name": "Application",
+      "type": "module",
+      "position": {
+        "x": -9.6,
+        "y": 1.0,
+        "z": 1.83697019872103e-15
+      },
+      "size": 3.1541195255158465,
+      "parent": "management",
+      "metrics": {
+        "loc": 1425
+      }
+    },
+    {
+      "id": "management.dependencies",
+      "name": "Dependencies",
+      "type": "module",
+      "position": {
+        "x": -12.299999999999999,
+        "y": 1.0,
+        "z": 4.676537180435971
+      },
+      "size": 2.130333768495006,
+      "parent": "management",
+      "metrics": {
+        "loc": 134
+      }
+    },
+    {
+      "id": "management.domain",
+      "name": "Domain",
+      "type": "module",
+      "position": {
+        "x": -17.7,
+        "y": 1.0,
+        "z": 4.676537180435971
+      },
+      "size": 3.101059354908115,
+      "parent": "management",
+      "metrics": {
+        "loc": 1261
+      }
+    },
+    {
+      "id": "management.infrastructure",
+      "name": "Infrastructure",
+      "type": "module",
+      "position": {
+        "x": -20.4,
+        "y": 1.0,
+        "z": 2.4982794702606007e-15
+      },
+      "size": 3.219060332448861,
+      "parent": "management",
+      "metrics": {
+        "loc": 1655
+      }
+    },
+    {
+      "id": "management.ports",
+      "name": "Ports",
+      "type": "module",
+      "position": {
+        "x": -17.700000000000003,
+        "y": 1.0,
+        "z": -4.6765371804359654
+      },
+      "size": 2.4623979978989556,
+      "parent": "management",
+      "metrics": {
+        "loc": 289
+      }
+    },
+    {
+      "id": "management.presentation",
+      "name": "Presentation",
+      "type": "module",
+      "position": {
+        "x": -12.299999999999999,
+        "y": 1.0,
+        "z": -4.676537180435967
+      },
+      "size": 2.7831886910752575,
+      "parent": "management",
+      "metrics": {
+        "loc": 606
+      }
+    },
+    {
+      "id": "query.application",
+      "name": "Application",
+      "type": "module",
+      "position": {
+        "x": 12.000000000000002,
+        "y": 1.0,
+        "z": -12.990381056766578
+      },
+      "size": 2.5490032620257876,
+      "parent": "query",
+      "metrics": {
+        "loc": 353
+      }
+    },
+    {
+      "id": "query.domain",
+      "name": "Domain",
+      "type": "module",
+      "position": {
+        "x": 8.890576474687265,
+        "y": 1.0,
+        "z": -8.710626733438389
+      },
+      "size": 2.1846914308175984,
+      "parent": "query",
+      "metrics": {
+        "loc": 152
+      }
+    },
+    {
+      "id": "query.infrastructure",
+      "name": "Infrastructure",
+      "type": "module",
+      "position": {
+        "x": 3.8594235253127387,
+        "y": 1.0,
+        "z": -10.345347421450448
+      },
+      "size": 2.927370363039023,
+      "parent": "query",
+      "metrics": {
+        "loc": 845
+      }
+    },
+    {
+      "id": "query.ports",
+      "name": "Ports",
+      "type": "module",
+      "position": {
+        "x": 3.859423525312738,
+        "y": 1.0,
+        "z": -15.635414692082707
+      },
+      "size": 2.2430380486862944,
+      "parent": "query",
+      "metrics": {
+        "loc": 174
+      }
+    },
+    {
+      "id": "query.presentation",
+      "name": "Presentation",
+      "type": "module",
+      "position": {
+        "x": 8.890576474687265,
+        "y": 1.0,
+        "z": -17.27013538009477
+      },
+      "size": 2.380211241711606,
+      "parent": "query",
+      "metrics": {
+        "loc": 239
+      }
+    },
+    {
+      "id": "shared_kernel.auth",
+      "name": "Auth",
+      "type": "module",
+      "position": {
+        "x": -2.1000000000000068,
+        "y": 1.0,
+        "z": -12.990381056766577
+      },
+      "size": 2.5646660642520893,
+      "parent": "shared_kernel",
+      "metrics": {
+        "loc": 366
+      }
+    },
+    {
+      "id": "shared_kernel.authorization",
+      "name": "Authorization",
+      "type": "module",
+      "position": {
+        "x": -4.800000000000006,
+        "y": 1.0,
+        "z": -8.313843876330608
+      },
+      "size": 3.289811839117621,
+      "parent": "shared_kernel",
+      "metrics": {
+        "loc": 1948
+      }
+    },
+    {
+      "id": "shared_kernel.graph_primitives",
+      "name": "Graph Primitives",
+      "type": "module",
+      "position": {
+        "x": -10.200000000000006,
+        "y": 1.0,
+        "z": -8.313843876330608
+      },
+      "size": 2.3344537511509307,
+      "parent": "shared_kernel",
+      "metrics": {
+        "loc": 215
+      }
+    },
+    {
+      "id": "shared_kernel.job_package",
+      "name": "Job Package",
+      "type": "module",
+      "position": {
+        "x": -12.900000000000007,
+        "y": 1.0,
+        "z": -12.990381056766577
+      },
+      "size": 2.9777236052888476,
+      "parent": "shared_kernel",
+      "metrics": {
+        "loc": 949
+      }
+    },
+    {
+      "id": "shared_kernel.middleware",
+      "name": "Middleware",
+      "type": "module",
+      "position": {
+        "x": -10.20000000000001,
+        "y": 1.0,
+        "z": -17.666918237202545
+      },
+      "size": 2.8853612200315117,
+      "parent": "shared_kernel",
+      "metrics": {
+        "loc": 767
+      }
+    },
+    {
+      "id": "shared_kernel.outbox",
+      "name": "Outbox",
+      "type": "module",
+      "position": {
+        "x": -4.800000000000006,
+        "y": 1.0,
+        "z": -17.666918237202545
+      },
+      "size": 2.7909884750888154,
+      "parent": "shared_kernel",
+      "metrics": {
+        "loc": 617
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "graph",
+      "target": "iam",
+      "type": "cross_context"
+    },
+    {
+      "source": "graph",
+      "target": "infrastructure",
+      "type": "cross_context"
+    },
+    {
+      "source": "graph",
+      "target": "shared_kernel",
+      "type": "cross_context"
+    },
+    {
+      "source": "graph.application",
+      "target": "graph.domain",
+      "type": "internal"
+    },
+    {
+      "source": "graph.application",
+      "target": "graph.ports",
+      "type": "internal"
+    },
+    {
+      "source": "graph.infrastructure",
+      "target": "graph.domain",
+      "type": "internal"
+    },
+    {
+      "source": "graph.infrastructure",
+      "target": "graph.ports",
+      "type": "internal"
+    },
+    {
+      "source": "graph.ports",
+      "target": "graph.domain",
+      "type": "internal"
+    },
+    {
+      "source": "graph.presentation",
+      "target": "graph.application",
+      "type": "internal"
+    },
+    {
+      "source": "graph.presentation",
+      "target": "graph.domain",
+      "type": "internal"
+    },
+    {
+      "source": "iam",
+      "target": "infrastructure",
+      "type": "cross_context"
+    },
+    {
+      "source": "iam",
+      "target": "shared_kernel",
+      "type": "cross_context"
+    },
+    {
+      "source": "iam.application",
+      "target": "iam.domain",
+      "type": "internal"
+    },
+    {
+      "source": "iam.application",
+      "target": "iam.ports",
+      "type": "internal"
+    },
+    {
+      "source": "iam.dependencies",
+      "target": "iam.application",
+      "type": "internal"
+    },
+    {
+      "source": "iam.dependencies",
+      "target": "iam.domain",
+      "type": "internal"
+    },
+    {
+      "source": "iam.dependencies",
+      "target": "iam.infrastructure",
+      "type": "internal"
+    },
+    {
+      "source": "iam.dependencies",
+      "target": "iam.ports",
+      "type": "internal"
+    },
+    {
+      "source": "iam.domain",
+      "target": "iam.ports",
+      "type": "internal"
+    },
+    {
+      "source": "iam.infrastructure",
+      "target": "iam.domain",
+      "type": "internal"
+    },
+    {
+      "source": "iam.infrastructure",
+      "target": "iam.ports",
+      "type": "internal"
+    },
+    {
+      "source": "iam.ports",
+      "target": "iam.domain",
+      "type": "internal"
+    },
+    {
+      "source": "iam.presentation",
+      "target": "iam.application",
+      "type": "internal"
+    },
+    {
+      "source": "iam.presentation",
+      "target": "iam.dependencies",
+      "type": "internal"
+    },
+    {
+      "source": "iam.presentation",
+      "target": "iam.domain",
+      "type": "internal"
+    },
+    {
+      "source": "iam.presentation",
+      "target": "iam.ports",
+      "type": "internal"
+    },
+    {
+      "source": "infrastructure",
+      "target": "graph",
+      "type": "cross_context"
+    },
+    {
+      "source": "infrastructure",
+      "target": "iam",
+      "type": "cross_context"
+    },
+    {
+      "source": "infrastructure",
+      "target": "query",
+      "type": "cross_context"
+    },
+    {
+      "source": "infrastructure",
+      "target": "shared_kernel",
+      "type": "cross_context"
+    },
+    {
+      "source": "infrastructure.database",
+      "target": "infrastructure.observability",
+      "type": "internal"
+    },
+    {
+      "source": "infrastructure.outbox",
+      "target": "infrastructure.database",
+      "type": "internal"
+    },
+    {
+      "source": "management",
+      "target": "iam",
+      "type": "cross_context"
+    },
+    {
+      "source": "management",
+      "target": "infrastructure",
+      "type": "cross_context"
+    },
+    {
+      "source": "management",
+      "target": "shared_kernel",
+      "type": "cross_context"
+    },
+    {
+      "source": "management.application",
+      "target": "management.domain",
+      "type": "internal"
+    },
+    {
+      "source": "management.application",
+      "target": "management.ports",
+      "type": "internal"
+    },
+    {
+      "source": "management.dependencies",
+      "target": "management.application",
+      "type": "internal"
+    },
+    {
+      "source": "management.dependencies",
+      "target": "management.infrastructure",
+      "type": "internal"
+    },
+    {
+      "source": "management.infrastructure",
+      "target": "management.domain",
+      "type": "internal"
+    },
+    {
+      "source": "management.infrastructure",
+      "target": "management.ports",
+      "type": "internal"
+    },
+    {
+      "source": "management.ports",
+      "target": "management.domain",
+      "type": "internal"
+    },
+    {
+      "source": "management.presentation",
+      "target": "management.application",
+      "type": "internal"
+    },
+    {
+      "source": "management.presentation",
+      "target": "management.dependencies",
+      "type": "internal"
+    },
+    {
+      "source": "management.presentation",
+      "target": "management.domain",
+      "type": "internal"
+    },
+    {
+      "source": "management.presentation",
+      "target": "management.ports",
+      "type": "internal"
+    },
+    {
+      "source": "query",
+      "target": "graph",
+      "type": "cross_context"
+    },
+    {
+      "source": "query",
+      "target": "infrastructure",
+      "type": "cross_context"
+    },
+    {
+      "source": "query",
+      "target": "shared_kernel",
+      "type": "cross_context"
+    },
+    {
+      "source": "query.application",
+      "target": "query.domain",
+      "type": "internal"
+    },
+    {
+      "source": "query.application",
+      "target": "query.ports",
+      "type": "internal"
+    },
+    {
+      "source": "query.infrastructure",
+      "target": "query.domain",
+      "type": "internal"
+    },
+    {
+      "source": "query.infrastructure",
+      "target": "query.ports",
+      "type": "internal"
+    },
+    {
+      "source": "query.ports",
+      "target": "query.domain",
+      "type": "internal"
+    },
+    {
+      "source": "query.presentation",
+      "target": "query.application",
+      "type": "internal"
+    },
+    {
+      "source": "query.presentation",
+      "target": "query.domain",
+      "type": "internal"
+    },
+    {
+      "source": "query.presentation",
+      "target": "query.ports",
+      "type": "internal"
+    },
+    {
+      "source": "shared_kernel.outbox",
+      "target": "shared_kernel.authorization",
+      "type": "internal"
+    }
+  ],
+  "metadata": {
+    "source_path": "/home/jsell/code/kartograph/src/api",
+    "timestamp": "2026-04-23T13:48:45.458245+00:00"
+  }
+}
