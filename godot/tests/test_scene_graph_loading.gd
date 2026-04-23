@@ -45,7 +45,9 @@ func _make_fixture() -> Dictionary:
 func test_volumes_created_for_each_node() -> bool:
 	var main_node: Node3D = MainScript.new()
 	main_node.build_from_graph(_make_fixture())
-	return main_node._anchors.has("ctx1") and main_node._anchors.has("mod1")
+	var result: bool = main_node._anchors.has("ctx1") and main_node._anchors.has("mod1")
+	main_node.free()
+	return result
 
 
 ## THEN generates 3D volumes — each anchor must contain a MeshInstance3D child.
@@ -53,18 +55,23 @@ func test_mesh_instances_exist_in_anchors() -> bool:
 	var main_node: Node3D = MainScript.new()
 	main_node.build_from_graph(_make_fixture())
 
+	var all_have_mesh := true
 	for node_id: String in ["ctx1", "mod1"]:
 		var anchor: Node3D = main_node._anchors.get(node_id)
 		if anchor == null:
-			return false
+			all_have_mesh = false
+			break
 		var has_mesh := false
 		for child: Node in anchor.get_children():
 			if child is MeshInstance3D:
 				has_mesh = true
 				break
 		if not has_mesh:
-			return false
-	return true
+			all_have_mesh = false
+			break
+
+	main_node.free()
+	return all_have_mesh
 
 
 ## AND generates connections for each edge —
@@ -80,7 +87,9 @@ func test_edge_mesh_instances_created() -> bool:
 			edge_mesh_count += 1
 
 	# Each edge produces: 1 ImmediateMesh line + 1 CylinderMesh arrowhead = 2
-	return edge_mesh_count >= 2
+	var result: bool = edge_mesh_count >= 2
+	main_node.free()
+	return result
 
 
 ## AND positions elements according to the layout data in the JSON —
@@ -92,11 +101,13 @@ func test_anchor_positions_match_json() -> bool:
 	var ctx_anchor: Node3D = main_node._anchors.get("ctx1")
 	var mod_anchor: Node3D = main_node._anchors.get("mod1")
 	if ctx_anchor == null or mod_anchor == null:
+		main_node.free()
 		return false
 
 	var ctx_ok := ctx_anchor.position.is_equal_approx(Vector3(0.0, 0.0, 0.0))
 	# mod1's position in JSON is {x:2, y:0, z:2} relative to its parent ctx1.
 	var mod_ok := mod_anchor.position.is_equal_approx(Vector3(2.0, 0.0, 2.0))
+	main_node.free()
 	return ctx_ok and mod_ok
 
 
@@ -110,15 +121,19 @@ func test_labels_are_billboard_and_readable() -> bool:
 
 	var anchor: Node3D = main_node._anchors.get("ctx1")
 	if anchor == null:
+		main_node.free()
 		return false
 
+	var result := false
 	for child: Node in anchor.get_children():
 		if child is Label3D:
 			var lbl := child as Label3D
-			var billboard_ok := lbl.billboard == BaseMaterial3D.BILLBOARD_ENABLED
-			var pixel_size_ok := lbl.pixel_size > 0.0
-			var depth_ok := lbl.no_depth_test == true
-			return billboard_ok and pixel_size_ok and depth_ok
+			result = (
+				lbl.billboard == BaseMaterial3D.BILLBOARD_ENABLED
+				and lbl.pixel_size > 0.0
+				and lbl.no_depth_test == true
+			)
+			break
 
-	# No Label3D found in anchor — test fails.
-	return false
+	main_node.free()
+	return result

@@ -57,9 +57,12 @@ func test_large_module_has_bigger_mesh() -> bool:
 	var small_mesh: BoxMesh = _get_box_mesh(main_node, "small_mod")
 	var large_mesh: BoxMesh = _get_box_mesh(main_node, "large_mod")
 	if small_mesh == null or large_mesh == null:
+		main_node.free()
 		return false
 
-	return large_mesh.size.x > small_mesh.size.x
+	var result: bool = large_mesh.size.x > small_mesh.size.x
+	main_node.free()
+	return result
 
 
 ## AND the relative sizes are proportional to the metric —
@@ -72,8 +75,11 @@ func test_mesh_sizes_proportional_to_metric() -> bool:
 	var small_mesh: BoxMesh = _get_box_mesh(main_node, "small_mod")
 	var large_mesh: BoxMesh = _get_box_mesh(main_node, "large_mod")
 	if small_mesh == null or large_mesh == null:
+		main_node.free()
 		return false
 
 	var expected_ratio: float = 9.0 / 3.0  # 3.0
 	var actual_ratio: float = large_mesh.size.x / small_mesh.size.x
-	return abs(actual_ratio - expected_ratio) < 0.001
+	var result: bool = abs(actual_ratio - expected_ratio) < 0.001
+	main_node.free()
+	return result

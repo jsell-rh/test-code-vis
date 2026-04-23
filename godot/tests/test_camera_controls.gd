@@ -33,13 +33,17 @@ const CameraScript := preload("res://scripts/camera_controller.gd")
 ## The initial value 0.15 rad ≈ 8.6° satisfies "predominantly top-down" (< 45° = PI/4).
 func test_initial_theta_is_near_top_down() -> bool:
 	var cam = CameraScript.new()
-	return cam._theta < PI / 4.0
+	var result: bool = cam._theta < PI / 4.0
+	cam.free()
+	return result
 
 
 ## The initial _distance must be positive (camera is not at the origin/pivot).
 func test_initial_distance_is_positive() -> bool:
 	var cam = CameraScript.new()
-	return cam._distance > 0.0
+	var result: bool = cam._distance > 0.0
+	cam.free()
+	return result
 
 
 ## WHEN the user scrolls up THEN the camera moves closer —
@@ -53,7 +57,9 @@ func test_scroll_up_decreases_distance() -> bool:
 	event.pressed = true
 	cam._handle_button(event)
 
-	return cam._distance < initial_distance
+	var result: bool = cam._distance < initial_distance
+	cam.free()
+	return result
 
 
 ## WHEN the user scrolls down THEN the camera moves farther —
@@ -67,7 +73,9 @@ func test_scroll_down_increases_distance() -> bool:
 	event.pressed = true
 	cam._handle_button(event)
 
-	return cam._distance > initial_distance
+	var result: bool = cam._distance > initial_distance
+	cam.free()
+	return result
 
 
 ## WHEN the user middle-mouse drags horizontally THEN the camera orbits —
@@ -89,7 +97,9 @@ func test_orbit_horizontal_drag_changes_phi() -> bool:
 	cam._handle_motion(motion)
 
 	# _phi should have changed by -50 * orbit_speed
-	return cam._phi != initial_phi
+	var result: bool = cam._phi != initial_phi
+	cam.free()
+	return result
 
 
 ## WHEN the user middle-mouse drags vertically THEN the polar angle changes —
@@ -110,7 +120,9 @@ func test_orbit_vertical_drag_changes_theta() -> bool:
 	motion.position = Vector2(100.0, 80.0)
 	cam._handle_motion(motion)
 
-	return cam._theta != initial_theta
+	var result: bool = cam._theta != initial_theta
+	cam.free()
+	return result
 
 
 ## AND orientation remains intuitive — set_pivot() must update the internal
@@ -120,7 +132,9 @@ func test_set_pivot_updates_state() -> bool:
 	var new_pivot := Vector3(5.0, 0.0, 5.0)
 	var new_distance: float = 100.0
 	cam.set_pivot(new_pivot, new_distance)
-	return cam._pivot == new_pivot and cam._distance == new_distance
+	var result: bool = cam._pivot == new_pivot and cam._distance == new_distance
+	cam.free()
+	return result
 
 
 ## Zoom is clamped to [min_distance, max_distance] —
@@ -133,4 +147,6 @@ func test_zoom_clamped_at_minimum() -> bool:
 	# Scroll in 200 times — must not go below min_distance.
 	for _i: int in range(200):
 		cam._handle_button(event)
-	return cam._distance >= cam.min_distance
+	var result: bool = cam._distance >= cam.min_distance
+	cam.free()
+	return result

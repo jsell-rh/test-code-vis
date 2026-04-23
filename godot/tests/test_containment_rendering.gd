@@ -59,15 +59,19 @@ func test_bounded_context_is_translucent() -> bool:
 
 	var ctx_anchor: Node3D = main_node._anchors.get("ctx1")
 	if ctx_anchor == null:
+		main_node.free()
 		return false
 	var mat: StandardMaterial3D = _get_mesh_material(ctx_anchor)
 	if mat == null:
+		main_node.free()
 		return false
 
-	return (
+	var result: bool = (
 		mat.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED
 		and mat.albedo_color.a < 1.0
 	)
+	main_node.free()
+	return result
 
 
 ## AND its child modules appear as smaller opaque volumes —
@@ -78,12 +82,16 @@ func test_module_is_opaque() -> bool:
 
 	var mod_anchor: Node3D = main_node._anchors.get("mod1")
 	if mod_anchor == null:
+		main_node.free()
 		return false
 	var mat: StandardMaterial3D = _get_mesh_material(mod_anchor)
 	if mat == null:
+		main_node.free()
 		return false
 
-	return mat.albedo_color.a >= 1.0
+	var result: bool = mat.albedo_color.a >= 1.0
+	main_node.free()
+	return result
 
 
 ## AND its child modules appear inside it —
@@ -95,9 +103,12 @@ func test_module_parented_inside_context() -> bool:
 	var ctx_anchor: Node3D = main_node._anchors.get("ctx1")
 	var mod_anchor: Node3D = main_node._anchors.get("mod1")
 	if ctx_anchor == null or mod_anchor == null:
+		main_node.free()
 		return false
 
-	return mod_anchor.get_parent() == ctx_anchor
+	var result: bool = mod_anchor.get_parent() == ctx_anchor
+	main_node.free()
+	return result
 
 
 ## THEN the bounded context appears as a larger volume —
@@ -109,9 +120,12 @@ func test_bounded_context_larger_than_module() -> bool:
 	var ctx_mesh: BoxMesh = _get_box_mesh(main_node._anchors.get("ctx1"))
 	var mod_mesh: BoxMesh = _get_box_mesh(main_node._anchors.get("mod1"))
 	if ctx_mesh == null or mod_mesh == null:
+		main_node.free()
 		return false
 
-	return ctx_mesh.size.x > mod_mesh.size.x
+	var result: bool = ctx_mesh.size.x > mod_mesh.size.x
+	main_node.free()
+	return result
 
 
 ## AND the boundary of the parent is visually distinct —
@@ -123,9 +137,13 @@ func test_bounded_context_cull_disabled() -> bool:
 
 	var ctx_anchor: Node3D = main_node._anchors.get("ctx1")
 	if ctx_anchor == null:
+		main_node.free()
 		return false
 	var mat: StandardMaterial3D = _get_mesh_material(ctx_anchor)
 	if mat == null:
+		main_node.free()
 		return false
 
-	return mat.cull_mode == BaseMaterial3D.CULL_DISABLED
+	var result: bool = mat.cull_mode == BaseMaterial3D.CULL_DISABLED
+	main_node.free()
+	return result
