@@ -1,0 +1,35 @@
+---
+verdict: pass
+---
+All spec scenarios implemented and verified.
+
+## Schema (schema.py)
+- `SceneGraph` TypedDict: exactly `nodes`, `edges`, `metadata` — no extra fields.
+- `Node`: `id`, `name`, `type`, `position` (x/y/z), `size`, `parent`, optional `metrics`.
+- `Edge`: `source`, `target`, `type` (cross_context | internal).
+- `Metadata`: `source_path`, `timestamp`.
+
+## Pre-Computed Layout (extractor.py)
+Two spec gaps were identified and fixed:
+
+1. **Child nodes within parent bounds** — `compute_layout` now offsets each
+   module node's position by its parent BC's absolute position, so children
+   are always spatially close to (and within the radius of) their parent.
+
+2. **Tightly coupled nodes closer** — Added `_order_by_coupling` which uses a
+   greedy nearest-neighbour heuristic to reorder BCs before placing them in the
+   ring, so pairs with cross-context edges end up adjacent. `build_scene_graph`
+   now computes edges before calling `compute_layout` so coupling data is
+   available to the layout algorithm.
+
+## Tests
+- 96 Python tests pass (93 pre-existing + 3 new layout tests).
+- New tests: `test_child_nodes_are_near_parent_position`,
+  `test_coupled_bcs_are_closer_than_uncoupled`,
+  `test_order_by_coupling_places_coupled_adjacent`.
+- 24 GDScript behavioural tests pass (unchanged).
+
+## Checks
+- `extractor-lint.sh`: PASS (ruff clean, 96 pytest pass)
+- `godot-compile.sh`: PASS
+- `godot-tests.sh`: PASS (24/24)
