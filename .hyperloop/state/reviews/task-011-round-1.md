@@ -1,0 +1,37 @@
+---
+task_id: task-011
+round: 1
+role: verifier
+verdict: fail
+---
+## Automatic FAIL — check-not-in-scope.sh exited non-zero
+
+Per the review guidelines, `check-not-in-scope.sh` MUST be run first. If it exits
+non-zero, a FAIL verdict is issued immediately and no other requirements are evaluated
+as COVERED or PARTIAL.
+
+### check-not-in-scope.sh output (verbatim)
+
+```
+FAIL: Prohibited file present: godot/scripts/view_spec.gd (moldable views are not in scope)
+FAIL: Prohibited file present: godot/scripts/view_spec_renderer.gd (moldable views are not in scope)
+FAIL: Prohibited test file present: godot/tests/test_view_spec.gd (covers a not-in-scope feature)
+FAIL: Prohibited test file present: godot/tests/test_view_spec_renderer.gd (covers a not-in-scope feature)
+FAIL: Prohibited spec-extraction code found in extractor/extractor.py
+FAIL: Prohibited spec-extraction code found in extractor/__main__.py
+FAIL: Prohibited spec-extraction tests found in extractor/tests/
+```
+
+### What must be fixed
+
+1. **Remove** `godot/scripts/view_spec.gd` — moldable views are explicitly out of scope.
+2. **Remove** `godot/scripts/view_spec_renderer.gd` — same reason.
+3. **Remove** `godot/tests/test_view_spec.gd` — covers an out-of-scope feature.
+4. **Remove** `godot/tests/test_view_spec_renderer.gd` — covers an out-of-scope feature.
+5. **Remove** spec-extraction code from `extractor/extractor.py` — spec extraction is
+   not in scope for this task; only scene-graph extraction is.
+6. **Remove** spec-extraction code from `extractor/__main__.py` — same reason.
+7. **Remove** spec-extraction tests from `extractor/tests/` — same reason.
+
+Once all prohibited artifacts have been removed and `check-not-in-scope.sh` exits 0,
+the implementation may be re-evaluated against the full requirement checklist.
