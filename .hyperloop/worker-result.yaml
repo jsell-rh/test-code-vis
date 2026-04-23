@@ -1,0 +1,52 @@
+---
+verdict: pass
+---
+Reviewed task-001 (scene graph schema definition) against the spec.
+
+## Checks run
+
+- `ruff check extractor/` — clean, no issues
+- `ruff format --check extractor/` — 4 files already formatted
+- `pytest` — 36/36 passed
+- `.hyperloop/checks/extractor-lint.sh` — passed
+- `.hyperloop/checks/godot-compile.sh` — passed (Godot 4.6.2 headless, no errors)
+
+## Commit trailers
+
+Both required trailers are present on the implementation commit (886bbd2):
+
+- `Spec-Ref: specs/extraction/scene-graph-schema.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384`
+- `Task-Ref: task-001`
+
+## Spec compliance
+
+Every requirement in the spec is covered:
+
+**Schema Structure** — `SceneGraph` TypedDict has exactly three top-level keys
+(`nodes`, `edges`, `metadata`); no extras possible at the type level.
+`test_scene_graph_has_no_extra_top_level_fields` verifies this at runtime. ✓
+
+**Node Schema** — `Node` TypedDict contains all required fields: `id`, `name`,
+`type`, `position`, `size`, `parent`. `NodeType` is a `Literal["bounded_context",
+"module"]` which encodes the two permitted values from the spec. `parent` is
+`str | None`, correctly supporting both top-level and child nodes. ✓
+
+**Edge Schema** — `Edge` TypedDict contains `source`, `target`, `type`.
+`EdgeType` is `Literal["cross_context", "internal"]`. Both edge kinds exercised
+by the spec scenarios are tested. ✓
+
+**Metadata** — `Metadata` TypedDict contains `source_path` (str) and
+`timestamp` (str, expected ISO-8601 UTC). ✓
+
+**Pre-Computed Layout** — `Node.position` is a `Position` TypedDict with `x`,
+`y`, `z` floats. The docstring on `position` explicitly states "Pre-computed 3D
+position. Coordinates are relative to the parent node." Tests verify every node
+carries a numeric position and that fixture nodes have distinct coordinates,
+enforcing that layout has been applied. The schema correctly makes positions a
+mandatory field so the Godot side has no reason to re-compute them. ✓
+
+## No findings requiring action
+
+The implementation is correct, well-typed, and spec-complete. Tests are
+thorough (36 cases) and directly cross-reference each spec requirement
+section. Code style is clean with no ruff warnings.
