@@ -1,80 +1,38 @@
 ---
 verdict: pass
 ---
-## Spec Alignment Review — godot-application.spec.md (Fresh Independent Pass)
+## Godot Application — Task 007 Verification
 
-Reviewed branch `hyperloop/task-007`. All six SHALL/MUST requirements are
-implemented and covered by GDScript behavioral tests. Tests were executed live:
-24/24 pass.
+All checks pass. 24/24 GDScript behavioral tests pass.
 
-### Test run (executed now)
-```
-godot --headless --path godot --script tests/run_tests.gd
-24 / 24 tests passed.
-ALL TESTS PASSED
-```
+### Check results
+- `extractor-lint.sh`: PASS (93 Python tests pass, ruff clean)
+- `godot-compile.sh`: PASS (Godot 4.6.2 compiles cleanly)
+- `godot-tests.sh`: PASS (24/24 tests pass)
+
+### Implementation summary
+
+**godot/scripts/main.gd**
+- `_ready()` → `_load_and_build()`: reads JSON via `FileAccess`, parses with `JSON.new()`
+- `_build()`: creates `Node3D` anchors, `MeshInstance3D` volumes, `Label3D` labels, edge lines + arrowheads
+- Bounded contexts: translucent `BoxMesh` (`TRANSPARENCY_ALPHA`, `albedo_color.a=0.18`, `CULL_DISABLED`)
+- Modules: opaque `BoxMesh` (`albedo_color.a=1.0`), scene-tree parented inside context anchor
+- Edges: `ImmediateMesh` line + `CylinderMesh` cone arrowhead (`top_radius=0`), orange for cross-context
+- Size: `BoxMesh.size` dimensions set directly from `nd["size"]` → proportional to metric
+
+**godot/scripts/camera_controller.gd**
+- Initial `_theta=0.15` rad (≈8.6°, near top-down, < PI/4)
+- `WHEEL_UP`/`WHEEL_DOWN` zoom with clamping to `[min_distance, max_distance]`
+- Middle-mouse drag orbits via `_phi` / `_theta`; `look_at(_pivot, Vector3.UP)` locks up orientation
+- `set_pivot()` allows main scene to reposition camera to frame the whole graph
 
 ### Per-requirement status
 
-| Requirement | Scenarios | Status | Notes |
+| Requirement | Scenarios | Tests | Status |
 |---|---|---|---|
-| JSON Scene Graph Loading | 1 | COVERED | |
-| Containment Rendering | 1 | COVERED | |
-| Dependency Rendering | 1 | COVERED | |
-| Size Encoding | 1 | COVERED | |
-| Camera Controls | 3 | COVERED | |
-| Godot 4 | 1 | COVERED | project.godot confirms 4.6, all scripts are .gd |
-
-### Verification details
-
-**JSON Scene Graph Loading**
-- `main.gd::_ready()` calls `_load_and_build()` → reads JSON file via `FileAccess`,
-  parses it with `JSON.new()`, passes the graph dict to `_build()`.
-- `_build()` creates a `Node3D` anchor per node (stored in `_anchors`), a
-  `MeshInstance3D` with a `BoxMesh` per volume, and an `ImmediateMesh` line +
-  `CylinderMesh` arrowhead per edge.  Anchor `.position` is set from `nd["position"]`.
-- Tests (5): `test_volumes_created_for_each_node`, `test_mesh_instances_exist_in_anchors`,
-  `test_edge_mesh_instances_created`, `test_anchor_positions_match_json`,
-  `test_labels_are_billboard_and_readable`.
-
-**Containment Rendering**
-- Bounded context → `BoxMesh` with `TRANSPARENCY_ALPHA`, `albedo_color.a = 0.18`,
-  `CULL_DISABLED` (visually distinct).  Module → opaque `BoxMesh` (`alpha=1.0`),
-  scene-tree parented inside the context's anchor.
-- Tests (5): `test_bounded_context_is_translucent`, `test_module_is_opaque`,
-  `test_module_parented_inside_context`, `test_bounded_context_larger_than_module`,
-  `test_bounded_context_cull_disabled`.
-
-**Dependency Rendering**
-- `_create_edge()` emits an `ImmediateMesh` line between `from_pos` and `to_pos`,
-  then places a `CylinderMesh` (top_radius=0) arrowhead at `to_pos` oriented along
-  the edge direction.  Cross-context edges are orange (`Color(1.0, 0.50, 0.10)`).
-- Tests (4): `test_edge_line_mesh_created`, `test_direction_indicator_cone_created`,
-  `test_direction_cone_near_target`, `test_cross_context_cone_is_orange`.
-
-**Size Encoding**
-- `sz = float(nd["size"])` is applied directly to `BoxMesh.size` dimensions, so
-  mesh width ratio equals metric ratio exactly.
-- Tests (2): `test_large_module_has_bigger_mesh`, `test_mesh_sizes_proportional_to_metric`
-  (ratio asserted within 0.001 of 3.0).
-
-**Camera Controls — Top-down overview**
-- `_theta` initialised to `0.15` rad ≈ 8.6° (well below `PI/4 = 45°`).
-- Tests (2): `test_initial_theta_is_near_top_down`, `test_initial_distance_is_positive`.
-
-**Camera Controls — Zooming in**
-- `WHEEL_UP` decreases `_distance`; `WHEEL_DOWN` increases it; both clamped to
-  `[min_distance, max_distance]`.  Labels use `BILLBOARD_ENABLED`, `pixel_size=0.012`,
-  `no_depth_test=true` so they remain readable as the camera moves.
-- Tests (4): `test_scroll_up_decreases_distance`, `test_scroll_down_increases_distance`,
-  `test_zoom_clamped_at_minimum`, `test_labels_are_billboard_and_readable`.
-
-**Camera Controls — Orbiting**
-- Middle-mouse drag modifies `_phi` (azimuth) and `_theta` (polar), clamped to
-  `[0.01, PI-0.01]` to prevent gimbal flip.  `look_at(_pivot, Vector3.UP)` locks up.
-- Tests (3): `test_orbit_horizontal_drag_changes_phi`, `test_orbit_vertical_drag_changes_theta`,
-  `test_set_pivot_updates_state`.
-
-**Godot 4**
-- `project.godot`: `config/features=PackedStringArray("4.6")`.
-- All scripts (`main.gd`, `camera_controller.gd`, `run_tests.gd`, `test_*.gd`) are GDScript.
+| JSON Scene Graph Loading | 1 | 5 | PASS |
+| Containment Rendering | 1 | 5 | PASS |
+| Dependency Rendering | 1 | 4 | PASS |
+| Size Encoding | 1 | 2 | PASS |
+| Camera Controls | 3 | 8 | PASS |
+| Godot 4 | 1 | confirmed | PASS |
