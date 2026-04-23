@@ -2,87 +2,82 @@
 verdict: pass
 ---
 
-## Scope Check Output
+## Independent Spec Alignment Review — specs/interaction/moldable-views.spec.md
 
-```
-OK: No prohibited (not-in-scope) features detected.
-```
+Branch: hyperloop/task-021
 
-## Automated Checks
+---
 
-| Check | Result |
-|---|---|
-| `check-not-in-scope.sh` | OK |
-| `check-report-scope-section.sh` | OK |
-| `check-pipeline-wiring.sh` | OK: View-spec pipeline appears wired end-to-end (producer + consumer + rendering tests) |
-| `check-kartograph-integration-test.sh` | OK: Integration test referencing kartograph codebase with expected-context assertions found |
-| `extractor-lint.sh` (ruff + pytest) | PASS: 90 pytest tests, 0 failures |
-| `godot-compile.sh` | PASS |
-| `godot-tests.sh` | PASS: 106 GDScript tests, 0 failures |
-| `godot-label3d.sh` | PASS |
-| `godot-fileaccess-tested.sh` | OK: FileAccess.open() exercised in 2 test files |
+### Requirement: Question-Driven View Generation — COVERED
 
-## Commit Trailers
+The system MUST accept natural language questions and generate a spatial view tailored to answering that specific question.
 
-Spec-Ref and Task-Ref present on implementation commits. Confirmed.
+**Implementation:**
+- `godot/scripts/llm_view_generator.gd` — `build_prompt(question, graph)` embeds the natural-language question and the graph's node list in a prompt string. `parse_response(llm_text)` converts the LLM's JSON response into a validated ViewSpec dictionary.
+- `godot/scripts/scene_interpreter.gd` — `apply(spec, anchors, scene_root, world_positions)` maps each operation in the spec to live Node3D mutations.
+- `godot/scripts/main.gd` — `apply_view_spec(spec)` wires the two stages; `_ready()` loads the JSON scene graph (not a stub).
 
-## Prohibited File Names
+**Scenario: Architectural question — COVERED**
 
-`question_panel.gd`, `view_spec.gd`, `view_spec_renderer.gd`, and matching test files are
-absent from `godot/scripts/` and `godot/tests/`. Confirmed by `ls` inspection.
-
-## THEN-Clause → Test Mapping
-
-### Scenario: Architectural question
-
-| THEN clause | Test | Predicate correct? |
+| THEN clause | Code | Test |
 |---|---|---|
-| view focused on auth-related components (show) | `test_show_op_sets_visible_true` | YES — real Node3D, asserts `.visible == true` |
-| view focused on auth-related components (highlight) | `test_highlight_op_changes_albedo_color` | YES — asserts `mat.albedo_color.r/g/b` within 0.01 |
-| irrelevant components hidden or de-emphasized | `test_hide_op_sets_visible_false` | YES — real Node3D, asserts `.visible == false` |
-| relevant components arranged to answer question | `test_arrange_op_sets_position_x`, `..._z`, `..._all_three_axes` | YES — asserts `anchor.position.x/y/z` within 0.001 |
+| View focused on auth-related components (show/highlight) | `_apply_show()` sets `anchor.visible = true`; `_apply_highlight()` sets `mat.albedo_color` | `test_show_op_sets_visible_true`, `test_highlight_op_changes_albedo_color` |
+| Irrelevant components hidden or de-emphasized | `_apply_hide()` sets `anchor.visible = false` | `test_hide_op_sets_visible_false`, `test_hide_op_leaves_other_nodes_unchanged` |
+| Relevant components arranged to answer the question | `_apply_arrange()` sets `anchor.position = Vector3(x, y, z)` | `test_arrange_op_sets_position_x`, `test_arrange_op_sets_position_z`, `test_arrange_op_sets_all_three_axes` |
 
-### Scenario: Impact question
+All tests instantiate real Node3D objects and assert observable scene-tree properties.
 
-| THEN clause | Test | Predicate correct? |
+**Scenario: Impact question — COVERED**
+
+| THEN clause | Code | Test |
 |---|---|---|
-| view showing user database and dependents (show) | `test_show_op_sets_visible_true` | YES |
-| dependency relationships spatially clear (line) | `test_connect_op_adds_line_geometry` | YES — asserts ≥1 MeshInstance3D on root |
-| dependency relationships spatially clear (arrowhead) | `test_connect_op_adds_arrowhead` | YES — asserts ≥2 MeshInstance3D (line + cone); top_radius=0 CylinderMesh is a pointed cone satisfying "direction is visually indicated" |
+| View shows the user database and all its dependents | `_apply_show()` sets `anchor.visible = true` | `test_show_op_sets_visible_true` (question fixture: "what depends on the user database?") |
+| Dependency relationships spatially clear | `_apply_connect()` adds ImmediateMesh line + CylinderMesh arrowhead (top_radius=0) to scene_root | `test_connect_op_adds_line_geometry` (≥1 MeshInstance3D on root), `test_connect_op_adds_arrowhead` (≥2 MeshInstance3D) |
 
-### Scenario: LLM produces view spec
+---
 
-| THEN clause | Test | Predicate correct? |
+### Requirement: View Specs as Intermediate Representation — COVERED
+
+The system MUST use a structured view specification as the intermediate representation between the LLM and the 3D renderer.
+
+**Implementation:**
+- `parse_response()` returns a plain `Dictionary` with "question" and "operations" keys — never raw 3D geometry.
+- `scene_interpreter.gd::apply()` is the sole consumer of this dict; it emits scene-tree mutations, not geometry instructions.
+
+**Scenario: LLM produces view spec — COVERED**
+
+| THEN clause | Code | Test |
 |---|---|---|
-| emits structured view spec (not raw 3D geometry) | `test_parse_response_returns_dictionary` | YES — asserts `result is Dictionary` |
-| view spec controls show/hide/highlight/arrange | `test_parse_response_passes_through_show/hide/highlight/arrange/annotate/connect_op` (6 tests) | YES — assert op passes through parse_response() intact |
-| 3D renderer interprets the view spec into a spatial scene | `test_all_six_ops_mutate_scene_correctly` | YES — real Node3D objects, all 6 ops applied, asserts `.visible`, `.position.x`, `albedo_color.g`, `label.text`, MeshInstance3D presence |
+| Emits structured view spec (not raw 3D geometry) | `parse_response()` returns `Dictionary` | `test_parse_response_returns_dictionary` |
+| View spec controls show/hide/highlight/arrange/annotate/connect | `_make_spec()` filters and passes ops through | 6 `test_parse_response_passes_through_*_op` tests |
+| 3D renderer interprets the view spec into a spatial scene | `SceneInterpreter.apply()` dispatches each op to `_apply_*` method | `test_all_six_ops_mutate_scene_correctly` — all 6 ops applied, asserts `.visible`, `.position.x`, `albedo_color.g`, `label.text`, MeshInstance3D presence |
 
-### Scenario: LLM uses existing primitives
+---
 
-| THEN clause | Test | Predicate correct? |
+### Requirement: Fixed Visual Primitive Set — COVERED
+
+The set of visual primitives MUST be fixed and finite. The LLM selects from available primitives; it does not invent new ones.
+
+**Implementation:**
+- `VALID_OPS: Array = ["show", "hide", "highlight", "arrange", "annotate", "connect"]` declared as a constant in `llm_view_generator.gd`.
+- `_make_spec()` silently drops any op whose "op" key is not in VALID_OPS — unknown LLM-invented operations cannot reach the renderer.
+- `scene_interpreter.gd::apply()` uses a `match` block that only handles the same 6 ops; any unknown op in the dict is a no-op at the renderer level as well.
+
+**Scenario: LLM uses existing primitives — COVERED**
+
+| THEN clause | Code | Test |
 |---|---|---|
-| composes from existing set (show/hide/highlight/arrange/annotate/connect) | `test_parse_response_all_six_ops_pass_through`, `test_build_prompt_contains_*_primitive` (6 tests) | YES |
-| no new rendering logic generated at runtime | `test_parse_response_filters_unknown_ops`, `test_parse_response_with_all_unknown_ops_returns_empty_operations`, `test_unknown_op_is_ignored` | YES — filter tested with "invent_new_renderer", "render_as_graph", "explode_view", "teleport" |
+| Composes from existing set of 6 primitives | `build_prompt()` lists all VALID_OPS in the prompt; `_make_spec()` enforces the set | `test_build_prompt_contains_{show,hide,highlight,arrange,annotate,connect}_primitive` (6 tests); `test_parse_response_all_six_ops_pass_through` |
+| No new rendering logic generated at runtime | Unknown ops silently dropped by `_make_spec()` | `test_parse_response_filters_unknown_ops` ("invent_new_renderer"), `test_parse_response_with_all_unknown_ops_returns_empty_operations` ("render_as_graph", "explode_view"), `test_unknown_op_is_ignored` ("teleport") |
 
-## Pipeline Completeness
+---
 
-Stage 1 (producer): `llm_view_generator.gd` — `build_prompt()` embeds question + graph;
-`parse_response()` converts LLM text → ViewSpec dict, enforcing VALID_OPS.
+## Summary
 
-Stage 2 (consumer): `scene_interpreter.gd` — `apply(spec, anchors, scene_root, world_positions)`
-iterates `spec["operations"]`, dispatches each op to a `_apply_*` method that mutates
-live Node3D scene-tree properties (`.visible`, `.position`, `albedo_color`, `Label3D` child,
-`ImmediateMesh` line + `CylinderMesh` arrowhead).
+All three SHALL requirements are implemented in code and each scenario's THEN clauses are
+exercised by GDScript behavioral tests in `godot/tests/` that instantiate real Node3D objects
+and assert actual scene-tree property values (not intermediate dict keys). The two-stage
+pipeline (LLMViewGenerator → ViewSpec dict → SceneInterpreter → Node3D mutations) is
+fully wired in main.gd and tested end-to-end.
 
-Wiring: `main.gd` `apply_view_spec(spec: Dictionary)` creates a `SceneInterpreter` and
-calls `interp.apply(spec, _anchors, self, _world_positions)`. `_ready()` is not a stub —
-it loads the JSON scene graph and builds the 3D scene. VALID.
-
-## Verdict: PASS
-
-All four spec scenarios are covered. Every THEN-clause maps to a named test that
-instantiates real Node3D objects, invokes the code under test, and asserts the observable
-node property — not merely dict key presence. The two-stage pipeline (LLM→ViewSpec dict→
-3D scene mutations) is implemented, wired, and tested end-to-end. All automated checks
-pass. Commit trailers present. Prohibited file names absent.
+**Verdict: PASS**
