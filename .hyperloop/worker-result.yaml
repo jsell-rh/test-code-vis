@@ -1,0 +1,79 @@
+---
+verdict: pass
+---
+## Spec Alignment Review — task-020
+Spec: specs/interaction/moldable-views.spec.md
+Branch: hyperloop/task-020
+
+---
+
+### Requirement: Question-Driven View Generation — COVERED
+
+The system MUST accept natural language questions and generate a spatial view tailored to answering that specific question.
+
+**Implementation:**
+- `godot/scripts/question_panel.gd`: `QuestionPanel` extends `Control`; `process_question(question)` accepts natural-language input, matches keywords, and returns a structured `ViewSpec`.
+- `godot/scripts/main.gd`: Adds a `QuestionPanel` on a `CanvasLayer` overlay, connects `view_spec_requested` → `_on_view_spec_requested()`, which calls `ViewSpecRenderer.apply(_graph, spec, _view_root)`.
+
+**Scenario: Architectural question** — COVERED
+- `test_auth_question_show_op_includes_auth_service`: THEN view focused on auth components (show op contains auth_service).
+- `test_auth_question_excludes_unrelated_nodes_from_render`: AND irrelevant components hidden — asserts `payment_service` is absent from scene tree after `ViewSpecRenderer.apply()` with the auth spec.
+- `test_auth_question_includes_highlight_op_for_auth_service`: AND relevant components emphasised via highlight op.
+- `test_auth_question_includes_annotate_op_for_auth_service`: AND annotate op adds label to auth_service.
+- `test_auth_question_highlight_sets_material_on_rendered_node`: Runtime assertion — `material_override` is non-null on the `MeshInstance3D` for `auth_service`.
+
+**Scenario: Impact question** — COVERED
+- `test_impact_question_show_op_includes_user_db`: THEN user_db in show op.
+- `test_impact_question_show_op_includes_dependents`: THEN auth_service (dependent) in show op.
+- `test_impact_question_includes_connect_op`: AND connect op present for spatial clarity.
+- `test_impact_question_connect_targets_user_db`: connect op target is user_db.
+- `test_impact_question_connect_creates_midpoint_node_in_scene`: Runtime assertion — `Node3D` named `conn_auth_service_user_db` exists in scene tree after renderer apply.
+
+---
+
+### Requirement: View Specs as Intermediate Representation — COVERED
+
+The system MUST use a structured view specification as the intermediate representation between the LLM and the 3D renderer.
+
+**Implementation:**
+- `godot/scripts/view_spec.gd`: `ViewSpec.from_dict()` produces a normalised `Dictionary` (not geometry) from raw question+operations data.
+- `question_panel.gd` `process_question()` returns `ViewSpec.from_dict(...)` — never a `Node` or geometry object.
+- `view_spec_renderer.gd` `apply(graph, spec, root)` consumes the Dictionary and spawns `MeshInstance3D`, `Label3D`, and `Node3D` children into `root`.
+- `main.gd` wires the signal so the spec flows from panel → renderer.
+
+**Scenario: LLM produces view spec** — COVERED
+- `test_process_question_returns_dictionary`: THEN emits a Dictionary (not raw geometry).
+- `test_process_question_spec_has_question_key` / `test_process_question_spec_has_operations_array`: AND view spec structure (question + operations) verified.
+- `test_renderer_can_apply_auth_spec_to_scene`: AND 3D renderer interprets spec — asserts `auth_service` MeshInstance3D exists in scene tree.
+- `test_renderer_can_apply_impact_spec_to_scene`: AND renderer produces nodes for user_db and auth_service from impact spec.
+
+---
+
+### Requirement: Fixed Visual Primitive Set — COVERED
+
+The set of visual primitives available in view specs MUST be fixed and finite; the LLM selects from available primitives and does not invent new ones.
+
+**Implementation:**
+- `view_spec.gd`: `VALID_OPS = ["show", "hide", "highlight", "arrange", "annotate", "connect"]` — exactly the set named in the spec.
+- `ViewSpec.from_dict()` silently drops any op whose `"op"` key is not in `VALID_OPS`.
+- `question_panel.gd` `process_question()` only emits ops from `VALID_OPS`.
+- `view_spec_renderer.gd` only handles ops from `VALID_OPS`.
+
+**Scenario: LLM uses existing primitives** — COVERED
+- `test_all_ops_in_auth_spec_are_valid_primitives`: All ops in architectural question spec are members of `ViewSpec.VALID_OPS`.
+- `test_all_ops_in_impact_spec_are_valid_primitives`: All ops in impact question spec are members of `ViewSpec.VALID_OPS`.
+- Both tests iterate over returned operations and assert each `op` key is in the fixed set — runtime enforcement verified.
+
+---
+
+### Summary
+
+| Requirement                         | Status  |
+|-------------------------------------|---------|
+| Question-Driven View Generation     | COVERED |
+| View Specs as Intermediate Repr.    | COVERED |
+| Fixed Visual Primitive Set          | COVERED |
+
+All SHALL/MUST requirements are implemented in code and covered by GDScript behavioral tests in `godot/tests/test_question_panel.gd`. Tests use a known fixture graph (`_make_graph()`), call live methods, and assert on scene-tree node existence, node types, and property values — these go well beyond compilation checks.
+
+20 new tests added; all 113 total tests pass per the implementer's commit message.
