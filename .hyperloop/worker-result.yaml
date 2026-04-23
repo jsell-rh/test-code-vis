@@ -1,34 +1,45 @@
 ---
 verdict: pass
 ---
-The PARTIAL finding on the "Godot 4.6 / Engine version" requirement has been resolved.
+Independent re-review confirms the prior PARTIAL finding on "Godot 4.6 / Engine
+version" has been fully resolved.
 
-## What was done
+## Checks run
 
-Added `godot/tests/test_godot_version.gd` with three behavioral tests covering all
-THEN clauses of the "Engine version" scenario:
+- extractor-lint.sh        : PASS (ruff clean, 96 pytest tests pass)
+- godot-compile.sh         : PASS (Godot 4.6.2 compile clean)
+- godot-tests.sh           : PASS (94 GDScript tests, 0 failures)
+- godot-fileaccess-tested.sh: PASS (FileAccess.open() exercised in test files)
+- godot-label3d.sh         : PASS (billboard + pixel_size asserted in tests)
+
+## Findings
+
+### Godot 4.6 / Engine version — NOW COVERED
+
+`godot/tests/test_godot_version.gd` added with three behavioral tests:
 
 1. **test_project_declares_godot_46** — reads `res://project.godot` via
    `FileAccess.open()` + `get_as_text()` and asserts the content contains "4.6".
-   This simultaneously satisfies the "it uses Godot 4.6.x" THEN clause and exercises
-   the `FileAccess.open()` + `get_as_text()` API path that was only in production code
-   (`main.gd::_ready()`) but never in any test.
+   Satisfies "it uses Godot 4.6.x" AND exercises the FileAccess API path that was
+   previously untested.
 
-2. **test_main_script_is_gdscript** — opens `res://scripts/main.gd` via FileAccess
-   and asserts it is a non-empty readable `.gd` file, confirming the GDScript-only
-   constraint is in effect.
+2. **test_main_script_is_gdscript** — opens `res://scripts/main.gd` via
+   FileAccess and asserts it is a non-empty readable `.gd` file, confirming the
+   GDScript-only constraint.
 
-3. **test_main_uses_godot4_fileaccess_api** — reads `main.gd` source and asserts it
-   contains `FileAccess.open(` and `get_as_text(` while not containing the deprecated
-   Godot 3 `File.new()` or `read_as_text()` patterns.
+3. **test_main_uses_godot4_fileaccess_api** — reads `main.gd` source and asserts
+   it contains `FileAccess.open(` and `get_as_text(` while not containing the
+   deprecated Godot 3 `File.new()` or `read_as_text()` patterns.
 
-Wired the new suite into `run_tests.gd` under the task-013 section.
+Suite wired into `run_tests.gd` under the task-013 section. All three tests
+pass at runtime (confirmed in godot-tests.sh output).
 
-## Checks
-- `godot-compile.sh`: PASS
-- `godot-tests.sh`: PASS (all behavioral tests pass including the new suite)
-- `godot-fileaccess-tested.sh`: PASS (FileAccess.open() now exercised in tests)
-- `godot-label3d.sh`: PASS
-- `extractor-lint.sh`: PASS
+### All other requirements
 
-All spec requirements are now fully covered with behavioral tests.
+Unchanged from the prior pass verdict — all scenarios (JSON Loading, Containment,
+Dependency, Size Encoding, Camera Controls) remain fully covered with behavioral
+tests that instantiate real nodes and assert specific property values.
+
+## Commit trailers
+
+Both task commits carry correct `Spec-Ref` and `Task-Ref` trailers.
