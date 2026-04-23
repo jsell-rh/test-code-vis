@@ -152,19 +152,65 @@ def _circular_positions(
     return positions
 
 
-def compute_layout(nodes: list[Node]) -> None:
+def _order_by_coupling(bc_nodes: list[Node], edges: list[Edge]) -> list[Node]:
+    """Re-order *bc_nodes* so tightly coupled pairs end up adjacent in the circle.
+
+    Uses a greedy nearest-neighbour heuristic: starting from the first node,
+    repeatedly pick the remaining node with the highest coupling score to the
+    current tail of the ordered list.  Coupling score is the number of
+    cross-context edges shared between two bounded contexts.
+    """
+    if len(bc_nodes) <= 2:
+        return list(bc_nodes)
+
+    bc_id_set = {n["id"] for n in bc_nodes}
+
+    # Build symmetric coupling counts between BC pairs.
+    coupling: dict[str, dict[str, int]] = {n["id"]: {} for n in bc_nodes}
+    for edge in edges:
+        src_bc = edge["source"].split(".")[0]
+        tgt_bc = edge["target"].split(".")[0]
+        if src_bc in bc_id_set and tgt_bc in bc_id_set and src_bc != tgt_bc:
+            coupling[src_bc][tgt_bc] = coupling[src_bc].get(tgt_bc, 0) + 1
+            coupling[tgt_bc][src_bc] = coupling[tgt_bc].get(src_bc, 0) + 1
+
+    remaining = list(bc_nodes)
+    ordered = [remaining.pop(0)]
+    while remaining:
+        current_id = ordered[-1]["id"]
+        best_idx = max(
+            range(len(remaining)),
+            key=lambda i: coupling[current_id].get(remaining[i]["id"], 0),
+        )
+        ordered.append(remaining.pop(best_idx))
+
+    return ordered
+
+
+def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
     """Assign pre-computed 3D positions to all nodes (mutates *nodes* in-place).
 
-    Bounded contexts are arranged in a circle.  The modules within each
-    context are arranged in a smaller circle at a fixed y-offset so that
-    child nodes are visually "inside" their parent.
+    Bounded contexts are arranged in a circle.  When *edges* are supplied the
+    BC order is optimised by ``_order_by_coupling`` so tightly coupled pairs
+    are placed adjacent, reducing their spatial distance.
+
+    Module nodes are placed in a smaller circle *offset by their parent BC's
+    absolute position* so that child nodes are always within the spatial bounds
+    of their parent.
     """
     bc_nodes = [n for n in nodes if n["type"] == "bounded_context"]
+
+    # Optionally reorder so coupled BCs sit adjacent in the ring.
+    if edges:
+        bc_nodes = _order_by_coupling(bc_nodes, edges)
+
     bc_radius = max(5.0, len(bc_nodes) * 2.5)
     bc_positions = _circular_positions(len(bc_nodes), bc_radius)
 
+    bc_pos_map: dict[str, tuple[float, float, float]] = {}
     for bc_node, pos in zip(bc_nodes, bc_positions):
         bc_node["position"] = {"x": pos[0], "y": pos[1], "z": pos[2]}
+        bc_pos_map[bc_node["id"]] = pos
 
     # Group modules by parent
     parent_children: dict[str, list[Node]] = {}
@@ -172,11 +218,18 @@ def compute_layout(nodes: list[Node]) -> None:
         if n["type"] == "module" and n["parent"]:
             parent_children.setdefault(n["parent"], []).append(n)
 
-    for children in parent_children.values():
+    for parent_id, children in parent_children.items():
         mod_radius = max(1.5, len(children) * 0.9)
         mod_positions = _circular_positions(len(children), mod_radius, y=1.0)
+        # Offset by the parent BC's absolute position so children are
+        # spatially contained within their parent's bounds.
+        px, py, pz = bc_pos_map.get(parent_id, (0.0, 0.0, 0.0))
         for child, pos in zip(children, mod_positions):
-            child["position"] = {"x": pos[0], "y": pos[1], "z": pos[2]}
+            child["position"] = {
+                "x": px + pos[0],
+                "y": py + pos[1],
+                "z": pz + pos[2],
+            }
 
 
 # ---------------------------------------------------------------------------
@@ -426,11 +479,11 @@ def build_scene_graph(
         module_nodes = discover_submodules(src_path, bc_node["id"])
         nodes.extend(module_nodes)
 
-    # 3. Compute layout (mutates positions in-place).
-    compute_layout(nodes)
-
-    # 4. Build dependency edges.
+    # 3. Build dependency edges first so the layout can use coupling info.
     edges = build_dependency_edges(src_path, nodes)
+
+    # 4. Compute layout with coupling-aware BC ordering (mutates positions in-place).
+    compute_layout(nodes, edges)
 
     # 5. Optionally add spec nodes.
     if include_specs:

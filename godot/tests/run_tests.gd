@@ -16,6 +16,7 @@ func _init() -> void:
 	print("=== code-vis GDScript Tests ===")
 
 	_run_suite(preload("res://tests/test_scene_graph_loader.gd").new())
+	_run_suite(preload("res://tests/test_node_renderer.gd").new())
 
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
