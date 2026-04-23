@@ -1,0 +1,149 @@
+---
+verdict: pass
+---
+
+## Spec Alignment Review: Godot Application Specification
+
+All six MUST requirements are implemented in `godot/scripts/` and covered by
+GDScript behavioral tests in `godot/tests/`. Every test exercises known fixture
+data and asserts runtime outputs (scene-tree nodes, property values, positions)
+— not merely Godot compilation (`--headless --quit`).
+
+---
+
+### Requirement: JSON Scene Graph Loading — COVERED
+
+**Implementation:** `godot/scripts/main.gd`
+- `_ready()` opens the JSON file with `FileAccess.open()` + `get_as_text()`.
+- `SceneGraphLoader.load_from_dict()` (scene_graph_loader.gd) parses the raw dict.
+- `build_from_graph()` iterates nodes to create 3D anchors/volumes, then iterates
+  edges to call `_create_edge()`, and calls `_frame_camera()` afterwards.
+- World-space positions are resolved from JSON `position` fields (no recomputation).
+
+**Tests:** `godot/tests/test_scene_graph_loading.gd`
+- `test_volumes_created_for_each_node()` — GIVEN fixture with 2 nodes, THEN
+  `_anchors` contains both node ids.
+- `test_mesh_instances_exist_in_anchors()` — each anchor contains a MeshInstance3D.
+- `test_edge_mesh_instances_created()` — at least 2 MeshInstance3D children exist
+  on the main node (line + arrowhead cone per edge).
+- `test_anchor_positions_match_json()` — local positions on anchors equal the JSON
+  `position` fields exactly.
+- `test_labels_are_billboard_and_readable()` — Label3D uses BILLBOARD_ENABLED,
+  pixel_size > 0, no_depth_test = true.
+
+---
+
+### Requirement: Containment Rendering — COVERED
+
+**Implementation:** `godot/scripts/main.gd::_create_volume()`
+- `bounded_context` nodes: BoxMesh with `TRANSPARENCY_ALPHA`, `alpha = 0.18`,
+  `CULL_DISABLED`.
+- `module` nodes: BoxMesh with `alpha = 1.0` (opaque).
+- Child nodes are parented to their parent's anchor Node3D, placing them visually
+  inside the parent volume.
+- Context size is larger than module size because `sz` is taken directly from the
+  JSON `size` field (extractor sets context sizes larger).
+
+**Tests:** `godot/tests/test_containment_rendering.gd`
+- `test_bounded_context_is_translucent()` — material transparency != DISABLED,
+  albedo_color.a < 1.
+- `test_module_is_opaque()` — module material albedo_color.a >= 1.
+- `test_module_parented_inside_context()` — module anchor's parent == context anchor.
+- `test_bounded_context_larger_than_module()` — context BoxMesh.size.x > module's.
+- `test_bounded_context_cull_disabled()` — context material uses CULL_DISABLED,
+  making it visually distinct from child nodes (which use default back-face culling).
+
+---
+
+### Requirement: Dependency Rendering — COVERED
+
+**Implementation:** `godot/scripts/main.gd::_create_edge()`
+- Builds an `ImmediateMesh` with `PRIMITIVE_LINES` between from_pos and to_pos.
+- Adds a `CylinderMesh` with `top_radius = 0` (arrowhead cone) at the target end,
+  oriented along the edge direction, to indicate flow direction.
+- Cross-context edges are colored orange `Color(1.0, 0.50, 0.10)`; internal are grey.
+
+**Tests:** `godot/tests/test_dependency_rendering.gd`
+- `test_edge_line_mesh_created()` — ImmediateMesh exists in main node's children.
+- `test_direction_indicator_cone_created()` — CylinderMesh with top_radius == 0
+  exists among children.
+- `test_direction_cone_near_target()` — cone position is within 2 units of target.
+- `test_cross_context_cone_is_orange()` — cross_context edge cone has R > 0.8,
+  B < 0.3.
+
+---
+
+### Requirement: Size Encoding — COVERED
+
+**Implementation:** `godot/scripts/main.gd::_create_volume()`
+- `sz = float(nd["size"])` is applied directly to `BoxMesh.size` dimensions.
+- Larger `size` value → larger mesh in all three axes (no normalization or
+  re-scaling performed in Godot).
+
+**Tests:** `godot/tests/test_size_encoding.gd`
+- `test_large_module_has_bigger_mesh()` — large_mod (size=9) BoxMesh.size.x >
+  small_mod (size=3) BoxMesh.size.x.
+- `test_mesh_sizes_proportional_to_metric()` — ratio of mesh x-dimensions equals
+  ratio of input sizes (9/3 = 3.0) within float tolerance.
+
+---
+
+### Requirement: Camera Controls — COVERED
+
+**Implementation:** `godot/scripts/camera_controller.gd`
+- Initial `_theta = 0.15` rad (≈ 8.6° from top-down, well below 45°).
+- Scroll wheel up/down changes `_distance` (zoom), clamped to `[min_distance,
+  max_distance]`.
+- Middle-mouse drag updates `_phi` (azimuth) and `_theta` (polar/altitude);
+  `_theta` clamped to `[0.01, PI − 0.01]` so up stays up.
+- `set_pivot(pivot, distance)` called from `main.gd::_frame_camera()` to frame
+  the scene on load.
+
+**Tests:** `godot/tests/test_camera_controls.gd`
+- `test_initial_theta_is_near_top_down()` — theta < PI/4.
+- `test_initial_distance_is_positive()` — distance > 0.
+- `test_scroll_up_decreases_distance()` — WHEEL_UP reduces _distance.
+- `test_scroll_down_increases_distance()` — WHEEL_DOWN increases _distance.
+- `test_orbit_horizontal_drag_changes_phi()` — middle-mouse horizontal drag
+  changes _phi.
+- `test_orbit_vertical_drag_changes_theta()` — middle-mouse vertical drag
+  changes _theta.
+- `test_set_pivot_updates_state()` — set_pivot stores new pivot and distance.
+- `test_zoom_clamped_at_minimum()` — 200 scroll-up events never push _distance
+  below min_distance.
+
+Label readability on zoom additionally covered by
+`test_scene_graph_loading.gd::test_labels_are_billboard_and_readable()`.
+
+---
+
+### Requirement: Godot 4.6 — COVERED
+
+**Implementation:**
+- `project.godot` declares `config/features=PackedStringArray("4.6")`.
+- All scripts are `.gd` files (no `.cs` files present).
+- `main.gd` uses `FileAccess.open()` + `get_as_text()` (Godot 4 API); no
+  deprecated `File.new()` or `read_as_text()` calls.
+
+**Tests:** `godot/tests/test_engine_version.gd` and `test_godot_version.gd`
+- `test_project_godot_declares_version_4_6()` / `test_project_declares_godot_46()`
+  — reads project.godot via FileAccess and asserts "4.6" is present.
+- `test_project_features_include_4_6()` — asserts `"4.6"` appears in the
+  `config/features` line.
+- `test_main_script_is_gdscript()` — main.gd file is non-empty and project.godot
+  references `.tscn` (not `.cs`).
+- `test_main_uses_godot4_fileaccess_api()` — main.gd contains `FileAccess.open(`
+  and `get_as_text()` and does NOT contain `File.new()` or `read_as_text()`.
+
+---
+
+## Summary
+
+| Requirement             | Status  |
+|-------------------------|---------|
+| JSON Scene Graph Loading | COVERED |
+| Containment Rendering    | COVERED |
+| Dependency Rendering     | COVERED |
+| Size Encoding            | COVERED |
+| Camera Controls          | COVERED |
+| Godot 4.6                | COVERED |
