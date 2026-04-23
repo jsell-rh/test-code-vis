@@ -17,6 +17,8 @@ func _init() -> void:
 
 	_run_suite(preload("res://tests/test_scene_graph_loader.gd").new())
 	_run_suite(preload("res://tests/test_node_renderer.gd").new())
+	_run_suite(preload("res://tests/test_view_spec.gd").new())
+	_run_suite(preload("res://tests/test_view_spec_renderer.gd").new())
 
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
