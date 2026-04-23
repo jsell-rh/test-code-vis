@@ -28,6 +28,16 @@ guidelines: |
     invokes the function under test, and asserts the node's `.position.x`, `.position.y`,
     `.position.z` properties match the fixture values.
   - **Node properties that produce visual behavior are spec-observable.** For any THEN clause satisfied by a node property (`billboard`, `pixel_size`, `no_depth_test`, `transparency_mode`, `cull_mode`, `albedo_color.a`, etc.), confirm a GDScript test asserts that specific property value on the instantiated node — "the engine handles it" is NOT acceptable coverage.
+  - **Technology/version constraint scenarios are not exempt from test coverage.** For any
+    scenario whose THEN clause is a version or technology assertion (e.g., "Engine version
+    4.6.x", "all scripts are GDScript"), confirm a GDScript test exists that exercises the
+    assertion at runtime — e.g., reads `project.godot` via `FileAccess.open()` +
+    `get_as_text()` and asserts the version string. A config-only implementation with no
+    test is PARTIAL, not COVERED.
+  - **Confirm `_ready()` file I/O is tested.** If the main script's `_ready()` calls
+    `FileAccess.open()` + `get_as_text()`, verify at least one test file in `godot/tests/`
+    also calls `FileAccess.open()` + `get_as_text()`. Verify by grepping test files; if no
+    test exercises this path, mark the file-I/O scenario as PARTIAL.
   - Verify camera controls work (pan, zoom, orbit).
   - Verify labels are readable (assert `billboard == BILLBOARD_ENABLED` and `pixel_size > 0.0` on any Label3D nodes).
   - Verify containment is visually represented (child volumes inside parent volumes).

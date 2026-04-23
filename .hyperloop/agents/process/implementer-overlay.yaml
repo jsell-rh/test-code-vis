@@ -44,6 +44,16 @@ guidelines: |
     `.position.z` values on the scene-tree node — not on an intermediate dictionary.
   - **Node properties that produce visual behavior require property-value tests.** If a THEN clause is satisfied by setting a node property (e.g. `billboard`, `pixel_size`, `no_depth_test`, `transparency_mode`, `cull_mode`, `albedo_color.a`), write a test that builds the scene from fixture data and asserts that property value on the resulting node. "The engine renders it correctly" is never a substitute for asserting the property.
   - **Label3D readability is mandatory, not optional.** Whenever you create a `Label3D` node, you MUST immediately set `label.billboard = BaseMaterial3D.BILLBOARD_ENABLED` and `label.pixel_size = 0.05` (or another legible value > 0.0). These are not style choices — a Label3D at default settings is illegible in a 3D scene. Write tests asserting both `billboard == BaseMaterial3D.BILLBOARD_ENABLED` and `pixel_size > 0.0` on the resulting node, even if the spec's THEN clause only mentions "add an annotation."
+  - **Technology/version constraint scenarios require behavioral tests too.** A spec scenario
+    like "Engine version" or "GDScript only" is NOT satisfied by setting a config file value
+    alone. Write a GDScript test that reads the config file via `FileAccess.open()` +
+    `get_as_text()` and asserts the expected version or constraint (e.g., assert the string
+    "4.6" appears in the `project.godot` content). Config-without-test is PARTIAL.
+  - **`_ready()` file I/O must be covered by at least one test.** If `_ready()` uses
+    `FileAccess.open()` + `get_as_text()` but unit tests bypass `_ready()` by calling
+    internal methods directly, add a test that exercises `FileAccess.open()` +
+    `get_as_text()` on a known file and asserts its content. The call path must appear in
+    a test, not only in production code.
   - **Before submitting your verdict**, run all check scripts in `.hyperloop/checks/`.
     Both the Godot compile check and the extractor lint check must pass.
     If a check SKIPs (because the relevant component doesn't exist yet), that's fine.
