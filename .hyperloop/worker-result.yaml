@@ -1,25 +1,31 @@
 ---
 verdict: pass
 ---
-## Godot Application — task-007 Verification (2026-04-23, fresh attempt)
+## Godot Application — task-007 Verification (2026-04-23, independent review)
 
-All three check scripts pass after independent verification:
+All three check scripts pass under independent execution:
 
 - `extractor-lint.sh`: ruff clean, 93 Python extractor tests pass.
-- `godot-compile.sh`: Godot 4.6.2 compiles the project headlessly without errors.
+- `godot-compile.sh`: Godot 4.6.2 compiles headlessly; expected warning about missing JSON at runtime only.
 - `godot-tests.sh`: **24/24 GDScript behavioral tests pass** ("ALL TESTS PASSED").
 
 ### Spec Coverage
 
-| Requirement              | Implementation                                      | Tests                                                        |
-|--------------------------|-----------------------------------------------------|--------------------------------------------------------------|
-| JSON Scene Graph Loading | `main.gd`: FileAccess + JSON.parse → _build()       | 5 tests — volumes, meshes, edges, positions, label props      |
-| Containment Rendering    | translucent parent (alpha=0.18) + opaque child       | 5 tests — translucency, opacity, parenting, sizing, cull mode |
-| Dependency Rendering     | ImmediateMesh line + CylinderMesh cone (arrowhead)  | 4 tests — line mesh, cone, cone position, orange color        |
-| Size Encoding            | BoxMesh.size.x = float(nd["size"])                  | 2 tests — larger mesh, proportional ratio                     |
-| Camera Controls          | `camera_controller.gd`: spherical coords + clamping | 8 tests — theta, distance, scroll, orbit, pivot, clamp        |
-| Godot 4                  | `project.godot` features="4.6", all .gd scripts     | Configuration fact (no behavioral test needed)                |
+| Requirement              | Code                                                          | Tests                                                             |
+|--------------------------|---------------------------------------------------------------|-------------------------------------------------------------------|
+| JSON Scene Graph Loading | `main.gd _ready()` → `_load_and_build()` → `_build()`; not a stub | 5 tests: volumes, meshes, edges, positions, label properties |
+| Containment Rendering    | Translucent parent (alpha=0.18, TRANSPARENCY_ALPHA, CULL_DISABLED) + opaque child (alpha=1.0); child anchored to parent | 5 tests: translucency, opacity, parenting, size, cull mode |
+| Dependency Rendering     | ImmediateMesh line + CylinderMesh cone (top_radius=0, arrowhead) at target end | 4 tests: line mesh, cone exists, cone near target, orange color on cross-context |
+| Size Encoding            | `box.size = Vector3(sz, …, sz)` where `sz = float(nd["size"])` | 2 tests: larger module → bigger mesh, proportional ratio exact |
+| Camera Controls          | Spherical-coord orbit/zoom/pan; defaults to θ=0.15 (≈8.6° from top) | 8 tests: initial theta, distance, scroll up/down, orbit H/V, set_pivot, clamp |
+| Godot 4                  | `project.godot` version 4.6.2, all scripts are GDScript       | Configuration fact — no behavioral test needed                    |
 
-All THEN clauses from the spec are implemented in code and asserted by GDScript tests
-using known fixture data and runtime property checks (not dict-key assertions).
-No requirement is PARTIAL or MISSING.
+### Guideline checks
+
+- **`main.gd _ready()`**: calls `_load_and_build()` — not an empty stub. ✓
+- **GDScript tests**: 5 `test_*.gd` files, one per spec scenario group. ✓
+- **Real Node3D instantiation**: tests call `MainScript.new()` (extends Node3D) and `_build(fixture)`, then assert `.position`, `.size.x`, `.albedo_color.a`, `.transparency`, `.cull_mode`, `.billboard`, `.pixel_size`. No dict-key-only assertions. ✓
+- **Direction visually indicated**: explicit CylinderMesh cone (top_radius=0) geometry — not just a colour difference. ✓
+- **Labels readable**: `billboard == BILLBOARD_ENABLED` and `pixel_size = 0.012 > 0.0` asserted by `test_labels_are_billboard_and_readable`. ✓
+- **Containment**: module anchor parented directly to context anchor, asserted by `test_module_parented_inside_context`. ✓
+- **Commit trailers**: `Spec-Ref` and `Task-Ref` present on all implementation commits (`a02ffac`, `12ac742`, `11960e4`). ✓
