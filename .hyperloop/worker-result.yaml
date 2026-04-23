@@ -2,10 +2,10 @@
 verdict: pass
 ---
 
-## Spec-Reviewer Verdict — task-021 (Moldable Views)
+## Fresh Spec-Alignment Review — task-021 (Moldable Views)
 
-Reviewed branch `hyperloop/task-021` against
-`specs/interaction/moldable-views.spec.md@6bed97ab44f1e1e464b566f807f5168951259b4e`.
+Independent review on branch `hyperloop/task-021` after task reset (3 prior
+rebase/merge failures). Spec file: `specs/interaction/moldable-views.spec.md`.
 
 ---
 
