@@ -134,3 +134,47 @@ func test_zoom_clamped_at_minimum() -> bool:
 	for _i: int in range(200):
 		cam._handle_button(event)
 	return cam._distance >= cam.min_distance
+
+
+## AND orientation remains intuitive (up stays up) — theta clamped at top pole (0.01).
+## Driving an extreme downward drag from near the lower bound must leave _theta >= 0.01.
+## Without clamping: theta(0.02) - 20000 * 0.005 = -99.98; with clamping: stays at 0.01.
+func test_theta_clamped_at_minimum() -> bool:
+	var cam = CameraScript.new()
+	cam._theta = 0.02  # near the lower bound (top pole)
+
+	# Begin orbiting via middle mouse press.
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_MIDDLE
+	press.pressed = true
+	press.position = Vector2(100.0, 100.0)
+	cam._handle_button(press)
+
+	# Extreme downward drag: delta.y = +20000 → would push theta to -99.98 unclamped.
+	var motion := InputEventMouseMotion.new()
+	motion.position = Vector2(100.0, 20100.0)
+	cam._handle_motion(motion)
+
+	return cam._theta >= 0.01
+
+
+## AND orientation remains intuitive (up stays up) — theta clamped at bottom pole (PI-0.01).
+## Driving an extreme upward drag from near the upper bound must leave _theta <= PI - 0.01.
+## Without clamping: theta(PI-0.02) + 20000 * 0.005 = very large; with clamping: stays at PI-0.01.
+func test_theta_clamped_at_maximum() -> bool:
+	var cam = CameraScript.new()
+	cam._theta = PI - 0.02  # near the upper bound (bottom pole)
+
+	# Begin orbiting via middle mouse press.
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_MIDDLE
+	press.pressed = true
+	press.position = Vector2(100.0, 20100.0)
+	cam._handle_button(press)
+
+	# Extreme upward drag: delta.y = -20000 → would push theta above PI unclamped.
+	var motion := InputEventMouseMotion.new()
+	motion.position = Vector2(100.0, 100.0)
+	cam._handle_motion(motion)
+
+	return cam._theta <= PI - 0.01
