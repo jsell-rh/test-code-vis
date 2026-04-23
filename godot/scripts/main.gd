@@ -12,6 +12,7 @@ extends Node3D
 ## The JSON file path is configurable via the exported variable.
 
 const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
+const SceneInterpreter = preload("res://scripts/scene_interpreter.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -252,3 +253,21 @@ func _frame_camera() -> void:
 
 	if _camera.has_method("set_pivot"):
 		_camera.call("set_pivot", centre, distance)
+
+
+# ---------------------------------------------------------------------------
+# View spec application — Stage 2 of the moldable-views pipeline
+# ---------------------------------------------------------------------------
+
+## Apply a view spec produced by LLMViewGenerator.parse_response() to the
+## live 3D scene.  SceneInterpreter maps each operation to scene-tree mutations:
+##   show/hide  → anchor.visible
+##   highlight  → material.albedo_color
+##   arrange    → anchor.position
+##   annotate   → Label3D child added to anchor
+##   connect    → ImmediateMesh line + CylinderMesh arrowhead added to scene
+##
+## spec: Dictionary from LLMViewGenerator.parse_response()
+func apply_view_spec(spec: Dictionary) -> void:
+	var interp := SceneInterpreter.new()
+	interp.apply(spec, _anchors, self, _world_positions)
