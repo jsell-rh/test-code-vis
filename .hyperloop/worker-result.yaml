@@ -1,18 +1,30 @@
 ---
 verdict: pass
 ---
-All checks pass. The only failing item in the previous submission was the missing
-`## Scope Check Output` section in this file (the check itself passed; only the
-verbatim output was absent from the report).
+Re-review after implementer fix (commit 474642d). All requirements satisfied.
 
 ## Scope Check Output
 
 OK: No prohibited (not-in-scope) features detected.
 
-## Summary
+## Findings
 
-All requirements from `specs/prototype/godot-application.spec.md` are implemented
-and tested.
+### Fixed from Previous Review
+The previous FAIL was solely due to the missing `## Scope Check Output` section in the
+implementer's report. Commit 474642d adds that section with the verbatim output of
+`check-not-in-scope.sh`. The requirement is now satisfied.
+
+### Check Script Results
+
+| Script                             | Result |
+|------------------------------------|--------|
+| check-not-in-scope.sh              | PASS   |
+| extractor-lint.sh                  | PASS   |
+| godot-compile.sh                   | PASS   |
+| godot-tests.sh (30 tests / 8 files)| PASS   |
+| godot-fileaccess-tested.sh         | PASS   |
+| godot-label3d.sh                   | PASS   |
+| check-kartograph-integration-test.sh (run from main) | PASS |
 
 ### Spec Coverage
 
@@ -25,22 +37,30 @@ and tested.
 | Camera Controls          | COVERED | test_camera_controls.gd        |
 | Godot 4.6                | COVERED | test_engine_version.gd         |
 
-### All Checks Pass
+### Implementation Spot-Checks (all pass)
 
-- **check-not-in-scope.sh**: `OK: No prohibited (not-in-scope) features detected.`
-- **extractor-lint.sh**: All checks passed, 90 tests pass, ruff clean.
-- **godot-compile.sh**: Godot Engine v4.6.2.stable.official — project compiles successfully.
-- **godot-tests.sh**: 30 GDScript behavioral tests pass across 8 test files.
-- **godot-fileaccess-tested.sh**: FileAccess.open() is exercised in 1 test file(s).
-- **godot-label3d.sh**: All Label3D nodes have billboard and pixel_size set and tested.
+- `main.gd` `_ready()` is non-empty: calls `FileAccess.open()` + `get_as_text()` at line 33–37.
+- Direction indicator: `CylinderMesh` with `top_radius=0.0` (cone shape) at
+  `godot/scripts/main.gd:211–215` — satisfies "visually indicated" per guidelines.
+- Tests assert real `Node3D` position properties: `test_node_renderer.gd` checks
+  `position.x`, `position.y`, `position.z` against fixture values — no dict-key-only
+  assertions in rendering tests.
+- Label3D nodes: `billboard = BILLBOARD_ENABLED`, `pixel_size = 0.012 > 0.0`,
+  `no_depth_test = true`, all asserted in test files.
 
-### Implementation Notes
+### Prohibited Feature Audit
 
-- `main.gd` `_ready()` performs real `FileAccess.open()` + `get_as_text()` work (non-empty).
-- Direction indicator on dependency edges is a `CylinderMesh` with `top_radius=0` (cone shape),
-  satisfying "visually indicated" with an explicit rendering element.
-- All `Label3D` nodes have `billboard = BaseMaterial3D.BILLBOARD_ENABLED`,
-  `pixel_size = 0.012 > 0.0`, and `no_depth_test = true`.
-- All commits carry the required trailers:
-  - `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384`
-  - `Task-Ref: task-009`
+All "Not In Scope" items are absent from the codebase:
+- conformance mode: absent
+- evaluation mode: absent
+- simulation mode: absent
+- data flow visualization: absent
+- first-person navigation: absent
+- moldable views (view_spec.gd, question_panel.gd): absent
+- spec extraction (extract_spec_nodes, --specs flag): absent
+
+### Commit Trailers
+
+All branch commits carry:
+- `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384`
+- `Task-Ref: task-009`
