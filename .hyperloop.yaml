@@ -1,5 +1,16 @@
 overlay: .hyperloop/agents/
 base_branch: main
 runtime: local
-max_workers: 4
+max_workers: 6
 max_task_rounds: 30
+max_cycles: 10000
+
+merge:
+  auto_merge: true
+  strategy: squash
+  delete_branch: true
+
+observability:
+  log_level: debug
+
+dashboard: { enabled: true }
