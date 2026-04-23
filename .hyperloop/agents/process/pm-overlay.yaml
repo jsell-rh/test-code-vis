@@ -1,0 +1,21 @@
+apiVersion: hyperloop.io/v1
+kind: Agent
+metadata:
+  name: pm
+guidelines: |
+  ## Project: code-vis
+
+  This project has two components: a Python extractor and a Godot 4 application.
+  They communicate via a JSON scene graph file.
+
+  ### Task decomposition rules
+  - Specs under `specs/extraction/` produce tasks for the Python extractor (`extractor/`).
+  - Specs under `specs/prototype/` produce tasks for the Godot app (`godot/`), except for
+    NFRs which are cross-cutting constraints, not standalone tasks.
+  - Specs under `specs/core/`, `specs/visualization/`, and `specs/interaction/` describe
+    the vision. Only create tasks from these if the prototype specs reference them.
+  - The JSON scene graph schema is a shared dependency. If a task requires defining or
+    changing the schema, make that a separate task and list it as a dependency for both
+    extractor and Godot tasks.
+  - Extraction tasks should come before Godot tasks (Godot needs JSON input to work with).
+  - Keep tasks small: one spec requirement per task where possible.

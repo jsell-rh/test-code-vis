@@ -1,0 +1,35 @@
+apiVersion: hyperloop.io/v1
+kind: Agent
+metadata:
+  name: implementer
+guidelines: |
+  ## Project: code-vis
+
+  This project has two components with different languages and tooling. Understand which
+  component your task targets before writing code.
+
+  ### Component 1: Python Extractor (`extractor/`)
+  - Parses the kartograph codebase (~/code/kartograph) and outputs a JSON scene graph.
+  - Python 3.12+. Use only standard library + tree-sitter (or ast module).
+  - Output is a single JSON file that the Godot app consumes.
+  - No frameworks. Keep it simple — a CLI script.
+  - Use type hints throughout. Run `ruff check` and `ruff format --check` before committing.
+  - Write tests with pytest for extraction logic.
+
+  ### Component 2: Godot Application (`godot/`)
+  - Godot 4.x with GDScript.
+  - Loads the JSON scene graph and renders it as a navigable 3D space.
+  - Use Godot's built-in node types (MeshInstance3D, Label3D, etc.).
+  - Keep scenes composable — one scene per logical visual element.
+  - Do not hardcode paths to the kartograph codebase in the Godot project. The JSON file
+    is the sole interface between the extractor and the Godot app.
+
+  ### General
+  - The JSON scene graph is the interface contract between the two components.
+    If you change its schema, update both sides.
+  - Specs are in `specs/`. Read the relevant spec thoroughly before implementing.
+  - This is a prototype — prefer simple and working over clever and flexible.
+  - Do not add dependencies beyond what the spec requires.
+  - **Before submitting your verdict**, run all check scripts in `.hyperloop/checks/`.
+    Both the Godot compile check and the extractor lint check must pass.
+    If a check SKIPs (because the relevant component doesn't exist yet), that's fine.

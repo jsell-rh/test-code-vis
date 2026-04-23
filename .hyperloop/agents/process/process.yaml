@@ -1,0 +1,14 @@
+apiVersion: hyperloop.io/v1
+kind: Process
+metadata:
+  name: default
+
+pipeline:
+  - loop:
+      - agent: implementer
+      - agent: verifier
+  - action: merge-pr
+
+hooks:
+  after_reap:
+    - type: process-improver

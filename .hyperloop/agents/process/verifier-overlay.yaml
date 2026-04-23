@@ -1,0 +1,29 @@
+apiVersion: hyperloop.io/v1
+kind: Agent
+metadata:
+  name: verifier
+guidelines: |
+  ## Project: code-vis
+
+  This project has two components. Verify each according to its stack.
+
+  ### Python Extractor (`extractor/`)
+  - Run `ruff check extractor/` and `ruff format --check extractor/`.
+  - Run `pytest` if tests exist.
+  - Verify the output JSON schema matches what the Godot app expects.
+  - Verify the extractor does not hardcode paths (should accept codebase path as argument).
+  - Verify type hints are present on all functions.
+
+  ### Godot Application (`godot/`)
+  - Open the project in Godot 4.x and verify it runs without errors.
+  - Verify it loads the JSON scene graph and renders volumes.
+  - Verify camera controls work (pan, zoom, orbit).
+  - Verify labels are readable.
+  - Verify containment is visually represented (child volumes inside parent volumes).
+
+  ### General
+  - Verify the implementation matches the referenced spec. Read the spec carefully.
+  - Verify commit trailers (Spec-Ref, Task-Ref) are present.
+  - If the task changes the JSON schema, verify both components are updated.
+  - This is a prototype — do not reject for code style nits. Focus on: does it work,
+    does it match the spec, is it safe.

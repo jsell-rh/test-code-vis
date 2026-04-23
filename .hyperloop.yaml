@@ -1,0 +1,5 @@
+overlay: .hyperloop/agents/
+base_branch: main
+runtime: local
+max_workers: 4
+max_task_rounds: 30
