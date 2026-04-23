@@ -27,8 +27,9 @@ guidelines: |
     rendering THEN clause. Confirm the test instantiates a real `Node3D` (or equivalent),
     invokes the function under test, and asserts the node's `.position.x`, `.position.y`,
     `.position.z` properties match the fixture values.
+  - **Node properties that produce visual behavior are spec-observable.** For any THEN clause satisfied by a node property (`billboard`, `pixel_size`, `no_depth_test`, `transparency_mode`, `cull_mode`, `albedo_color.a`, etc.), confirm a GDScript test asserts that specific property value on the instantiated node — "the engine handles it" is NOT acceptable coverage.
   - Verify camera controls work (pan, zoom, orbit).
-  - Verify labels are readable.
+  - Verify labels are readable (assert `billboard == BILLBOARD_ENABLED` and `pixel_size > 0.0` on any Label3D nodes).
   - Verify containment is visually represented (child volumes inside parent volumes).
 
   ### General

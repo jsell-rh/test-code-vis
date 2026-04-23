@@ -42,6 +42,7 @@ guidelines: |
     says "renders nodes at pre-computed positions." The test must instantiate the Node3D,
     call the function under test, and assert the actual `.position.x`, `.position.y`,
     `.position.z` values on the scene-tree node — not on an intermediate dictionary.
+  - **Node properties that produce visual behavior require property-value tests.** If a THEN clause is satisfied by setting a node property (e.g. `billboard`, `pixel_size`, `no_depth_test`, `transparency_mode`, `cull_mode`, `albedo_color.a`), write a test that builds the scene from fixture data and asserts that property value on the resulting node. "The engine renders it correctly" is never a substitute for asserting the property.
   - **Before submitting your verdict**, run all check scripts in `.hyperloop/checks/`.
     Both the Godot compile check and the extractor lint check must pass.
     If a check SKIPs (because the relevant component doesn't exist yet), that's fine.
