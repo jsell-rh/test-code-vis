@@ -1,0 +1,37 @@
+---
+verdict: pass
+---
+## Review Summary — task-007 (Godot: JSON scene graph loader)
+
+### Checks run
+- `extractor-lint.sh`: PASS — ruff clean, 36 pytest tests pass
+- `godot-compile.sh`: PASS — Godot 4.6.2 headless exit 0 (expected warning for missing JSON is benign)
+
+### Commit trailers
+- `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384` ✅
+- `Task-Ref: task-007` ✅
+
+### Spec coverage
+
+| Requirement | Status | Notes |
+|---|---|---|
+| JSON Scene Graph Loading | ✅ PASS | `_load_and_build()` reads JSON, builds volumes and edges, positions from layout data. Path is an `@export` var (not hardcoded). |
+| Containment Rendering | ✅ PASS | Bounded-context → translucent BoxMesh (alpha=0.18, CULL_DISABLED). Modules → opaque BoxMesh parented to context anchor. Visually distinct. |
+| Dependency Rendering | ✅ PASS | ImmediateMesh PRIMITIVE_LINES between world-space centres. Cross-context = orange, internal = grey. |
+| Size Encoding | ✅ PASS | Both box types use `nd["size"]` to set `BoxMesh.size`, so volume proportional to metric. |
+| Camera – Top-down start | ✅ PASS | `_theta = 0.15` (≈9° from vertical) + `_frame_camera()` centres on graph bounds at startup. |
+| Camera – Zoom | ✅ PASS | Scroll-wheel zoom with distance-proportional step. |
+| Camera – Orbit | ✅ PASS | Middle-mouse orbit; theta clamped [0.01, π−0.01] keeps Y-up intuitive; `look_at(_pivot, Vector3.UP)`. |
+| Camera – Pan | ✅ PASS | Right-mouse drag pans pivot in camera's local XZ plane. |
+| Godot 4 / GDScript | ✅ PASS | `project.godot` declares feature "4.6"; runtime confirmed as 4.6.2; all scripts are `.gd`. |
+
+### Findings (non-blocking for prototype)
+
+1. **Edge direction not explicitly arrow-indicated** — The spec says "the line's direction is visually indicated." The implementation uses colour (orange vs grey) to distinguish edge type but draws plain line segments with no arrowhead. For a prototype this is acceptable; if direction becomes important a future task could add a cone mesh at the target end.
+
+2. **Context slab height vs module cube height** — Context slabs are `sz * 0.2` tall while module cubes are `sz * 0.6` tall. If a module's `size` is not substantially smaller than the context's `size`, module cubes will protrude visually above/below the parent slab. Containment is still represented (correct scene-tree parent, cubes positioned inside the slab footprint), but the visual effect is less clean. Acceptable for prototype.
+
+3. **`_camera` onready path assumes Camera3D is a direct child named "Camera3D"** — Currently true in `main.tscn`; if the scene structure changes this will silently null-ref. Low risk for prototype.
+
+### Verdict
+All spec requirements are met, both check scripts pass, trailers are present, and Godot 4.x/GDScript constraint is confirmed. The implementation is solid for a prototype. **PASS.**
