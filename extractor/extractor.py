@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import ast
 import math
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -352,118 +351,17 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
 
 
 # ---------------------------------------------------------------------------
-# Spec extraction
-# ---------------------------------------------------------------------------
-
-_SPEC_HEADING_RE = re.compile(
-    r"^#{1,3}\s+(?:Bounded Context:\s*)?([A-Za-z][A-Za-z0-9 _-]+)\s*$",
-    re.MULTILINE,
-)
-_SPEC_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\.spec\.md\)")
-
-
-def extract_spec_nodes(src_path: Path) -> list[Node]:
-    """Extract spec-defined components from a codebase's ``specs/`` directory.
-
-    Returns nodes with ``type='spec'`` so they are distinguishable from
-    code-derived nodes.  Only top-level bounded-context spec directories are
-    discovered; individual spec files become module-level spec nodes.
-    """
-    specs_path = src_path / "specs"
-    if not specs_path.exists() or not specs_path.is_dir():
-        return []
-
-    nodes: list[Node] = []
-    index_file = specs_path / "index.spec.md"
-
-    # Use the index file to find top-level bounded contexts if available.
-    bc_names: list[str] = []
-    if index_file.exists():
-        text = index_file.read_text(encoding="utf-8", errors="replace")
-        # Look for section links like [IAM](iam/) or [IAM](iam/...)
-        for m in re.finditer(r"\[([^\]]+)\]\(([a-z][a-z0-9_-]*)/", text):
-            label, dirname = m.group(1), m.group(2)
-            bc_dir = specs_path / dirname
-            if bc_dir.is_dir():
-                bc_names.append(dirname)
-                spec_node: Node = {
-                    "id": f"spec.{dirname}",
-                    "name": label,
-                    "type": "spec",
-                    "position": {"x": 0.0, "y": 0.0, "z": 0.0},
-                    "size": 1.0,
-                    "parent": None,
-                }
-                nodes.append(spec_node)
-                # Child spec files
-                for spec_file in sorted(bc_dir.glob("*.spec.md")):
-                    stem = spec_file.stem.replace(".spec", "")
-                    child: Node = {
-                        "id": f"spec.{dirname}.{stem}",
-                        "name": _prettify(stem.replace("-", "_")),
-                        "type": "spec",
-                        "position": {"x": 0.0, "y": 0.0, "z": 0.0},
-                        "size": 0.5,
-                        "parent": f"spec.{dirname}",
-                    }
-                    nodes.append(child)
-    else:
-        # Fallback: discover spec directories by scanning the specs/ folder.
-        for candidate in sorted(specs_path.iterdir()):
-            if candidate.is_dir() and not candidate.name.startswith("."):
-                spec_node = {
-                    "id": f"spec.{candidate.name}",
-                    "name": _prettify(candidate.name.replace("-", "_")),
-                    "type": "spec",
-                    "position": {"x": 0.0, "y": 0.0, "z": 0.0},
-                    "size": 1.0,
-                    "parent": None,
-                }
-                nodes.append(spec_node)
-
-    # Position spec nodes in a separate ring above the code nodes.
-    _layout_spec_nodes(nodes)
-    return nodes
-
-
-def _layout_spec_nodes(spec_nodes: list[Node]) -> None:
-    """Position spec nodes in a ring above the main scene (y=5)."""
-    top_level = [n for n in spec_nodes if n["parent"] is None]
-    radius = max(5.0, len(top_level) * 2.5)
-    positions = _circular_positions(len(top_level), radius, y=5.0)
-    parent_pos: dict[str, tuple[float, float, float]] = {}
-    for node, pos in zip(top_level, positions):
-        node["position"] = {"x": pos[0], "y": pos[1], "z": pos[2]}
-        parent_pos[node["id"]] = pos
-
-    children_by_parent: dict[str, list[Node]] = {}
-    for n in spec_nodes:
-        if n["parent"]:
-            children_by_parent.setdefault(n["parent"], []).append(n)
-
-    for parent_id, children in children_by_parent.items():
-        child_radius = max(1.0, len(children) * 0.8)
-        child_positions = _circular_positions(len(children), child_radius, y=5.0)
-        for child, pos in zip(children, child_positions):
-            child["position"] = {"x": pos[0], "y": pos[1], "z": pos[2]}
-
-
-# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
 
 def build_scene_graph(
     src_path: Path,
-    *,
-    include_specs: bool = False,
 ) -> SceneGraph:
     """Extract a complete scene graph from the Python codebase at *src_path*.
 
     Args:
         src_path: Root directory of the Python source tree to analyse.
-        include_specs: When *True*, also extract spec-defined components
-            from a ``specs/`` directory alongside the source tree.
 
     Returns:
         A :class:`SceneGraph` ready to be serialised as JSON.
@@ -485,17 +383,7 @@ def build_scene_graph(
     # 4. Compute layout with coupling-aware BC ordering (mutates positions in-place).
     compute_layout(nodes, edges)
 
-    # 5. Optionally add spec nodes.
-    if include_specs:
-        # The specs/ directory is conventionally a sibling of src_path.
-        spec_search_roots = [src_path, src_path.parent, src_path.parent.parent]
-        for root in spec_search_roots:
-            spec_nodes = extract_spec_nodes(root)
-            if spec_nodes:
-                nodes.extend(spec_nodes)
-                break
-
-    # 6. Assemble metadata.
+    # 5. Assemble metadata.
     metadata: Metadata = {
         "source_path": str(src_path),
         "timestamp": datetime.now(timezone.utc).isoformat(),
