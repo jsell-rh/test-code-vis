@@ -1,9 +1,237 @@
 extends Node3D
 
+## Main scene controller.
+##
+## Reads the JSON scene graph produced by the Python extractor and
+## procedurally builds the 3D visualisation:
+##   • bounded-context nodes  → large translucent boxes
+##   • module nodes           → smaller opaque boxes nested inside their context
+##   • edges                  → coloured lines (orange = cross-context, grey = internal)
+##
+## The JSON file path is configured via the exported variable so it can be
+## changed without touching code.  The default path is res://data/scene_graph.json.
+
+@export var scene_graph_path: String = "res://data/scene_graph.json"
+
+# Node id → Node3D anchor that owns the volume and label.
+var _anchors: Dictionary = {}
+
+# Node id → world-space centre Vector3 (computed from relative positions).
+var _world_positions: Dictionary = {}
+
+@onready var _camera: Camera3D = $Camera3D
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 
 func _ready() -> void:
-	pass
+	_load_and_build()
 
 
-func _process(_delta: float) -> void:
-	pass
+func _load_and_build() -> void:
+	if not FileAccess.file_exists(scene_graph_path):
+		push_warning("CodeVis: scene graph not found at '%s'. Place the extractor output there." % scene_graph_path)
+		return
+
+	var file := FileAccess.open(scene_graph_path, FileAccess.READ)
+	if file == null:
+		push_error("CodeVis: cannot open '%s'." % scene_graph_path)
+		return
+	var raw := file.get_as_text()
+	file.close()
+
+	var json := JSON.new()
+	var parse_err := json.parse(raw)
+	if parse_err != OK:
+		push_error("CodeVis: JSON parse error — %s (line %d)" % [json.get_error_message(), json.get_error_line()])
+		return
+
+	var graph: Dictionary = json.get_data()
+	_build(graph)
+
+
+# ---------------------------------------------------------------------------
+# Scene building
+# ---------------------------------------------------------------------------
+
+func _build(graph: Dictionary) -> void:
+	var nodes: Array = graph.get("nodes", [])
+	var edges: Array = graph.get("edges", [])
+
+	# Index raw node data for fast lookup.
+	var node_data_map: Dictionary = {}
+	for nd: Dictionary in nodes:
+		node_data_map[nd["id"]] = nd
+
+	# Pre-compute every node's world-space centre before creating geometry,
+	# so that edge endpoints are available without depending on Godot's
+	# deferred global-transform propagation.
+	_compute_world_positions(nodes, node_data_map)
+
+	# Create volumes: parents first so children can be parented to them.
+	for nd: Dictionary in nodes:
+		if nd["parent"] == null:
+			_create_volume(nd, self)
+	for nd: Dictionary in nodes:
+		if nd["parent"] != null:
+			var parent_anchor: Node3D = _anchors.get(nd["parent"])
+			if parent_anchor != null:
+				_create_volume(nd, parent_anchor)
+			else:
+				push_warning("CodeVis: parent '%s' not found for node '%s'." % [nd["parent"], nd["id"]])
+				_create_volume(nd, self)
+
+	# Create edge lines after all volumes exist.
+	for ed: Dictionary in edges:
+		_create_edge(ed)
+
+	# Reposition camera to frame the whole graph.
+	_frame_camera()
+
+
+# ---------------------------------------------------------------------------
+# World-position helpers
+# ---------------------------------------------------------------------------
+
+func _compute_world_positions(nodes: Array, node_data_map: Dictionary) -> void:
+	for nd: Dictionary in nodes:
+		if not _world_positions.has(nd["id"]):
+			_world_positions[nd["id"]] = _resolve_world_pos(nd, node_data_map)
+
+
+func _resolve_world_pos(nd: Dictionary, node_data_map: Dictionary) -> Vector3:
+	var p: Dictionary = nd["position"]
+	var local := Vector3(float(p["x"]), float(p["y"]), float(p["z"]))
+
+	if nd["parent"] == null:
+		return local
+
+	var parent_id: String = nd["parent"]
+	if _world_positions.has(parent_id):
+		return _world_positions[parent_id] + local
+
+	# Resolve parent recursively (handles arbitrary nesting depth).
+	var parent_nd: Dictionary = node_data_map.get(parent_id, {})
+	if parent_nd.is_empty():
+		return local
+
+	var parent_world := _resolve_world_pos(parent_nd, node_data_map)
+	_world_positions[parent_id] = parent_world
+	return parent_world + local
+
+
+# ---------------------------------------------------------------------------
+# Volume creation
+# ---------------------------------------------------------------------------
+
+func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
+	var anchor := Node3D.new()
+	anchor.name = (nd["id"] as String).replace(".", "_")
+
+	var p: Dictionary = nd["position"]
+	anchor.position = Vector3(float(p["x"]), float(p["y"]), float(p["z"]))
+	parent_node.add_child(anchor)
+	_anchors[nd["id"]] = anchor
+
+	var sz: float = float(nd["size"])
+	var is_context: bool = nd["type"] == "bounded_context"
+
+	# Mesh ----------------------------------------------------------------
+	var mesh_instance := MeshInstance3D.new()
+	var box := BoxMesh.new()
+
+	var mat := StandardMaterial3D.new()
+	if is_context:
+		# Larger, flat, translucent slab — acts as a visible floor/boundary.
+		box.size = Vector3(sz, sz * 0.2, sz)
+		mat.albedo_color = Color(0.25, 0.45, 0.85, 0.18)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		# Show both sides so the translucent slab is visible from above and below.
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	else:
+		# Compact, opaque cube for modules — height proportional to size.
+		box.size = Vector3(sz, sz * 0.6, sz)
+		mat.albedo_color = Color(0.35, 0.70, 0.40, 1.0)
+
+	mesh_instance.mesh = box
+	mesh_instance.material_override = mat
+	anchor.add_child(mesh_instance)
+
+	# Label ---------------------------------------------------------------
+	var label := Label3D.new()
+	label.text = nd["name"]
+	# pixel_size controls real-world text size; small value → readable at range.
+	label.pixel_size = 0.012
+	label.position = Vector3(0.0, sz * 0.15 + 0.4, 0.0)
+	# Always face the camera.
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	# Draw on top so labels remain readable through geometry.
+	label.no_depth_test = true
+	anchor.add_child(label)
+
+
+# ---------------------------------------------------------------------------
+# Edge creation
+# ---------------------------------------------------------------------------
+
+func _create_edge(ed: Dictionary) -> void:
+	var src: String = ed["source"]
+	var tgt: String = ed["target"]
+
+	if not _world_positions.has(src) or not _world_positions.has(tgt):
+		push_warning("CodeVis: skipping edge '%s' → '%s' (node missing)." % [src, tgt])
+		return
+
+	var from_pos: Vector3 = _world_positions[src]
+	var to_pos: Vector3 = _world_positions[tgt]
+
+	if from_pos.is_equal_approx(to_pos):
+		return  # Self-loop or co-located nodes — nothing to draw.
+
+	var is_cross: bool = ed["type"] == "cross_context"
+	var line_color: Color = Color(1.0, 0.50, 0.10) if is_cross else Color(0.55, 0.55, 0.55)
+
+	# Build a line mesh using ImmediateMesh (two vertices, PRIMITIVE_LINES).
+	var imesh := ImmediateMesh.new()
+	imesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	imesh.surface_set_color(line_color)
+	imesh.surface_add_vertex(from_pos)
+	imesh.surface_set_color(line_color)
+	imesh.surface_add_vertex(to_pos)
+	imesh.surface_end()
+
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.mesh = imesh
+	mesh_instance.material_override = mat
+	# Edges live at the scene root so their positions are already world-space.
+	add_child(mesh_instance)
+
+
+# ---------------------------------------------------------------------------
+# Camera framing
+# ---------------------------------------------------------------------------
+
+func _frame_camera() -> void:
+	if _world_positions.is_empty() or _camera == null:
+		return
+
+	var min_pos := Vector3(INF, INF, INF)
+	var max_pos := Vector3(-INF, -INF, -INF)
+
+	for pos: Vector3 in _world_positions.values():
+		min_pos = min_pos.min(pos)
+		max_pos = max_pos.max(pos)
+
+	var centre: Vector3 = (min_pos + max_pos) * 0.5
+	# Add padding so no node is clipped at the very edge of the view.
+	var span: float = maxf((max_pos - min_pos).length(), 10.0)
+	var distance: float = span * 1.5
+
+	if _camera.has_method("set_pivot"):
+		_camera.call("set_pivot", centre, distance)
