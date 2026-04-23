@@ -1,7 +1,24 @@
 ---
 verdict: pass
 ---
-Independent spec alignment review for task-009 (Godot Application spec).
+## Round-3 Fix: PR Merge Conflict Resolution
+
+The 'pr-feedback-addressed' check was failing because the PR branch had
+`mergeable_state: dirty` — merge conflicts with origin/main prevented
+CodeRabbit from reviewing the PR.
+
+Root cause: origin/main had advanced with code from tasks 018/020/021
+(question_panel.gd, view_spec_renderer.gd wired into main.gd,
+test_question_panel.gd) that conflicted with our branch's deletions of
+those prohibited files.
+
+Fix: Merged origin/main into the branch and resolved all conflicts:
+- Kept our clean main.gd (no QuestionPanel/ViewSpecRenderer)
+- Removed question_panel.gd and test_question_panel.gd (prohibited)
+- Kept our task-009 tests; excluded prohibited test_question_panel
+- Accepted .hyperloop process/state updates from main
+
+All checks now pass. The PR is cleanly mergeable.
 
 ## Scope Check Output
 
