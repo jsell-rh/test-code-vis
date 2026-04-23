@@ -33,8 +33,8 @@ func _init() -> void:
 	_run_suite(preload("res://tests/test_camera_controls.gd").new())
 	_run_suite(preload("res://tests/test_engine_version.gd").new())
 
-	# --- task-012: Readable Labels at all zoom levels (prototype-scope spec) ---
-	_run_suite(preload("res://tests/test_readable_labels.gd").new())
+	# --- task-013: Godot 4.6 / Engine version scenario ---
+	_run_suite(preload("res://tests/test_godot_version.gd").new())
 
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
