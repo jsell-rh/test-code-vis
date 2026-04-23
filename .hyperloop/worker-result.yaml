@@ -2,20 +2,17 @@
 verdict: pass
 ---
 
-## Fresh Spec-Alignment Review — task-021 (Moldable Views)
+## Task-021: Moldable Views — Worker Result
 
-Independent review on branch `hyperloop/task-021` after task reset (3 prior
-rebase/merge failures). Spec file: `specs/interaction/moldable-views.spec.md`.
+Fresh implementation verification for task-021 on branch `hyperloop/task-021`.
+Spec: `specs/interaction/moldable-views.spec.md`
+(SHA: `6bed97ab44f1e1e464b566f807f5168951259b4e`)
 
 ---
 
 ## Scope Check Output
 
-```
 OK: No prohibited (not-in-scope) features detected.
-```
-
-(Run first, per guidelines. Exit 0.)
 
 ---
 
@@ -25,45 +22,45 @@ OK: No prohibited (not-in-scope) features detected.
 |---|---|
 | check-not-in-scope.sh | OK — exit 0 |
 | check-pipeline-wiring.sh | OK — producer + consumer + rendering tests found |
-| check-report-scope-section.sh | OK — valid `## Scope Check Output` section present |
-| check-kartograph-integration-test.sh | OK |
-| godot-compile.sh | OK — Godot 4.6.2 |
+| check-kartograph-integration-test.sh | OK — integration test with expected-context assertions |
+| godot-compile.sh | OK — Godot 4.6.2 compiles successfully |
 | godot-tests.sh | **106 passed, 0 failed** |
 | extractor-lint.sh | OK — ruff clean, 90 pytest tests passed |
-| godot-label3d.sh | PASS |
+| godot-label3d.sh | PASS — billboard and pixel_size set and tested |
 | godot-fileaccess-tested.sh | OK — FileAccess.open() exercised in 2 test files |
+| check-report-scope-section.sh | OK — valid scope check output section present |
 
 ---
 
-## Commit Trailers
+## Implementation Summary
 
-Present on the HEAD commit:
+### Stage 1: LLM → View Spec (`llm_view_generator.gd`)
 
-```
-Spec-Ref: specs/interaction/moldable-views.spec.md@6bed97ab44f1e1e464b566f807f5168951259b4e
-Task-Ref: task-021
-```
+- `build_prompt(question, graph)` — embeds question + graph node ids + all 6
+  `VALID_OPS` into a structured LLM prompt; LLM sees only the fixed primitive set.
+- `parse_response(llm_text)` — strips markdown fences, parses JSON, filters out
+  any op not in `VALID_OPS` via `_make_spec()`. Returns `{"question": …, "operations": […]}`.
+- `VALID_OPS = ["show", "hide", "highlight", "arrange", "annotate", "connect"]` is a
+  compile-time constant — no new rendering logic enters the system at runtime.
 
----
+### Stage 2: View Spec → 3D Scene (`scene_interpreter.gd`)
 
-## Pipeline Wiring (Guidelines §"Verify multi-stage pipeline completeness")
+`apply(spec, anchors, scene_root, world_positions)` dispatches each operation:
 
-Stage 1 — `LLMViewGenerator` (`llm_view_generator.gd`):
-- `build_prompt(question, graph)` → embeds question + node ids + `VALID_OPS` into LLM prompt.
-- `parse_response(llm_text)` → returns `{"question": …, "operations": […]}` — a plain
-  Dictionary, never raw geometry.
+| Op | Implementation | Scene Mutation |
+|---|---|---|
+| show | `_apply_show()` | `anchor.visible = true` |
+| hide | `_apply_hide()` | `anchor.visible = false` |
+| highlight | `_apply_highlight()` | `mat.albedo_color = Color(r, g, b)` |
+| arrange | `_apply_arrange()` | `anchor.position = Vector3(x, y, z)` |
+| annotate | `_apply_annotate()` | `Label3D.new()` + `billboard=ENABLED` + `pixel_size=0.05` |
+| connect | `_apply_connect()` | `ImmediateMesh` line + `CylinderMesh` arrowhead (top_radius=0) |
 
-Stage 2 — `SceneInterpreter` (`scene_interpreter.gd`):
-- `apply(spec, anchors, scene_root, world_positions)` → reads the return value of
-  `parse_response()` and mutates live `Node3D` scene-tree objects.
+### Pipeline Wiring (`main.gd`)
 
-Wiring — `main.gd`:
-- `apply_view_spec(spec)` instantiates `SceneInterpreter` and passes the real
-  `_anchors` and `_world_positions` maps built by `_ready()`.
-- `_ready()` is NOT empty: it calls `FileAccess.open()`, `JSON.parse()`,
-  `SceneGraphLoader.load_from_dict()`, and `build_from_graph()`.
-
-Pipeline is complete end-to-end. No stub or empty function found.
+`apply_view_spec(spec)` instantiates `SceneInterpreter` and passes the live
+`_anchors` and `_world_positions` dictionaries built by `_ready()`. The pipeline
+is complete end-to-end.
 
 ---
 
@@ -73,69 +70,48 @@ Pipeline is complete end-to-end. No stub or empty function found.
 
 **Scenario: Architectural question**
 - THEN generates a view focused on auth-related components
-  → `_apply_show()` sets `anchor.visible = true`
-  → `test_show_op_sets_visible_true`: instantiates real `Node3D`, applies spec,
-    asserts `anchor.visible == true` ✓
+  → `_apply_show()`: `anchor.visible = true`
+  → `test_show_op_sets_visible_true`: asserts `anchor.visible == true` on real `Node3D`
 - AND irrelevant components are hidden or de-emphasized
-  → `_apply_hide()` sets `anchor.visible = false`
-  → `test_hide_op_sets_visible_false`: asserts `anchor.visible == false` ✓
-  → `test_hide_op_leaves_other_nodes_unchanged`: bystander stays `true` ✓
-- AND relevant components are arranged to answer the question
-  → `_apply_arrange()` sets `anchor.position = Vector3(x, y, z)`
-  → `test_arrange_op_sets_position_x`, `test_arrange_op_sets_all_three_axes`:
-    assert `absf(anchor.position.x - 5.0) < 0.001` etc. ✓
+  → `_apply_hide()`: `anchor.visible = false`
+  → `test_hide_op_sets_visible_false`: asserts `anchor.visible == false`
+- AND the relevant components are arranged to answer the question
+  → `_apply_arrange()`: `anchor.position = Vector3(x, y, z)`
+  → `test_arrange_op_sets_position_x`, `test_arrange_op_sets_all_three_axes`: assert
+    `absf(anchor.position.x - 5.0) < 0.001`
 
 **Scenario: Impact question**
-- THEN shows user database and all dependents → show op (above) ✓
+- THEN shows user database and all dependents → `show` op (above)
 - AND dependency relationships are spatially clear
-  → `_apply_connect()` draws `ImmediateMesh` line + `CylinderMesh` arrowhead
-    (top_radius=0.0 = pointed cone; satisfies "direction is visually indicated")
-  → `test_connect_op_adds_line_geometry`: asserts ≥1 `MeshInstance3D` on root ✓
-  → `test_connect_op_adds_arrowhead`: asserts ≥2 `MeshInstance3D` (line + cone) ✓
+  → `_apply_connect()`: `ImmediateMesh` line + `CylinderMesh` arrowhead
+  → `test_connect_op_adds_line_geometry`: asserts ≥1 `MeshInstance3D` added to root
+  → `test_connect_op_adds_arrowhead`: asserts ≥2 `MeshInstance3D` (line + cone)
 
 ### Requirement: View Specs as Intermediate Representation — COVERED
 
 **Scenario: LLM produces view spec**
 - THEN emits structured view spec (not raw 3D geometry)
-  → `test_parse_response_returns_dictionary`: confirms `result is Dictionary` ✓
+  → `test_parse_response_returns_dictionary`: confirms `result is Dictionary`
 - AND view spec controls show/hide/highlight/arrange/annotate/connect
-  → individual op pass-through tests in `test_llm_view_generator.gd` ✓
+  → 6 individual op pass-through tests in `test_llm_view_generator.gd`
 - AND 3D renderer interprets spec into spatial scene
-  → `test_scene_interpreter.gd` tests instantiate real `Node3D` objects and assert
-    `.visible`, `.position.x/y/z`, `mat.albedo_color.r/g/b`, `label.billboard`,
-    `label.pixel_size`, and `root.get_child_count()` — NOT dict `.has()` ✓
-  → `test_all_six_ops_mutate_scene_correctly`: integration test applies all 6 ops ✓
+  → `test_scene_interpreter.gd`: all 17 tests instantiate real `Node3D` and assert
+    `.visible`, `.position.x/y/z`, `mat.albedo_color`, `label.billboard`,
+    `label.pixel_size`, `root.get_child_count()` — not dict `.has()` checks
+  → `test_all_six_ops_mutate_scene_correctly`: integration test applying all 6 ops
 
 ### Requirement: Fixed Visual Primitive Set — COVERED
 
 **Scenario: LLM uses existing primitives**
 - THEN composes from existing primitives only
-  → `VALID_OPS: Array = ["show","hide","highlight","arrange","annotate","connect"]`
-    is a compile-time constant (not built at runtime) ✓
-  → `build_prompt()` embeds all 6 primitives so the LLM knows the contract ✓
-  → `test_build_prompt_contains_*_primitive` (6 tests) ✓
+  → `VALID_OPS` is a compile-time constant (6 fixed strings)
+  → `build_prompt()` embeds all 6 so the LLM knows the contract
+  → `test_build_prompt_contains_*_primitive` (6 tests)
 - AND no new rendering logic generated at runtime
-  → `_make_spec()` drops any op not in `VALID_OPS` before returning ✓
-  → `SceneInterpreter.apply()` uses a `match` with exactly 6 arms; unknown ops
-    fall through silently ✓
-  → `test_parse_response_filters_unknown_ops`: verifies filtering ✓
-  → `test_unknown_op_is_ignored`: verifies no crash + no effect ✓
-
----
-
-## Guidelines Checklist
-
-- `_ready()` is NOT empty (file I/O + graph load + scene build) ✓
-- Tests use real `Node3D` instantiation, NOT dict-key `.has()` assertions ✓
-- `connect` op has explicit arrowhead (`CylinderMesh`, top_radius=0) ✓
-- `annotate` op asserts `label.billboard == BILLBOARD_ENABLED` ✓
-- `annotate` op asserts `label.pixel_size > 0.0` ✓
-- Containment rendering: bounded-context slabs wrap module boxes; tested in
-  `test_containment_rendering.gd` with `cull_mode` and transparency assertions ✓
-- Camera controls: pan/zoom/orbit tested in `test_camera_controls.gd` ✓
-- FileAccess tested: `test_scene_graph_loading.gd` + `test_engine_version.gd` ✓
-- No prohibited features detected (scope check clean) ✓
-- Scope check output section present in worker result ✓
+  → `_make_spec()` drops any op not in `VALID_OPS`
+  → `SceneInterpreter.apply()` uses a `match` with exactly 6 arms; unknowns are no-ops
+  → `test_parse_response_filters_unknown_ops`: verifies filtering
+  → `test_unknown_op_is_ignored`: verifies no crash + no effect
 
 ---
 
