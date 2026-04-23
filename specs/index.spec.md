@@ -17,6 +17,7 @@ Spatial development environment for understanding agent-built software systems.
 
 ### Extraction
 - [Code Extraction](extraction/code-extraction.spec.md) — Python extractor: codebase → JSON scene graph
+- [Scene Graph Schema](extraction/scene-graph-schema.spec.md) — JSON interface contract between extractor and Godot app
 
 ### Prototype (Phase 1)
 - [Prototype Scope](prototype/prototype-scope.spec.md) — What we're building and why, hypothesis to test

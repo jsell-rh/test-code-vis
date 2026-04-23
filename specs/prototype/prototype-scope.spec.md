@@ -80,3 +80,17 @@ The prototype MUST support basic spatial navigation.
 - WHEN the user interacts with the application
 - THEN they can pan, zoom, and rotate the view
 - AND they can smoothly transition between overview and detail levels
+
+### Requirement: Not In Scope
+The following capabilities are described in the vision specs but are NOT part of the prototype. They MUST NOT be implemented in the prototype phase.
+
+#### Scenario: Features excluded from prototype
+- GIVEN the prototype scope
+- THEN conformance mode (spec overlay comparison) is NOT implemented
+- AND evaluation mode (architectural quality assessment) is NOT implemented
+- AND simulation mode (hypothetical change impact) is NOT implemented
+- AND data flow visualization is NOT implemented
+- AND moldable views (LLM-powered question-driven views) is NOT implemented
+- AND spec extraction is NOT implemented
+- AND first-person navigation is NOT implemented
+- AND the prototype focuses solely on: extract structure, render in 3D, navigate with top-down camera
