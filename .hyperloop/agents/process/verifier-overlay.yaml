@@ -19,8 +19,17 @@ guidelines: |
   - For each Godot spec scenario, confirm a GDScript test file exists in `godot/tests/` that exercises it with fixture data and asserts specific runtime outputs (node counts, property values, positions). A scenario with no corresponding test file is PARTIAL/MISSING, not COVERED.
   - Verify `godot/tests/` exists and contains at least one `test_*.gd` file per Godot spec scenario. Fail if either is absent.
   - Phrases like "visually indicated" or "visually represented" require an explicit rendering element in code (arrowhead, cone, separate mesh, etc.). A plain line or colour difference alone does not satisfy "direction is visually indicated."
+  - **Check entry-point scripts for empty stubs.** Open `main.gd` (and any script the spec
+    requires to perform work). If `_ready()` contains only `pass`, and the spec scenario
+    requires rendering or node instantiation, the implementation is MISSING — not PARTIAL.
+  - **Dict-key assertions ≠ rendering coverage.** A GDScript test that only calls `.has()`
+    on a dictionary (e.g., checking that `node_dict.has("position")`) does NOT satisfy a
+    rendering THEN clause. Confirm the test instantiates a real `Node3D` (or equivalent),
+    invokes the function under test, and asserts the node's `.position.x`, `.position.y`,
+    `.position.z` properties match the fixture values.
+  - **Node properties that produce visual behavior are spec-observable.** For any THEN clause satisfied by a node property (`billboard`, `pixel_size`, `no_depth_test`, `transparency_mode`, `cull_mode`, `albedo_color.a`, etc.), confirm a GDScript test asserts that specific property value on the instantiated node — "the engine handles it" is NOT acceptable coverage.
   - Verify camera controls work (pan, zoom, orbit).
-  - Verify labels are readable.
+  - Verify labels are readable (assert `billboard == BILLBOARD_ENABLED` and `pixel_size > 0.0` on any Label3D nodes).
   - Verify containment is visually represented (child volumes inside parent volumes).
 
   ### General

@@ -15,7 +15,10 @@ from pathlib import Path
 
 import pytest
 
+import math
+
 from extractor.extractor import (
+    _order_by_coupling,
     build_dependency_edges,
     build_scene_graph,
     classify_edge_type,
@@ -378,6 +381,26 @@ class TestDependencyExtraction:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture()
+def src_coupling(tmp_path: Path) -> Path:
+    """A source tree with 4 bounded contexts where auth↔shared_kernel are
+    coupled and billing↔reporting are coupled, for layout ordering tests."""
+    for bc in ["auth", "billing", "reporting", "shared_kernel"]:
+        pkg = tmp_path / bc
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+
+    # auth imports from shared_kernel (coupling: auth → shared_kernel)
+    (tmp_path / "auth" / "service.py").write_text(
+        "from shared_kernel.token import Token\n"
+    )
+    # billing imports from reporting (coupling: billing → reporting)
+    (tmp_path / "billing" / "invoice.py").write_text(
+        "from reporting.summary import Report\n"
+    )
+    return tmp_path
+
+
 class TestLayout:
     def test_all_nodes_have_positions_after_layout(self, src: Path) -> None:
         nodes: list[Node] = discover_bounded_contexts(src)
@@ -394,6 +417,114 @@ class TestLayout:
         compute_layout(nodes)
         positions = [(n["position"]["x"], n["position"]["z"]) for n in nodes]
         assert len(set(positions)) == len(positions), "BC positions should be distinct"
+
+    def test_child_nodes_are_near_parent_position(self, src: Path) -> None:
+        """Spec: child nodes are positioned within the spatial bounds of their parent.
+
+        After compute_layout, every module node's position must be physically
+        close to its parent BC — specifically, closer than the full scene radius.
+        """
+        nodes: list[Node] = discover_bounded_contexts(src)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src, bc["id"]))
+
+        compute_layout(nodes)
+
+        node_pos = {
+            n["id"]: (n["position"]["x"], n["position"]["y"], n["position"]["z"])
+            for n in nodes
+        }
+        bc_count = sum(1 for n in nodes if n["type"] == "bounded_context")
+        bc_radius = max(5.0, bc_count * 2.5)
+
+        for n in nodes:
+            if n["parent"] is None:
+                continue
+            px, py, pz = node_pos[n["parent"]]
+            cx, cy, cz = node_pos[n["id"]]
+            dist = math.sqrt((cx - px) ** 2 + (cy - py) ** 2 + (cz - pz) ** 2)
+            assert dist < bc_radius, (
+                f"Child {n['id']} is at distance {dist:.2f} from parent "
+                f"{n['parent']}, exceeding scene radius {bc_radius:.2f}. "
+                "Child must be positioned within parent's spatial bounds."
+            )
+
+    def test_coupled_bcs_are_closer_than_uncoupled(self, src_coupling: Path) -> None:
+        """Spec: tightly coupled nodes have smaller distances between them.
+
+        With 4 BCs where auth↔shared_kernel are coupled and billing is
+        uncoupled to auth, the layout must place auth and shared_kernel
+        adjacent in the ring (closer than auth to billing).
+        """
+        nodes = discover_bounded_contexts(src_coupling)
+        edges = build_dependency_edges(src_coupling, nodes)
+        compute_layout(nodes, edges)
+
+        node_pos = {
+            n["id"]: (n["position"]["x"], n["position"]["y"], n["position"]["z"])
+            for n in nodes
+        }
+
+        def dist(a: str, b: str) -> float:
+            ax, ay, az = node_pos[a]
+            bx, by, bz = node_pos[b]
+            return math.sqrt((ax - bx) ** 2 + (ay - by) ** 2 + (az - bz) ** 2)
+
+        # auth→shared_kernel are coupled; billing is not coupled to auth.
+        # The coupled pair must be at most as close as any uncoupled pair
+        # (greedy ordering puts coupled nodes adjacent in the ring).
+        assert dist("auth", "shared_kernel") < dist("auth", "billing"), (
+            "Coupled pair auth↔shared_kernel should be closer than uncoupled "
+            "pair auth↔billing."
+        )
+
+    def test_order_by_coupling_places_coupled_adjacent(self) -> None:
+        """Unit test for _order_by_coupling: coupled BCs end up next to each other."""
+        from extractor.schema import Edge
+
+        bc_a: Node = {
+            "id": "a",
+            "name": "A",
+            "type": "bounded_context",
+            "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "size": 1.0,
+            "parent": None,
+        }
+        bc_b: Node = {
+            "id": "b",
+            "name": "B",
+            "type": "bounded_context",
+            "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "size": 1.0,
+            "parent": None,
+        }
+        bc_c: Node = {
+            "id": "c",
+            "name": "C",
+            "type": "bounded_context",
+            "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "size": 1.0,
+            "parent": None,
+        }
+        bc_d: Node = {
+            "id": "d",
+            "name": "D",
+            "type": "bounded_context",
+            "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "size": 1.0,
+            "parent": None,
+        }
+        edges: list[Edge] = [
+            {"source": "a", "target": "b", "type": "cross_context"},
+        ]
+        ordered = _order_by_coupling([bc_a, bc_b, bc_c, bc_d], edges)
+        ids = [n["id"] for n in ordered]
+        # 'a' starts first; 'b' (coupled to a) must immediately follow
+        assert ids[0] == "a"
+        assert ids[1] == "b", (
+            f"Coupled BC 'b' should be adjacent to 'a' in the circle ordering, "
+            f"got {ids}"
+        )
 
 
 # ---------------------------------------------------------------------------

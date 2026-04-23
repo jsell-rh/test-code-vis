@@ -55,7 +55,7 @@ func _get_box_mesh(anchor: Node3D) -> BoxMesh:
 ## its material must use TRANSPARENCY_ALPHA and have alpha < 1.
 func test_bounded_context_is_translucent() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture())
+	main_node.build_from_graph(_make_fixture())
 
 	var ctx_anchor: Node3D = main_node._anchors.get("ctx1")
 	if ctx_anchor == null:
@@ -74,7 +74,7 @@ func test_bounded_context_is_translucent() -> bool:
 ## module material must have alpha == 1 (fully opaque).
 func test_module_is_opaque() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture())
+	main_node.build_from_graph(_make_fixture())
 
 	var mod_anchor: Node3D = main_node._anchors.get("mod1")
 	if mod_anchor == null:
@@ -90,7 +90,7 @@ func test_module_is_opaque() -> bool:
 ## the module anchor must be a direct child of the context anchor.
 func test_module_parented_inside_context() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture())
+	main_node.build_from_graph(_make_fixture())
 
 	var ctx_anchor: Node3D = main_node._anchors.get("ctx1")
 	var mod_anchor: Node3D = main_node._anchors.get("mod1")
@@ -104,7 +104,7 @@ func test_module_parented_inside_context() -> bool:
 ## its BoxMesh.size.x must exceed the module's BoxMesh.size.x.
 func test_bounded_context_larger_than_module() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture())
+	main_node.build_from_graph(_make_fixture())
 
 	var ctx_mesh: BoxMesh = _get_box_mesh(main_node._anchors.get("ctx1"))
 	var mod_mesh: BoxMesh = _get_box_mesh(main_node._anchors.get("mod1"))
@@ -119,7 +119,7 @@ func test_bounded_context_larger_than_module() -> bool:
 ## distinguishing it from the children which use default (back-face culling).
 func test_bounded_context_cull_disabled() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture())
+	main_node.build_from_graph(_make_fixture())
 
 	var ctx_anchor: Node3D = main_node._anchors.get("ctx1")
 	if ctx_anchor == null:

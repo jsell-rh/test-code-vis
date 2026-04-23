@@ -1,15 +1,17 @@
 extends Node3D
 
-## Main scene controller.
+## Main scene controller for CodeVis.
 ##
-## Reads the JSON scene graph produced by the Python extractor and
-## procedurally builds the 3D visualisation:
+## Loads the JSON scene graph produced by the Python extractor via SceneGraphLoader
+## and procedurally builds the 3D visualisation:
 ##   • bounded-context nodes  → large translucent boxes
 ##   • module nodes           → smaller opaque boxes nested inside their context
-##   • edges                  → coloured lines (orange = cross-context, grey = internal)
+##   • edges                  → coloured lines with arrowhead cones
+##     (orange = cross-context, grey = internal)
 ##
-## The JSON file path is configured via the exported variable so it can be
-## changed without touching code.  The default path is res://data/scene_graph.json.
+## The JSON file path is configurable via the exported variable.
+
+const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -27,36 +29,26 @@ var _world_positions: Dictionary = {}
 # ---------------------------------------------------------------------------
 
 func _ready() -> void:
-	_load_and_build()
-
-
-func _load_and_build() -> void:
-	if not FileAccess.file_exists(scene_graph_path):
+	if FileAccess.file_exists(scene_graph_path):
+		var file := FileAccess.open(scene_graph_path, FileAccess.READ)
+		if file == null:
+			push_error("Cannot open scene graph: " + scene_graph_path)
+			return
+		var json_text := file.get_as_text()
+		file.close()
+		var json := JSON.new()
+		if json.parse(json_text) != OK:
+			push_error("JSON parse error: " + json.get_error_message())
+			return
+		var graph: Dictionary = SceneGraphLoader.load_from_dict(json.data)
+		build_from_graph(graph)
+	else:
 		push_warning("CodeVis: scene graph not found at '%s'. Place the extractor output there." % scene_graph_path)
-		return
-
-	var file := FileAccess.open(scene_graph_path, FileAccess.READ)
-	if file == null:
-		push_error("CodeVis: cannot open '%s'." % scene_graph_path)
-		return
-	var raw := file.get_as_text()
-	file.close()
-
-	var json := JSON.new()
-	var parse_err := json.parse(raw)
-	if parse_err != OK:
-		push_error("CodeVis: JSON parse error — %s (line %d)" % [json.get_error_message(), json.get_error_line()])
-		return
-
-	var graph: Dictionary = json.get_data()
-	_build(graph)
 
 
-# ---------------------------------------------------------------------------
-# Scene building
-# ---------------------------------------------------------------------------
-
-func _build(graph: Dictionary) -> void:
+## Build the 3D scene from a parsed scene-graph dictionary.
+## Called from _ready() at startup and from tests directly.
+func build_from_graph(graph: Dictionary) -> void:
 	var nodes: Array = graph.get("nodes", [])
 	var edges: Array = graph.get("edges", [])
 
@@ -128,6 +120,7 @@ func _resolve_world_pos(nd: Dictionary, node_data_map: Dictionary) -> Vector3:
 
 func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	var anchor := Node3D.new()
+	# Node name matches node id (dots replaced for GDScript compatibility).
 	anchor.name = (nd["id"] as String).replace(".", "_")
 
 	var p: Dictionary = nd["position"]
@@ -151,7 +144,7 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 		# Show both sides so the translucent slab is visible from above and below.
 		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	else:
-		# Compact, opaque cube for modules — height proportional to size.
+		# Compact, opaque box for modules — height proportional to size.
 		box.size = Vector3(sz, sz * 0.6, sz)
 		mat.albedo_color = Color(0.35, 0.70, 0.40, 1.0)
 
@@ -162,12 +155,12 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	# Label ---------------------------------------------------------------
 	var label := Label3D.new()
 	label.text = nd["name"]
-	# pixel_size controls real-world text size; small value → readable at range.
+	# pixel_size controls real-world text size; must be > 0 for legibility.
 	label.pixel_size = 0.012
 	label.position = Vector3(0.0, sz * 0.15 + 0.4, 0.0)
-	# Always face the camera.
+	# Always face the camera (mandatory for legibility in 3D).
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	# Draw on top so labels remain readable through geometry.
+	# Draw on top so labels remain visible through geometry.
 	label.no_depth_test = true
 	anchor.add_child(label)
 
@@ -193,7 +186,7 @@ func _create_edge(ed: Dictionary) -> void:
 	var is_cross: bool = ed["type"] == "cross_context"
 	var line_color: Color = Color(1.0, 0.50, 0.10) if is_cross else Color(0.55, 0.55, 0.55)
 
-	# Build a line mesh using ImmediateMesh (two vertices, PRIMITIVE_LINES).
+	# Build a line mesh using ImmediateMesh (PRIMITIVE_LINES, two vertices).
 	var imesh := ImmediateMesh.new()
 	imesh.surface_begin(Mesh.PRIMITIVE_LINES)
 	imesh.surface_set_color(line_color)
@@ -213,9 +206,7 @@ func _create_edge(ed: Dictionary) -> void:
 	add_child(mesh_instance)
 
 	# Arrowhead: a cone (CylinderMesh, top_radius=0 = pointed tip) placed at the
-	# target end, oriented along the edge direction, to indicate which way the
-	# dependency flows.  The cone's +Y axis is the tip; we rotate so +Y aligns
-	# with dir (from_pos → to_pos).
+	# target end, oriented along the edge direction, indicating the dependency flow.
 	var dir: Vector3 = (to_pos - from_pos).normalized()
 	var cone_mesh := CylinderMesh.new()
 	cone_mesh.top_radius = 0.0       # pointed tip at +Y
@@ -259,3 +250,7 @@ func _frame_camera() -> void:
 
 	if _camera.has_method("set_pivot"):
 		_camera.call("set_pivot", centre, distance)
+
+
+func _process(_delta: float) -> void:
+	pass

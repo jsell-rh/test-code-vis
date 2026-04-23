@@ -1,58 +1,87 @@
-## Minimal headless test runner for CodeVis GDScript tests.
+## Headless test runner for code-vis GDScript tests.
 ##
-## Usage (from repo root):
-##   godot --headless --path godot --script tests/run_tests.gd
+## Usage:
+##   godot --headless --path godot/ --script tests/run_tests.gd
 ##
-## Each test_*.gd file must:
-##   - extend RefCounted
-##   - define one or more methods whose names start with "test_"
-##   - return true (PASS) or false (FAIL) from each test method
+## Each test_*.gd file is loaded, its test_* methods are discovered and called.
+## Results are printed to stdout. Exits 0 on all-pass, 1 on any failure.
 ##
-## The runner prints PASS/FAIL per test and exits 0 if all pass, 1 otherwise.
+## Supports two test patterns:
+##   1. _check()/_test_failed pattern (main branch tests)
+##   2. Return-bool pattern (true = pass, false = fail)
+
 extends SceneTree
+
+var _passes: int = 0
+var _failures: int = 0
 
 
 func _initialize() -> void:
-	print("=== CodeVis GDScript Test Suite ===")
-	var total: int = 0
-	var passed: int = 0
+	print("=== code-vis GDScript Tests ===")
 
-	var test_script_paths: Array[String] = [
-		"res://tests/test_scene_graph_loading.gd",
-		"res://tests/test_containment_rendering.gd",
-		"res://tests/test_dependency_rendering.gd",
-		"res://tests/test_size_encoding.gd",
-		"res://tests/test_camera_controls.gd",
-	]
+	# --- Existing test suites (from merged tasks) ---
+	_run_suite(preload("res://tests/test_scene_graph_loader.gd").new())
+	_run_suite(preload("res://tests/test_node_renderer.gd").new())
+	_run_suite(preload("res://tests/test_view_spec.gd").new())
+	_run_suite(preload("res://tests/test_view_spec_renderer.gd").new())
 
-	for script_path: String in test_script_paths:
-		var script: GDScript = load(script_path)
-		if script == null:
-			print("ERROR: could not load %s" % script_path)
-			continue
+	# --- task-007: Godot Application spec ---
+	_run_suite(preload("res://tests/test_scene_graph_loading.gd").new())
+	_run_suite(preload("res://tests/test_containment_rendering.gd").new())
+	_run_suite(preload("res://tests/test_dependency_rendering.gd").new())
+	_run_suite(preload("res://tests/test_size_encoding.gd").new())
+	_run_suite(preload("res://tests/test_camera_controls.gd").new())
 
-		var instance: RefCounted = script.new()
-		var file_name: String = script_path.get_file()
+	print("")
+	print("Results: %d passed, %d failed" % [_passes, _failures])
 
-		for method: Dictionary in instance.get_method_list():
-			var method_name: String = method["name"]
-			if not method_name.begins_with("test_"):
-				continue
-			total += 1
-			var ok: bool = instance.call(method_name)
-			if ok:
-				print("  PASS  %s::%s" % [file_name, method_name])
-				passed += 1
-			else:
-				print("  FAIL  %s::%s" % [file_name, method_name])
-
-		print("---")
-
-	print("%d / %d tests passed." % [passed, total])
-
-	if total > 0 and passed == total:
-		print("ALL TESTS PASSED")
-		quit(0)
-	else:
-		print("SOME TESTS FAILED")
+	if _failures > 0:
 		quit(1)
+	else:
+		quit(0)
+
+
+func _run_suite(obj: Object) -> void:
+	var path: String = obj.get_script().get_path()
+	print("\n[%s]" % path.get_file())
+	for m: Dictionary in obj.get_method_list():
+		var method_name: String = m["name"]
+		if method_name.begins_with("test_"):
+			_run_one(obj, method_name)
+
+
+func _run_one(obj: Object, method_name: String) -> void:
+	# Determine which test pattern this suite uses.
+	# Pattern 1: _check()/_test_failed (obj has _test_failed property)
+	# Pattern 2: method returns bool
+	var script: GDScript = obj.get_script()
+	var has_test_failed: bool = false
+	for prop: Dictionary in script.get_script_property_list():
+		if prop["name"] == "_test_failed":
+			has_test_failed = true
+			break
+
+	if has_test_failed:
+		# Pattern 1: _check()/_test_failed
+		obj.set("_runner", self)
+		obj.set("_test_failed", false)
+		obj.call(method_name)
+		if obj.get("_test_failed"):
+			print("  FAIL: %s" % method_name)
+			_failures += 1
+		else:
+			print("  PASS: %s" % method_name)
+			_passes += 1
+	else:
+		# Pattern 2: method returns bool
+		var result = obj.call(method_name)
+		if result == true:
+			print("  PASS: %s" % method_name)
+			_passes += 1
+		else:
+			print("  FAIL: %s" % method_name)
+			_failures += 1
+
+
+func record_failure(msg: String) -> void:
+	print("    -> %s" % msg)

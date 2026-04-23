@@ -1,6 +1,6 @@
 ---
 task_id: task-007
-round: 0
+round: 1
 role: orchestrator
 verdict: fail
 ---

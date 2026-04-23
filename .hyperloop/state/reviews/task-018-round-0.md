@@ -1,0 +1,80 @@
+---
+task_id: task-018
+round: 0
+role: verifier
+verdict: fail
+---
+## Summary
+
+One guideline violation — Label3D nodes created by the `annotate` primitive are not
+configured for readability in 3D space, and no tests assert those properties.
+
+## Checks run
+
+| Check | Result |
+|-------|--------|
+| extractor-lint.sh | PASS (ruff clean, 96 pytest tests pass) |
+| godot-compile.sh  | PASS (Godot 4.6.2 headless compile) |
+| godot-tests.sh    | PASS (67/67 GDScript tests pass) |
+| Commit trailers   | PASS (Spec-Ref + Task-Ref present) |
+| main.gd _ready()  | PASS (non-empty; loads graph and calls build_from_graph) |
+
+## Spec coverage
+
+All three requirements and every THEN/AND clause have a corresponding behavioral test.
+Tests properly instantiate real Node3D objects, invoke the function under test, and
+assert specific property values — not dict-key membership alone.
+
+| Scenario | Coverage |
+|----------|----------|
+| Architectural question — show focused view | COVERED (test_show_op_includes_listed_node_in_scene_tree) |
+| Architectural question — hide irrelevant nodes | COVERED (test_show_op_excludes_non_listed_nodes_from_scene_tree, test_hide_op_*) |
+| Architectural question — arrange to answer | COVERED (test_arrange_op_overrides_node_position_{x,y,z}) |
+| Impact question — show dependents | COVERED (test_show_multiple_ids_all_appear_in_scene_tree) |
+| Impact question — spatially clear relationships | COVERED (test_connect_op_*) |
+| LLM produces view spec (Dict, not geometry) | COVERED (test_view_spec_from_dict_returns_dictionary) |
+| Fixed primitive set — 6 ops only | COVERED (test_valid_ops_has_exactly_six_primitives, test_unknown_op_is_filtered_out) |
+
+## Failure
+
+### Label3D readability properties not set or tested
+
+**Guideline:** "Verify labels are readable (assert `billboard == BILLBOARD_ENABLED`
+and `pixel_size > 0.0` on any Label3D nodes)."
+
+**What the code does:** `view_spec_renderer.gd` lines 86–89 create a `Label3D` for
+the `annotate` primitive:
+
+```gdscript
+var label := Label3D.new()
+label.name = "annotation"
+label.text = annotate_map[id]
+mesh.add_child(label)
+```
+
+`billboard` is left at the default (`BILLBOARD_DISABLED`) and `pixel_size` is left at
+its Godot default (`0.005`). Neither is guaranteed visible or readable in a 3D scene.
+
+**What the tests check:** `test_annotate_op_adds_label3d_child` and
+`test_annotate_op_sets_label3d_text` verify existence and `.text` only. Neither test
+asserts `label.billboard == BaseMaterial3D.BILLBOARD_ENABLED` or
+`label.pixel_size > 0.0`.
+
+## Required fix
+
+In `godot/scripts/view_spec_renderer.gd`, after `label.text = annotate_map[id]`,
+add:
+
+```gdscript
+label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+label.pixel_size = 0.05   # or another legible value > 0
+```
+
+Add two assertions to `test_annotate_op_sets_label3d_text` (or two new tests):
+
+```gdscript
+_check(label.billboard == BaseMaterial3D.BILLBOARD_ENABLED,
+    "annotation Label3D must have billboard enabled for readability")
+_check(label.pixel_size > 0.0,
+    "annotation Label3D must have pixel_size > 0.0, got %s" % label.pixel_size)
+```

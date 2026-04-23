@@ -72,7 +72,7 @@ func _make_fixture_cross_context() -> Dictionary:
 ## _create_edge() adds an ImmediateMesh MeshInstance3D as a child of the main node.
 func test_edge_line_mesh_created() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture_internal())
+	main_node.build_from_graph(_make_fixture_internal())
 
 	for child: Node in main_node.get_children():
 		if child is MeshInstance3D:
@@ -86,7 +86,7 @@ func test_edge_line_mesh_created() -> bool:
 ## The cone material uses albedo_color directly (not vertex_color_use_as_albedo).
 func test_cross_context_cone_is_orange() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture_cross_context())
+	main_node.build_from_graph(_make_fixture_cross_context())
 
 	for child: Node in main_node.get_children():
 		if child is MeshInstance3D:
@@ -109,7 +109,7 @@ func test_cross_context_cone_is_orange() -> bool:
 ## main node's children after _create_edge() runs.
 func test_direction_indicator_cone_created() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture_internal())
+	main_node.build_from_graph(_make_fixture_internal())
 
 	for child: Node in main_node.get_children():
 		if child is MeshInstance3D:
@@ -125,7 +125,7 @@ func test_direction_indicator_cone_created() -> bool:
 ## (within 2 units of to_pos = (20, 0, 0)) so that it marks the arrival point.
 func test_direction_cone_near_target() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture_internal())
+	main_node.build_from_graph(_make_fixture_internal())
 
 	var target_pos := Vector3(20.0, 0.0, 0.0)
 	for child: Node in main_node.get_children():

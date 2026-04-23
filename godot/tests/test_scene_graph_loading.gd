@@ -44,14 +44,14 @@ func _make_fixture() -> Dictionary:
 ## _build() must create an anchor entry in _anchors for every node id.
 func test_volumes_created_for_each_node() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture())
+	main_node.build_from_graph(_make_fixture())
 	return main_node._anchors.has("ctx1") and main_node._anchors.has("mod1")
 
 
 ## THEN generates 3D volumes — each anchor must contain a MeshInstance3D child.
 func test_mesh_instances_exist_in_anchors() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture())
+	main_node.build_from_graph(_make_fixture())
 
 	for node_id: String in ["ctx1", "mod1"]:
 		var anchor: Node3D = main_node._anchors.get(node_id)
@@ -72,7 +72,7 @@ func test_mesh_instances_exist_in_anchors() -> bool:
 ## (the line mesh) plus at least one more for the arrowhead cone.
 func test_edge_mesh_instances_created() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture())
+	main_node.build_from_graph(_make_fixture())
 
 	var edge_mesh_count := 0
 	for child: Node in main_node.get_children():
@@ -87,7 +87,7 @@ func test_edge_mesh_instances_created() -> bool:
 ## The local position on each anchor must match the "position" field in the JSON.
 func test_anchor_positions_match_json() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture())
+	main_node.build_from_graph(_make_fixture())
 
 	var ctx_anchor: Node3D = main_node._anchors.get("ctx1")
 	var mod_anchor: Node3D = main_node._anchors.get("mod1")
@@ -108,7 +108,7 @@ func test_anchor_positions_match_json() -> bool:
 ## Covers spec THEN clause: "AND labels scale to remain readable".
 func test_labels_are_billboard_and_readable() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture())
+	main_node.build_from_graph(_make_fixture())
 
 	var anchor: Node3D = main_node._anchors.get("ctx1")
 	if anchor == null:

@@ -52,7 +52,7 @@ func _get_box_mesh(main_node: Node3D, node_id: String) -> BoxMesh:
 ## the large module's BoxMesh.size.x must exceed the small module's.
 func test_large_module_has_bigger_mesh() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture())
+	main_node.build_from_graph(_make_fixture())
 
 	var small_mesh: BoxMesh = _get_box_mesh(main_node, "small_mod")
 	var large_mesh: BoxMesh = _get_box_mesh(main_node, "large_mod")
@@ -67,7 +67,7 @@ func test_large_module_has_bigger_mesh() -> bool:
 ## BoxMesh.size.x ratio must match within floating-point tolerance.
 func test_mesh_sizes_proportional_to_metric() -> bool:
 	var main_node: Node3D = MainScript.new()
-	main_node._build(_make_fixture())
+	main_node.build_from_graph(_make_fixture())
 
 	var small_mesh: BoxMesh = _get_box_mesh(main_node, "small_mod")
 	var large_mesh: BoxMesh = _get_box_mesh(main_node, "large_mod")
