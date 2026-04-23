@@ -1,0 +1,206 @@
+---
+task_id: task-012
+round: 0
+role: spec-reviewer
+verdict: fail
+---
+## Spec Alignment Review: prototype-scope.spec.md
+
+Branch: hyperloop/task-012
+
+---
+
+### Requirement: Target Codebase — COVERED
+
+The extractor (`extractor/__main__.py`) accepts any Python source path, including
+`~/code/kartograph/src/api`. The CLI entry point, `build_scene_graph()`, and the
+discovery functions (`discover_bounded_contexts`, `discover_submodules`) are all
+implemented. The automated check (`check-kartograph-integration-test.sh`) passes.
+
+Tests: `test_extractor.py::TestModuleDiscovery`, `TestSceneGraphOutput` — use a
+kartograph-shaped tmp fixture with `iam`, `graph`, `shared_kernel` bounded contexts
+and assert the expected structure is produced.
+
+**Scenario: Loading kartograph** — COVERED
+Code: `extractor/extractor.py::build_scene_graph()`, `extractor/__main__.py`
+Tests: `TestSceneGraphOutput::test_nodes_include_bounded_contexts`,
+`test_nodes_include_internal_modules`
+
+---
+
+### Requirement: Two-Stage Pipeline — COVERED
+
+The Python extractor produces a JSON scene graph (`build_scene_graph` → `json.dumps`
+in `__main__.py`). The Godot application (`godot/scripts/main.gd::_ready`) reads the
+file via `FileAccess`, parses JSON, calls `SceneGraphLoader.load_from_dict()`, then
+`build_from_graph()` to build the 3D scene.
+
+Tests:
+- `test_extractor.py::TestSceneGraphOutput::test_output_is_json_serialisable`
+- `test_scene_graph_loader.gd` — full coverage of SceneGraphLoader parsing
+- `test_scene_graph_loading.gd::test_volumes_created_for_each_node`,
+  `test_edge_mesh_instances_created`
+
+**Scenario: Extraction then visualization** — COVERED
+
+---
+
+### Requirement: Top-Down Architectural View — COVERED
+
+`camera_controller.gd` initialises `_theta = 0.15` (≈8.6° from vertical, well within
+top-down range). Bounded contexts are placed in a circular layout by `compute_layout()`
+with coupling-aware ordering (`_order_by_coupling`). Cross-context dependency lines are
+rendered as orange ImmediateMesh lines.
+
+Tests:
+- `test_camera_controls.gd::test_initial_theta_is_near_top_down`
+- `test_extractor.py::TestLayout::test_coupled_bcs_are_closer_than_uncoupled`
+- `test_extractor.py::TestLayout::test_order_by_coupling_places_coupled_adjacent`
+- `test_dependency_rendering.gd::test_edge_line_mesh_created`,
+  `test_cross_context_cone_is_orange`
+
+**Scenario: Viewing kartograph from above** — COVERED
+
+---
+
+### Requirement: Zoom to Detail — COVERED
+
+Scroll-wheel zoom changes `_distance` (camera_controller.gd). Module nodes are created
+as smaller opaque boxes parented inside their bounded-context anchor node (main.gd
+`build_from_graph`), so zooming in brings internal modules into view.
+
+Tests:
+- `test_camera_controls.gd::test_scroll_up_decreases_distance`,
+  `test_scroll_down_increases_distance`
+- `test_containment_rendering.gd::test_module_parented_inside_context`,
+  `test_bounded_context_larger_than_module`
+
+**Scenario: Zooming into IAM** — COVERED
+
+---
+
+### Requirement: Abstract Visual Language — COVERED
+
+All nodes are rendered as `BoxMesh` primitives (bounded contexts: translucent flat
+slabs; modules: opaque compact boxes). Size is driven directly from the `size` field
+(derived from LOC). Containment is achieved by parenting module anchors inside BC
+anchors.
+
+Tests:
+- `test_containment_rendering.gd::test_bounded_context_is_translucent`,
+  `test_module_is_opaque`, `test_bounded_context_cull_disabled`
+- `test_size_encoding.gd::test_large_module_has_bigger_mesh`,
+  `test_mesh_sizes_proportional_to_metric`
+- `test_node_renderer.gd::test_no_layout_recomputed_in_godot`
+
+**Scenario: Visual representation** — COVERED
+
+---
+
+### Requirement: Readable Labels — COVERED
+
+`_create_volume()` in `main.gd` attaches a `Label3D` to every anchor with:
+- `text = nd["name"]`
+- `billboard = BaseMaterial3D.BILLBOARD_ENABLED`
+- `pixel_size = 0.012` (> 0)
+- `no_depth_test = true`
+
+Tests: `test_readable_labels.gd` provides 10 tests covering bounded context and module
+labels for text content, billboard mode, pixel_size > 0, and no_depth_test = true.
+
+**Scenario: Identifying a module** — COVERED
+
+---
+
+### Requirement: Dependency Visualization — COVERED
+
+`_create_edge()` in `main.gd` draws an ImmediateMesh line between node world-positions
+and adds a `CylinderMesh` (top_radius=0, pointed tip) arrowhead at the target end.
+Cross-context edges are orange; internal are grey.
+
+Tests:
+- `test_dependency_rendering.gd::test_edge_line_mesh_created`,
+  `test_direction_indicator_cone_created`, `test_direction_cone_near_target`,
+  `test_cross_context_cone_is_orange`
+
+**Scenario: Cross-context dependency** — COVERED
+
+---
+
+### Requirement: Navigation — COVERED
+
+`camera_controller.gd` implements:
+- Scroll-wheel zoom (`_distance` change, clamped)
+- Middle-mouse-drag orbit (`_theta`, `_phi` spherical coordinates)
+- Right-mouse-drag pan (pivot translation in camera's local XZ plane)
+
+Tests: `test_camera_controls.gd` — 7 tests covering initial state, zoom in/out,
+orbit, panning, set_pivot, and zoom clamp.
+
+**Scenario: Moving through the space** — COVERED
+
+---
+
+### Requirement: Not In Scope — FAIL
+
+The spec mandates that the following features MUST NOT be implemented in the prototype:
+
+> "AND moldable views (LLM-powered question-driven views) is NOT implemented"
+> "AND spec extraction is NOT implemented"
+
+**Violation 1: Moldable views are fully implemented.**
+
+Files present that the spec prohibits:
+- `godot/scripts/question_panel.gd` — QuestionPanel with `process_question()` that
+  produces ViewSpec dictionaries from natural-language questions
+- `godot/scripts/view_spec.gd` — ViewSpec primitive set (VALID_OPS)
+- `godot/scripts/view_spec_renderer.gd` — interprets ViewSpec into 3D scene nodes
+- `godot/tests/test_question_panel.gd` — 14 tests for QuestionPanel
+- `godot/tests/test_view_spec.gd` — 9 tests for ViewSpec
+- `godot/tests/test_view_spec_renderer.gd` — tests for ViewSpecRenderer
+- `godot/scripts/main.gd` — wires in QuestionPanel and ViewSpecRenderer at startup,
+  preloads both, connects `view_spec_requested` signal, creates `_view_root` container
+
+The automated scope check (`check-not-in-scope.sh`) fails on all of these.
+
+**Violation 2: Spec extraction is fully implemented.**
+
+- `extractor/extractor.py` contains `extract_spec_nodes()` and `_layout_spec_nodes()`
+- `extractor/extractor.py::build_scene_graph()` accepts `include_specs: bool` parameter
+- `extractor/__main__.py` exposes a `--specs` CLI flag
+- `extractor/tests/test_extractor.py::TestSpecExtraction` — 6 tests for spec extraction
+
+The automated scope check (`check-not-in-scope.sh`) fails on all of these.
+
+**Features correctly absent (conformance, evaluation, simulation modes; data flow;
+first-person navigation):** verified — none of these appear in the implementation.
+
+---
+
+## Summary
+
+| Requirement                     | Status  |
+|---------------------------------|---------|
+| Target Codebase                 | COVERED |
+| Two-Stage Pipeline              | COVERED |
+| Top-Down Architectural View     | COVERED |
+| Zoom to Detail                  | COVERED |
+| Abstract Visual Language        | COVERED |
+| Readable Labels                 | COVERED |
+| Dependency Visualization        | COVERED |
+| Navigation                      | COVERED |
+| Not In Scope                    | FAIL    |
+
+**Overall verdict: FAIL**
+
+The "Not In Scope" requirement is violated. Two explicitly prohibited features are
+implemented with full code, tests, and main.gd wiring:
+
+1. **Moldable views** — remove `question_panel.gd`, `view_spec.gd`,
+   `view_spec_renderer.gd`, their tests, and all references from `main.gd`
+   (`QuestionPanel`, `ViewSpecRenderer`, `_view_root`, `_on_view_spec_requested`,
+   and the CanvasLayer/panel wiring in `_ready()`).
+
+2. **Spec extraction** — remove `extract_spec_nodes()`, `_layout_spec_nodes()`, the
+   `include_specs` parameter from `build_scene_graph()`, the `--specs` flag from
+   `__main__.py`, and the `TestSpecExtraction` test class.
