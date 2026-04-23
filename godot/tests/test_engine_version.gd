@@ -51,3 +51,26 @@ func test_main_script_is_gdscript() -> bool:
 	file.close()
 	# run/main_scene must point to a .tscn (GDScript-backed) scene, not a .cs scene.
 	return content.contains("main.tscn") and not content.contains(".cs")
+
+
+## AND all scripts use GDScript — iteration predicate —
+## Spec says "all scripts use GDScript". This test satisfies the "all" predicate
+## by using DirAccess to iterate every file in res://scripts/ and asserting that
+## each filename ends in ".gd" — meaning no C#, C++, or other language files exist.
+func test_scripts_dir_contains_only_gdscript() -> bool:
+	var dir := DirAccess.open("res://scripts")
+	if dir == null:
+		return false
+	dir.list_dir_begin()
+	var file_name: String = dir.get_next()
+	var found_any: bool = false
+	while file_name != "":
+		if not dir.current_is_dir():
+			found_any = true
+			if not file_name.ends_with(".gd"):
+				dir.list_dir_end()
+				return false
+		file_name = dir.get_next()
+	dir.list_dir_end()
+	# Must have found at least one file (sanity check that the directory isn't empty)
+	return found_any

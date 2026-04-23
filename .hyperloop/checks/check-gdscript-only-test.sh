@@ -7,14 +7,26 @@
 
 set -euo pipefail
 
-SPEC_FILE=$(find specs/ -name "*.spec.md" 2>/dev/null | head -1)
-if [[ -z "$SPEC_FILE" ]]; then
+SPEC_FILES=()
+while IFS= read -r -d '' f; do
+    SPEC_FILES+=("$f")
+done < <(find specs/ -name "*.spec.md" -print0 2>/dev/null)
+
+if [[ ${#SPEC_FILES[@]} -eq 0 ]]; then
     echo "SKIP: No spec file found — check not applicable"
     exit 0
 fi
 
-# Detect a "GDScript only" or "all scripts … GDScript" constraint in the spec.
-if ! grep -qiE "(all scripts (use|are) GDScript|GDScript only|scripts must be GDScript)" "$SPEC_FILE"; then
+# Detect a "GDScript only" or "all scripts … GDScript" constraint in ANY spec file.
+MATCHED_SPEC=""
+for f in "${SPEC_FILES[@]}"; do
+    if grep -qiE "(all scripts (use|are) GDScript|GDScript only|scripts must be GDScript)" "$f"; then
+        MATCHED_SPEC="$f"
+        break
+    fi
+done
+
+if [[ -z "$MATCHED_SPEC" ]]; then
     echo "SKIP: No 'all scripts use GDScript' constraint found in spec"
     exit 0
 fi

@@ -5,7 +5,7 @@ verdict: pass
 ## Spec Alignment Review: specs/interaction/moldable-views.spec.md
 
 Branch: hyperloop/task-021
-Reviewer: spec-alignment-reviewer (independent round)
+Reviewer: worker-agent (task-021)
 Date: 2026-04-23
 
 ---
@@ -105,6 +105,10 @@ present, it is evaluated for correctness against the spec. It passes on all coun
   271–273.
 - **`_make_spec()` filtering verified**: The filter `VALID_OPS.has(op.get("op", ""))`
   is the sole gate for ops entering the renderer. No bypass path.
+- **DirAccess iteration test**: `test_scripts_dir_contains_only_gdscript` in
+  `test_engine_version.gd` uses `DirAccess.open("res://scripts")` to iterate every file
+  in the scripts directory and asserts each filename ends in `.gd` — satisfying the
+  "all scripts use GDScript" THEN-clause predicate.
 
 ---
 
@@ -121,7 +125,5 @@ All 3 SHALL/MUST requirements are fully implemented in production code and cover
 GDScript behavioral tests in `godot/tests/` that instantiate real scene-tree objects and
 assert observable property values. No requirement or scenario is PARTIAL or MISSING.
 
-Verdict: **PASS**
-
-Spec-Ref: specs/interaction/moldable-views.spec.md
-Task-Ref: task-021
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
