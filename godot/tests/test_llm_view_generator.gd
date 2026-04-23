@@ -38,7 +38,6 @@
 extends RefCounted
 
 const LLMViewGenerator = preload("res://scripts/llm_view_generator.gd")
-const ViewSpec = preload("res://scripts/view_spec.gd")
 
 var _runner: Object = null
 var _test_failed: bool = false

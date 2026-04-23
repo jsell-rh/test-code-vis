@@ -24,9 +24,11 @@ extends RefCounted
 ##   The LLM does NOT generate raw 3D geometry.
 ##
 ## Requirement: Fixed Visual Primitive Set
-##   The LLM selects from ViewSpec.VALID_OPS; it does not invent new ones.
+##   The LLM selects from VALID_OPS; it does not invent new ones.
 
-const ViewSpec = preload("res://scripts/view_spec.gd")
+## Fixed set of visual primitives the LLM may select from.
+## No new rendering logic is generated at runtime — this list is the contract.
+const VALID_OPS: Array = ["show", "hide", "highlight", "arrange", "annotate", "connect"]
 
 
 ## Build a prompt string for the LLM containing the question and graph context.
@@ -48,7 +50,7 @@ static func build_prompt(question: String, graph: Dictionary) -> String:
 			]
 		)
 
-	var ops_list: String = ", ".join(ViewSpec.VALID_OPS)
+	var ops_list: String = ", ".join(VALID_OPS)
 	var nodes_str: String = "\n".join(node_lines) if node_lines.size() > 0 else "  (none)"
 
 	return (
@@ -86,9 +88,8 @@ static func build_prompt(question: String, graph: Dictionary) -> String:
 ## strips those before parsing.  JSON parsing failures return an empty spec
 ## so the caller always receives a valid ViewSpec structure.
 ##
-## Delegates to ViewSpec.from_dict() which enforces the fixed primitive set —
-## unknown ops emitted by the LLM are silently dropped, ensuring no new
-## rendering logic enters the renderer at runtime.
+## Enforces the fixed primitive set — unknown ops emitted by the LLM are
+## silently dropped, ensuring no new rendering logic enters the renderer at runtime.
 ##
 ## Returns a Dictionary with "question" (String) and "operations" (Array).
 static func parse_response(llm_text: String) -> Dictionary:
@@ -103,11 +104,24 @@ static func parse_response(llm_text: String) -> Dictionary:
 
 	var json := JSON.new()
 	if json.parse(text) != OK:
-		# Return an empty but structurally valid ViewSpec on parse failure.
-		return ViewSpec.from_dict({"question": "", "operations": []})
+		# Return an empty but structurally valid spec on parse failure.
+		return _make_spec("", [])
 
 	if not json.data is Dictionary:
-		return ViewSpec.from_dict({"question": "", "operations": []})
+		return _make_spec("", [])
 
-	# Delegate to ViewSpec.from_dict() to enforce the fixed primitive contract.
-	return ViewSpec.from_dict(json.data)
+	# Enforce the fixed primitive contract: drop any op not in VALID_OPS.
+	return _make_spec(
+		json.data.get("question", ""),
+		json.data.get("operations", [])
+	)
+
+
+## Build a normalised view-spec Dictionary, filtering ops to VALID_OPS only.
+## Unknown ops are silently dropped — no new rendering logic can be introduced.
+static func _make_spec(question: String, raw_ops: Array) -> Dictionary:
+	var ops: Array = []
+	for op in raw_ops:
+		if op is Dictionary and VALID_OPS.has(op.get("op", "")):
+			ops.append(op)
+	return {"question": question, "operations": ops}

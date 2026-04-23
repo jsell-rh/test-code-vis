@@ -11,9 +11,7 @@ extends Node3D
 ##
 ## The JSON file path is configurable via the exported variable.
 
-const SceneGraphLoader   = preload("res://scripts/scene_graph_loader.gd")
-const QuestionPanel      = preload("res://scripts/question_panel.gd")
-const ViewSpecRenderer   = preload("res://scripts/view_spec_renderer.gd")
+const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -23,11 +21,8 @@ var _anchors: Dictionary = {}
 ## Node id → world-space centre Vector3 (computed from relative positions).
 var _world_positions: Dictionary = {}
 
-## The parsed scene graph retained so view-spec queries can reference it.
+## The parsed scene graph retained for reference.
 var _graph: Dictionary = {}
-
-## Container for nodes spawned by ViewSpecRenderer.apply().
-var _view_root: Node3D = null
 
 @onready var _camera: Camera3D = $Camera3D
 
@@ -52,37 +47,6 @@ func _ready() -> void:
 		build_from_graph(_graph)
 	else:
 		push_warning("CodeVis: scene graph not found at '%s'." % scene_graph_path)
-
-	# Add the question-input UI panel on a CanvasLayer so it overlays the 3D scene.
-	var canvas := CanvasLayer.new()
-	add_child(canvas)
-
-	var panel := QuestionPanel.new()
-	# Anchor to the bottom of the screen, full width; use offsets for height.
-	panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
-	panel.offset_top = -60.0
-	panel.offset_bottom = 0.0
-	panel.view_spec_requested.connect(_on_view_spec_requested)
-	canvas.add_child(panel)
-
-	# Container that ViewSpecRenderer writes into when a question is asked.
-	_view_root = Node3D.new()
-	_view_root.name = "ViewRoot"
-	add_child(_view_root)
-
-
-## Called when the user submits a question via the QuestionPanel.
-## Clears the previous view-spec result and applies the new spec.
-func _on_view_spec_requested(spec: Dictionary) -> void:
-	# Remove all previous view-spec nodes.
-	for child in _view_root.get_children():
-		child.queue_free()
-
-	if _graph.is_empty():
-		push_warning("CodeVis: no scene graph loaded — cannot apply view spec.")
-		return
-
-	ViewSpecRenderer.apply(_graph, spec, _view_root)
 
 
 ## Build the 3D scene from a parsed scene-graph dictionary.
