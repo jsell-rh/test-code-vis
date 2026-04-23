@@ -5,14 +5,15 @@ Define technology choices, constraints, and quality attributes for the prototype
 
 ## Requirements
 
-### Requirement: Godot 4 Engine
-The visualization application MUST be built using Godot 4.x.
+### Requirement: Godot 4.6 Engine
+The visualization application MUST be built using Godot 4.6.x. All GDScript MUST use API calls valid in Godot 4.6 (e.g. `FileAccess.get_as_text()`, not deprecated or nonexistent methods).
 
 #### Scenario: Engine version
 - GIVEN the project repository
 - WHEN a developer opens it
-- THEN it opens in Godot 4.x (latest stable)
+- THEN it opens in Godot 4.6.x
 - AND all scripts use GDScript
+- AND all API calls are valid for the Godot 4.6 API
 
 ### Requirement: Python Extractor
 The code extraction stage MUST be implemented in Python.

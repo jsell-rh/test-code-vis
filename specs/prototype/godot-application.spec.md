@@ -65,11 +65,12 @@ The application MUST provide camera controls for navigating the scene.
 - THEN the camera rotates around the current focal point
 - AND orientation remains intuitive (up stays up)
 
-### Requirement: Godot 4
-The application MUST be built using Godot 4.x with GDScript.
+### Requirement: Godot 4.6
+The application MUST be built using Godot 4.6.x with GDScript. All API calls MUST be compatible with the Godot 4.6 API (e.g. `FileAccess.get_as_text()`, not `read_as_text()`).
 
 #### Scenario: Engine version
 - GIVEN the project is opened in Godot
 - WHEN the project settings are inspected
-- THEN it uses Godot 4.x
-- AND all scripts are GDScript
+- THEN it uses Godot 4.6.x
+- AND all scripts use GDScript
+- AND all API calls are valid for the Godot 4.6 API

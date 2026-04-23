@@ -11,7 +11,7 @@ func _ready() -> void:
 		if file == null:
 			push_error("Cannot open scene graph: " + _graph_path)
 			return
-		var json_text: String = file.read_as_text()
+		var json_text: String = file.get_as_text()
 		file.close()
 		var json: JSON = JSON.new()
 		if json.parse(json_text) != OK:
