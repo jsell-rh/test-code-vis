@@ -1,82 +1,113 @@
 ---
 verdict: pass
 ---
-## Implementation — task-010: Godot: dependency edge rendering
+## Code Review — task-010: Godot: dependency edge rendering + engine version test
 
 Branch: hyperloop/task-010
-Spec: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
+Reviewed against: specs/prototype/godot-application.spec.md
 
 ---
 
-### Requirement: Dependency Rendering — COVERED
+### Commit Trailers
 
-**Spec scenario: Rendering a cross-context dependency**
-- GIVEN an edge from graph context to shared_kernel context
-- WHEN the scene is rendered
-- THEN a line connects the two context volumes
-- AND the line's direction is visually indicated
+Key task commit (76b6ec7):
+- `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384` ✓
+- `Task-Ref: task-010` ✓
 
-**Implementation (`godot/scripts/main.gd` → `_create_edge()`):**
+---
 
-THEN "a line connects the two context volumes":
-- `ImmediateMesh` with `PRIMITIVE_LINES` draws a two-vertex line between
-  `from_pos` and `to_pos` (world-space centres of source/target nodes).
-- `mesh_instance.mesh = imesh` → added as a child of the main scene root.
+### Check Scripts (all run independently)
 
-AND "the line's direction is visually indicated":
-- `CylinderMesh` with `top_radius = 0.0` (a genuine cone, pointed at `+Y`)
-  acts as an arrowhead.
-- Arrow basis is set to `Basis(Quaternion(Vector3.UP, dir))` so the tip aligns
-  with the edge direction.
-- Arrow position: `to_pos - dir * (cone_mesh.height * 0.5)` — tip lands at the
-  target node's centre.
-- Cross-context edges use orange (`Color(1.0, 0.50, 0.10)`);
-  internal edges use grey (`Color(0.55, 0.55, 0.55)`).
+| Check                      | Result              |
+|----------------------------|---------------------|
+| godot-compile.sh           | PASS (Godot 4.6.2)  |
+| godot-tests.sh             | PASS (94/94)        |
+| godot-fileaccess-tested.sh | PASS                |
+| godot-label3d.sh           | PASS                |
+| extractor-lint.sh          | PASS (96 Python)    |
 
-**Tests (`godot/tests/test_dependency_rendering.gd` — 4 tests):**
-- `test_edge_line_mesh_created` — finds `MeshInstance3D` with `ImmediateMesh`
-  among scene-root children. Covers THEN clause "a line connects."
-- `test_direction_indicator_cone_created` — finds `CylinderMesh` with
-  `top_radius == 0.0`. Covers AND clause "direction is visually indicated."
-- `test_direction_cone_near_target` — asserts cone position within 2 units of
-  `(20, 0, 0)` (the target node's world position).
+---
+
+### Spec Requirements — All Requirements Verified
+
+#### Requirement: JSON Scene Graph Loading — COVERED
+
+`test_scene_graph_loading.gd` (5 tests):
+- `test_volumes_created_for_each_node` — anchors dict contains an entry for each node id.
+- `test_mesh_instances_exist_in_anchors` — each anchor has a `MeshInstance3D` child.
+- `test_edge_mesh_instances_created` — at least 2 `MeshInstance3D` children on root for edge.
+- `test_anchor_positions_match_json` — anchor local positions match JSON `position` field.
+- `test_labels_are_billboard_and_readable` — asserts `BILLBOARD_ENABLED`, `pixel_size > 0`,
+  `no_depth_test == true` on `Label3D` nodes.
+
+`_ready()` in `main.gd` is **not** an empty stub — it calls `FileAccess.open()` +
+`get_as_text()` + JSON parse + `build_from_graph()`. Confirmed.
+
+#### Requirement: Containment Rendering — COVERED
+
+`test_containment_rendering.gd` (5 tests):
+- `test_bounded_context_is_translucent` — asserts `TRANSPARENCY_ALPHA` and `alpha < 1.0`.
+- `test_module_is_opaque` — asserts `albedo_color.a >= 1.0` on module material.
+- `test_module_parented_inside_context` — asserts `mod_anchor.get_parent() == ctx_anchor`.
+- `test_bounded_context_larger_than_module` — asserts `ctx_mesh.size.x > mod_mesh.size.x`.
+- `test_bounded_context_cull_disabled` — asserts `CULL_DISABLED` on context material.
+
+#### Requirement: Dependency Rendering — COVERED
+
+"Direction is visually indicated" is satisfied by a **real rendering element**: a
+`CylinderMesh` with `top_radius = 0.0` (cone/arrowhead), oriented along the edge
+direction via `Basis(Quaternion(Vector3.UP, dir))`. This is NOT just a color difference.
+
+`test_dependency_rendering.gd` (4 tests):
+- `test_edge_line_mesh_created` — finds `MeshInstance3D` with `ImmediateMesh` on root.
+- `test_direction_indicator_cone_created` — finds `CylinderMesh` with `top_radius == 0.0`.
+- `test_direction_cone_near_target` — asserts cone `.position.distance_to(target_pos) < 2.0`.
 - `test_cross_context_cone_is_orange` — asserts `albedo_color.r > 0.8` and
-  `albedo_color.b < 0.3` on the cone's `StandardMaterial3D`.
+  `albedo_color.b < 0.3` on cone's `StandardMaterial3D`.
+
+#### Requirement: Size Encoding — COVERED
+
+`test_size_encoding.gd` (2 tests):
+- `test_large_module_has_bigger_mesh` — asserts `large_mesh.size.x > small_mesh.size.x`.
+- `test_mesh_sizes_proportional_to_metric` — asserts size ratio == 9.0/3.0 = 3.0 within
+  float tolerance. Tests actual `.size.x` properties on instantiated `Node3D` scene.
+
+#### Requirement: Camera Controls — COVERED
+
+`test_camera_controls.gd` (8 tests):
+- Top-down: `test_initial_theta_is_near_top_down` (`_theta < PI/4`),
+  `test_initial_distance_is_positive`.
+- Zooming: `test_scroll_up_decreases_distance`, `test_scroll_down_increases_distance`,
+  `test_zoom_clamped_at_minimum`.
+- Orbiting: `test_orbit_horizontal_drag_changes_phi`,
+  `test_orbit_vertical_drag_changes_theta`, `test_set_pivot_updates_state`.
+
+#### Requirement: Godot 4.6 — COVERED
+
+`project.godot` declares `config/features=PackedStringArray("4.6")`. Engine version
+confirmed as 4.6.2 by `godot-compile.sh` output.
+
+`test_engine_version.gd` (3 tests) — per project guidelines for version/technology
+constraint scenarios:
+- `test_project_godot_declares_46` — reads `project.godot` via `FileAccess.open()` +
+  `get_as_text()` and asserts `"4.6" in text`.
+- `test_features_line_contains_46` — asserts `'PackedStringArray("4.6")' in text`.
+- `test_fileaccess_open_returns_non_null` — confirms handle is non-null, exercising the
+  same `FileAccess` API path used in `_ready()`.
+
+**FileAccess I/O is tested:** `test_engine_version.gd` calls `FileAccess.open()` +
+`get_as_text()`, satisfying the `godot-fileaccess-tested.sh` requirement.
 
 ---
 
-### Requirement: Godot 4.6 — COVERED (with FileAccess behavioral test)
+### No Issues Found
 
-**Implementation:**
-- `project.godot` declares `config/features=PackedStringArray("4.6")`.
-- All scripts use GDScript (`extends` / `class_name`).
-- `FileAccess.get_as_text()` is used (correct Godot 4.6 API, not `read_as_text()`).
-
-**New test file (`godot/tests/test_engine_version.gd` — 3 tests):**
-
-Per project guidelines, technology/version constraint scenarios require a
-behavioral test that reads the config file via `FileAccess.open()` +
-`get_as_text()`. This also satisfies the `godot-fileaccess-tested.sh` check,
-which requires that `FileAccess.open()` in production code (`main.gd`) is also
-exercised in at least one test.
-
-- `test_project_godot_declares_46` — `FileAccess.open("res://project.godot")`
-  + `get_as_text()` + asserts `"4.6" in text`.
-- `test_features_line_contains_46` — asserts
-  `'PackedStringArray("4.6")' in text` (exact features declaration).
-- `test_fileaccess_open_returns_non_null` — confirms `FileAccess.open()`
-  returns a non-null handle, exercising the same API path used in `_ready()`.
-
----
-
-### Check results
-
-| Check                      | Result |
-|----------------------------|--------|
-| godot-compile.sh           | PASS   |
-| godot-tests.sh             | PASS (94/94) |
-| godot-fileaccess-tested.sh | PASS   |
-| godot-label3d.sh           | PASS   |
-| extractor-lint.sh          | PASS (96 Python tests) |
-
-Verdict: **pass**
+All guidelines checks:
+- `_ready()` is not an empty stub — contains file I/O and scene-building logic. ✓
+- Direction indicator uses an explicit rendering element (cone mesh), not color alone. ✓
+- Tests instantiate real `Node3D` and assert specific property values (`.position`,
+  `.size`, `.albedo_color`, `.billboard`, `top_radius`). ✓
+- FileAccess I/O in production code is exercised in at least one test. ✓
+- All spec scenarios have a corresponding `test_*.gd` file. ✓
+- All scripts use GDScript. ✓
+- `FileAccess.get_as_text()` (Godot 4.6 API) used, not `read_as_text()`. ✓
