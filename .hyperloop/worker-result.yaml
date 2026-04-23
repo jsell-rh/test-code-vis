@@ -1,88 +1,139 @@
 ---
 verdict: pass
 ---
-## task-007: Godot Application — PASS
+## task-007: Godot Application Spec — PASS (fresh review 2026-04-23)
 
-### Checks
+Fresh independent review of `specs/prototype/godot-application.spec.md`.
 
-All four check scripts pass:
-- `extractor-lint.sh`: 96 extractor tests pass, ruff clean
-- `godot-compile.sh`: project parses under Godot 4.6.2 (config/features="4.6" confirmed)
-- `godot-label3d.sh`: all Label3D nodes have billboard + pixel_size set and tested
-- `godot-tests.sh`: 91 GDScript behavioral tests, Results: 91 passed, 0 failed
+---
 
-### Commit Trailers
+### Requirement: JSON Scene Graph Loading — COVERED
 
-Implementation commit `a02ffac`:
-- `Spec-Ref`: present ✓
-- `Task-Ref`: task-007 ✓
+**Implementation** (`godot/scripts/main.gd`):
+- `_ready()`: opens file via `FileAccess`, parses JSON with `JSON.new()`, calls
+  `SceneGraphLoader.load_from_dict()` then `build_from_graph()`.
+- `build_from_graph()`: iterates nodes → `_create_volume()`, edges → `_create_edge()`.
+- `_resolve_world_pos()`: reads `position.{x,y,z}` directly from JSON for placement.
 
-### Requirement Coverage
+**Tests** (`test_scene_graph_loading.gd`):
+- `test_volumes_created_for_each_node()`: asserts `_anchors.has("ctx1")` and
+  `_anchors.has("mod1")` — volumes exist for every JSON node.
+- `test_mesh_instances_exist_in_anchors()`: asserts MeshInstance3D child in each anchor.
+- `test_edge_mesh_instances_created()`: asserts ≥2 MeshInstance3D children on main node
+  (1 ImmediateMesh line + 1 CylinderMesh arrowhead per edge).
+- `test_anchor_positions_match_json()`: asserts `anchor.position` equals fixture values
+  exactly (`ctx1` at 0,0,0 and `mod1` at 2,0,2).
 
-**JSON Scene Graph Loading** — COVERED
+All four THEN/AND clauses of the scenario are exercised by real Node3D instantiation
+with known fixture data and property assertions.
 
-`main.gd._ready()` is not an empty stub: opens file via FileAccess, parses JSON,
-calls `SceneGraphLoader.load_from_dict()` and `build_from_graph()`. The latter
-iterates nodes → `_create_volume()` and edges → `_create_edge()`, with positions
-set directly from JSON `position.{x,y,z}`.
+---
 
-Tests (`test_scene_graph_loading.gd`): instantiate real Node3D, call
-`build_from_graph()`, assert `_anchors` entries exist, MeshInstance3D children
-exist, and `anchor.position` matches JSON fixture values exactly. Real node
-instantiation and property assertions — not dict.has() checks.
+### Requirement: Containment Rendering — COVERED
 
-**Containment Rendering** — COVERED
+**Implementation** (`godot/scripts/main.gd → _create_volume()`):
+- `bounded_context`: `TRANSPARENCY_ALPHA`, `albedo_color.a = 0.18`, `CULL_DISABLED`,
+  box size `Vector3(sz, sz*0.2, sz)` where `sz` comes from JSON.
+- `module`: fully opaque (`albedo_color.a = 1.0`), box size `Vector3(sz, sz*0.6, sz)`.
+- Module anchor is parented directly to its context anchor (lines 71–73), placing it
+  inside the parent in the scene tree.
 
-`_create_volume()`: bounded_context uses `TRANSPARENCY_ALPHA`, `albedo_color.a=0.18`,
-`CULL_DISABLED`. Module anchors are parented to their context anchor. Context
-mesh is larger (sz*1.0 × sz*0.2 × sz) vs module (sz*1.0 × sz*0.6 × sz with smaller sz).
+**Tests** (`test_containment_rendering.gd`):
+- `test_bounded_context_is_translucent()`: asserts `transparency != TRANSPARENCY_DISABLED`
+  and `albedo_color.a < 1.0`.
+- `test_module_is_opaque()`: asserts `albedo_color.a >= 1.0`.
+- `test_module_parented_inside_context()`: asserts `mod_anchor.get_parent() == ctx_anchor`.
+- `test_bounded_context_larger_than_module()`: asserts `ctx_mesh.size.x > mod_mesh.size.x`
+  (10.0 > 3.0 with fixture data).
+- `test_bounded_context_cull_disabled()`: asserts `cull_mode == CULL_DISABLED` —
+  visually distinct from children which use default back-face culling.
 
-Tests (`test_containment_rendering.gd`): assert `transparency != DISABLED`,
-`alpha < 1.0`, module `alpha >= 1.0`, `mod_anchor.get_parent() == ctx_anchor`,
-`ctx_mesh.size.x > mod_mesh.size.x`, `cull_mode == CULL_DISABLED`. All are real
-Node3D property assertions.
+All THEN/AND clauses covered by real Node3D property assertions.
 
-**Dependency Rendering** — COVERED
+---
 
-`_create_edge()`: draws an `ImmediateMesh` (PRIMITIVE_LINES) for the line.
-Direction is visually indicated by a `CylinderMesh` with `top_radius=0.0` (a true
-cone/arrowhead geometry) placed at `to_pos - dir*(height*0.5)`. This satisfies the
-guideline: "a plain line or colour difference alone does not satisfy direction is
-visually indicated" — an explicit arrowhead mesh is present.
+### Requirement: Dependency Rendering — COVERED
 
-Tests (`test_dependency_rendering.gd`): assert ImmediateMesh exists, CylinderMesh
-with `top_radius==0.0` exists, cone position is within 2 units of target, and
-cross-context cone has orange albedo (r>0.8, b<0.3).
+**Implementation** (`godot/scripts/main.gd → _create_edge()`):
+- Line: `ImmediateMesh` with `PRIMITIVE_LINES`, coloured by edge type.
+- Direction indicator: `CylinderMesh` with `top_radius = 0.0` (pointed cone) placed at
+  `to_pos - dir * (height * 0.5)`, oriented with `Basis(Quaternion(Vector3.UP, dir))`.
+  This is an explicit arrowhead geometry — satisfies "direction is visually indicated".
+- Cross-context edges use orange (`Color(1.0, 0.50, 0.10)`).
 
-**Size Encoding** — COVERED
+**Tests** (`test_dependency_rendering.gd`):
+- `test_edge_line_mesh_created()`: asserts ImmediateMesh MeshInstance3D exists as child.
+- `test_direction_indicator_cone_created()`: asserts CylinderMesh with `top_radius == 0.0`
+  exists.
+- `test_direction_cone_near_target()`: asserts cone position is within 2 units of
+  `Vector3(20, 0, 0)` (the target node's position in fixture).
+- `test_cross_context_cone_is_orange()`: asserts `albedo_color.r > 0.8` and
+  `albedo_color.b < 0.3` on the cone material for a `cross_context` edge.
 
-`sz = float(nd["size"])` → `BoxMesh.size = Vector3(sz, sz*0.6, sz)`. Mesh width
-is directly proportional to the size field (linear mapping).
+---
 
-Tests (`test_size_encoding.gd`): assert `large_mesh.size.x > small_mesh.size.x` and
-ratio `9.0/3.0 = 3.0` matches within 0.001 tolerance.
+### Requirement: Size Encoding — COVERED
 
-**Camera Controls** — COVERED
+**Implementation** (`godot/scripts/main.gd → _create_volume()`):
+- `sz = float(nd["size"])` → `BoxMesh.size = Vector3(sz, sz*0.6, sz)`.
+- X and Z dimensions are exactly proportional to the JSON `size` field (linear mapping).
 
-`camera_controller.gd`: initial `_theta=0.15 < PI/4` (near top-down), scroll wheel
-changes `_distance`, middle-mouse drag changes `_phi` and `_theta`, `look_at(_pivot,
-Vector3.UP)` preserves orientation. `set_pivot()` updates pivot and distance for
-programmatic framing at startup.
+**Tests** (`test_size_encoding.gd`):
+- `test_large_module_has_bigger_mesh()`: asserts `large_mesh.size.x > small_mesh.size.x`
+  (size 9.0 vs 3.0 fixture).
+- `test_mesh_sizes_proportional_to_metric()`: asserts
+  `abs(large.size.x / small.size.x - 3.0) < 0.001` — exact ratio matches.
 
-Tests (`test_camera_controls.gd`): 8 tests asserting initial state, scroll zoom,
-orbit drag via real InputEventMouseButton/InputEventMouseMotion objects, clamping.
+---
 
-Label readability (`test_scene_graph_loading.gd::test_labels_are_billboard_and_readable`):
-asserts `BILLBOARD_ENABLED`, `pixel_size > 0.0`, `no_depth_test == true` on real
-Label3D node.
+### Requirement: Camera Controls — COVERED
 
-**Godot 4** — COVERED
+**Implementation** (`godot/scripts/camera_controller.gd`):
+- Top-down default: `_theta = 0.15` (≈ 8.6° from vertical, well below PI/4 = 45°).
+- `_distance = 40.0` (positive, camera not at pivot).
+- Zoom: `MOUSE_BUTTON_WHEEL_UP` decreases `_distance`, `WHEEL_DOWN` increases it,
+  clamped to `[min_distance, max_distance]`.
+- Orbit: middle-mouse drag changes `_phi` (azimuth) and `_theta` (polar), then
+  `look_at(_pivot, Vector3.UP)` ensures up-vector stays intuitive.
+- `set_pivot(pivot, distance)`: updates `_pivot` and `_distance` for programmatic framing.
 
-`project.godot`: `config/features=PackedStringArray("4.6")`. All scripts use GDScript 2.0.
+Label readability (Zooming in scenario "AND labels scale to remain readable"):
+- `_create_volume()` creates `Label3D` with `billboard = BILLBOARD_ENABLED`,
+  `pixel_size = 0.012 > 0.0`, `no_depth_test = true`.
+
+**Tests** (`test_camera_controls.gd`, 8 tests):
+- `test_initial_theta_is_near_top_down()`: `cam._theta < PI/4`.
+- `test_initial_distance_is_positive()`: `cam._distance > 0.0`.
+- `test_scroll_up_decreases_distance()`: wheel-up decreases distance.
+- `test_scroll_down_increases_distance()`: wheel-down increases distance.
+- `test_orbit_horizontal_drag_changes_phi()`: 50px drag changes `_phi`.
+- `test_orbit_vertical_drag_changes_theta()`: 20px vertical drag changes `_theta`.
+- `test_set_pivot_updates_state()`: `set_pivot()` updates `_pivot` and `_distance`.
+- `test_zoom_clamped_at_minimum()`: 200 scroll-ups stay above `min_distance`.
+
+Label readability test in `test_scene_graph_loading.gd`:
+- `test_labels_are_billboard_and_readable()`: asserts `BILLBOARD_ENABLED`,
+  `pixel_size > 0.0`, `no_depth_test == true` on real Label3D node.
+
+---
+
+### Requirement: Godot 4 — COVERED
+
+**Evidence**:
+- `godot/project.godot`: `config/features=PackedStringArray("4.6")` — Godot 4.6.
+- All 15 GDScript files use `.gd` extension and GDScript 2.0 syntax (typed variables,
+  `@export`, `@onready`, `extends`, `func` with return-type annotations).
+- The test runner (`run_tests.gd extends SceneTree`) and all test files are GDScript.
+
+No separate behavioral test is needed for a static configuration property; the project
+file is the authoritative implementation.
+
+---
 
 ### Summary
 
-Implementation is complete across all spec scenarios. Tests use real Node3D
-instantiation, supply known fixture data, and assert actual runtime property values.
-No empty stubs, no dict.has()-only assertions, direction is explicitly rendered with
-a cone mesh geometry. All check scripts pass.
+All six requirements are fully implemented and covered by GDScript behavioral tests in
+`godot/tests/`. Tests instantiate real `Node3D`/`RefCounted` objects, supply known
+fixture data, and assert concrete runtime property values (positions, mesh dimensions,
+material transparency, cull mode, color channels, camera state variables).
+Verdict: **PASS**.
