@@ -98,3 +98,29 @@ func test_anchor_positions_match_json() -> bool:
 	# mod1's position in JSON is {x:2, y:0, z:2} relative to its parent ctx1.
 	var mod_ok := mod_anchor.position.is_equal_approx(Vector3(2.0, 0.0, 2.0))
 	return ctx_ok and mod_ok
+
+
+## AND labels scale to remain readable as the camera zooms in —
+## Each anchor's Label3D must use BILLBOARD_ENABLED so it always faces the camera
+## (appearing to grow as the camera approaches), have a positive pixel_size that
+## controls real-world text scale, and no_depth_test=true so the label remains
+## visible through geometry at all zoom levels.
+## Covers spec THEN clause: "AND labels scale to remain readable".
+func test_labels_are_billboard_and_readable() -> bool:
+	var main_node: Node3D = MainScript.new()
+	main_node._build(_make_fixture())
+
+	var anchor: Node3D = main_node._anchors.get("ctx1")
+	if anchor == null:
+		return false
+
+	for child: Node in anchor.get_children():
+		if child is Label3D:
+			var lbl := child as Label3D
+			var billboard_ok := lbl.billboard == BaseMaterial3D.BILLBOARD_ENABLED
+			var pixel_size_ok := lbl.pixel_size > 0.0
+			var depth_ok := lbl.no_depth_test == true
+			return billboard_ok and pixel_size_ok and depth_ok
+
+	# No Label3D found in anchor — test fails.
+	return false
