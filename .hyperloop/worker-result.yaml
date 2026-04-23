@@ -1,0 +1,95 @@
+---
+verdict: pass
+---
+## Spec Alignment Review — task-021
+### Spec: specs/interaction/moldable-views.spec.md
+
+All SHALL/MUST requirements are implemented at the prototype-permitted scope and backed
+by passing GDScript behavioral tests (87/87 total; 32 in test_llm_view_generator.gd).
+
+---
+
+### Requirement: Question-Driven View Generation — COVERED
+
+The system MUST accept natural language questions and generate a spatial view tailored
+to answering that specific question.
+
+**Implementation:** `godot/scripts/llm_view_generator.gd`
+- `build_prompt(question, graph)` — embeds the natural-language question plus every
+  node id/name/type from the structural graph into an LLM prompt.
+- `parse_response(llm_text)` — converts the LLM's JSON reply into a structured
+  view-spec Dictionary (the "spatial view" at prototype scope).
+
+**Prototype-scope note:** `question_panel.gd` (UI) and `view_spec_renderer.gd` (3D
+renderer) are explicitly prohibited by `check-not-in-scope.sh` per
+`specs/prototype/prototype-scope.spec.md §"Not In Scope"`. Per reviewer guidelines,
+absent out-of-scope features do NOT constitute a FAIL.
+
+#### Scenario: Architectural question — COVERED
+- `test_build_prompt_contains_question` — verifies "how does authentication work?" is
+  embedded in the prompt.
+- `test_build_prompt_contains_node_id_auth_service` — confirms auth-related node ids
+  are in the prompt so the LLM can focus on auth components.
+- `test_parse_response_passes_through_hide_op` — "irrelevant components hidden".
+- `test_parse_response_passes_through_arrange_op` — "relevant components arranged".
+
+#### Scenario: Impact question — COVERED
+- `test_build_prompt_contains_node_id_user_db` — user_db is in the graph context.
+- `test_parse_response_passes_through_show_op` — user database shown.
+- `test_parse_response_passes_through_connect_op` — dependency relationships clear.
+
+---
+
+### Requirement: View Specs as Intermediate Representation — COVERED
+
+The system MUST use a structured view specification as the intermediate representation
+between the LLM and the 3D renderer. The LLM generates a view spec; the renderer
+interprets it.
+
+**Implementation:** `parse_response()` returns `{"question": str, "operations": Array}`
+— a structured Dictionary, not raw 3D geometry. This is the intermediate representation
+contract. The 3D renderer side is prohibited by prototype scope (not a FAIL).
+
+#### Scenario: LLM produces view spec — COVERED
+- `test_parse_response_returns_dictionary` — confirms return type is Dictionary (not
+  geometry).
+- `test_parse_response_has_question_key` / `test_parse_response_has_operations_key` —
+  verifies the view spec structure.
+- `test_parse_response_all_six_ops_pass_through` — all six op types (show, hide,
+  highlight, arrange, annotate, connect) survive parsing, confirming the view spec
+  controls which elements are shown, hidden, highlighted, and arranged.
+- `test_parse_response_strips_markdown_code_fences` / `test_parse_response_strips_plain_code_fences`
+  — LLM wrapping handled gracefully.
+
+---
+
+### Requirement: Fixed Visual Primitive Set — COVERED
+
+The set of visual primitives MUST be fixed and finite. The LLM selects from available
+primitives; it does not invent new ones.
+
+**Implementation:**
+- `VALID_OPS: Array = ["show","hide","highlight","arrange","annotate","connect"]` is a
+  compile-time constant in `llm_view_generator.gd`.
+- `build_prompt()` embeds all VALID_OPS in the prompt text so the LLM cannot invent ops
+  it was never told about.
+- `_make_spec()` (called by `parse_response()`) drops any op not in VALID_OPS,
+  enforcing the contract at parse time — no new rendering logic enters the renderer.
+
+#### Scenario: LLM uses existing primitives — COVERED
+- `test_build_prompt_contains_{show,hide,highlight,arrange,annotate,connect}_primitive`
+  (6 tests) — all primitives are listed in the prompt.
+- `test_parse_response_all_six_ops_pass_through` — all 6 valid ops survive.
+- `test_parse_response_filters_unknown_ops` — unknown op "invent_new_renderer" is
+  silently dropped; only "show" survives.
+- `test_parse_response_with_all_unknown_ops_returns_empty_operations` — all-unknown
+  payload yields zero operations.
+
+---
+
+### Checks (all green)
+- `check-not-in-scope.sh`: OK — prohibited moldable-views files absent.
+- `godot-tests.sh`: 87 passed, 0 failed — GDScript behavioral tests pass.
+- `godot-compile.sh`: project compiles without errors.
+- `extractor-lint.sh`: all extractor checks passed, 90 pytest tests pass.
+- `check-kartograph-integration-test.sh`: OK.
