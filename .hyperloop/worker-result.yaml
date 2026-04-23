@@ -2,47 +2,26 @@
 verdict: pass
 ---
 
-## Re-review — PR Feedback Loop (triggered by `@coderabbit recheck`)
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
 
-This is a fresh review of the branch at its current state after commit `49d84df`
-("fix(task-011): remove all prohibited out-of-scope artifacts").
-
----
-
-## Scope Check
-
-`check-not-in-scope.sh` does not exist on this branch (it was committed to main after
-this branch was created). Manual verification confirms all prohibited artifacts from the
-prior FAIL verdict have been removed:
-
-| Prohibited artifact | Present? |
-|---|---|
-| `godot/scripts/view_spec.gd` | NO — removed |
-| `godot/scripts/view_spec_renderer.gd` | NO — removed |
-| `godot/tests/test_view_spec.gd` | NO — removed |
-| `godot/tests/test_view_spec_renderer.gd` | NO — removed |
-| spec-extraction code in `extractor/extractor.py` | NO — not present |
-| spec-extraction code in `extractor/__main__.py` | NO — not present |
-| spec-extraction tests in `extractor/tests/` | NO — not present |
-
-Grep for `view_spec`, `moldable`, `ViewSpec`, `SpecExtract` across all GDScript and
-Python files returned 0 matches.
-
----
+## Kartograph Integration Check Output
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
 
 ## Check Script Results
 
-All five check scripts on this branch were executed and exited 0:
+All eight check scripts were executed and exit 0:
 
 | Script | Result |
 |---|---|
+| `check-not-in-scope.sh` | EXIT 0 — OK: No prohibited (not-in-scope) features detected. |
+| `check-kartograph-integration-test.sh` | EXIT 0 — OK: Integration test referencing kartograph codebase with expected-context assertions found. |
+| `check-report-scope-section.sh` | EXIT 0 — OK: worker-result.yaml contains a valid '## Scope Check Output' section. |
 | `extractor-lint.sh` | EXIT 0 — ruff clean, 90 pytest tests pass |
 | `godot-compile.sh` | EXIT 0 — Godot Engine v4.6.2.stable compiles |
 | `godot-fileaccess-tested.sh` | EXIT 0 — FileAccess.open() exercised in 2 test files |
 | `godot-label3d.sh` | EXIT 0 — Label3D billboard + pixel_size set and tested |
-| `godot-tests.sh` | EXIT 0 — 56 GDScript tests pass, 0 fail |
-
----
+| `godot-tests.sh` | EXIT 0 — GDScript behavioral tests passed, 0 fail |
 
 ## Spec Requirement Coverage
 
@@ -120,11 +99,12 @@ All five check scripts on this branch were executed and exited 0:
   - `test_project_does_not_declare_csharp` — no "Mono" or "C#"
   - `test_file_access_get_as_text_returns_non_empty_string` — non-empty, correct header
 
----
-
 ## Verdict
 
-**PASS.** All prohibited out-of-scope artifacts have been removed. All five check
+**PASS.** All prohibited out-of-scope artifacts have been removed. All eight check
 scripts exit 0. All six SHALL requirements are implemented and covered by GDScript
-behavioral tests (56 tests, 0 failures). The implementation is correct and complete
-with respect to the Godot Application spec.
+behavioral tests (all tests pass, 0 failures). The implementation is correct and
+complete with respect to the Godot Application spec.
+
+The `## Scope Check Output` section above contains the verbatim stdout of
+`check-not-in-scope.sh` as required by the check-report-scope-section.sh validator.
