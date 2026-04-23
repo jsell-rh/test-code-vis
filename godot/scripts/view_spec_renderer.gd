@@ -86,6 +86,8 @@ static func apply(graph: Dictionary, spec: Dictionary, root: Node3D) -> void:
 			var label := Label3D.new()
 			label.name = "annotation"
 			label.text = annotate_map[id]
+			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			label.pixel_size = 0.05
 			mesh.add_child(label)
 
 	# connect adds a Node3D at the midpoint between the two named nodes.

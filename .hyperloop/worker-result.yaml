@@ -1,0 +1,20 @@
+---
+verdict: pass
+---
+Fixed the Label3D readability violation identified in the review findings.
+
+Changes made:
+1. `godot/scripts/view_spec_renderer.gd` — After `label.text = annotate_map[id]`,
+   added `label.billboard = BaseMaterial3D.BILLBOARD_ENABLED` and
+   `label.pixel_size = 0.05` so annotate-primitive labels are legible in 3D space.
+
+2. `godot/tests/test_view_spec_renderer.gd` — Extended
+   `test_annotate_op_sets_label3d_text` with two new assertions:
+   - `label.billboard == BaseMaterial3D.BILLBOARD_ENABLED`
+   - `label.pixel_size > 0.0`
+
+All checks pass:
+- extractor-lint.sh : PASS (ruff clean, 96 pytest tests)
+- godot-compile.sh  : PASS (Godot 4.6.2 headless compile)
+- godot-label3d.sh  : PASS (billboard + pixel_size set and tested)
+- godot-tests.sh    : PASS (67/67 GDScript tests pass)
