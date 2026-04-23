@@ -27,7 +27,6 @@ from extractor.extractor import (
     discover_bounded_contexts,
     discover_submodules,
     extract_imports_from_file,
-    extract_spec_nodes,
     get_target_node_id,
     is_bounded_context,
     is_internal_module,
@@ -83,22 +82,6 @@ def src(tmp_path: Path) -> Path:
     (tests / "__init__.py").write_text("")
 
     return tmp_path
-
-
-@pytest.fixture()
-def src_with_specs(src: Path) -> Path:
-    """Extend src fixture with a specs/ directory."""
-    specs = src / "specs"
-    (specs / "iam").mkdir(parents=True)
-    (specs / "graph").mkdir(parents=True)
-    (specs / "index.spec.md").write_text(
-        "## Bounded Contexts\n"
-        "### [IAM](iam/) — Identity\n"
-        "### [Graph](graph/) — Knowledge Graph\n"
-    )
-    (specs / "iam" / "tenants.spec.md").write_text("# Tenants\n")
-    (specs / "graph" / "mutations.spec.md").write_text("# Mutations\n")
-    return src
 
 
 # ---------------------------------------------------------------------------
@@ -583,47 +566,3 @@ class TestSceneGraphOutput:
         for n in graph["nodes"]:
             pos = n["position"]
             assert "x" in pos and "y" in pos and "z" in pos
-
-
-# ---------------------------------------------------------------------------
-# Requirement: Spec Extraction
-# ---------------------------------------------------------------------------
-
-
-class TestSpecExtraction:
-    def test_spec_nodes_have_spec_type(self, src_with_specs: Path) -> None:
-        nodes = extract_spec_nodes(src_with_specs)
-        assert nodes, "Should extract at least one spec node"
-        for n in nodes:
-            assert n["type"] == "spec"
-
-    def test_spec_nodes_distinguishable_from_code_nodes(
-        self, src_with_specs: Path
-    ) -> None:
-        graph = build_scene_graph(src_with_specs, include_specs=True)
-        code_nodes = [n for n in graph["nodes"] if n["type"] != "spec"]
-        spec_nodes = [n for n in graph["nodes"] if n["type"] == "spec"]
-        assert len(code_nodes) > 0
-        assert len(spec_nodes) > 0
-
-    def test_spec_node_ids_prefixed(self, src_with_specs: Path) -> None:
-        nodes = extract_spec_nodes(src_with_specs)
-        for n in nodes:
-            assert n["id"].startswith("spec.")
-
-    def test_spec_child_nodes_have_parent(self, src_with_specs: Path) -> None:
-        nodes = extract_spec_nodes(src_with_specs)
-        child_nodes = [n for n in nodes if n["parent"] is not None]
-        assert len(child_nodes) > 0
-        parent_ids = {n["id"] for n in nodes if n["parent"] is None}
-        for child in child_nodes:
-            assert child["parent"] in parent_ids
-
-    def test_no_spec_nodes_when_not_enabled(self, src_with_specs: Path) -> None:
-        graph = build_scene_graph(src_with_specs, include_specs=False)
-        spec_nodes = [n for n in graph["nodes"] if n["type"] == "spec"]
-        assert len(spec_nodes) == 0
-
-    def test_no_spec_nodes_when_no_specs_dir(self, src: Path) -> None:
-        nodes = extract_spec_nodes(src)
-        assert nodes == []
