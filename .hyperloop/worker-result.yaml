@@ -1,38 +1,55 @@
 ---
 verdict: pass
 ---
-## Godot Application — Task 007 Verification
+## Godot Application — Task 007 Verification (independent review 2026-04-23)
 
-All checks pass. 24/24 GDScript behavioral tests pass.
+### Check script results
+- `extractor-lint.sh`: PASS — ruff clean, 93 Python unit tests pass
+- `godot-compile.sh`: PASS — Godot 4.6.2 compiles cleanly (expected warning for missing scene_graph.json at runtime)
+- `godot-tests.sh`: PASS — 24/24 GDScript behavioral tests pass
 
-### Check results
-- `extractor-lint.sh`: PASS (93 Python tests pass, ruff clean)
-- `godot-compile.sh`: PASS (Godot 4.6.2 compiles cleanly)
-- `godot-tests.sh`: PASS (24/24 tests pass)
+### Commit trailers
+All three implementation commits carry `Spec-Ref` and `Task-Ref` trailers. ✅
 
-### Implementation summary
+### Spec scenario coverage
 
-**godot/scripts/main.gd**
-- `_ready()` → `_load_and_build()`: reads JSON via `FileAccess`, parses with `JSON.new()`
-- `_build()`: creates `Node3D` anchors, `MeshInstance3D` volumes, `Label3D` labels, edge lines + arrowheads
-- Bounded contexts: translucent `BoxMesh` (`TRANSPARENCY_ALPHA`, `albedo_color.a=0.18`, `CULL_DISABLED`)
-- Modules: opaque `BoxMesh` (`albedo_color.a=1.0`), scene-tree parented inside context anchor
-- Edges: `ImmediateMesh` line + `CylinderMesh` cone arrowhead (`top_radius=0`), orange for cross-context
-- Size: `BoxMesh.size` dimensions set directly from `nd["size"]` → proportional to metric
+**JSON Scene Graph Loading**
+- `_ready()` calls `_load_and_build()` — not a stub. Reads JSON via `FileAccess`, parses with `JSON.new()`.
+- `test_scene_graph_loading.gd`: 5 tests — volumes created per node, `MeshInstance3D` children present,
+  edge mesh + arrowhead created, anchor positions match JSON position fields, `Label3D` property assertions.
 
-**godot/scripts/camera_controller.gd**
-- Initial `_theta=0.15` rad (≈8.6°, near top-down, < PI/4)
-- `WHEEL_UP`/`WHEEL_DOWN` zoom with clamping to `[min_distance, max_distance]`
-- Middle-mouse drag orbits via `_phi` / `_theta`; `look_at(_pivot, Vector3.UP)` locks up orientation
-- `set_pivot()` allows main scene to reposition camera to frame the whole graph
+**Containment Rendering**
+- Module anchors are scene-tree children of their context anchor — containment is structural, not cosmetic.
+- Bounded context: `TRANSPARENCY_ALPHA`, `albedo_color.a=0.18`, `CULL_DISABLED`.
+- Module: `albedo_color.a=1.0` (opaque), smaller `BoxMesh`.
+- `test_containment_rendering.gd`: 5 tests — translucency, opacity, parent–child relationship,
+  size ordering, `CULL_DISABLED` on context. All instantiate real `Node3D`, assert properties. ✅
 
-### Per-requirement status
+**Dependency Rendering**
+- Edges rendered as `ImmediateMesh` (line) + `CylinderMesh` arrowhead (`top_radius=0`, cone).
+  "Direction is visually indicated" is satisfied by the cone mesh, not just line colour.
+- `test_dependency_rendering.gd`: 4 tests — line mesh present, cross-context cone is orange
+  (asserts `albedo_color.r > 0.8 and .b < 0.3`), cone with `top_radius==0` exists,
+  cone position within 2 units of target node. ✅
 
-| Requirement | Scenarios | Tests | Status |
-|---|---|---|---|
-| JSON Scene Graph Loading | 1 | 5 | PASS |
-| Containment Rendering | 1 | 5 | PASS |
-| Dependency Rendering | 1 | 4 | PASS |
-| Size Encoding | 1 | 2 | PASS |
-| Camera Controls | 3 | 8 | PASS |
-| Godot 4 | 1 | confirmed | PASS |
+**Size Encoding**
+- `BoxMesh.size` dimensions set directly from `nd["size"]` float — ratio preserved exactly.
+- `test_size_encoding.gd`: 2 tests — larger module has bigger mesh, ratio matches 9/3 = 3.0 within 0.001. ✅
+
+**Camera Controls**
+- Initial `_theta=0.15` rad (≈8.6°, satisfies "top-down", < PI/4).
+- Scroll wheel zooms with clamping. Middle-mouse drag changes `_phi`/`_theta`. `look_at(..., Vector3.UP)` keeps orientation intuitive.
+- `test_camera_controls.gd`: 8 tests — initial top-down theta, positive distance, scroll up decreases
+  distance, scroll down increases distance, horizontal drag changes `_phi`, vertical drag changes `_theta`,
+  `set_pivot()` updates state, zoom clamped at `min_distance`. ✅
+
+**Godot 4**
+- Confirmed Godot 4.6.2 in compile output. All scripts are GDScript. ✅
+
+**Guideline checks**
+- `_ready()` is not a stub — it delegates to `_load_and_build()`.
+- Tests use real `Node3D` instantiation, not only dict `.has()` checks.
+- `Label3D` nodes assert `billboard == BILLBOARD_ENABLED`, `pixel_size > 0.0`, `no_depth_test == true`.
+- Direction indicator is a cone mesh (explicit rendering element), satisfying "visually indicated".
+- Extractor accepts `src_path: Path` — no hardcoded paths.
+- Type hints present on all extractor functions (ruff + manual inspection).
