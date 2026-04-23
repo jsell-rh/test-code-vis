@@ -1,0 +1,154 @@
+---
+verdict: pass
+---
+## Spec Alignment — godot-application.spec.md (task-013, round 4)
+
+Branch: hyperloop/task-013
+Spec: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
+
+This submission re-confirms all requirements pass after the orchestrator
+cleared the previous worker-result.yaml (commit 4419a4b). No code was
+changed; all checks re-ran against the existing implementation.
+
+---
+
+### Requirement: JSON Scene Graph Loading — COVERED
+
+**Implementation:** `godot/scripts/main.gd::_ready()` reads the JSON file
+via `FileAccess.open()` + `get_as_text()`, parses it with `JSON.new()`,
+calls `SceneGraphLoader.load_from_dict()`, then `build_from_graph()`.
+`build_from_graph()` creates a `Node3D` anchor + `MeshInstance3D` (BoxMesh)
++ `Label3D` for every node, calls `_create_edge()` for every edge, and sets
+`anchor.position` from the JSON `position` field.
+
+**Tests:** `godot/tests/test_scene_graph_loading.gd`
+- `test_volumes_created_for_each_node` — PASS
+- `test_mesh_instances_exist_in_anchors` — PASS
+- `test_edge_mesh_instances_created` — PASS
+- `test_anchor_positions_match_json` — PASS
+- `test_labels_are_billboard_and_readable` — PASS
+
+---
+
+### Requirement: Containment Rendering — COVERED
+
+**Implementation:** `_create_volume()` in `main.gd`:
+- bounded_context: TRANSPARENCY_ALPHA, albedo_color.a = 0.18, CULL_DISABLED
+- module: albedo_color.a = 1.0 (opaque), default cull
+- Child anchors parented to parent anchor, producing nested scene-tree structure
+
+**Tests:** `godot/tests/test_containment_rendering.gd`
+- `test_bounded_context_is_translucent` — PASS
+- `test_module_is_opaque` — PASS
+- `test_module_parented_inside_context` — PASS
+- `test_bounded_context_larger_than_module` — PASS
+- `test_bounded_context_cull_disabled` — PASS
+
+---
+
+### Requirement: Dependency Rendering — COVERED
+
+**Implementation:** `_create_edge()` in `main.gd`:
+- ImmediateMesh line (PRIMITIVE_LINES) from source to target position
+- CylinderMesh (top_radius=0) arrowhead at target end, rotated along edge direction
+- Cross-context edges: orange Color(1.0, 0.50, 0.10); internal: grey
+
+**Tests:** `godot/tests/test_dependency_rendering.gd`
+- `test_edge_line_mesh_created` — PASS
+- `test_direction_indicator_cone_created` — PASS
+- `test_direction_cone_near_target` — PASS
+- `test_cross_context_cone_is_orange` — PASS
+
+---
+
+### Requirement: Size Encoding — COVERED
+
+**Implementation:** `sz = float(nd["size"])` applied as `BoxMesh.size =
+Vector3(sz, sz*0.6, sz)` for modules, so mesh width is linearly proportional
+to the size metric.
+
+**Tests:** `godot/tests/test_size_encoding.gd`
+- `test_large_module_has_bigger_mesh` — PASS
+- `test_mesh_sizes_proportional_to_metric` — PASS
+
+---
+
+### Requirement: Camera Controls — COVERED
+
+**Implementation:** `godot/scripts/camera_controller.gd`
+- `_theta = 0.15` rad on init (≈8.6° from top-down)
+- Scroll wheel zoom: `_distance` clamped to [min_distance, max_distance]
+- Middle-mouse drag: changes `_phi` (azimuth) and `_theta` (altitude)
+- `_theta` clamped to [0.01, PI-0.01] so camera never flips (up stays up)
+- `set_pivot()` called from `_frame_camera()` to fit entire scene
+
+**Tests:** `godot/tests/test_camera_controls.gd`
+- `test_initial_theta_is_near_top_down` — PASS
+- `test_initial_distance_is_positive` — PASS
+- `test_scroll_up_decreases_distance` — PASS
+- `test_scroll_down_increases_distance` — PASS
+- `test_orbit_horizontal_drag_changes_phi` — PASS
+- `test_orbit_vertical_drag_changes_theta` — PASS
+- `test_set_pivot_updates_state` — PASS
+- `test_zoom_clamped_at_minimum` — PASS
+
+---
+
+### Requirement: Godot 4.6 — COVERED
+
+**Implementation:**
+- `godot/project.godot` declares `config/features=PackedStringArray("4.6")`
+- All scripts are `.gd` GDScript files; no `.cs` files exist
+- `main.gd` uses `FileAccess.open()` + `get_as_text()` (Godot 4.x API)
+
+**Tests:** `godot/tests/test_engine_version.gd` and `godot/tests/test_godot_version.gd`
+- `test_project_godot_declares_version_4_6` — PASS
+- `test_project_features_include_4_6` — PASS
+- `test_main_script_is_gdscript` — PASS
+- `test_project_declares_godot_46` — PASS
+- `test_main_uses_godot4_fileaccess_api` — PASS
+
+---
+
+### Not In Scope — CONFIRMED ABSENT
+
+The following prohibited features are absent (confirmed by check-not-in-scope.sh):
+- Moldable views (question_panel.gd, view_spec.gd, view_spec_renderer.gd) — ABSENT
+- Spec extraction (extract_spec_nodes, --specs flag) — ABSENT
+- Conformance/evaluation/simulation modes — ABSENT
+- Data flow visualization — ABSENT
+- First-person navigation (WASD/fly-cam) — ABSENT
+
+---
+
+### All Automated Checks
+
+| Check                              | Result |
+|------------------------------------|--------|
+| check-not-in-scope                 | OK     |
+| check-kartograph-integration-test  | OK     |
+| extractor-lint (90 tests)          | PASS   |
+| godot-compile (Godot 4.6.2)        | PASS   |
+| godot-tests (GDScript behavioral)  | PASS   |
+| godot-label3d                      | PASS   |
+| godot-fileaccess-tested            | OK     |
+
+---
+
+### Summary
+
+| Requirement               | Status  |
+|---------------------------|---------|
+| JSON Scene Graph Loading  | COVERED |
+| Containment Rendering     | COVERED |
+| Dependency Rendering      | COVERED |
+| Size Encoding             | COVERED |
+| Camera Controls           | COVERED |
+| Godot 4.6                 | COVERED |
+| Not In Scope              | COVERED |
+
+All SHALL/MUST requirements are implemented and tested. All automated
+checks pass. No prohibited features present.
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
