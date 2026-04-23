@@ -1,0 +1,96 @@
+---
+verdict: pass
+---
+All SHALL/MUST requirements from the Godot Application spec are implemented and
+have corresponding behavioral GDScript tests in godot/tests/.
+
+## Requirement: JSON Scene Graph Loading — COVERED
+
+Implementation: `godot/scripts/main.gd::_ready()` opens the file via
+`FileAccess.open()` + `file.get_as_text()` (Godot 4.6 API), parses JSON,
+delegates to `SceneGraphLoader.load_from_dict()`, then calls `build_from_graph()`
+which loops over nodes and edges to create volumes and lines.
+
+Tests (`godot/tests/test_scene_graph_loading.gd`):
+- `test_volumes_created_for_each_node` — anchor dict entries for every node id
+- `test_mesh_instances_exist_in_anchors` — MeshInstance3D child inside each anchor
+- `test_edge_mesh_instances_created` — at least 2 MeshInstance3D children on main
+  node per edge (line + arrowhead)
+- `test_anchor_positions_match_json` — local position on anchors equals JSON position
+- `test_labels_are_billboard_and_readable` — Label3D uses BILLBOARD_ENABLED,
+  pixel_size > 0, no_depth_test = true
+
+## Requirement: Containment Rendering — COVERED
+
+Implementation: `_create_volume()` in `main.gd` renders bounded_context nodes as
+translucent slabs (`TRANSPARENCY_ALPHA`, albedo alpha = 0.18, `CULL_DISABLED`) and
+module nodes as opaque boxes (albedo alpha = 1.0). Child modules are attached as
+scene-tree children of their parent's anchor node.
+
+Tests (`godot/tests/test_containment_rendering.gd`):
+- `test_bounded_context_is_translucent` — TRANSPARENCY_ALPHA + alpha < 1.0
+- `test_module_is_opaque` — albedo alpha >= 1.0
+- `test_module_parented_inside_context` — mod anchor's parent == context anchor
+- `test_bounded_context_larger_than_module` — BoxMesh.size.x for context > module
+- `test_bounded_context_cull_disabled` — CULL_DISABLED for visual distinctness
+
+## Requirement: Dependency Rendering — COVERED
+
+Implementation: `_create_edge()` in `main.gd` creates an ImmediateMesh
+(PRIMITIVE_LINES) for the line and a CylinderMesh (top_radius=0, pointed cone)
+placed at the target end and oriented along the edge direction. Cross-context edges
+use orange color (1.0, 0.50, 0.10); internal edges use grey.
+
+Tests (`godot/tests/test_dependency_rendering.gd`):
+- `test_edge_line_mesh_created` — ImmediateMesh child on main node exists
+- `test_direction_indicator_cone_created` — CylinderMesh with top_radius==0 exists
+- `test_direction_cone_near_target` — cone position within 2 units of target
+- `test_cross_context_cone_is_orange` — material albedo R > 0.8, B < 0.3
+
+## Requirement: Size Encoding — COVERED
+
+Implementation: `sz = float(nd["size"])` drives `box.size = Vector3(sz, sz*0.6, sz)`
+for modules and `Vector3(sz, sz*0.2, sz)` for contexts. The "size" field in the
+JSON already encodes the complexity metric; the mesh width (x) ratio equals the
+input size ratio exactly.
+
+Tests (`godot/tests/test_size_encoding.gd`):
+- `test_large_module_has_bigger_mesh` — large_mod BoxMesh.size.x > small_mod
+- `test_mesh_sizes_proportional_to_metric` — actual ratio (9/3 = 3.0) within 0.001
+
+## Requirement: Camera Controls — COVERED
+
+Implementation: `godot/scripts/camera_controller.gd` extends Camera3D. Initial
+state: `_theta = 0.15` rad (≈8.6°, near top-down), `_distance = 40.0`. Scroll
+wheel adjusts `_distance` (clamped to [min_distance, max_distance]). Middle-mouse
+drag adjusts `_phi` (azimuth) and `_theta` (polar), clamped to prevent pole flip.
+`look_at(_pivot, Vector3.UP)` ensures up stays up. Labels use BILLBOARD_ENABLED
+so they remain readable at any zoom.
+
+Tests (`godot/tests/test_camera_controls.gd`):
+- `test_initial_theta_is_near_top_down` — _theta < PI/4
+- `test_initial_distance_is_positive` — _distance > 0
+- `test_scroll_up_decreases_distance` — zoom in scenario
+- `test_scroll_down_increases_distance` — zoom out
+- `test_orbit_horizontal_drag_changes_phi` — orbit phi change
+- `test_orbit_vertical_drag_changes_theta` — orbit theta change
+- `test_set_pivot_updates_state` — set_pivot updates pivot and distance
+- `test_zoom_clamped_at_minimum` — never below min_distance
+Labels-readable clause covered by `test_labels_are_billboard_and_readable` in
+test_scene_graph_loading.gd.
+
+## Requirement: Godot 4.6 — COVERED
+
+Implementation: `godot/project.godot` declares
+`config/features=PackedStringArray("4.6")`. All scripts are .gd files. `main.gd`
+uses `FileAccess.open()` + `file.get_as_text()` (Godot 4.x API, not deprecated
+`File.new()` / `read_as_text()`).
+
+Tests (`godot/tests/test_engine_version.gd` and `test_godot_version.gd`):
+- `test_project_godot_declares_version_4_6` — content contains "4.6"
+- `test_project_features_include_4_6` — content contains `"4.6"` in features array
+- `test_main_script_is_gdscript` — main.tscn present, no .cs in project.godot
+- `test_project_declares_godot_46` — (duplicate coverage, second suite)
+- `test_main_script_is_gdscript` — main.gd readable .gd file
+- `test_main_uses_godot4_fileaccess_api` — FileAccess.open() + get_as_text()
+  present; File.new() and read_as_text() absent
