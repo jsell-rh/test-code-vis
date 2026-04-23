@@ -2,100 +2,129 @@
 verdict: pass
 ---
 
-## Scope Check Output
+## Re-review — PR Feedback Loop (triggered by `@coderabbit recheck`)
 
-`check-not-in-scope.sh` was run from the `main` branch (the file itself does not exist
-on `hyperloop/task-011` — it appears the branch predates when that script was committed
-to main, but the script was applied against the current working tree):
+This is a fresh review of the branch at its current state after commit `49d84df`
+("fix(task-011): remove all prohibited out-of-scope artifacts").
 
-```
-OK: No prohibited (not-in-scope) features detected.
-```
+---
 
-The script is absent from this branch only because the branch was created before the
-script was committed to main. Running it directly against the working tree confirms all
-prohibited artifacts have been removed.
+## Scope Check
 
-## ## Scope Check Output (implementer-reported)
+`check-not-in-scope.sh` does not exist on this branch (it was committed to main after
+this branch was created). Manual verification confirms all prohibited artifacts from the
+prior FAIL verdict have been removed:
 
-The implementer's `worker-result.yaml` also contains:
+| Prohibited artifact | Present? |
+|---|---|
+| `godot/scripts/view_spec.gd` | NO — removed |
+| `godot/scripts/view_spec_renderer.gd` | NO — removed |
+| `godot/tests/test_view_spec.gd` | NO — removed |
+| `godot/tests/test_view_spec_renderer.gd` | NO — removed |
+| spec-extraction code in `extractor/extractor.py` | NO — not present |
+| spec-extraction code in `extractor/__main__.py` | NO — not present |
+| spec-extraction tests in `extractor/tests/` | NO — not present |
 
-```
-OK: No prohibited (not-in-scope) features detected.
-```
+Grep for `view_spec`, `moldable`, `ViewSpec`, `SpecExtract` across all GDScript and
+Python files returned 0 matches.
 
-## Check Results
+---
+
+## Check Script Results
+
+All five check scripts on this branch were executed and exited 0:
 
 | Script | Result |
 |---|---|
-| `check-not-in-scope.sh` (from main) | EXIT 0 — OK: No prohibited features |
-| `check-kartograph-integration-test.sh` (from main) | EXIT 0 — OK |
 | `extractor-lint.sh` | EXIT 0 — ruff clean, 90 pytest tests pass |
-| `godot-compile.sh` | EXIT 0 — Godot 4.6.2 compiles |
+| `godot-compile.sh` | EXIT 0 — Godot Engine v4.6.2.stable compiles |
 | `godot-fileaccess-tested.sh` | EXIT 0 — FileAccess.open() exercised in 2 test files |
 | `godot-label3d.sh` | EXIT 0 — Label3D billboard + pixel_size set and tested |
-| `godot-tests.sh` | EXIT 0 — all GDScript behavioral tests pass |
+| `godot-tests.sh` | EXIT 0 — 56 GDScript tests pass, 0 fail |
 
-## Commit Trailers
+---
 
-Both required trailers are present on the implementation commit (`49d84df`):
+## Spec Requirement Coverage
 
-```
-Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
-Task-Ref: task-011
-```
+### Requirement: JSON Scene Graph Loading — COVERED
 
-## Spec Coverage
+- **Implementation**: `godot/scripts/main.gd` — `_ready()` reads JSON via
+  `FileAccess.open()` + `get_as_text()` + `JSON.parse()`, then calls
+  `build_from_graph()` which creates `Node3D` anchors and `MeshInstance3D` volumes for
+  each node and `ImmediateMesh`/`CylinderMesh` pairs for each edge.  Positions are set
+  from the JSON `position` dictionary.
+- **Tests** (`test_scene_graph_loading.gd`, 5 tests, all PASS):
+  - `test_volumes_created_for_each_node` — anchors keyed by node id
+  - `test_mesh_instances_exist_in_anchors` — MeshInstance3D child present in each anchor
+  - `test_edge_mesh_instances_created` — ≥2 MeshInstance3D children on main node per edge
+  - `test_anchor_positions_match_json` — `anchor.position` matches JSON `position` field
+  - `test_labels_are_billboard_and_readable` — BILLBOARD_ENABLED, pixel_size > 0,
+    no_depth_test
 
-### JSON Scene Graph Loading — COVERED
-`test_scene_graph_loading.gd` instantiates `MainScript`, calls `build_from_graph()` with
-fixture data, and asserts: anchors exist for every node, each anchor holds a
-`MeshInstance3D`, ≥2 edge meshes are produced (line + arrowhead), and anchor `.position`
-matches JSON values (real `Node3D` property assertions, not dict `.has()` checks).
+### Requirement: Containment Rendering — COVERED
 
-### Containment Rendering — COVERED
-`test_containment_rendering.gd` asserts: bounded_context material uses
-`TRANSPARENCY_ALPHA` and `albedo_color.a < 1.0`; module material has `albedo_color.a
->= 1.0`; module anchor is a direct child of context anchor (scene-tree parenting); bounded_context `BoxMesh.size.x > module BoxMesh.size.x`; bounded_context uses
-`CULL_DISABLED`.
+- **Implementation**: `_create_volume()` in `main.gd` — bounded_context nodes get
+  `TRANSPARENCY_ALPHA`, `albedo_color.a = 0.18`, `CULL_DISABLED`, and a larger
+  `BoxMesh`; module nodes are parented to the bounded_context anchor with full opacity.
+- **Tests** (`test_containment_rendering.gd`, 5 tests, all PASS):
+  - `test_bounded_context_is_translucent` — transparency != DISABLED, a < 1
+  - `test_module_is_opaque` — albedo_color.a >= 1.0
+  - `test_module_parented_inside_context` — mod_anchor.get_parent() == ctx_anchor
+  - `test_bounded_context_larger_than_module` — ctx BoxMesh.size.x > mod BoxMesh.size.x
+  - `test_bounded_context_cull_disabled` — cull_mode == CULL_DISABLED
 
-### Dependency Rendering — COVERED
-`test_dependency_rendering.gd` asserts: an `ImmediateMesh` MeshInstance3D exists for the
-line; a `CylinderMesh` with `top_radius == 0.0` (a cone — an explicit rendering element,
-not just a colour difference) exists for the direction indicator; the cone is within 2
-units of the target position; the cross-context cone's material has orange colour
-(`r > 0.8`, `b < 0.3`). This satisfies the "direction is visually indicated" requirement
-per the guidelines (explicit rendering element, not a plain line/colour alone).
+### Requirement: Dependency Rendering — COVERED
 
-### Size Encoding — COVERED
-`test_size_encoding.gd` asserts: large module's `BoxMesh.size.x > small module's`; ratio
-of sizes matches ratio of input metrics within floating-point tolerance.
+- **Implementation**: `_create_edge()` in `main.gd` — creates an `ImmediateMesh`
+  (PRIMITIVE_LINES) for the line and a `CylinderMesh` with `top_radius=0.0` (cone)
+  at the target end as the direction indicator.
+- **Tests** (`test_dependency_rendering.gd`, 4 tests, all PASS):
+  - `test_edge_line_mesh_created` — ImmediateMesh child present on main node
+  - `test_direction_indicator_cone_created` — CylinderMesh with top_radius==0.0 exists
+  - `test_direction_cone_near_target` — cone position within 2 units of to_pos
+  - `test_cross_context_cone_is_orange` — R > 0.8, B < 0.3 for cross_context edges
 
-### Camera Controls — COVERED
-`test_camera_controls.gd` asserts: initial `_theta < PI/4` (top-down view); initial
-`_distance > 0`; scroll-up decreases `_distance`, scroll-down increases it; zoom clamped
-at `min_distance`; horizontal middle-mouse drag changes `_phi`; vertical drag changes
-`_theta`; `set_pivot()` updates `_pivot` and `_distance`. Label readability is covered in
-`test_scene_graph_loading.gd` (`billboard == BILLBOARD_ENABLED`, `pixel_size > 0.0`,
-`no_depth_test == true`).
+### Requirement: Size Encoding — COVERED
 
-### Godot 4.6 / Engine Version — COVERED
-`test_engine_version.gd` opens `project.godot` via `FileAccess.open()` + `get_as_text()`
-(exercising the same API path as `main.gd._ready()`), and asserts: content contains
-`"4.6"` in `config/features`; no `"Mono"` or `"C#"` is present; `get_as_text()` returns
-a non-empty string starting with the standard Godot header.
+- **Implementation**: `_create_volume()` sets `box.size = Vector3(sz, sz * 0.6, sz)`
+  where `sz = float(nd["size"])`, so mesh width scales linearly with the size metric.
+- **Tests** (`test_size_encoding.gd`, 2 tests, all PASS):
+  - `test_large_module_has_bigger_mesh` — large_mesh.size.x > small_mesh.size.x
+  - `test_mesh_sizes_proportional_to_metric` — ratio matches 9.0/3.0 = 3.0 within 0.001
 
-### `_ready()` is not a stub — CONFIRMED
-`main.gd._ready()` calls `FileAccess.open()`, `get_as_text()`, `JSON.parse()`, and
-`build_from_graph()`. Not a pass stub.
+### Requirement: Camera Controls — COVERED
 
-### FileAccess.open() tested — CONFIRMED
-`godot-fileaccess-tested.sh` found FileAccess.open() in 1 production script and confirmed
-it is exercised in 2 test files.
+- **Implementation**: `godot/scripts/camera_controller.gd` — spherical-coordinate orbit
+  camera. Initial `_theta = 0.15` rad (near top-down). Scroll wheel changes `_distance`
+  clamped to `[min_distance, max_distance]`. Middle-mouse drag changes `_phi` and
+  `_theta`. `set_pivot()` repositions the focal point.
+- **Tests** (`test_camera_controls.gd`, 7 tests, all PASS):
+  - `test_initial_theta_is_near_top_down` — _theta < PI/4
+  - `test_initial_distance_is_positive` — _distance > 0
+  - `test_scroll_up_decreases_distance` — WHEEL_UP reduces _distance
+  - `test_scroll_down_increases_distance` — WHEEL_DOWN increases _distance
+  - `test_orbit_horizontal_drag_changes_phi` — middle-mouse horizontal motion changes _phi
+  - `test_orbit_vertical_drag_changes_theta` — middle-mouse vertical motion changes _theta
+  - `test_set_pivot_updates_state` — _pivot and _distance updated
+  - `test_zoom_clamped_at_minimum` — 200× scroll-up never goes below min_distance
+
+### Requirement: Godot 4.6 — COVERED
+
+- **Implementation**: `project.godot` declares
+  `config/features=PackedStringArray("4.6")`. All scripts are `.gd` GDScript.
+  `main.gd._ready()` uses `FileAccess.open()` + `get_as_text()` (4.6 API, not the
+  deprecated `read_as_text()`).
+- **Tests** (`test_engine_version.gd`, 4 tests, all PASS):
+  - `test_project_godot_declares_46_feature` — content contains "4.6"
+  - `test_project_godot_config_features_line` — config/features line with `"4.6"` present
+  - `test_project_does_not_declare_csharp` — no "Mono" or "C#"
+  - `test_file_access_get_as_text_returns_non_empty_string` — non-empty, correct header
+
+---
 
 ## Verdict
 
-**PASS.** All scope checks pass, all project check scripts exit 0, all spec scenarios are
-covered by GDScript tests that make real runtime assertions, commit trailers are present,
-and no prohibited features remain. The implementation is correct and complete with respect
-to the Godot Application spec.
+**PASS.** All prohibited out-of-scope artifacts have been removed. All five check
+scripts exit 0. All six SHALL requirements are implemented and covered by GDScript
+behavioral tests (56 tests, 0 failures). The implementation is correct and complete
+with respect to the Godot Application spec.
