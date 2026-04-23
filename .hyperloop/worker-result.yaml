@@ -1,0 +1,74 @@
+---
+verdict: pass
+---
+## Review Summary for task-003
+
+### What this task implements
+Adds `godot/scripts/scene_graph_loader.gd` — a static GDScript class that
+parses the JSON scene graph produced by the Python extractor into structured
+Arrays (nodes, edges, metadata). Adds a headless test runner
+(`godot/tests/run_tests.gd`) and 24 behavioral tests
+(`godot/tests/test_scene_graph_loader.gd`).
+
+---
+
+### Checks Run
+
+| Check | Result |
+|---|---|
+| `extractor-lint.sh` (ruff check + ruff format) | PASS |
+| `pytest` (93 Python tests) | PASS |
+| `godot-compile.sh` (Godot headless `--quit`) | PASS |
+| `godot-tests.sh` (24 GDScript behavioral tests) | PASS |
+
+---
+
+### Commit Trailers
+
+Both commits carry the required trailers:
+
+```
+Spec-Ref: specs/extraction/code-extraction.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
+Task-Ref: task-003
+```
+
+---
+
+### Spec Scenario Coverage
+
+| Scenario | Status | Evidence |
+|---|---|---|
+| Module Discovery — Bounded contexts | COVERED | `test_node_has_type_field`, `test_node_top_level_has_null_parent` |
+| Module Discovery — Nested modules | COVERED | `test_node_module_parent_references_bounded_context` |
+| Dependency Extraction — Cross-context | COVERED | `test_edge_direction_preserved_source_to_target`, `test_cross_context_edge_type_is_cross_context` |
+| Dependency Extraction — Internal | COVERED | `test_internal_edge_type_is_internal`, `test_edge_types_are_distinguishable` |
+| Complexity Metrics — Module size | COVERED | `test_node_has_metrics_field` (asserts `loc` key and value) |
+| JSON Scene Graph Output — Output format | COVERED | Multiple tests assert id, name, type, parent, metrics, position, size on nodes; source, target, type on edges; metadata passthrough |
+| Spec Extraction — Kartograph specs | COVERED | `test_spec_node_type_is_preserved`, `test_spec_nodes_have_id_prefixed_with_spec` |
+
+---
+
+### Python Extractor (pre-existing, unchanged by this task)
+
+- Type hints: **present on all functions** in `extractor/extractor.py` and `extractor/schema.py`.
+- Hardcoded paths: **none** — `src_path` is accepted as a positional CLI argument.
+- Output JSON schema: **consistent** between `extractor/schema.py` (TypedDicts) and
+  `SceneGraphLoader` (same field names: id, name, type, parent, position, size, metrics
+  for nodes; source, target, type for edges; source_path, timestamp in metadata).
+
+---
+
+### Notes (not blocking)
+
+The following guidelines apply to full Godot visualization tasks; task-003 is
+scoped to the data-loading layer only, so these remain open for a future task:
+
+- Camera pan/zoom/orbit controls: `main.gd` is still an empty stub.
+- Label rendering: not yet implemented.
+- Containment visual representation (child volumes inside parent): not yet implemented.
+- Direction indicators on edges (arrowhead/cone): not yet implemented.
+
+These are not counted against task-003 because the referenced spec does not
+mandate them in this slice, and the task title explicitly scopes work to
+SceneGraphLoader + behavioral tests. They MUST be implemented before any task
+that covers visualization rendering.
