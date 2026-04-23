@@ -1,0 +1,189 @@
+---
+verdict: pass
+---
+## Spec Alignment Review — specs/extraction/code-extraction.spec.md
+
+All SHALL/MUST requirements are implemented and tested. Both SHOULD requirements
+are also implemented and tested. Verdict: PASS.
+
+---
+
+### Requirement: Module Discovery (MUST)
+
+**COVERED**
+
+#### Scenario: Discovering kartograph's bounded contexts
+
+- **Code**: `discover_bounded_contexts()` in `extractor/extractor.py`. Iterates
+  the source directory, filters to Python packages excluded from `_NON_CONTEXT_DIRS`
+  and not underscore-prefixed. Each is represented as a `Node` with `id` (dotted
+  module path, encodes the "path" concept from the spec), `name`, `type`, `position`,
+  `size`, `parent`, and `metrics`.
+
+  Minor note: the spec says "a node with a name, path, and type". The schema uses
+  `id` (e.g. `"iam"`) in place of an explicit `path` field. This is a naming
+  difference, not a gap — the `id` unambiguously encodes the module path and the
+  Godot consumer uses it as such. Not a failure.
+
+- **Tests** (`extractor/tests/test_extractor.py`):
+  - `TestModuleDiscovery::test_discovers_bounded_contexts` — asserts `iam`, `graph`,
+    `shared_kernel` are discovered from a synthetic kartograph-like fixture.
+  - `TestModuleDiscovery::test_bounded_context_node_has_required_keys` — asserts
+    presence of `id`, `name`, `type`, `position`, `size`, `parent`.
+  - `TestModuleDiscovery::test_bounded_context_type` — type == `"bounded_context"`.
+  - `TestModuleDiscovery::test_bounded_context_parent_is_none` — top-level nodes
+    have `parent = None`.
+  - `TestModuleDiscovery::test_excludes_tests_directory` — exclusion list enforced.
+
+#### Scenario: Discovering nested modules
+
+- **Code**: `discover_submodules()` in `extractor/extractor.py`. For each bounded
+  context, iterates its sub-directories for non-underscore Python packages.
+  Each gets `id = f"{bc_name}.{candidate.name}"` and `parent = bc_name`, encoding
+  the containment relationship.
+
+- **Tests**:
+  - `TestModuleDiscovery::test_discovers_submodules_in_iam` — finds `iam.domain`
+    and `iam.application`.
+  - `TestModuleDiscovery::test_submodule_parent_references_bc` — parent == `"iam"`.
+  - `TestModuleDiscovery::test_submodule_type_is_module` — type == `"module"`.
+  - `TestModuleDiscovery::test_submodule_id_is_dotted` — id contains `.`.
+  - `TestSceneGraphOutput::test_nodes_include_internal_modules` — integration check
+    that the full pipeline includes submodules.
+
+---
+
+### Requirement: Dependency Extraction (MUST)
+
+**COVERED**
+
+#### Scenario: Cross-context dependency
+
+- **Code**: `build_dependency_edges()` in `extractor/extractor.py`. When source and
+  target belong to different bounded contexts, a `cross_context` edge is emitted at
+  the BC level (e.g. `iam → shared_kernel`). Direction is encoded by `source` and
+  `target` fields.
+
+- **Tests**:
+  - `TestDependencyExtraction::test_cross_context_edge_created` — asserts
+    `("iam", "shared_kernel")` pair is in the edge set.
+  - `TestDependencyExtraction::test_cross_context_edge_type` — asserts
+    `type == "cross_context"` for that edge.
+  - `TestDependencyExtraction::test_edges_have_required_keys` — every edge has
+    `source`, `target`, `type`.
+
+#### Scenario: Internal dependency
+
+- **Code**: Same `build_dependency_edges()`. When source and target share the same
+  bounded context and the source is a module-level node, an `internal` edge is
+  emitted (e.g. `iam.application → iam.domain`).
+
+- **Tests**:
+  - `TestDependencyExtraction::test_internal_edge_created` — asserts
+    `("iam.application", "iam.domain")` pair is in the edge set.
+  - `TestDependencyExtraction::test_internal_edge_type` — asserts
+    `type == "internal"` for that edge.
+  - `TestEdgeSchema::test_internal_edge_*` in `test_schema.py` — validates schema
+    fields on an internal edge.
+
+---
+
+### Requirement: Complexity Metrics (SHOULD)
+
+**COVERED**
+
+#### Scenario: Module size
+
+- **Code**: `compute_loc()` in `extractor/extractor.py` recursively counts Python
+  source lines under a directory. The result is stored as `metrics: {"loc": <int>}`
+  on every code-derived node.
+
+- **Tests**:
+  - `TestComplexityMetrics::test_compute_loc_counts_python_lines` — counts 3 lines
+    from two files.
+  - `TestComplexityMetrics::test_compute_loc_recursive` — counts through
+    subdirectories.
+  - `TestComplexityMetrics::test_compute_loc_empty_dir` — returns 0 for empty.
+  - `TestModuleDiscovery::test_bounded_context_has_metrics_loc` — BC nodes have
+    `metrics.loc` as an int.
+  - `TestModuleDiscovery::test_submodule_has_metrics_loc` — module nodes have
+    `metrics.loc` as an int.
+
+---
+
+### Requirement: JSON Scene Graph Output (MUST)
+
+**COVERED**
+
+#### Scenario: Output format
+
+- **Code**: `build_scene_graph()` in `extractor/extractor.py` returns a `SceneGraph`
+  TypedDict (defined in `extractor/schema.py`) with:
+  - `nodes`: list of `Node` (id, name, type, parent, position, size, metrics)
+  - `edges`: list of `Edge` (source, target, type)
+  - `metadata`: `Metadata` (source_path, timestamp)
+  The output is directly JSON-serialisable with `json.dumps` — no transformation
+  needed for Godot consumption.
+
+- **Tests** (`test_extractor.py` — `TestSceneGraphOutput`):
+  - `test_build_scene_graph_has_required_keys` — top-level keys present.
+  - `test_output_is_json_serialisable` — round-trip through `json.dumps/loads`.
+  - `test_every_node_has_position` — all nodes carry x/y/z.
+  - `test_node_ids_are_unique` — no duplicate IDs.
+  - `test_nodes_include_bounded_contexts` / `test_nodes_include_internal_modules`
+    — content validation.
+  - `test_edges_non_empty` — at least one edge produced.
+  - `test_metadata_has_source_path` / `test_metadata_has_timestamp` — metadata
+    fields present.
+- **Tests** (`test_schema.py`): `TestSchemaStructure`, `TestNodeSchema`,
+  `TestEdgeSchema`, `TestMetadataSchema`, `TestPreComputedLayout` — exhaustively
+  validate every field of the schema TypedDicts.
+
+---
+
+### Requirement: Spec Extraction (SHOULD)
+
+**COVERED**
+
+Note: `specs/prototype/prototype-scope.spec.md` lists spec extraction as out of
+prototype scope, but since it is a SHOULD in this spec and IS implemented and
+tested, it is recorded as covered (not a failure either way).
+
+#### Scenario: Kartograph specs
+
+- **Code**: `extract_spec_nodes()` in `extractor/extractor.py`. Reads the target
+  codebase's `specs/` directory, parses an optional `index.spec.md` for bounded
+  context links, and returns nodes with `type="spec"`. Top-level spec nodes have
+  `parent=None`; per-file child nodes have `parent=f"spec.{dirname}"`. IDs are
+  prefixed with `"spec."`. `build_scene_graph(include_specs=True)` triggers this
+  path.
+
+- **Tests** (`TestSpecExtraction` in `test_extractor.py`):
+  - `test_spec_nodes_have_spec_type` — all returned nodes have `type == "spec"`.
+  - `test_spec_nodes_distinguishable_from_code_nodes` — integration: both code
+    and spec nodes coexist and are distinguishable by `type`.
+  - `test_spec_node_ids_prefixed` — all IDs start with `"spec."`.
+  - `test_spec_child_nodes_have_parent` — child nodes reference valid parent IDs.
+  - `test_no_spec_nodes_when_not_enabled` — `include_specs=False` produces zero
+    spec nodes.
+  - `test_no_spec_nodes_when_no_specs_dir` — graceful handling of missing
+    `specs/` directory.
+
+---
+
+## Summary Table
+
+| Requirement              | Level | Status  |
+|--------------------------|-------|---------|
+| Module Discovery         | MUST  | COVERED |
+| — Bounded contexts       | MUST  | COVERED |
+| — Nested modules         | MUST  | COVERED |
+| Dependency Extraction    | MUST  | COVERED |
+| — Cross-context edge     | MUST  | COVERED |
+| — Internal edge          | MUST  | COVERED |
+| Complexity Metrics       | SHOULD| COVERED |
+| — Module size (LOC)      | SHOULD| COVERED |
+| JSON Scene Graph Output  | MUST  | COVERED |
+| — Output format          | MUST  | COVERED |
+| Spec Extraction          | SHOULD| COVERED |
+| — Kartograph specs       | SHOULD| COVERED |
