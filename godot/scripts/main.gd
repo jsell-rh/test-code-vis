@@ -247,5 +247,5 @@ func _frame_camera() -> void:
 	var span: float = maxf((max_pos - min_pos).length(), 10.0)
 	var distance: float = span * 1.5
 
-	if _camera.has_method("set_pivot"):
-		_camera.call("set_pivot", centre, distance)
+	if _camera != null and _camera.has_method("set_pivot"):
+		_camera.set_pivot(centre, distance)

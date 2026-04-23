@@ -18,7 +18,7 @@ class Position(TypedDict):
     z: float
 
 
-NodeType = Literal["bounded_context", "module", "spec"]
+NodeType = Literal["bounded_context", "module"]
 EdgeType = Literal["cross_context", "internal"]
 
 
@@ -42,7 +42,7 @@ class Node(TypedDict):
     """Human-readable display name, e.g. 'IAM' or 'Domain'."""
 
     type: NodeType
-    """Level of the node: 'bounded_context', 'module', or 'spec'."""
+    """Level of the node: 'bounded_context' or 'module'."""
 
     position: Position
     """Pre-computed 3D position. Coordinates are relative to the parent node."""
