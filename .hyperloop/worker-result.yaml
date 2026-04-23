@@ -110,3 +110,6 @@ pattern used by `test_llm_view_generator.gd`.
 
 All three SHALL requirements are implemented in code and covered by GDScript behavioral tests
 that assert real scene-tree property values on `Node3D` fixtures. Verdict: **PASS**.
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
