@@ -38,6 +38,9 @@ func _init() -> void:
 	# --- task-020: Moldable Views — question input UI panel ---
 	_run_suite(preload("res://tests/test_question_panel.gd").new())
 
+	# --- task-021: Moldable views — LLM question + graph context → view spec ---
+	_run_suite(preload("res://tests/test_llm_view_generator.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
