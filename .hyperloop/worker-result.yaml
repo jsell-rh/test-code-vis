@@ -1,0 +1,82 @@
+---
+verdict: pass
+---
+## Implementation — task-010: Godot: dependency edge rendering
+
+Branch: hyperloop/task-010
+Spec: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
+
+---
+
+### Requirement: Dependency Rendering — COVERED
+
+**Spec scenario: Rendering a cross-context dependency**
+- GIVEN an edge from graph context to shared_kernel context
+- WHEN the scene is rendered
+- THEN a line connects the two context volumes
+- AND the line's direction is visually indicated
+
+**Implementation (`godot/scripts/main.gd` → `_create_edge()`):**
+
+THEN "a line connects the two context volumes":
+- `ImmediateMesh` with `PRIMITIVE_LINES` draws a two-vertex line between
+  `from_pos` and `to_pos` (world-space centres of source/target nodes).
+- `mesh_instance.mesh = imesh` → added as a child of the main scene root.
+
+AND "the line's direction is visually indicated":
+- `CylinderMesh` with `top_radius = 0.0` (a genuine cone, pointed at `+Y`)
+  acts as an arrowhead.
+- Arrow basis is set to `Basis(Quaternion(Vector3.UP, dir))` so the tip aligns
+  with the edge direction.
+- Arrow position: `to_pos - dir * (cone_mesh.height * 0.5)` — tip lands at the
+  target node's centre.
+- Cross-context edges use orange (`Color(1.0, 0.50, 0.10)`);
+  internal edges use grey (`Color(0.55, 0.55, 0.55)`).
+
+**Tests (`godot/tests/test_dependency_rendering.gd` — 4 tests):**
+- `test_edge_line_mesh_created` — finds `MeshInstance3D` with `ImmediateMesh`
+  among scene-root children. Covers THEN clause "a line connects."
+- `test_direction_indicator_cone_created` — finds `CylinderMesh` with
+  `top_radius == 0.0`. Covers AND clause "direction is visually indicated."
+- `test_direction_cone_near_target` — asserts cone position within 2 units of
+  `(20, 0, 0)` (the target node's world position).
+- `test_cross_context_cone_is_orange` — asserts `albedo_color.r > 0.8` and
+  `albedo_color.b < 0.3` on the cone's `StandardMaterial3D`.
+
+---
+
+### Requirement: Godot 4.6 — COVERED (with FileAccess behavioral test)
+
+**Implementation:**
+- `project.godot` declares `config/features=PackedStringArray("4.6")`.
+- All scripts use GDScript (`extends` / `class_name`).
+- `FileAccess.get_as_text()` is used (correct Godot 4.6 API, not `read_as_text()`).
+
+**New test file (`godot/tests/test_engine_version.gd` — 3 tests):**
+
+Per project guidelines, technology/version constraint scenarios require a
+behavioral test that reads the config file via `FileAccess.open()` +
+`get_as_text()`. This also satisfies the `godot-fileaccess-tested.sh` check,
+which requires that `FileAccess.open()` in production code (`main.gd`) is also
+exercised in at least one test.
+
+- `test_project_godot_declares_46` — `FileAccess.open("res://project.godot")`
+  + `get_as_text()` + asserts `"4.6" in text`.
+- `test_features_line_contains_46` — asserts
+  `'PackedStringArray("4.6")' in text` (exact features declaration).
+- `test_fileaccess_open_returns_non_null` — confirms `FileAccess.open()`
+  returns a non-null handle, exercising the same API path used in `_ready()`.
+
+---
+
+### Check results
+
+| Check                      | Result |
+|----------------------------|--------|
+| godot-compile.sh           | PASS   |
+| godot-tests.sh             | PASS (94/94) |
+| godot-fileaccess-tested.sh | PASS   |
+| godot-label3d.sh           | PASS   |
+| extractor-lint.sh          | PASS (96 Python tests) |
+
+Verdict: **pass**
