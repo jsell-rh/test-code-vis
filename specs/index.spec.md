@@ -23,3 +23,4 @@ Spatial development environment for understanding agent-built software systems.
 - [Prototype Scope](prototype/prototype-scope.spec.md) — What we're building and why, hypothesis to test
 - [Godot Application](prototype/godot-application.spec.md) — Godot 4 app: JSON scene graph → navigable 3D space
 - [Non-Functional Requirements](prototype/nfr.spec.md) — Tech stack, platform, performance, disposability
+- [UX Polish](prototype/ux-polish.spec.md) — Intuitive controls: pan, zoom-to-cursor, orbit-around-point, smooth movement
