@@ -1,10 +1,19 @@
 ---
 verdict: pass
 ---
-## task-007: Godot Application Spec — Spec Alignment Review (2026-04-23)
+## task-007: Godot Application — Worker Verdict (fresh attempt 2026-04-23)
 
-Independent review against the Godot Application Specification
-(embedded in task assignment, matching `specs/prototype/godot-application.spec.md`).
+All checks run and verified against the Godot Application Specification
+(specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384).
+
+### Checks run
+
+| Check | Result |
+|-------|--------|
+| godot-compile.sh | PASS (Godot 4.6.2, project parses cleanly) |
+| extractor-lint.sh | PASS (ruff clean, 96 pytest tests pass) |
+| godot-label3d.sh | PASS (billboard + pixel_size set and tested in all Label3D-creating scripts) |
+| godot-tests.sh | PASS (91 GDScript behavioral tests, 0 failures) |
 
 ---
 
