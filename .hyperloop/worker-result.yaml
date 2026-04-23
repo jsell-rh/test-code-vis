@@ -1,0 +1,71 @@
+---
+verdict: pass
+---
+## Summary
+
+All three SHALL requirements and every scenario from
+`specs/interaction/moldable-views.spec.md` are implemented and covered by
+behavioral GDScript tests. The round-0 failure (Label3D readability properties
+unset and untested) was resolved in commit 2cc7a62 and is now fully verified.
+
+## Requirement Coverage
+
+### Requirement: Question-Driven View Generation — COVERED
+
+**Scenario: Architectural question**
+
+| Clause | Code | Test |
+|--------|------|------|
+| THEN generates view focused on auth-related components | `ViewSpecRenderer.apply()` renders only ids listed in "show" ops | `test_show_op_includes_listed_node_in_scene_tree` |
+| AND irrelevant components hidden/de-emphasized | Nodes absent from "show" list are not added to scene tree; "hide" op excludes them | `test_show_op_excludes_non_listed_nodes_from_scene_tree`, `test_hide_op_removes_node_from_scene_tree` |
+| AND relevant components arranged to answer the question | "arrange" op overrides `MeshInstance3D.position` from spec-provided coords | `test_arrange_op_overrides_node_position_x`, `_y`, `_z` |
+
+**Scenario: Impact question**
+
+| Clause | Code | Test |
+|--------|------|------|
+| THEN generates view showing user_db and all dependents | "show" op with multiple ids renders each one | `test_show_multiple_ids_all_appear_in_scene_tree` |
+| AND dependency relationships spatially clear | "connect" op creates `Node3D` at midpoint between source and target | `test_connect_op_creates_connector_node_in_scene_tree`, `test_connect_op_connector_position_is_midpoint_x`, `_y` |
+
+### Requirement: View Specs as Intermediate Representation — COVERED
+
+**Scenario: LLM produces view spec**
+
+| Clause | Code | Test |
+|--------|------|------|
+| THEN emits structured view spec (not raw 3D geometry) | `ViewSpec.from_dict()` returns a `Dictionary` | `test_view_spec_from_dict_returns_dictionary` |
+| AND view spec controls shown/hidden/highlighted/arranged elements | Each primitive (show, hide, highlight, arrange, annotate, connect) modifies scene tree or node properties accordingly | All per-primitive tests in `test_view_spec_renderer.gd` |
+| AND 3D renderer interprets view spec into spatial scene | `ViewSpecRenderer.apply()` creates `MeshInstance3D` children under `root` | `test_renderer_creates_mesh_instance_3d_for_each_shown_node`, `test_renderer_nodes_are_mesh_instance_3d` |
+
+### Requirement: Fixed Visual Primitive Set — COVERED
+
+**Scenario: LLM uses existing primitives**
+
+| Clause | Code | Test |
+|--------|------|------|
+| THEN composes from primitives (show, hide, highlight, arrange, annotate, connect) | `ViewSpec.VALID_OPS` is a six-element constant; `from_dict()` drops anything outside it | `test_valid_ops_has_exactly_six_primitives`, `test_valid_ops_contains_{show,hide,highlight,arrange,annotate,connect}` |
+| AND no new rendering logic generated at runtime | `from_dict()` silently filters unknown ops before they reach the renderer | `test_unknown_op_is_filtered_out` |
+
+## Round-0 Failure Resolution — VERIFIED
+
+**Issue:** `annotate` primitive left `Label3D.billboard` at `BILLBOARD_DISABLED`
+and `pixel_size` at Godot default; no tests asserted these properties.
+
+**Fix in commit 2cc7a62:**
+
+`view_spec_renderer.gd` lines 89–90:
+```gdscript
+label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+label.pixel_size = 0.05
+```
+
+`test_view_spec_renderer.gd` lines 434–437 (inside `test_annotate_op_sets_label3d_text`):
+```gdscript
+_check(label.billboard == BaseMaterial3D.BILLBOARD_ENABLED,
+    "annotation Label3D must have billboard enabled for readability in 3D space")
+_check(label.pixel_size > 0.0,
+    "annotation Label3D must have pixel_size > 0.0 for legibility, got %s" % label.pixel_size)
+```
+
+Both the implementation fix and the test assertions are present and correct.
+No outstanding issues remain.
