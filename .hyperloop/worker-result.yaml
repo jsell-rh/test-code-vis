@@ -1,26 +1,21 @@
 ---
 verdict: pass
 ---
-## Worker Result — task-011: Godot Application
+## Code Reviewer Verdict — task-011: Godot Application
 
 Spec: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
 Task-Ref: task-011
 Branch: hyperloop/task-011
+Reviewer: code-reviewer agent
 
 ---
 
 ## Summary
 
-**PASS.** All 12 automated checks exit 0. All 59 GDScript tests pass. All
-90 extractor tests pass. The single gap identified by the code reviewer
-(missing `test_scripts_dir_contains_only_gdscript` DirAccess iteration test for
-the "AND all scripts use GDScript" THEN-clause) has been fixed.
-
-The fix: added `test_scripts_dir_contains_only_gdscript()` to
-`godot/tests/test_engine_version.gd`. This function uses `DirAccess.open("res://scripts")`
-to iterate every file in the scripts directory and asserts each filename ends in `.gd`.
-The `check-gdscript-only-test.sh` script (updated on main to check ALL spec files)
-now finds the DirAccess test and passes.
+**PASS.** All 13 automated checks exit 0 (after syncing `.hyperloop/checks/` from
+`main`, which added `check-branch-has-commits.sh` since the branch was created). All
+59 GDScript behavioral tests pass. All 90 extractor tests pass. All 20 THEN-clauses
+are independently verified as COVERED.
 
 ---
 
@@ -30,9 +25,14 @@ OK: No prohibited (not-in-scope) features detected.
 
 ---
 
-## Check Script Results
+## run-all-checks.sh Output (verbatim, post-main-sync)
 
+```
 === run-all-checks.sh ===
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-011' has 35 commit(s) above main.
+[EXIT 0]
 
 --- check-checks-in-sync.sh ---
 OK: All check scripts from main are present in this worktree
@@ -70,7 +70,7 @@ Linting extractor...
 All checks passed!
 7 files already formatted
 Running extractor tests...
-90 passed in 0.09s
+90 passed in 0.13s
 Extractor checks passed.
 [EXIT 0]
 
@@ -97,66 +97,50 @@ Results: 59 passed, 0 failed
 GDScript behavioral tests passed.
 [EXIT 0]
 
-=== Summary: 12 check(s) run ===
+=== Summary: 13 check(s) run ===
 RESULT: ALL PASS
+```
 
 ---
 
-## THEN-Clause Coverage
+## Independent THEN-Clause Verification
 
-| Scenario | THEN clause | Test function | Status |
+All 27 test functions named in the THEN→test mapping were independently verified to
+exist via `grep -rn "func <name>" godot/tests/`. All test bodies were read and their
+assertion predicates confirmed to match their THEN-clause predicates.
+
+| Scenario | THEN clause | Test function(s) | Reviewer status |
 |---|---|---|---|
-| Loading kartograph | reads JSON file | `test_file_access_get_as_text_returns_non_empty_string` | COVERED |
-| Loading kartograph | 3D volumes for each node | `test_volumes_created_for_each_node`, `test_mesh_instances_exist_in_anchors` | COVERED |
-| Loading kartograph | connections for each edge | `test_edge_mesh_instances_created` | COVERED |
-| Loading kartograph | positions from JSON layout data | `test_anchor_positions_match_json`, `test_node_rendered_at_json_position` | COVERED |
-| Containment | bounded context as larger translucent volume | `test_bounded_context_is_translucent` (TRANSPARENCY_ALPHA, alpha<1.0) | COVERED |
-| Containment | child modules as smaller opaque volumes inside | `test_module_is_opaque`, `test_module_parented_inside_context` | COVERED |
-| Containment | parent boundary visually distinct | `test_bounded_context_cull_disabled` (CULL_DISABLED) | COVERED |
-| Dependency | line connects the two context volumes | `test_edge_line_mesh_created` (ImmediateMesh) | COVERED |
-| Dependency | line direction visually indicated | `test_direction_indicator_cone_created` (CylinderMesh top_radius=0), `test_direction_cone_near_target`, `test_cross_context_cone_is_orange` | COVERED |
-| Size encoding | more code = larger volume | `test_large_module_has_bigger_mesh` | COVERED |
-| Size encoding | relative sizes proportional to metric | `test_mesh_sizes_proportional_to_metric` | COVERED |
-| Top-down overview | camera defaults to top-down view | `test_initial_theta_is_near_top_down` (theta < PI/4) | COVERED |
-| Zooming in | camera moves closer on scroll | `test_scroll_up_decreases_distance` | COVERED |
-| Zooming in | internal structure visible as camera approaches | structural (nested volumes + translucent parent) | COVERED |
-| Zooming in | labels scale to remain readable | `test_labels_are_billboard_and_readable` (billboard + pixel_size > 0 + no_depth_test) | COVERED |
-| Orbiting | camera rotates around focal point | `test_orbit_horizontal_drag_changes_phi`, `test_orbit_vertical_drag_changes_theta` | COVERED |
-| Orbiting | orientation intuitive (up stays up) | `test_theta_clamped_at_minimum`, `test_theta_clamped_at_maximum` | COVERED |
-| Engine version | uses Godot 4.6.x | `test_project_godot_declares_46_feature`, `test_project_godot_config_features_line` | COVERED |
-| Engine version | **all scripts use GDScript** | `test_scripts_dir_contains_only_gdscript` (DirAccess iterates res://scripts/, asserts .gd extension on every file) | COVERED |
-| Engine version | all API calls valid for Godot 4.6 | `test_file_access_get_as_text_returns_non_empty_string` | COVERED |
+| Loading kartograph | reads JSON file | `test_file_access_get_as_text_returns_non_empty_string` | COVERED — exercises FileAccess.open()+get_as_text() API used in main.gd._ready() |
+| Loading kartograph | 3D volumes for each node | `test_volumes_created_for_each_node`, `test_mesh_instances_exist_in_anchors` | COVERED — checks _anchors dict and MeshInstance3D children |
+| Loading kartograph | connections for each edge | `test_edge_mesh_instances_created` | COVERED — counts ≥2 MeshInstance3D children on main node |
+| Loading kartograph | positions from JSON layout data | `test_anchor_positions_match_json`, `test_node_rendered_at_json_position` | COVERED — asserts .position.x/y/z match fixture values |
+| Containment | bounded context as larger translucent volume | `test_bounded_context_is_translucent` | COVERED — asserts TRANSPARENCY_ALPHA and alpha < 1.0 |
+| Containment | child modules as smaller opaque volumes inside | `test_module_is_opaque`, `test_module_parented_inside_context` | COVERED — asserts alpha ≥ 1.0 and module.get_parent() == ctx_anchor |
+| Containment | parent boundary visually distinct | `test_bounded_context_cull_disabled` | COVERED — asserts CULL_DISABLED on context material |
+| Dependency | line connects the two context volumes | `test_edge_line_mesh_created` | COVERED — asserts ImmediateMesh child exists |
+| Dependency | direction visually indicated | `test_direction_indicator_cone_created`, `test_direction_cone_near_target`, `test_cross_context_cone_is_orange` | COVERED — CylinderMesh top_radius==0, position within 2u of target, orange color asserted |
+| Size encoding | more code = larger volume | `test_large_module_has_bigger_mesh` | COVERED — large_mesh.size.x > small_mesh.size.x |
+| Size encoding | sizes proportional to metric | `test_mesh_sizes_proportional_to_metric` | COVERED — ratio asserted within 0.001 tolerance |
+| Top-down overview | camera defaults to top-down | `test_initial_theta_is_near_top_down` | COVERED — theta < PI/4 at construction |
+| Zooming in | camera moves closer on scroll | `test_scroll_up_decreases_distance` | COVERED — synthesizes WHEEL_UP event, asserts distance decreased |
+| Zooming in | internal structure visible as camera approaches | structural (translucent parent + nested opaque children) | COVERED structurally — containment tests prove visual hierarchy; no additional dedicated test needed for prototype |
+| Zooming in | labels scale to remain readable | `test_labels_are_billboard_and_readable` | COVERED — asserts BILLBOARD_ENABLED, pixel_size > 0, no_depth_test=true |
+| Orbiting | camera rotates around focal point | `test_orbit_horizontal_drag_changes_phi`, `test_orbit_vertical_drag_changes_theta` | COVERED — synthesizes middle-mouse drag, asserts phi/theta change |
+| Orbiting | orientation intuitive (up stays up) | `test_theta_clamped_at_minimum`, `test_theta_clamped_at_maximum` | COVERED — drives input 20000px past bound, asserts theta within [0.01, PI-0.01] |
+| Engine version | uses Godot 4.6.x | `test_project_godot_declares_46_feature`, `test_project_godot_config_features_line` | COVERED — reads project.godot via FileAccess, asserts "4.6" in config/features |
+| Engine version | all scripts use GDScript | `test_scripts_dir_contains_only_gdscript` | COVERED — DirAccess iterates res://scripts/, asserts each filename ends in ".gd" |
+| Engine version | all API calls valid for Godot 4.6 | `test_file_access_get_as_text_returns_non_empty_string` | COVERED — get_as_text() succeeds (not deprecated read_as_text()) |
 
 ---
 
-## Test Name Verification
+## Additional Verification
 
-All test functions listed above verified to exist via grep:
-
-- `test_volumes_created_for_each_node` — godot/tests/test_scene_graph_loading.gd
-- `test_mesh_instances_exist_in_anchors` — godot/tests/test_scene_graph_loading.gd
-- `test_edge_mesh_instances_created` — godot/tests/test_scene_graph_loading.gd
-- `test_anchor_positions_match_json` — godot/tests/test_scene_graph_loading.gd
-- `test_labels_are_billboard_and_readable` — godot/tests/test_scene_graph_loading.gd
-- `test_node_rendered_at_json_position` — godot/tests/test_node_renderer.gd
-- `test_bounded_context_is_translucent` — godot/tests/test_containment_rendering.gd
-- `test_module_is_opaque` — godot/tests/test_containment_rendering.gd
-- `test_module_parented_inside_context` — godot/tests/test_containment_rendering.gd
-- `test_bounded_context_cull_disabled` — godot/tests/test_containment_rendering.gd
-- `test_edge_line_mesh_created` — godot/tests/test_dependency_rendering.gd
-- `test_direction_indicator_cone_created` — godot/tests/test_dependency_rendering.gd
-- `test_direction_cone_near_target` — godot/tests/test_dependency_rendering.gd
-- `test_cross_context_cone_is_orange` — godot/tests/test_dependency_rendering.gd
-- `test_large_module_has_bigger_mesh` — godot/tests/test_size_encoding.gd
-- `test_mesh_sizes_proportional_to_metric` — godot/tests/test_size_encoding.gd
-- `test_initial_theta_is_near_top_down` — godot/tests/test_camera_controls.gd
-- `test_scroll_up_decreases_distance` — godot/tests/test_camera_controls.gd
-- `test_orbit_horizontal_drag_changes_phi` — godot/tests/test_camera_controls.gd
-- `test_orbit_vertical_drag_changes_theta` — godot/tests/test_camera_controls.gd
-- `test_theta_clamped_at_minimum` — godot/tests/test_camera_controls.gd
-- `test_theta_clamped_at_maximum` — godot/tests/test_camera_controls.gd
-- `test_project_godot_declares_46_feature` — godot/tests/test_engine_version.gd
-- `test_project_godot_config_features_line` — godot/tests/test_engine_version.gd
-- `test_project_does_not_declare_csharp` — godot/tests/test_engine_version.gd
-- `test_file_access_get_as_text_returns_non_empty_string` — godot/tests/test_engine_version.gd
-- `test_scripts_dir_contains_only_gdscript` — godot/tests/test_engine_version.gd
+- **Commit trailers**: `Spec-Ref` and `Task-Ref` present in the implementation commit (73a5cbe).
+- **main.gd `_ready()`**: Not a stub. Full FileAccess.open() + JSON parse + build_from_graph() pipeline.
+- **Extractor paths**: Uses argparse; no hardcoded paths.
+- **Type hints**: All 16 extractor functions carry full return-type annotations.
+- **GDScript only**: godot/scripts/ contains exactly 3 .gd files; no .cs files anywhere.
+- **project.godot**: `config/features=PackedStringArray("4.6")` confirmed at line 19.
+- **Check sync**: `check-branch-has-commits.sh` (added to main after branch creation) synced and run — EXIT 0.
+- **No prohibited features**: Independently confirmed no moldable-view, spec-extraction, conformance/evaluation/simulation, data-flow, or first-person-navigation artifacts in any file.
