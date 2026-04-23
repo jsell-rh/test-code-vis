@@ -1,0 +1,92 @@
+---
+verdict: pass
+---
+## Spec Alignment Review — task-021
+### Spec: specs/interaction/moldable-views.spec.md
+
+All SHALL/MUST requirements are implemented at the prototype-permitted scope and backed
+by passing GDScript behavioral tests (87 total, 32 in `test_llm_view_generator.gd`).
+
+---
+
+### Requirement: Question-Driven View Generation — COVERED
+
+The system MUST accept natural language questions and generate a spatial view tailored
+to answering that specific question.
+
+**Implementation:** `godot/scripts/llm_view_generator.gd`
+- `build_prompt(question, graph)` — embeds the natural-language question plus every
+  node id/name/type from the structural graph into an LLM prompt.
+- `parse_response(llm_text)` — converts the LLM's JSON reply into a structured
+  view-spec Dictionary (the "spatial view" at prototype scope).
+
+**Prototype-scope note:** `question_panel.gd` (UI) and `view_spec_renderer.gd` (3D
+renderer) are explicitly prohibited by `check-not-in-scope.sh` per
+`specs/prototype/prototype-scope.spec.md § "Not In Scope"`. Absent out-of-scope
+features are not a FAIL.
+
+#### Scenario: Architectural question — COVERED
+- `test_build_prompt_contains_question` — "how does authentication work?" is embedded
+  in the prompt so the LLM can answer it.
+- `test_build_prompt_contains_node_id_auth_service` — auth node ids are in the prompt
+  context so the LLM can focus on auth components.
+- `test_parse_response_passes_through_hide_op` — irrelevant components hidden.
+- `test_parse_response_passes_through_arrange_op` — relevant components arranged.
+
+#### Scenario: Impact question — COVERED
+- `test_build_prompt_contains_node_id_user_db` — user_db appears in graph context.
+- `test_parse_response_passes_through_show_op` — user database shown.
+- `test_parse_response_passes_through_connect_op` — dependency relationships are clear.
+
+---
+
+### Requirement: View Specs as Intermediate Representation — COVERED
+
+The system MUST use a structured view specification as the intermediate representation
+between the LLM and the 3D renderer.
+
+**Implementation:** `parse_response()` returns `{"question": str, "operations": Array}`
+— a structured Dictionary, not raw 3D geometry.
+
+#### Scenario: LLM produces view spec — COVERED
+- `test_parse_response_returns_dictionary` — result is a Dictionary (not geometry).
+- `test_parse_response_has_question_key` — "question" key present.
+- `test_parse_response_has_operations_key` — "operations" key present.
+- `test_parse_response_operations_is_array` — operations is an Array.
+- `test_parse_response_preserves_question` — the original question is preserved.
+- `test_parse_response_passes_through_show_op`, `_hide_op`, `_highlight_op`,
+  `_arrange_op`, `_annotate_op`, `_connect_op` — view spec controls all listed
+  element states and arrangements.
+
+---
+
+### Requirement: Fixed Visual Primitive Set — COVERED
+
+The set of visual primitives MUST be fixed and finite. The LLM selects from them;
+it does not invent new ones.
+
+**Implementation:** `VALID_OPS = ["show", "hide", "highlight", "arrange", "annotate",
+"connect"]` is the closed set. `_make_spec()` filters out any op not in `VALID_OPS`
+before returning — no new rendering logic can be introduced at runtime.
+
+#### Scenario: LLM uses existing primitives — COVERED
+- `test_build_prompt_contains_show_primitive` through `_connect_primitive` — all 6
+  primitives are listed in the prompt so the LLM knows the fixed contract.
+- `test_parse_response_all_six_ops_pass_through` — all 6 valid ops survive filtering.
+- `test_parse_response_filters_unknown_ops` — unknown ops are silently dropped.
+- `test_parse_response_with_all_unknown_ops_returns_empty_operations` — all-unknown
+  yields zero operations (no new rendering logic).
+
+---
+
+### All Checks Passing
+- `check-not-in-scope.sh`: OK
+- `extractor-lint.sh`: All checks passed, 90 tests passed
+- `godot-compile.sh`: Godot project compiles successfully
+- `godot-fileaccess-tested.sh`: FileAccess.open() exercised in 2 test files
+- `godot-label3d.sh`: All Label3D nodes have billboard and pixel_size set and tested
+- `godot-tests.sh`: 87 passed, 0 failed
+- `check-kartograph-integration-test.sh`: Integration test found with assertions
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
