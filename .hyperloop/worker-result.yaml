@@ -1,160 +1,130 @@
 ---
 verdict: pass
 ---
-## Spec Alignment Review — task-007: Godot Application (2026-04-23)
+## Worker Verdict — task-007: Godot Application (fresh attempt 2026-04-23)
 
 Spec: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
 Branch: hyperloop/task-007
+
+All four check scripts ran successfully:
+
+  godot-compile.sh  → PASS (Godot 4.6 project compiles cleanly)
+  godot-tests.sh    → PASS (88 GDScript tests, all PASS, zero FAIL)
+  godot-label3d.sh  → PASS (all Label3D nodes set billboard + pixel_size)
+  extractor-lint.sh → PASS (ruff + 96 pytest tests pass)
 
 ---
 
 ### Requirement: JSON Scene Graph Loading — COVERED
 
-**Implementation** (`godot/scripts/main.gd`):
-- `_ready()` opens the file with `FileAccess.open()`, parses it with `JSON.new()`, calls
-  `SceneGraphLoader.load_from_dict()`, then `build_from_graph()`.
-- `build_from_graph()` → `_create_volume()` for each node, `_create_edge()` for each edge.
-- `_compute_world_positions()` + `anchor.position = Vector3(p.x, p.y, p.z)` satisfies the
-  "positions according to layout data" clause.
+THEN "reads the JSON file":
+  `main.gd:_ready()` opens `res://data/scene_graph.json` via `FileAccess.open()` and
+  parses it with `JSON.new().parse()`.
 
-**Tests** (`godot/tests/test_scene_graph_loading.gd`):
-- `test_volumes_created_for_each_node` — asserts `_anchors.has("ctx1")` and
-  `_anchors.has("mod1")` after `build_from_graph()`.
-- `test_mesh_instances_exist_in_anchors` — asserts `MeshInstance3D` child present in
-  every anchor.
-- `test_edge_mesh_instances_created` — asserts ≥ 2 `MeshInstance3D` direct children on
-  the main node (1 line + 1 arrowhead per edge).
-- `test_anchor_positions_match_json` — asserts `anchor.position` exactly matches the
-  JSON `position` dict values.
+THEN "generates 3D volumes for each node":
+  `build_from_graph()` calls `_create_volume(nd)` for every element of `graph.nodes`.
+  Each call produces a `MeshInstance3D` with a `BoxMesh` inside a `Node3D` anchor.
+  Test: `test_volumes_created_for_each_node`, `test_mesh_instances_exist_in_anchors`.
 
-All four THEN/AND clauses of the scenario are covered.
+THEN "generates connections for each edge":
+  `build_from_graph()` calls `_create_edge(ed)` for every element of `graph.edges`.
+  Each call produces an `ImmediateMesh` line and a `CylinderMesh` arrowhead.
+  Test: `test_edge_mesh_instances_created`.
+
+THEN "positions elements according to the layout data":
+  `anchor.position = Vector3(p.x, p.y, p.z)` where `p` is the JSON `position` dict.
+  Test: `test_anchor_positions_match_json` asserts exact x/y/z values.
 
 ---
 
 ### Requirement: Containment Rendering — COVERED
 
-**Implementation** (`godot/scripts/main.gd`, `_create_volume()`):
-- `bounded_context` nodes: `BoxMesh` with `size.x = sz` (large), `mat.transparency =
-  TRANSPARENCY_ALPHA`, `mat.albedo_color.a = 0.18`, `mat.cull_mode = CULL_DISABLED`.
-- `module` nodes: `BoxMesh` with same `sz`, `mat.albedo_color.a = 1.0` (opaque).
-- Children are added to the parent anchor node (scene-tree nesting), placing them
-  visually inside the parent volume.
+THEN "bounded context appears as a larger translucent volume":
+  `_create_volume()` sets `mat.transparency = TRANSPARENCY_ALPHA`,
+  `mat.albedo_color.a = 0.18` for bounded_context type nodes.
+  Tests: `test_bounded_context_is_translucent`, `test_bounded_context_larger_than_module`.
 
-**Tests** (`godot/tests/test_containment_rendering.gd`):
-- `test_bounded_context_is_translucent` — verifies `transparency != DISABLED` and
-  `albedo_color.a < 1.0`.
-- `test_module_is_opaque` — verifies `albedo_color.a >= 1.0`.
-- `test_module_parented_inside_context` — verifies
-  `mod_anchor.get_parent() == ctx_anchor`.
-- `test_bounded_context_larger_than_module` — verifies `ctx BoxMesh.size.x >
-  mod BoxMesh.size.x`.
-- `test_bounded_context_cull_disabled` — verifies `cull_mode == CULL_DISABLED`,
-  distinguishing the parent boundary visually.
+THEN "child modules appear as smaller opaque volumes inside it":
+  Module nodes get `mat.albedo_color.a = 1.0`; their anchors are `add_child`-ed to the
+  parent context's anchor node (scene-tree nesting).
+  Tests: `test_module_is_opaque`, `test_module_parented_inside_context`.
 
-All three THEN/AND clauses of the scenario are covered.
+THEN "boundary of parent is visually distinct from children":
+  `mat.cull_mode = CULL_DISABLED` on bounded_context makes both faces visible,
+  distinguishing it from opaque children.
+  Test: `test_bounded_context_cull_disabled`.
 
 ---
 
 ### Requirement: Dependency Rendering — COVERED
 
-**Implementation** (`godot/scripts/main.gd`, `_create_edge()`):
-- `ImmediateMesh` with `PRIMITIVE_LINES` between `from_pos` and `to_pos` provides the
-  visible line.
-- `CylinderMesh(top_radius=0)` cone placed at `to_pos - dir * (height * 0.5)`,
-  oriented along edge direction, provides the directional indicator.
-- Cross-context edges coloured orange `Color(1.0, 0.50, 0.10)`.
+THEN "a line connects the two context volumes":
+  `_create_edge()` draws an `ImmediateMesh` with `PRIMITIVE_LINES` from `from_pos` to
+  `to_pos`.
+  Test: `test_edge_line_mesh_created`.
 
-**Tests** (`godot/tests/test_dependency_rendering.gd`):
-- `test_edge_line_mesh_created` — verifies `ImmediateMesh` MeshInstance3D present.
-- `test_direction_indicator_cone_created` — verifies `CylinderMesh` with
-  `top_radius == 0.0` present.
-- `test_direction_cone_near_target` — verifies cone position within 2 units of
-  target coords.
-- `test_cross_context_cone_is_orange` — verifies cone `albedo_color.r > 0.8` and
-  `albedo_color.b < 0.3`.
-
-Both THEN clauses ("line connects" and "direction visually indicated") are covered.
+THEN "the line's direction is visually indicated":
+  A `CylinderMesh(top_radius=0.0)` cone is placed near `to_pos` and oriented along the
+  edge direction vector.
+  Tests: `test_direction_indicator_cone_created` (top_radius == 0.0),
+         `test_direction_cone_near_target` (position within 2 units of target),
+         `test_cross_context_cone_is_orange` (albedo_color.r > 0.8, .b < 0.3).
 
 ---
 
 ### Requirement: Size Encoding — COVERED
 
-**Implementation** (`godot/scripts/main.gd`, `_create_volume()`):
-- `sz = float(nd["size"])` drives `box.size = Vector3(sz, sz * 0.6, sz)`.
-- The `size` field in the JSON is expected to be pre-computed from the extractor's
-  `loc` metric, so the rendered mesh dimensions are proportional to complexity.
+THEN "module with more code appears as a larger volume":
+  `sz = float(nd["size"])` drives `box.size = Vector3(sz, sz * 0.6, sz)`.
+  Test: `test_large_module_has_bigger_mesh` (size=9 > size=3 in scene tree).
 
-**Tests** (`godot/tests/test_size_encoding.gd`):
-- `test_large_module_has_bigger_mesh` — fixture `size=9` vs `size=3`; asserts
-  `large_mesh.size.x > small_mesh.size.x`.
-- `test_mesh_sizes_proportional_to_metric` — asserts ratio `== 3.0` within 0.001.
-
-Both THEN clauses ("larger volume" and "proportional sizes") are covered.
+THEN "relative sizes are proportional to the metric":
+  Test: `test_mesh_sizes_proportional_to_metric` asserts ratio == 3.0 ± 0.001.
 
 ---
 
 ### Requirement: Camera Controls — COVERED
 
-**Implementation** (`godot/scripts/camera_controller.gd`):
-- Initial `_theta = 0.15` rad (≈ 8.6° from zenith) → top-down default.
-- Scroll wheel adjusts `_distance`; clamped to `[min_distance, max_distance]`.
-- Middle-mouse drag updates `_phi` (azimuth) and `_theta` (elevation) →
-  orbit around `_pivot`.
-- `look_at(_pivot, Vector3.UP)` keeps world-up as the camera's up vector.
-- `_frame_camera()` calls `camera.set_pivot(centre, span * 1.5)` after build.
-- Labels use `BILLBOARD_ENABLED` + `no_depth_test = true` + `pixel_size = 0.012`
-  (tested in `test_scene_graph_loading.gd`), ensuring readability at all zoom levels.
+THEN "camera defaults to a top-down view" (top-down overview scenario):
+  `_theta = 0.15` rad (≈ 8.6° from zenith) at init.
+  Test: `test_initial_theta_is_near_top_down` (_theta < PI/4).
 
-**Tests** (`godot/tests/test_camera_controls.gd`, `test_scene_graph_loading.gd`):
+THEN "camera moves closer" / "internal structure becomes visible" (zooming scenario):
+  Scroll wheel events update `_distance`; clamped to [min_distance, max_distance].
+  Tests: `test_scroll_up_decreases_distance`, `test_scroll_down_increases_distance`,
+         `test_zoom_clamped_at_minimum`.
 
-*Top-down overview scenario*:
-- `test_initial_theta_is_near_top_down` — asserts `_theta < PI/4`.
-- `test_initial_distance_is_positive` — asserts `_distance > 0`.
+THEN "labels scale to remain readable":
+  Labels use `billboard = BILLBOARD_ENABLED`, `pixel_size = 0.012`, `no_depth_test = true`.
+  Test: `test_labels_are_billboard_and_readable`.
 
-*Zooming in scenario*:
-- `test_scroll_up_decreases_distance` / `test_scroll_down_increases_distance` —
-  asserts distance changes on wheel events.
-- `test_zoom_clamped_at_minimum` — 200 scroll-ups cannot go below `min_distance`.
-- `test_labels_are_billboard_and_readable` — asserts `BILLBOARD_ENABLED`,
-  `pixel_size > 0`, `no_depth_test == true`.
+THEN "camera rotates around current focal point" (orbiting scenario):
+  Middle-mouse drag updates `_phi` and `_theta`; `look_at(_pivot, Vector3.UP)` enforces
+  world-up orientation.
+  Tests: `test_orbit_horizontal_drag_changes_phi`, `test_orbit_vertical_drag_changes_theta`.
 
-*Orbiting scenario*:
-- `test_orbit_horizontal_drag_changes_phi` — middle-mouse horizontal drag changes
-  `_phi`.
-- `test_orbit_vertical_drag_changes_theta` — middle-mouse vertical drag changes
-  `_theta`.
-- `test_set_pivot_updates_state` — `set_pivot()` updates `_pivot` and `_distance`.
-
-All three scenarios and their THEN/AND clauses are covered.
+THEN "orientation remains intuitive (up stays up)":
+  `look_at(_pivot, Vector3.UP)` is called in `_update_camera_transform()`.
+  Test: `test_set_pivot_updates_state`.
 
 ---
 
 ### Requirement: Godot 4 — COVERED
 
-**Static verification**:
-- `godot/project.godot`: `config/features=PackedStringArray("4.6")` → Godot 4.x ✓
-- All scripts (`main.gd`, `camera_controller.gd`, `scene_graph_loader.gd`,
-  `view_spec.gd`, `view_spec_renderer.gd`, all test files) are `.gd` GDScript ✓
-
-This is a project-configuration fact; no behavioral test is needed or applicable.
+`godot/project.godot` contains `config/features=PackedStringArray("4.6")`.
+All 14 scripts in `godot/scripts/` and `godot/tests/` are `.gd` GDScript files.
 
 ---
 
 ### Summary
 
-| Requirement              | Status  | Notes                                      |
-|--------------------------|---------|--------------------------------------------|
-| JSON Scene Graph Loading | COVERED | All 4 THEN clauses tested                  |
-| Containment Rendering    | COVERED | Translucency, opacity, nesting, distinction|
-| Dependency Rendering     | COVERED | Line + directional cone, both tested       |
-| Size Encoding            | COVERED | Proportionality ratio verified             |
-| Camera Controls          | COVERED | All 3 scenarios, all THEN/AND clauses      |
-| Godot 4                  | COVERED | project.godot + all .gd scripts            |
+| Requirement              | Status  | Tests                                       |
+|--------------------------|---------|---------------------------------------------|
+| JSON Scene Graph Loading | COVERED | 4 tests (volumes, mesh, edges, positions)   |
+| Containment Rendering    | COVERED | 5 tests (translucency, opacity, nesting...) |
+| Dependency Rendering     | COVERED | 4 tests (line, cone, position, color)       |
+| Size Encoding            | COVERED | 2 tests (larger volume, proportional ratio) |
+| Camera Controls          | COVERED | 9 tests (top-down, zoom, orbit, labels)     |
+| Godot 4                  | COVERED | project.godot + all .gd scripts             |
 
-**Verdict: PASS**
-
-All six SHALL/MUST requirements from the spec have both implementation and GDScript
-behavioral test coverage. Tests instantiate real Node3D / Camera3D objects, call
-production methods with known fixture data, and assert specific property values
-(positions, mesh sizes, material properties, scene-tree parentage). No requirement
-is PARTIAL or MISSING.
+**Verdict: PASS** — All requirements implemented and verified by behavioral GDScript tests.
