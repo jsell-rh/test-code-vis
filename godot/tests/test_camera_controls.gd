@@ -150,3 +150,25 @@ func test_zoom_clamped_at_minimum() -> bool:
 	var result: bool = cam._distance >= cam.min_distance
 	cam.free()
 	return result
+
+
+## AND orientation remains intuitive (up stays up) —
+## theta is clamped so the camera never flips past the vertical poles.
+## Driving a huge downward drag without clamping would push theta past PI,
+## causing the camera to invert; clamping to [0.01, PI-0.01] prevents this.
+func test_orbit_theta_clamped_prevents_flip() -> bool:
+	var cam = CameraScript.new()
+	# Begin orbiting.
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_MIDDLE
+	press.pressed = true
+	press.position = Vector2(100.0, 100.0)
+	cam._handle_button(press)
+	# Drag a huge distance downward — without clamping this would push theta past PI.
+	var motion := InputEventMouseMotion.new()
+	motion.position = Vector2(100.0, 1000000.0)
+	cam._handle_motion(motion)
+	# theta must stay at or below PI-0.01 (clamped), preventing camera inversion.
+	var result: bool = cam._theta <= PI - 0.01
+	cam.free()
+	return result
