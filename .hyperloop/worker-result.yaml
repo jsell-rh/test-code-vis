@@ -1,40 +1,71 @@
 ---
 verdict: pass
 ---
-## task-010: Godot Application (godot-application.spec.md) — re-run after PR feedback
+## task-010: Godot Application (godot-application.spec.md) — re-review after PR feedback loop
 
-### Problem addressed
-The `check-not-in-scope.sh` check was failing because three categories of
-prohibited features had been introduced in earlier cycles:
+### Checks run (all pass)
 
-1. **Moldable views** — `godot/scripts/view_spec.gd`,
-   `godot/scripts/view_spec_renderer.gd`, `godot/tests/test_view_spec.gd`,
-   `godot/tests/test_view_spec_renderer.gd` and their references in `run_tests.gd`.
-2. **Spec extraction** — `extract_spec_nodes()`, `_layout_spec_nodes()`,
-   and the `include_specs` parameter in `extractor/extractor.py`.
-3. **`--specs` CLI flag** — `extractor/__main__.py`.
-4. **Spec-extraction tests** — `TestSpecExtraction` class and `src_with_specs`
-   fixture in `extractor/tests/test_extractor.py`.
+| Check | Result |
+|---|---|
+| `check-not-in-scope.sh` | OK — no prohibited features detected |
+| `check-kartograph-integration-test.sh` | OK — integration test with kartograph assertions found |
+| `extractor-lint.sh` | PASS — 90 tests, 0 failures, ruff clean |
+| `godot-compile.sh` | PASS — Godot 4.6.2 compiles cleanly |
+| `godot-tests.sh` | PASS — all 51 GDScript tests pass |
+| `godot-fileaccess-tested.sh` | PASS — FileAccess.open() exercised in test suite |
+| `godot-label3d.sh` | PASS — all Label3D nodes have billboard + pixel_size |
 
-### Actions taken
-- Deleted the four prohibited GDScript files.
-- Removed moldable-view references from `godot/tests/run_tests.gd`.
-- Stripped the entire "Spec extraction" section (≈100 lines) from
-  `extractor/extractor.py` and simplified `build_scene_graph` signature.
-- Removed `--specs` argument from `extractor/__main__.py`.
-- Removed `extract_spec_nodes` import, `src_with_specs` fixture, and
-  `TestSpecExtraction` class from `extractor/tests/test_extractor.py`.
-- Removed now-unused `import re` from `extractor/extractor.py`.
-- Ran `ruff format` to satisfy the lint check.
+### Spec scenario coverage
 
-### Check results (all pass)
-- `check-not-in-scope.sh` — **OK**
-- `extractor-lint.sh` — **Passed** (90 tests, 0 failures)
-- `godot-compile.sh` — **Passed**
-- `godot-tests.sh` — **Passed**
-- `godot-fileaccess-tested.sh` — **OK**
-- `godot-label3d.sh` — **PASS**
-- `check-kartograph-integration-test.sh` — **OK**
+**JSON Scene Graph Loading** — COVERED
+- `test_scene_graph_loading.gd`: asserts anchors created per node, MeshInstance3D children
+  present, edge mesh instances created, anchor positions match JSON x/y/z values.
+- `test_node_renderer.gd`: asserts node positions equal JSON coordinates to floating-point
+  precision for multiple nodes; confirms no Godot-side layout recomputation.
 
-All spec requirements from `godot-application.spec.md` remain implemented
-and tested — no spec coverage was lost by removing the out-of-scope code.
+**Containment Rendering** — COVERED
+- `test_containment_rendering.gd`: asserts bounded_context material has TRANSPARENCY_ALPHA
+  and alpha < 1 (translucent); module material has alpha == 1 (opaque); module anchor is
+  direct child of context anchor (parented inside); context BoxMesh.size.x > module's;
+  context cull_mode == CULL_DISABLED (visually distinct boundary).
+
+**Dependency Rendering** — COVERED (direction visually indicated)
+- `test_dependency_rendering.gd`: asserts ImmediateMesh line mesh created; CylinderMesh
+  with `top_radius == 0` (arrowhead cone) created and positioned within 2 units of
+  target end; cross-context cone material albedo_color is orange (r > 0.8, b < 0.3).
+  The cone is a genuine rendering artifact, not a colour-only distinction.
+
+**Size Encoding** — COVERED
+- `test_size_encoding.gd`: asserts large module BoxMesh.size.x > small module's;
+  ratio of mesh sizes matches ratio of input size values (9/3 = 3.0) within 0.001.
+
+**Camera Controls** — COVERED
+- `test_camera_controls.gd`: asserts initial _theta < PI/4 (top-down), _distance > 0;
+  MOUSE_BUTTON_WHEEL_UP decreases _distance (zoom in), WHEEL_DOWN increases it;
+  middle-mouse horizontal drag changes _phi (orbit azimuth); vertical drag changes
+  _theta (orbit elevation); set_pivot() updates _pivot and _distance; zoom is clamped
+  at min_distance after 200 scroll-ups.
+  Note: "Node not inside tree" ERRORs in output are expected in headless testing
+  (Camera3D.look_at() needs scene tree); all 7 camera tests report PASS.
+
+**Godot 4.6 Engine Version** — COVERED
+- `test_engine_version.gd`: opens `res://project.godot` via FileAccess.open() +
+  get_as_text() and asserts "4.6" is present and `PackedStringArray("4.6")` appears
+  in the features line. Also satisfies godot-fileaccess-tested.sh requirement.
+
+### Entry-point check
+
+`main.gd::_ready()` is NOT a stub — it opens the JSON file with
+`FileAccess.open()`, parses with `JSON.new()`, and calls `build_from_graph()`.
+
+### Commit trailers
+
+Present on implementation commits:
+- `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384`
+- `Task-Ref: task-010`
+
+### Summary
+
+All six spec requirements are implemented and covered by behavioral GDScript tests
+that instantiate real Node3D objects and assert concrete property values. All automated
+checks pass. No prohibited features remain in the codebase.
