@@ -2,27 +2,65 @@
 verdict: pass
 ---
 
-All prohibited out-of-scope artifacts have been removed and all checks pass.
+All checks pass. All spec scenarios are covered by behavioral GDScript tests with real runtime assertions. No prohibited artifacts remain.
 
 ## Scope Check Output
 
+```
 OK: No prohibited (not-in-scope) features detected.
+EXIT_CODE: 0
+```
 
-## Summary
+## Check Results
 
-The following checks all pass:
+| Check | Result |
+|---|---|
+| check-not-in-scope.sh | PASS — exits 0, no prohibited artifacts |
+| check-kartograph-integration-test.sh | PASS — integration test with expected-context assertions found |
+| check-report-scope-section.sh | PASS — worker-result.yaml contains valid Scope Check Output section |
+| extractor-lint.sh | PASS — ruff clean, 90 pytest tests pass |
+| godot-compile.sh | PASS — Godot 4.6.2 compiles successfully |
+| godot-tests.sh | PASS — all GDScript behavioral tests pass (56 tests across 8 files) |
+| godot-label3d.sh | PASS — Label3D billboard + pixel_size set and tested |
+| godot-fileaccess-tested.sh | PASS — FileAccess.open() exercised in 2 test files |
+| check-pipeline-wiring.sh | NOT PRESENT — script absent from .hyperloop/checks/; pipeline verified manually (see below) |
 
-- **check-not-in-scope.sh**: OK — no prohibited moldable-views or spec-extraction code present
-- **godot-compile.sh**: Godot project compiles successfully (Godot 4.6.2)
-- **extractor-lint.sh**: All ruff checks pass, 90 tests pass
-- **godot-tests.sh**: All GDScript behavioral tests pass (test_scene_graph_loader, test_node_renderer, test_scene_graph_loading, test_containment_rendering, test_dependency_rendering, test_size_encoding, test_camera_controls, test_engine_version)
-- **godot-label3d.sh**: All Label3D nodes have billboard and pixel_size set and tested
-- **godot-fileaccess-tested.sh**: FileAccess.open() exercised in 2 test files
-- **check-kartograph-integration-test.sh**: Integration test referencing kartograph codebase with expected-context assertions found
+## Pipeline Verification (Manual — check-pipeline-wiring.sh absent)
 
-## What was fixed in this iteration
+`check-pipeline-wiring.sh` does not exist in `.hyperloop/checks/`. Manual verification confirms the full pipeline:
 
-The prior submission (ca7be72) contained the FAIL verdict left by the reviewer. The prohibited
-files (`question_panel.gd`, `view_spec.gd`, `view_spec_renderer.gd` and their tests, plus
-spec-extraction code in the extractor) had already been removed in commit 49d84df. This
-submission updates `worker-result.yaml` to reflect the actual current passing state.
+- **Stage 1 (extractor → JSON)**: `extractor/extractor.py` produces `scene_graph.json` with nodes, edges, positions, and metrics. Exercised by 90 pytest tests including kartograph integration test.
+- **Stage 2 (JSON → Godot render)**: `godot/scripts/main.gd._ready()` calls `FileAccess.open()` + `get_as_text()` + `JSON.parse()` + `build_from_graph()`. The `build_from_graph()` function consumes the parsed dictionary and creates Node3D volumes, edges, and labels. Not a stub.
+
+Pipeline is complete end-to-end.
+
+## Spec Scenario Coverage
+
+All 8 spec scenarios have corresponding GDScript test files with fixture data and runtime assertions on Node3D properties:
+
+1. **Loading kartograph's scene graph** — `test_scene_graph_loading.gd` (volumes created, mesh instances, edge meshes, positions asserted via `Vector3.is_equal_approx()`) + `test_node_renderer.gd` (anchor positions match JSON x/y/z)
+2. **Modules inside a bounded context** — `test_containment_rendering.gd` (translucency asserts `TRANSPARENCY_ALPHA` + `albedo_color.a < 1.0`; opacity asserts `albedo_color.a >= 1.0`; parenting asserts `mod_anchor.get_parent() == ctx_anchor`; size comparison asserts `ctx_mesh.size.x > mod_mesh.size.x`; cull asserts `CULL_DISABLED`)
+3. **Rendering a cross-context dependency** — `test_dependency_rendering.gd` (ImmediateMesh line + CylinderMesh arrowhead with `top_radius == 0.0` at target; orange color `r > 0.8 and b < 0.3` for cross-context)
+4. **Large module vs small module** — `test_size_encoding.gd` (mesh size.x larger; ratio 9/3 = 3.0 within 0.001 tolerance)
+5. **Top-down overview** — `test_camera_controls.gd` (`_theta < PI/4`; `_distance > 0`)
+6. **Zooming in** — `test_camera_controls.gd` (WHEEL_UP decreases `_distance`; WHEEL_DOWN increases; clamp enforced)
+7. **Orbiting** — `test_camera_controls.gd` (horizontal drag changes `_phi`; vertical drag changes `_theta`; `set_pivot` updates state)
+8. **Engine version** — `test_engine_version.gd` (`FileAccess.open("res://project.godot")` + `get_as_text()` asserts "4.6" in content; no C#/Mono; `get_as_text()` returns non-empty string)
+
+## Guidelines Compliance
+
+- **main.gd `_ready()` is not a stub**: Full FileAccess + JSON + build pipeline present.
+- **Direction visually indicated**: Explicit `CylinderMesh` with `top_radius = 0.0` (arrowhead cone) created at target end of each edge — satisfies "visually indicated", not a plain line only.
+- **Position assertions use real Node3D properties**: `anchor.position.is_equal_approx(Vector3(...))` — not dict `.has()` checks.
+- **Label3D properties**: `billboard == BILLBOARD_ENABLED`, `pixel_size = 0.012 > 0.0`, `no_depth_test = true` — all asserted in `test_labels_are_billboard_and_readable`.
+- **FileAccess tested**: `test_engine_version.gd` uses `FileAccess.open() + get_as_text()` in two tests.
+- **Scope section in worker-result**: Present and contains verbatim passing output.
+- **No falsification**: Scope check output in worker-result.yaml matches actual `check-not-in-scope.sh` exit code (0).
+
+## Commit Trailers
+
+HEAD commit (`1d5ef2e`) carries both required trailers:
+```
+Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
+Task-Ref: task-011
+```
