@@ -1,56 +1,23 @@
 ---
 verdict: pass
 ---
-## Godot Application — task-007 Spec Alignment Review (2026-04-23)
+## Godot Application — task-007 Implementation Verdict
 
-Independent full review of all SHALL/MUST requirements against code and tests.
+All three check scripts pass:
+- `extractor-lint.sh`: PASS (ruff + 93 pytest tests)
+- `godot-compile.sh`: PASS (Godot Engine v4.6.2)
+- `godot-tests.sh`: PASS (24 / 24 GDScript behavioral tests)
 
-### Requirement Status
+### Requirement Coverage
 
-| Requirement              | Status   | Code                                                                 | Tests                                                                          |
-|--------------------------|----------|----------------------------------------------------------------------|--------------------------------------------------------------------------------|
-| JSON Scene Graph Loading | COVERED  | `main.gd`: `_load_and_build()` reads JSON; `_build()` creates volumes, edges, positions from JSON fields | `test_scene_graph_loading.gd`: 5 tests — volumes, mesh instances, edge meshes, anchor positions, label billboard/pixel_size |
-| Containment Rendering    | COVERED  | `main.gd` `_create_volume()`: context → translucent (alpha=0.18, TRANSPARENCY_ALPHA, CULL_DISABLED); module → opaque (alpha=1.0); child anchor parented to parent anchor | `test_containment_rendering.gd`: 5 tests — translucency, opacity, parenting inside context, size ordering, cull mode |
-| Dependency Rendering     | COVERED  | `main.gd` `_create_edge()`: ImmediateMesh line (PRIMITIVE_LINES) + CylinderMesh cone (top_radius=0) at target end as direction indicator | `test_dependency_rendering.gd`: 4 tests — line mesh created, cone created, cone near target, orange on cross-context |
-| Size Encoding            | COVERED  | `main.gd` `_create_volume()`: `sz = float(nd["size"])`; `box.size = Vector3(sz, sz*k, sz)` — direct proportionality | `test_size_encoding.gd`: 2 tests — large module has bigger mesh, ratio exactly proportional to metric (3.0) |
-| Camera Controls          | COVERED  | `camera_controller.gd`: spherical coords orbit (middle-mouse), zoom (scroll), pan (right-mouse); initial `_theta=0.15` (≈8.6° from top); `look_at(_pivot, Vector3.UP)` preserves orientation; clamp prevents pole-flip | `test_camera_controls.gd`: 8 tests — initial theta < PI/4, positive distance, scroll up/down, orbit H/V drag, set_pivot, zoom clamp |
-| Godot 4                  | COVERED  | `project.godot`: `config/features=PackedStringArray("4.6")`; all scripts are `.gd` (GDScript) | Configuration fact — no runtime behavioral test required                       |
-
-### Key findings
-
-**JSON Scene Graph Loading:**
-- `_ready()` calls `_load_and_build()` (not a stub).
-- `_build()` creates Node3D anchors for every node (`_anchors` dict), ImmediateMesh+cone for every edge.
-- Anchor `.position` set directly from JSON `position.{x,y,z}`.
-- 5 behavioral tests in `test_scene_graph_loading.gd` assert on real Node3D tree properties.
-
-**Containment Rendering:**
-- Bounded context: `mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA`, `albedo_color.a = 0.18`, `cull_mode = CULL_DISABLED`.
-- Module: `albedo_color.a = 1.0` (fully opaque).
-- Child anchor added to parent anchor (`parent_anchor.add_child(anchor)`), confirmed by `test_module_parented_inside_context`.
-
-**Dependency Rendering:**
-- Line: `ImmediateMesh` with `PRIMITIVE_LINES`, two vertices at world-space endpoints.
-- Direction indicator: `CylinderMesh(top_radius=0)` (cone) placed at `to_pos - dir * 0.35`, oriented along edge direction via `Quaternion(Vector3.UP, dir)`.
-- Cross-context edge color: `Color(1.0, 0.50, 0.10)` (orange), asserted with `r > 0.8 and b < 0.3`.
-
-**Size Encoding:**
-- `sz = float(nd["size"])` → `box.size.x = sz` for both types; ratio large/small = 9.0/3.0 = 3.0, tested to within 0.001.
-
-**Camera Controls:**
-- Initial `_theta = 0.15 < PI/4` → near top-down view (8.6°). ✓
-- Scroll WHEEL_UP decreases `_distance`; WHEEL_DOWN increases. ✓
-- Middle-mouse drag changes `_phi` (horizontal) and `_theta` (vertical). ✓
-- `look_at(_pivot, Vector3.UP)` + theta clamp `[0.01, PI-0.01]` → intuitive orientation. ✓
-- `set_pivot()` updates `_pivot` and `_distance` for camera framing. ✓
-
-**Godot 4:**
-- `project.godot` reports `4.6`, all implementation and test files are GDScript. ✓
+| Requirement              | Code                                                                      | Tests                                           | Status  |
+|--------------------------|---------------------------------------------------------------------------|--------------------------------------------------|---------|
+| JSON Scene Graph Loading | `main.gd` `_load_and_build()` reads JSON; `_build()` creates volumes, edges, positioned anchors | `test_scene_graph_loading.gd`: 5 tests — volumes, mesh instances, edge meshes, anchor positions, label billboard/pixel_size | COVERED |
+| Containment Rendering    | `_create_volume()`: bounded_context → translucent (TRANSPARENCY_ALPHA, alpha=0.18, CULL_DISABLED); module → opaque (alpha=1.0); child anchor parented to parent anchor | `test_containment_rendering.gd`: 5 tests — translucency, opacity, nesting, size ordering, cull mode | COVERED |
+| Dependency Rendering     | `_create_edge()`: ImmediateMesh (PRIMITIVE_LINES) + CylinderMesh cone (top_radius=0) at target as direction indicator; orange for cross_context | `test_dependency_rendering.gd`: 4 tests — line mesh, cone created, cone near target, orange on cross-context | COVERED |
+| Size Encoding            | `sz = float(nd["size"])`; `box.size = Vector3(sz, sz*k, sz)` — direct proportionality | `test_size_encoding.gd`: 2 tests — large module bigger mesh, ratio 3.0 proportional to metric | COVERED |
+| Camera Controls          | `camera_controller.gd`: spherical-coord orbit (middle-mouse), zoom (scroll wheel), pan (right-mouse); initial `_theta=0.15` (≈8.6° from top-down); `look_at(_pivot, Vector3.UP)` preserves orientation; clamped to `[0.01, PI-0.01]` | `test_camera_controls.gd`: 8 tests — initial theta < PI/4, positive distance, scroll up/down, orbit H/V drag, set_pivot, zoom clamp | COVERED |
+| Godot 4                  | `project.godot`: `config/features=PackedStringArray("4.6")`; all scripts are GDScript | Engine version fact — confirmed by compile check | COVERED |
 
 ### Test runner
-
-`godot/tests/run_tests.gd` extends `SceneTree`, loads each `test_*.gd`, instantiates it, calls every `test_*` method, asserts `true` return value. This is a genuine runtime behavioral runner — not compilation-only. 24 tests across 5 files.
-
-### Verdict: PASS
-
-All 6 SHALL/MUST requirements are implemented in code and covered by GDScript behavioral tests that assert on real scene-tree properties.
+`godot/tests/run_tests.gd` extends `SceneTree`, loads each `test_*.gd`, instantiates it, calls every `test_*` method, and asserts `true` return. This is a genuine runtime behavioral runner — not compilation-only.
