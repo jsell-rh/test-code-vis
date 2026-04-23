@@ -121,3 +121,9 @@ JSON-specified coordinates with no layout recomputation.
 
 All 8 spec scenarios covered. All SHALL/MUST requirements implemented and tested with
 behavioral GDScript tests asserting real Node3D properties at runtime.
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
