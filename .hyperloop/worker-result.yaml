@@ -1,40 +1,53 @@
 ---
 verdict: pass
 ---
-## Task-007: Godot Application — Spec Review
+## Task-007: Godot Application — Spec Alignment Review
 
-Independent review confirms implementation is complete and correct.
-
-### Check Results
-- **extractor-lint.sh**: PASS — ruff clean; 93 pytest tests pass
-- **godot-compile.sh**: PASS — Godot 4.6.2 compiles cleanly (expected warning: no scene graph JSON at startup)
-- **godot-tests.sh**: PASS — 23/23 GDScript behavioral tests pass
-
-### Commit Trailers
-Present on all implementation commits:
-- `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384`
-- `Task-Ref: task-007`
+Independent review of `hyperloop/task-007` against `specs/prototype/godot-application.spec.md`.
 
 ### Spec Coverage
 
-| Requirement               | Scenarios | Tests                          | Status  |
-|---------------------------|-----------|--------------------------------|---------|
-| JSON Scene Graph Loading  | 1         | test_scene_graph_loading.gd (4)| COVERED |
-| Containment Rendering     | 1         | test_containment_rendering.gd (5) | COVERED |
-| Dependency Rendering      | 1         | test_dependency_rendering.gd (4)  | COVERED |
-| Size Encoding             | 1         | test_size_encoding.gd (2)      | COVERED |
-| Camera Controls           | 3         | test_camera_controls.gd (8)    | COVERED |
-| Godot 4                   | 1         | compile + project.godot config | COVERED |
+| Requirement               | Scenarios | Implementation                            | Tests                              | Status  |
+|---------------------------|-----------|-------------------------------------------|------------------------------------|---------|
+| JSON Scene Graph Loading  | 1         | `main.gd::_load_and_build()`, `_build()`  | `test_scene_graph_loading.gd` (4)  | COVERED |
+| Containment Rendering     | 1         | `main.gd::_create_volume()` nesting       | `test_containment_rendering.gd` (5)| COVERED |
+| Dependency Rendering      | 1         | `main.gd::_create_edge()` line + cone     | `test_dependency_rendering.gd` (4) | COVERED |
+| Size Encoding             | 1         | `main.gd::_create_volume()` BoxMesh size  | `test_size_encoding.gd` (2)        | COVERED |
+| Camera Controls           | 3         | `camera_controller.gd` full orbit/zoom    | `test_camera_controls.gd` (8)      | COVERED |
+| Godot 4                   | 1         | `project.godot` features=["4.6"]          | compile + runtime GDScript tests   | COVERED |
 
-### Key Findings
+### Detailed Findings
 
-**Direction indicator** satisfies the "visually indicated" requirement: `_create_edge()` places a `CylinderMesh` (top_radius=0 = pointed cone) at the target end, oriented along the edge direction via `Basis(Quaternion(Vector3.UP, dir))`. This is an explicit rendering element, not merely a colour difference.
+**JSON Scene Graph Loading (SHALL)**
+- `_load_and_build()` reads the file via `FileAccess`, parses via `JSON.new()`, and calls `_build(graph)`.
+- `_build()` iterates nodes and calls `_create_volume()` for each; iterates edges and calls `_create_edge()` for each.
+- Positions are set directly: `anchor.position = Vector3(p["x"], p["y"], p["z"])`.
+- Four tests cover: volumes created for each node, MeshInstance3D children exist, edge meshes created (≥2 per edge), and anchor positions match JSON data.
 
-**Containment** is rendered with child anchors parented to parent anchors in the scene tree, and the bounded-context BoxMesh is larger and translucent (alpha=0.18, TRANSPARENCY_ALPHA, CULL_DISABLED) vs child modules which are opaque (alpha=1.0).
+**Containment Rendering (MUST)**
+- Parent anchors (`bounded_context` nodes) are added to `self`; child anchors are added to the parent's `Node3D` anchor — creating true scene-tree nesting.
+- `bounded_context`: `BoxMesh.size = Vector3(sz, sz*0.2, sz)`, `albedo_color.a = 0.18`, `TRANSPARENCY_ALPHA`, `CULL_DISABLED`.
+- `module`: `BoxMesh.size = Vector3(sz, sz*0.6, sz)`, `albedo_color.a = 1.0` (fully opaque).
+- Five tests cover: translucency, opacity, parent-child scene-tree relationship, size ordering, and CULL_DISABLED.
 
-**Camera** defaults to theta=0.15 rad (~8.6° from vertical = near top-down). Middle-mouse drag orbits, scroll wheel zooms (clamped), right-mouse drag pans. `look_at(_pivot, Vector3.UP)` keeps up-vector consistent. Labels use `BILLBOARD_ENABLED` so they remain readable at any distance or angle.
+**Dependency Rendering (MUST)**
+- `_create_edge()` builds an `ImmediateMesh` line between world-space positions.
+- A `CylinderMesh` with `top_radius=0.0` (cone/arrowhead) is placed at the target end, rotated via `Basis(Quaternion(Vector3.UP, dir))`, satisfying "line's direction is visually indicated".
+- Cross-context edges use orange `Color(1.0, 0.50, 0.10)`; internal edges use grey.
+- Four tests cover: line mesh exists, orange cone for cross-context, direction cone created, cone positioned near target.
 
-**Size encoding** maps `nd["size"]` linearly to BoxMesh dimensions; the 3:1 ratio test confirms proportionality.
+**Size Encoding (MUST)**
+- `sz = float(nd["size"])` is used directly as `BoxMesh.size` dimensions.
+- Two tests confirm larger metric → larger mesh (size.x comparison) and proportional ratio (9.0/3.0 = 3.0, within 0.001 tolerance).
 
-### Note on State Files
-The branch diff vs main includes changes to `.hyperloop/state/` files. These are not from implementation commits — they result from the branch diverging from main at a point where orchestrator state differed. The two implementation commits (`a02ffac`, `12ac742`) touch only `godot/` and `.hyperloop/worker-result.yaml`. The state file divergence is what caused the prior 3 merge failures; the implementation itself is clean.
+**Camera Controls (MUST)**
+- Three scenarios, all covered:
+  - *Top-down overview*: `_theta = 0.15` rad (~8.6°) → well below 45° = top-down. Test: `test_initial_theta_is_near_top_down()`.
+  - *Zooming*: `MOUSE_BUTTON_WHEEL_UP` decreases `_distance`; `MOUSE_BUTTON_WHEEL_DOWN` increases it; clamped to `[min_distance, max_distance]`. Labels use `BILLBOARD_ENABLED` so they remain readable at any distance. Tests: scroll_up/down and clamp tests.
+  - *Orbiting*: Middle-mouse press+drag changes `_phi` (azimuth) and `_theta` (polar); `look_at(_pivot, Vector3.UP)` in `_update_transform()` keeps the up-vector stable. Tests: horizontal and vertical drag tests.
+- Eight tests cover all three scenarios plus pivot-update and zoom-clamp edge cases.
+
+**Godot 4 (MUST)**
+- `project.godot`: `config/features=PackedStringArray("4.6")` — Godot 4.6.
+- Both scripts (`main.gd`, `camera_controller.gd`) are `.gd` GDScript files; `main.tscn` references them via `ext_resource type="Script"`.
+- The test runner itself (`run_tests.gd`) is GDScript and drives 23 behavioral tests.
