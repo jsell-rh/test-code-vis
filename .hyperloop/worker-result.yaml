@@ -1,40 +1,70 @@
 ---
 verdict: pass
 ---
-## Spec Alignment — godot-application.spec.md
+## Spec Alignment Review — godot-application.spec.md
 
-All six requirements are now fully COVERED with code + tests. 24/24 GDScript
-tests pass. All check scripts pass.
-
-### Fix applied in this run
-
-The previous verdict was FAIL due to a missing property-value test for the
-"AND labels scale to remain readable" THEN clause in the Camera Controls /
-Zooming-in scenario.
-
-Added `test_labels_are_billboard_and_readable()` to
-`godot/tests/test_scene_graph_loading.gd`. The test:
-1. Instantiates `MainScript`, calls `_build()` with a known fixture.
-2. Retrieves the `Label3D` child from the `ctx1` anchor.
-3. Asserts the three properties that implement readability at all zoom levels:
-   - `lbl.billboard == BaseMaterial3D.BILLBOARD_ENABLED`  (label always faces camera)
-   - `lbl.pixel_size > 0.0`  (non-zero world-space text scale)
-   - `lbl.no_depth_test == true`  (visible through geometry at any zoom)
-
-These properties are set in `main.gd::_create_volume()` at lines 169–171.
-
-### All requirements — status
-
-| Requirement | Scenarios | Status |
-|---|---|---|
-| JSON Scene Graph Loading | 1 scenario | COVERED |
-| Containment Rendering | 1 scenario | COVERED |
-| Dependency Rendering | 1 scenario | COVERED |
-| Size Encoding | 1 scenario | COVERED |
-| Camera Controls | 3 scenarios | COVERED |
-| Godot 4 | 1 scenario | COVERED |
+Independent verification. All six requirements COVERED. 24/24 GDScript tests
+pass. All three check scripts pass. Commit trailers present on all implementation
+commits.
 
 ### Check results
-- `extractor-lint.sh`: PASS (93 extractor tests, ruff clean)
-- `godot-compile.sh`: PASS (Godot 4.6.2 headless compile)
+- `extractor-lint.sh`: PASS (ruff clean, 93 pytest tests)
+- `godot-compile.sh`: PASS (Godot Engine v4.6.2.stable, no errors)
 - `godot-tests.sh`: PASS (24/24 GDScript tests)
+
+### Per-requirement status
+
+| Requirement | Scenarios | Status | Notes |
+|---|---|---|---|
+| JSON Scene Graph Loading | 1 | COVERED | |
+| Containment Rendering | 1 | COVERED | |
+| Dependency Rendering | 1 | COVERED | |
+| Size Encoding | 1 | COVERED | |
+| Camera Controls | 3 | COVERED | |
+| Godot 4 | 1 | COVERED | project.godot + compile confirms 4.6 |
+
+### Verification details
+
+**JSON Scene Graph Loading**
+- `_ready()` calls `_load_and_build()` — not a stub.
+- `_build()` creates Node3D anchors per node, MeshInstance3D per volume, ImmediateMesh+cone per edge.
+- Tests: `test_volumes_created_for_each_node`, `test_mesh_instances_exist_in_anchors` (checks real MeshInstance3D child, not dict keys), `test_edge_mesh_instances_created`, `test_anchor_positions_match_json` (asserts `.position.is_equal_approx()` on real Node3D).
+
+**Containment Rendering**
+- Bounded context → translucent flat slab (TRANSPARENCY_ALPHA, alpha=0.18, CULL_DISABLED).
+- Module → opaque cube (alpha=1.0), scene-tree parented inside context anchor.
+- Tests: `test_bounded_context_is_translucent`, `test_module_is_opaque`, `test_module_parented_inside_context` (asserts `get_parent() == ctx_anchor`), `test_bounded_context_larger_than_module`, `test_bounded_context_cull_disabled`.
+
+**Dependency Rendering**
+- Each edge produces an ImmediateMesh line plus a CylinderMesh cone (top_radius=0) at the target end.
+- Direction indicator is an explicit arrowhead geometry — not a colour difference alone.
+- Tests: `test_edge_line_mesh_created`, `test_direction_indicator_cone_created`, `test_direction_cone_near_target`, `test_cross_context_cone_is_orange`.
+
+**Size Encoding**
+- `sz = float(nd["size"])` applied directly as BoxMesh.size dimensions → ratio preserved.
+- Tests: `test_large_module_has_bigger_mesh`, `test_mesh_sizes_proportional_to_metric` (asserts ratio within 0.001 of 3.0).
+
+**Camera Controls — Top-down overview**
+- `_theta` initialised to 0.15 rad (8.6°, well below PI/4).
+- Tests: `test_initial_theta_is_near_top_down`, `test_initial_distance_is_positive`.
+
+**Camera Controls — Zooming in**
+- WHEEL_UP decreases `_distance`, WHEEL_DOWN increases it; clamped to `[min_distance, max_distance]`.
+- Labels: `billboard == BILLBOARD_ENABLED`, `pixel_size = 0.012 > 0`, `no_depth_test = true` set in `_create_volume()`.
+- Tests: `test_scroll_up_decreases_distance`, `test_scroll_down_increases_distance`, `test_zoom_clamped_at_minimum`, `test_labels_are_billboard_and_readable` (instantiates Node3D, calls `_build()`, retrieves Label3D, asserts all three properties).
+
+**Camera Controls — Orbiting**
+- Middle-mouse drag changes `_phi`/`_theta`; `_theta` clamped to `[0.01, PI-0.01]` so up never flips.
+- `look_at(_pivot, Vector3.UP)` preserves orientation.
+- Tests: `test_orbit_horizontal_drag_changes_phi`, `test_orbit_vertical_drag_changes_theta`, `test_set_pivot_updates_state`.
+
+**Godot 4**
+- `project.godot`: `config/features=PackedStringArray("4.6")`.
+- Compile check confirms `Godot Engine v4.6.2.stable`.
+- All scripts are `.gd` (GDScript).
+
+### Commit trailers
+Both implementation commits carry `Spec-Ref` and `Task-Ref`:
+- `a02ffac` feat(godot): implement 3D scene graph visualiser
+- `12ac742` feat(godot): add GDScript test suite and edge direction indicator
+- `11960e4` test(godot): add label property test for readability at all zoom levels
