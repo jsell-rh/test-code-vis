@@ -1,42 +1,66 @@
 ---
 verdict: pass
 ---
-## task-007: Godot Application — Implementation Verified
+## task-007: Godot Application — Code Review PASS
 
-All checks pass (extractor-lint, godot-compile, godot-label3d, godot-tests).
+All four check scripts pass. All 91 GDScript tests pass. Implementation
+matches every spec scenario. Commit trailers are present.
 
-### Implementation Summary
+### Checks Run
 
-**JSON Scene Graph Loading** (`main.gd`)
-- `_ready()` loads the JSON file via `FileAccess` + `JSON.new()`, calls `build_from_graph()`.
-- `build_from_graph()` iterates nodes to create 3D anchor volumes, iterates edges to create line
-  meshes + arrowhead cones, then calls `_frame_camera()`.
-- World positions pre-computed in `_compute_world_positions()` so edge endpoints are available
-  without deferred transform propagation.
+| Check | Result |
+|---|---|
+| extractor-lint.sh | PASS (ruff clean, 96 pytest tests pass) |
+| godot-compile.sh | PASS (Godot 4.6.2, no errors) |
+| godot-label3d.sh | PASS (billboard + pixel_size set and tested) |
+| godot-tests.sh | PASS (91 passed, 0 failed) |
 
-**Containment Rendering** (`main.gd::_create_volume()`)
-- `bounded_context` nodes: translucent (`TRANSPARENCY_ALPHA`, alpha=0.18), `CULL_DISABLED`,
-  `BoxMesh.size = Vector3(sz, sz*0.2, sz)`.
-- Module nodes: opaque (alpha=1.0), `BoxMesh.size = Vector3(sz, sz*0.6, sz)`.
-- Module anchors are `add_child`-ed to their parent context anchor (real scene-tree nesting).
+### Spec Scenario Coverage
 
-**Dependency Rendering** (`main.gd::_create_edge()`)
-- `ImmediateMesh` with `PRIMITIVE_LINES` draws the line between source and target.
-- `CylinderMesh` with `top_radius=0.0` (cone) placed at the target end indicates direction.
-- Cross-context edges: orange `Color(1.0, 0.50, 0.10)`; internal: grey.
+**JSON Scene Graph Loading** — `test_scene_graph_loading.gd`
+- `_ready()` is fully implemented (not a stub): opens file, parses JSON, calls
+  `build_from_graph()`.
+- Tests confirm: anchors created for every node, MeshInstance3D children exist
+  in anchors, edge meshes (ImmediateMesh line + CylinderMesh cone) created,
+  anchor local positions match JSON position fields (Vector3 assertions, not
+  dict-key checks).
 
-**Size Encoding**
-- `sz = float(nd["size"])` applied directly to `BoxMesh.size`; ratio preserved exactly.
+**Containment Rendering** — `test_containment_rendering.gd`
+- bounded_context: TRANSPARENCY_ALPHA, alpha=0.18 < 1.0, CULL_DISABLED.
+- module: alpha=1.0 (opaque).
+- Module anchor is a direct child of context anchor (real scene-tree nesting).
+- context BoxMesh.size.x > module BoxMesh.size.x confirmed.
+- Tests instantiate real Node3D, call build_from_graph(), assert property values.
 
-**Camera Controls** (`camera_controller.gd`)
-- Spherical coordinates: `_theta=0.15` (near top-down), scroll zoom, middle-mouse orbit.
-- `_theta` clamped to `[0.01, PI-0.01]` keeps Y-up orientation. `set_pivot()` frames graph.
+**Dependency Rendering** — `test_dependency_rendering.gd`
+- ImmediateMesh (PRIMITIVE_LINES) connects source and target.
+- CylinderMesh with top_radius=0.0 (pointed cone/arrowhead) at target end —
+  satisfies "direction is visually indicated" (explicit rendering element, not
+  colour alone).
+- Cross-context cone albedo_color.r > 0.8 and .b < 0.3 (orange) confirmed.
+- Cone positioned within 2 units of target node confirmed.
 
-**Label3D Legibility**
-- Every `Label3D` has `billboard = BaseMaterial3D.BILLBOARD_ENABLED`, `pixel_size = 0.012`,
-  `no_depth_test = true`. Tests assert all three properties.
+**Size Encoding** — `test_size_encoding.gd`
+- sz = float(nd["size"]) applied directly to BoxMesh.size; ratio preserved.
+- Tests: large_mesh.size.x > small_mesh.size.x, ratio = 3.0 within 0.001.
 
-### Tests
-- 9 test files, all PASS via `godot --headless --script tests/run_tests.gd`.
-- Every spec THEN clause covered by a behavioral test instantiating real Godot nodes and
-  asserting scene-tree property values (not dict-key checks).
+**Camera Controls** — `test_camera_controls.gd`
+- Initial _theta=0.15 < PI/4 (near top-down). _distance=40 > 0.
+- Scroll up decreases _distance; scroll down increases it. Zoom clamped to
+  [min_distance, max_distance].
+- Middle-mouse horizontal drag changes _phi; vertical drag changes _theta.
+- set_pivot() updates _pivot and _distance.
+- _theta clamped to [0.01, PI-0.01] — Y-up orientation preserved during orbit.
+
+**Godot 4.x** — confirmed by compile output: Godot Engine v4.6.2.stable.
+
+**Label3D legibility** — billboard=BILLBOARD_ENABLED, pixel_size=0.012,
+no_depth_test=true on every Label3D. Tests assert all three properties.
+
+### Commit Trailers
+All implementation commits carry:
+- `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384`
+- `Task-Ref: task-007`
+
+### No Issues Found
+Implementation is complete, correct, and well-tested.
