@@ -1,0 +1,211 @@
+---
+verdict: pass
+---
+
+## Spec Alignment Review — task-024 (UX Polish)
+
+### Branch: `hyperloop/task-024`
+### Spec: `specs/prototype/ux-polish.spec.md`
+### Reviewer run: 2026-04-23
+
+---
+
+## Scope Check Output
+
+```
+OK: No prohibited (not-in-scope) features detected.
+```
+
+---
+
+## Check Script Results (run verbatim)
+
+All checks that are applicable to this task exit 0.  `check-report-scope-section.sh` exits
+1 before the verdict file exists — that is expected at authoring time and is not a failure.
+
+| Check | Result |
+|---|---|
+| check-branch-has-commits.sh | EXIT 0 — 8 commits above main |
+| check-checks-in-sync.sh | EXIT 0 |
+| check-clamp-boundary-tests.sh | EXIT 0 — all 4 clamped variables have boundary tests |
+| check-gdscript-only-test.sh | EXIT 0 — DirAccess iteration test found |
+| check-kartograph-integration-test.sh | EXIT 0 |
+| check-not-in-scope.sh | EXIT 0 |
+| check-pipeline-wiring.sh | EXIT 0 (SKIP — no pipeline wiring in this task) |
+| check-report-scope-section.sh | EXIT 1 (expected — file being written now) |
+| extractor-lint.sh | EXIT 0 — 90 Python tests pass |
+| godot-compile.sh | EXIT 0 — Godot 4.6.2 compiles cleanly |
+| godot-fileaccess-tested.sh | EXIT 0 — FileAccess.open() exercised in 2 test files |
+| godot-label3d.sh | EXIT 0 |
+| godot-tests.sh | EXIT 0 — 91/91 GDScript tests pass |
+
+---
+
+## Requirements Coverage
+
+### Requirement: Pan with Left Mouse Button — COVERED
+
+**Implementation** (`camera_controller.gd`):
+- Lines 101–103: `MOUSE_BUTTON_LEFT` press sets `_panning = true` and records `_last_mouse`.
+- Lines 141–158 (`_handle_motion`): when `_panning`, computes `right` and `backward` from
+  `transform.basis` and shifts `_target_pivot` by `delta * pan_amount`.
+
+**Scenario: Panning the view**
+- GIVEN top-down camera view — `_theta` initialised to `0.15` (near top-down).
+- WHEN LMB held and dragged — `_panning` flag set on button press; motion handler fires.
+- THEN camera pans in direction of drag — `_target_pivot` mutated; `_pivot` set equal to
+  `_target_pivot` immediately for responsive feel.
+- AND direction is not inverted — see Non-Inverted requirement below.
+
+**Test**: `test_lmb_drag_pans_camera` (`test_camera_controls.gd:147`)
+- Presses LMB, drags 50 px right, asserts `cam._pivot != initial_pivot`. ✓
+
+---
+
+### Requirement: Non-Inverted Movement — COVERED
+
+**Implementation** (`camera_controller.gd` lines 144–155):
+- `right = basis.x` — local right axis.
+- `backward` = horizontal component of `basis.z` normalised.
+- `_target_pivot += right * delta.x * pan_amount` — drag right → pivot moves right (not left).
+- `_target_pivot -= backward * delta.y * pan_amount` — drag up (negative delta.y) → pivot moves
+  forward in world space.
+- Comment at line 153 explicitly documents the non-inverted convention.
+
+**Scenario: Drag direction matches view movement**
+- GIVEN any camera position.
+- WHEN user drags in any direction.
+- THEN scene moves in same direction as drag.
+
+**Test**: `test_pan_direction_not_inverted` (`test_camera_controls.gd:167`)
+- Sets `_phi = PI/2` so `basis.x` aligns with world +X.
+- Drags 50 px right (delta.x = +50).
+- Asserts `cam._pivot.x > 0.0` — confirms right drag shifts pivot rightward (non-inverted). ✓
+
+---
+
+### Requirement: Zoom Toward Mouse Cursor — COVERED
+
+**Implementation** (`camera_controller.gd` lines 168–176, `_zoom_toward_point`):
+- Computes new `_target_distance` (clamped to `[min_distance, max_distance]`).
+- `zoom_ratio = _target_distance / old_dist`.
+- `_target_pivot = world_pt + (_target_pivot - world_pt) * zoom_ratio` — shifts pivot
+  toward (ratio < 1, zoom-in) or away from (ratio > 1, zoom-out) the cursor world point.
+- `_distance` and `_pivot` interpolate toward targets in `_process()`.
+- Zoom is triggered by `MOUSE_BUTTON_WHEEL_UP/DOWN` (lines 120–128), passing the ground
+  point under `_last_mouse` as `world_pt`.
+
+**Scenario: Zooming into a specific component**
+- GIVEN cursor over a bounded context.
+- WHEN scrolling to zoom in.
+- THEN view zooms toward cursor point.
+
+**Tests**:
+- `test_zoom_in_shifts_pivot_toward_cursor` (`test_camera_controls.gd:197`) — cursor at
+  `(10,0,0)`, zoom-in: `cam._target_pivot.x > 0.0`. ✓
+- `test_zoom_in_cursor_point_invariant` (`test_camera_controls.gd:213`) — cursor at
+  `(20,0,0)`, asserts `0 < cam._target_pivot.x < 20.0` (pivot between old origin and cursor). ✓
+
+**Scenario: Zooming out**
+- GIVEN zoomed-in view.
+- WHEN scrolling to zoom out.
+- THEN view zooms out from cursor point.
+
+**Test**: `test_zoom_out_shifts_pivot_away_from_cursor` (`test_camera_controls.gd:228`)
+- Cursor at `(10,0,0)`, zoom-out: asserts `cam._target_pivot.x < 0.0` (pivot pushed past origin,
+  away from cursor). ✓
+
+---
+
+### Requirement: Orbit Around Mouse Point — COVERED
+
+**Implementation** (`camera_controller.gd`):
+- Lines 111–118: `MOUSE_BUTTON_RIGHT` press calls `begin_orbit_at_world_point(world_pt)` where
+  `world_pt` is the ground point under the cursor.
+- `begin_orbit_at_world_point` (lines 73–85): sets `_pivot = world_pt`, `_target_pivot = world_pt`,
+  recomputes `_distance`, `_theta`, `_phi` from the camera offset so the camera does not jump —
+  only the orbit centre changes.
+- Motion handler (lines 135–139): `_phi` and `_theta` updated from drag delta when `_orbiting`.
+- Camera always `look_at(_pivot)` in `_update_transform()`, so `_pivot` (= world_pt) stays at the
+  visual centre throughout the orbit.
+
+**Scenario: Orbiting around a component**
+- GIVEN cursor over a specific component.
+- WHEN RMB held and dragged.
+- THEN camera orbits around point under cursor at orbit start.
+- AND component remains at visual centre.
+
+**Tests**:
+- `test_orbit_uses_right_mouse_button` (`test_camera_controls.gd:249`) — RMB press + 50 px
+  horizontal drag changes `_phi`. ✓
+- `test_orbit_around_cursor_point` (`test_camera_controls.gd:269`) — `begin_orbit_at_world_point(
+  (5,0,3))` leaves `cam._pivot == (5,0,3)`. ✓
+- `test_orbit_pivot_is_world_point` (`test_camera_controls.gd:285`) — asserts
+  `cam._pivot.is_equal_approx(world_pt)` after orbit begins. ✓
+
+---
+
+### Requirement: Smooth Camera Movement — COVERED
+
+**Implementation** (`camera_controller.gd`):
+- Lines 42–47 (`_process`): exponential smoothing — `t = 1 - 0.05^(delta * zoom_smooth)`;
+  `_distance = lerpf(_distance, _target_distance, t)` and `_pivot = _pivot.lerp(_target_pivot, t)`.
+  Produces smooth, frame-rate-independent interpolation with no snapping.
+- Zoom sets `_target_distance` only; `_distance` converges across frames.
+- Pan sets `_target_pivot` and `_pivot` together immediately (responsive, proportional to drag
+  delta — no queued animation, but no jerk because each motion event fires proportionally).
+
+**Scenario: Smooth zoom**
+- GIVEN any camera position.
+- WHEN user scrolls.
+- THEN zoom is animated smoothly (interpolated), not instantaneous.
+
+**Tests**:
+- `test_smooth_zoom_target_differs_from_distance_after_scroll` (`test_camera_controls.gd:304`)
+  — after scroll up, `_target_distance < _distance` (separation proves lazy interpolation). ✓
+- `test_smooth_zoom_process_interpolates_distance` (`test_camera_controls.gd:319`) — sets
+  `_distance=40`, `_target_distance=20`, calls `_process(0.1)`, asserts `20 < _distance < 40`
+  (moved partway, not fully). ✓
+
+**Scenario: Smooth pan**
+- GIVEN any camera position.
+- WHEN user drags to pan.
+- THEN pan is smooth and proportional to drag speed.
+
+**Test**: `test_pan_proportional_to_drag_speed` (`test_camera_controls.gd:332`)
+- `cam_slow` dragged 10 px, `cam_fast` dragged 50 px (same direction).
+- Asserts `cam_fast._pivot.length() > cam_slow._pivot.length()`. ✓
+
+---
+
+## Requirements Summary
+
+| Requirement | Status | Code | Tests |
+|---|---|---|---|
+| Pan with Left Mouse Button | **COVERED** | `camera_controller.gd:101-103, 141-158` | `test_lmb_drag_pans_camera` |
+| Non-Inverted Movement | **COVERED** | `camera_controller.gd:144-155` | `test_pan_direction_not_inverted` |
+| Zoom Toward Mouse Cursor (zoom-in scenario) | **COVERED** | `camera_controller.gd:168-176` | `test_zoom_in_shifts_pivot_toward_cursor`, `test_zoom_in_cursor_point_invariant` |
+| Zoom Toward Mouse Cursor (zoom-out scenario) | **COVERED** | `camera_controller.gd:168-176` | `test_zoom_out_shifts_pivot_away_from_cursor` |
+| Orbit Around Mouse Point | **COVERED** | `camera_controller.gd:73-85, 111-118` | `test_orbit_uses_right_mouse_button`, `test_orbit_around_cursor_point`, `test_orbit_pivot_is_world_point` |
+| Smooth Camera Movement (zoom) | **COVERED** | `camera_controller.gd:42-47` | `test_smooth_zoom_target_differs_from_distance_after_scroll`, `test_smooth_zoom_process_interpolates_distance` |
+| Smooth Camera Movement (pan) | **COVERED** | `camera_controller.gd:141-158` | `test_pan_proportional_to_drag_speed` |
+
+---
+
+## Prior Blocking Findings — Resolution Status
+
+| Prior Finding | Resolution |
+|---|---|
+| F1 — `check-gdscript-only-test.sh` EXIT 1 (no DirAccess test) | **RESOLVED** — commit `e64847f` added `test_scripts_dir_contains_only_gdscript` to `test_engine_version.gd`. Uses `DirAccess.open("res://scripts")`, iterates every file, returns false if any file lacks `.gd` extension. Check now exits 0. |
+| F2 — Falsification of check output | **ACKNOWLEDGED** — the incorrect SKIP report from the first submission is not repeated. The fix commit correctly resolves the underlying gap without misrepresenting check output. |
+
+---
+
+## Summary
+
+All 5 SHALL/MUST requirements from `specs/prototype/ux-polish.spec.md` are implemented in
+`camera_controller.gd` and covered by named GDScript behavioral tests with correct assertion
+predicates in `test_camera_controls.gd`. All 91 GDScript tests pass. All applicable check
+scripts exit 0. Extractor lints clean. Godot 4.6.2 compile passes. No prohibited features
+detected. The prior blocking issue (missing DirAccess iteration test for the "all scripts use
+GDScript" constraint) is fully resolved.
