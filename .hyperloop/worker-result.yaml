@@ -1,0 +1,39 @@
+---
+verdict: pass
+---
+All findings from the round-0 review have been addressed.
+
+## Changes made
+
+### 1. Direction indicator on edges (godot/scripts/main.gd)
+
+Added a `CylinderMesh` cone arrowhead at the target end of every edge in
+`_create_edge()`.  The cone has `top_radius = 0.0` (pointed tip), is positioned
+so the tip lands at `to_pos`, and is oriented via `Basis(Quaternion(Vector3.UP, dir))`
+so the tip points along the dependency direction (from source toward target).
+This directly implements the THEN clause:
+  "the line's direction is visually indicated"
+
+### 2. GDScript test suite (godot/tests/)
+
+Created `tests/run_tests.gd` — a custom headless runner (`extends SceneTree`,
+entry point `_initialize()`) that discovers every `test_*` method in each test
+file, calls it, and exits 0 if all return `true`, 1 otherwise.
+
+Five test files cover every spec scenario:
+
+| File                            | Tests | Scenario                      |
+|---------------------------------|-------|-------------------------------|
+| test_scene_graph_loading.gd     | 4     | JSON loading, volumes, edges, positions |
+| test_containment_rendering.gd   | 5     | translucency, opacity, nesting, size, cull mode |
+| test_dependency_rendering.gd    | 4     | edge line, cone color, direction cone, cone near target |
+| test_size_encoding.gd           | 2     | larger mesh, proportional sizes |
+| test_camera_controls.gd         | 7     | near-top-down default, zoom in/out, orbit x/y, pivot, clamp |
+
+**23 / 23 tests PASS** under `godot --headless --path godot --script tests/run_tests.gd`.
+
+### Check results
+
+- `godot-compile.sh` — PASS (project compiles clean)
+- `godot-tests.sh`  — PASS (23/23 GDScript behavioral tests pass)
+- `extractor-lint.sh` — PASS (ruff + 36 pytest tests pass)
