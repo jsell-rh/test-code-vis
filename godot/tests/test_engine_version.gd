@@ -86,3 +86,24 @@ func test_file_access_get_as_text_returns_non_empty_string() -> void:
 		"FileAccess.get_as_text() must return a non-empty string for project.godot")
 	_check(content.begins_with("; Engine configuration"),
 		"project.godot must begin with the standard Godot config header comment")
+
+
+## AND all scripts use GDScript — iterate res://scripts/ and assert every file
+## ends with ".gd". This covers the "all scripts use GDScript" THEN-clause by
+## checking the extension of every actual file in the scripts directory.
+func test_scripts_dir_contains_only_gdscript() -> void:
+	var dir := DirAccess.open("res://scripts")
+	_check(dir != null, "DirAccess.open('res://scripts') must succeed")
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var file_name := dir.get_next()
+	var found_any := false
+	while file_name != "":
+		if not dir.current_is_dir():
+			found_any = true
+			_check(file_name.ends_with(".gd"),
+				"All files in res://scripts/ must be GDScript (.gd); found: " + file_name)
+		file_name = dir.get_next()
+	dir.list_dir_end()
+	_check(found_any, "res://scripts/ must contain at least one file")
