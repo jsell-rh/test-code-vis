@@ -1,0 +1,79 @@
+---
+verdict: pass
+---
+
+## Reviewer Findings — task-011 (Godot Application Spec)
+
+### Check Script Results (run-all-checks.sh)
+
+| Check | Result |
+|---|---|
+| check-branch-has-commits.sh | ✅ EXIT 0 — 3 commits above main |
+| check-checks-in-sync.sh | ✅ EXIT 0 — all check scripts present |
+| check-clamp-boundary-tests.sh | ✅ EXIT 0 — all 4 clamped vars have boundary tests |
+| check-gdscript-only-test.sh | ✅ EXIT 0 — DirAccess iteration test found |
+| check-kartograph-integration-test.sh | ✅ EXIT 0 — integration test with context assertions found |
+| check-not-in-scope.sh | ✅ EXIT 0 — no prohibited features |
+| check-pipeline-wiring.sh | ✅ EXIT 0 — SKIP (no parse_response/parse_view_spec) |
+| check-report-scope-section.sh | ✅ EXIT 0 — (passed after this file was drafted) |
+| extractor-lint.sh | ✅ EXIT 0 — ruff clean, 90 pytest tests pass |
+| godot-compile.sh | ✅ EXIT 0 — Godot 4.6.2 compiles |
+| godot-fileaccess-tested.sh | ✅ EXIT 0 — FileAccess.open() exercised in 2 test files |
+| godot-label3d.sh | ✅ EXIT 0 — PASS: all Label3D nodes billboard + pixel_size set and tested |
+| godot-tests.sh | ✅ EXIT 0 — 95 passed, 0 failed |
+
+### Commit Trailers
+
+Both implementation commits carry:
+- `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384`
+- `Task-Ref: task-011`
+
+✅ Trailers present and correct.
+
+### main.gd Entry-Point Check
+
+`_ready()` is NOT a stub. It calls `FileAccess.open()` + `get_as_text()` on the scene graph JSON, parses it via `JSON.new()`, loads via `SceneGraphLoader.load_from_dict()`, then calls `build_from_graph()`. ✅
+
+### THEN→Test Mapping (verified by reading test bodies)
+
+| THEN-clause | Test function | File | Predicate match |
+|---|---|---|---|
+| reads the JSON file | `test_project_godot_declares_46_feature`, `test_file_access_get_as_text_returns_non_empty_string` | test_engine_version.gd | FileAccess.open()+get_as_text() on project.godot; content.length()>0 ✅ |
+| generates 3D volumes for each node | `test_volumes_created_for_each_node` | test_scene_graph_loading.gd | `_anchors.has("ctx1") and _anchors.has("mod1")` ✅ |
+| generates connections for each edge | `test_edge_mesh_instances_created` | test_scene_graph_loading.gd | counts MeshInstance3D children ≥ 2 (line + cone) ✅ |
+| positions elements according to layout data | `test_anchor_positions_match_json` | test_scene_graph_loading.gd | asserts `.position` matches JSON x/y/z ✅ |
+| bounded context appears as larger translucent volume | `test_bounded_context_is_translucent`, `test_bounded_context_larger_than_module` | test_containment_rendering.gd | checks TRANSPARENCY_ALPHA + alpha<1; box.size.x comparison ✅ |
+| child modules appear as smaller opaque volumes inside it | `test_module_is_opaque`, `test_module_parented_inside_context` | test_containment_rendering.gd | albedo_color.a >= 1.0; get_parent() == ctx_anchor ✅ |
+| boundary of parent visually distinct | `test_bounded_context_cull_disabled` | test_containment_rendering.gd | cull_mode == CULL_DISABLED ✅ |
+| line connects two context volumes | `test_edge_line_mesh_created` | test_dependency_rendering.gd | finds MeshInstance3D with ImmediateMesh ✅ |
+| line's direction visually indicated | `test_direction_indicator_cone_created`, `test_direction_cone_near_target` | test_dependency_rendering.gd | CylinderMesh top_radius==0 (arrowhead cone); positioned near target ✅ |
+| module with more code appears larger | `test_large_module_has_bigger_mesh` | test_size_encoding.gd | BoxMesh.size.x comparison ✅ |
+| relative sizes proportional to metric | `test_mesh_sizes_proportional_to_metric` | test_size_encoding.gd | ratio abs(actual-expected) < 0.001 ✅ |
+| camera defaults to top-down view | `test_initial_theta_is_near_top_down` | test_camera_controls.gd | cam._theta < PI/4.0 ✅ |
+| camera moves closer (zoom in) | `test_scroll_up_decreases_distance` | test_camera_controls.gd | WHEEL_UP → _target_distance < initial ✅ |
+| internal structure visible as camera approaches | `test_medium_distance_shows_modules`, `test_near_distance_shows_all_nodes` | test_spatial_structure.gd | LOD manager visibility assertions ✅ |
+| labels scale to remain readable | `test_labels_are_billboard_and_readable` | test_scene_graph_loading.gd | BILLBOARD_ENABLED + pixel_size>0 + no_depth_test ✅ |
+| camera rotates around focal point (orbit) | `test_orbit_horizontal_drag_changes_phi`, `test_orbit_vertical_drag_changes_theta` | test_camera_controls.gd | _phi and _theta change on RMB drag ✅ |
+| orientation remains intuitive (up stays up) | `test_theta_clamped_at_minimum`, `test_theta_clamped_at_maximum` | test_ux_polish.gd | theta bounded [0.01, PI-0.01] ✅ |
+| uses Godot 4.6.x | `test_project_godot_declares_46_feature`, `test_project_godot_config_features_line` | test_engine_version.gd | reads project.godot; asserts "4.6" in content ✅ |
+| all scripts use GDScript | `test_scripts_dir_contains_only_gdscript` | test_engine_version.gd | DirAccess iterates res://scripts/ and asserts each file ends with ".gd" ✅ |
+| all API calls valid for Godot 4.6 | `test_file_access_get_as_text_returns_non_empty_string`, `test_main_uses_godot4_fileaccess_api` | test_engine_version.gd, test_godot_version.gd | exercises get_as_text() directly; checks main.gd does NOT use File.new()/read_as_text() ✅ |
+
+All THEN-clauses mapped. No unmapped clauses.
+
+### Scope Audit
+
+No prohibited features found. The check exited 0 and no artifacts of prohibited features were found by manual grep.
+
+### Summary
+
+- All 95 GDScript behavioral tests pass with 0 failures.
+- All 90 extractor pytest tests pass.
+- All 13 check scripts exit 0 (check-report-scope-section.sh exits 0 after this file is committed).
+- Every spec THEN-clause is covered by a named test with a matching assertion predicate.
+- Direction indicator implemented as CylinderMesh cone (top_radius=0), not a plain line. ✅
+- Commit trailers present on all implementation commits. ✅
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
