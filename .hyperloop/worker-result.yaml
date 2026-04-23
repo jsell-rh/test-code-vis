@@ -1,62 +1,70 @@
 ---
 verdict: pass
 ---
-## task-007 — Godot Application Implementation
+## task-007 — Godot Application Implementation (fresh review 2026-04-23)
 
-All 6 SHALL/MUST requirements from specs/prototype/godot-application.spec.md are
-implemented and verified with 24/24 GDScript behavioral tests passing.
+Independent review — all checks run from scratch, code read directly.
 
-### Checks (fresh run 2026-04-23)
+### Checks
 
-- godot-compile.sh: PASS — project compiles cleanly under Godot 4.6.2
 - extractor-lint.sh: PASS — ruff clean, 93 Python tests pass
-- godot-tests.sh: PASS — 24/24 GDScript tests pass
+- godot-compile.sh: PASS — Godot 4.6.2, warning only (missing data file, expected)
+- godot-tests.sh: PASS — 24/24 GDScript behavioral tests pass
 
-### Spec coverage
+### Commit trailers
 
-**JSON Scene Graph Loading** (`godot/scripts/main.gd`):
-- `_ready()` → `_load_and_build()` reads JSON via `FileAccess` + `JSON.parse()`.
-- `_build()` calls `_create_volume()` for each node and `_create_edge()` for each edge.
-- `_compute_world_positions()` resolves positions from the JSON `position` field.
-- THEN clauses tested: anchors created (test_volumes_created_for_each_node),
-  MeshInstance3D children exist (test_mesh_instances_exist_in_anchors),
-  edge meshes created (test_edge_mesh_instances_created),
-  positions match JSON data (test_anchor_positions_match_json),
-  labels are billboard+readable (test_labels_are_billboard_and_readable).
+All three implementation commits carry both required trailers:
+- Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
+- Task-Ref: task-007
 
-**Containment Rendering** (`_create_volume()`):
-- Bounded context: BoxMesh, `TRANSPARENCY_ALPHA`, `albedo_color.a = 0.18`, `CULL_DISABLED`.
-- Module: BoxMesh, `albedo_color.a = 1.0` (opaque).
-- Children parented to context anchor in the scene tree.
-- THEN clauses tested: translucency (test_bounded_context_is_translucent),
-  opacity (test_module_is_opaque), nesting (test_module_parented_inside_context),
-  size ordering (test_bounded_context_larger_than_module),
-  distinct boundary (test_bounded_context_cull_disabled).
+### Spec scenario coverage (per guideline checklist)
 
-**Dependency Rendering** (`_create_edge()`):
-- Line: `ImmediateMesh` with `PRIMITIVE_LINES` between source and target world positions.
-- Direction indicator: `CylinderMesh` with `top_radius=0.0` (cone) placed at target end.
-- Cross-context edges: orange (`Color(1.0, 0.50, 0.10)`); internal: grey.
-- THEN clauses tested: line mesh created (test_edge_line_mesh_created),
-  cone created (test_direction_indicator_cone_created),
-  cone near target end (test_direction_cone_near_target),
-  cross-context cone is orange (test_cross_context_cone_is_orange).
+**JSON Scene Graph Loading**
+- `_ready()` calls `_load_and_build()`; not an empty stub.
+- Reads JSON via `FileAccess` + `JSON.parse()`, builds volumes+edges, positions from JSON.
+- Tests instantiate real Node3D, invoke `_build()`, assert `_anchors` keys, MeshInstance3D
+  children, local `.position` values.
+- THEN clauses fully covered: 5 tests pass.
 
-**Size Encoding** (`_create_volume()`):
-- `sz = float(nd["size"])` applied directly to `BoxMesh.size` axes.
-- THEN clauses tested: larger metric → larger mesh (test_large_module_has_bigger_mesh),
-  proportional sizes within 0.001 tolerance (test_mesh_sizes_proportional_to_metric).
+**Containment Rendering**
+- Bounded context: TRANSPARENCY_ALPHA + albedo_color.a=0.18 + CULL_DISABLED (translucent).
+- Module: albedo_color.a=1.0 (opaque). Children parented to context anchor.
+- Tests assert mat.transparency, mat.albedo_color.a, get_parent(), BoxMesh.size ordering,
+  and cull_mode — none are dict-key-only checks.
+- THEN clauses fully covered: 5 tests pass.
 
-**Camera Controls** (`godot/scripts/camera_controller.gd`):
-- Top-down default: `_theta = 0.15` rad (< PI/4 = 45°).
-- Zoom: WHEEL_UP decreases `_distance`, WHEEL_DOWN increases; clamped to [min, max].
-- Orbit: MIDDLE drag adjusts `_phi` (azimuth) and `_theta` (polar, clamped [0.01, PI-0.01]).
-- `look_at(_pivot, Vector3.UP)` on every update maintains up-stability.
-- THEN clauses tested: initial theta top-down, initial distance positive,
-  scroll up/down changes distance, orbit changes phi/theta,
-  set_pivot updates state, zoom clamped at minimum.
+**Dependency Rendering**
+- "direction is visually indicated": explicit CylinderMesh (top_radius=0 = cone) placed at
+  target end. Not a colour difference alone — a separate geometric element. ✅
+- Tests verify ImmediateMesh line exists, CylinderMesh cone exists, cone position < 2 units
+  from target, cross-context cone albedo is orange (R>0.8, B<0.3).
+- THEN clauses fully covered: 4 tests pass.
 
-**Godot 4**: `project.godot` declares `config/features=PackedStringArray("4.6")`.
-All scripts are `.gd` (GDScript).
+**Size Encoding**
+- BoxMesh.size set directly to float(nd["size"]); proportionality is 1:1.
+- Tests assert size.x ordering and ratio == 3.0 ±0.001.
+- THEN clauses fully covered: 2 tests pass.
+
+**Camera Controls**
+- Top-down: _theta=0.15 < PI/4. Zoom: scroll events change _distance, clamped at min.
+- Orbit: middle-drag changes _phi (azimuth) and _theta (polar); look_at(pivot, UP) keeps
+  up stable.
+- Tests exercise _handle_button() and _handle_motion() directly with synthesised events.
+- All three scenarios (top-down, zoom, orbit) covered: 8 tests pass.
+
+**Godot 4**
+- Compile output confirms Godot Engine v4.6.2.stable. All scripts are .gd.
+
+### Guidelines compliance
+
+- Entry-point stub check: `_ready()` calls `_load_and_build()`, not `pass`. ✅
+- Dict-key assertion check: tests use get_children(), cast to typed nodes, read actual
+  properties (.position, .albedo_color, .transparency, .cull_mode, .billboard,
+  .pixel_size, .no_depth_test). No .has()-only tests. ✅
+- Label readability: `test_labels_are_billboard_and_readable` asserts
+  `billboard == BILLBOARD_ENABLED` and `pixel_size > 0.0` and `no_depth_test == true`. ✅
+- Containment visually represented: module anchor is get_parent() == context anchor;
+  context is translucent slab, module is opaque cube. ✅
+- Direction "visually indicated": CylinderMesh cone (not just colour). ✅
 
 **Verdict: PASS**
