@@ -1,7 +1,7 @@
 ---
 verdict: pass
 ---
-## task-007 Spec Alignment Review — Godot Application (2026-04-23)
+## task-007 Worker Verdict — Godot Application (fresh run 2026-04-23)
 
 Spec: specs/prototype/godot-application.spec.md
 Branch: hyperloop/task-007
