@@ -51,3 +51,23 @@ func test_main_script_is_gdscript() -> bool:
 	file.close()
 	# run/main_scene must point to a .tscn (GDScript-backed) scene, not a .cs scene.
 	return content.contains("main.tscn") and not content.contains(".cs")
+
+
+## AND all scripts use GDScript (iteration) —
+## Iterates every file in res://scripts/ using DirAccess and asserts that
+## every file has a .gd extension.  This covers the "all scripts use GDScript"
+## THEN-clause by enumerating the complete set, not by checking a config string.
+func test_scripts_dir_contains_only_gdscript() -> bool:
+	var dir := DirAccess.open("res://scripts")
+	if dir == null:
+		return false
+	dir.list_dir_begin()
+	var file_name: String = dir.get_next()
+	while file_name != "":
+		if not dir.current_is_dir() and file_name != "":
+			if not file_name.ends_with(".gd"):
+				dir.list_dir_end()
+				return false
+		file_name = dir.get_next()
+	dir.list_dir_end()
+	return true
