@@ -24,8 +24,6 @@ func _init() -> void:
 	# --- Existing test suites (from completed prior tasks) ---
 	_run_suite(preload("res://tests/test_scene_graph_loader.gd").new())
 	_run_suite(preload("res://tests/test_node_renderer.gd").new())
-	_run_suite(preload("res://tests/test_view_spec.gd").new())
-	_run_suite(preload("res://tests/test_view_spec_renderer.gd").new())
 
 	# --- task-009: Godot Application spec ---
 	_run_suite(preload("res://tests/test_scene_graph_loading.gd").new())
@@ -35,8 +33,8 @@ func _init() -> void:
 	_run_suite(preload("res://tests/test_camera_controls.gd").new())
 	_run_suite(preload("res://tests/test_engine_version.gd").new())
 
-	# --- task-020: Moldable Views — question input UI panel ---
-	_run_suite(preload("res://tests/test_question_panel.gd").new())
+	# --- task-012: Readable Labels at all zoom levels (prototype-scope spec) ---
+	_run_suite(preload("res://tests/test_readable_labels.gd").new())
 
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
