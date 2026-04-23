@@ -38,6 +38,9 @@ func _init() -> void:
 	# --- task-020: Moldable Views — question input UI panel ---
 	_run_suite(preload("res://tests/test_question_panel.gd").new())
 
+	# --- task-013: Godot 4.6 / Engine version scenario ---
+	_run_suite(preload("res://tests/test_godot_version.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
