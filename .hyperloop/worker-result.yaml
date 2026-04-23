@@ -1,0 +1,136 @@
+---
+verdict: pass
+---
+## Spec Alignment Review — specs/interaction/moldable-views.spec.md
+
+All three SHALL requirements are implemented in GDScript and covered by
+behavioral tests in `godot/tests/`. Every scenario has a corresponding
+test that exercises the exact Given/When/Then conditions using fixture
+data and asserts runtime outputs (scene-tree nodes, property values,
+positions).
+
+Note: `specs/prototype/prototype-scope.spec.md` marks moldable views as
+NOT in prototype scope. The implementation was done anyway (the task was
+explicitly assigned). Per the review guidelines, out-of-scope exclusions
+are grounds not to fail for missing features — they do not prohibit
+implementing the feature. All requirements from the moldable-views spec
+itself are fully covered.
+
+---
+
+### Requirement: Question-Driven View Generation — COVERED
+
+**Code:** `godot/scripts/question_panel.gd` → `QuestionPanel.process_question()`
+accepts a natural-language question string and returns a `ViewSpec` dict
+filtered through `ViewSpec.from_dict()`. The prompt builder in
+`godot/scripts/llm_view_generator.gd` → `LLMViewGenerator.build_prompt()`
+packages the question plus graph context for an LLM call.
+`godot/scripts/view_spec_renderer.gd` → `ViewSpecRenderer.apply()` turns
+the resulting spec into a 3D spatial scene (MeshInstance3D children under a
+Node3D root).
+
+**Scenario: Architectural question — COVERED**
+
+- `test_question_panel.gd::test_auth_question_show_op_includes_auth_service`
+  — GIVEN graph + WHEN "how does authentication work?" THEN spec has `show`
+  op containing `auth_service`.
+- `test_question_panel.gd::test_auth_question_excludes_unrelated_nodes_from_render`
+  — GIVEN graph + auth spec THEN ViewSpecRenderer excludes `payment_service`
+  (irrelevant node not in `show` list).
+- `test_question_panel.gd::test_auth_question_includes_highlight_op_for_auth_service`
+  — AND relevant component is visually emphasised via `highlight` op.
+- `test_question_panel.gd::test_auth_question_includes_annotate_op_for_auth_service`
+  — AND component is arranged/labelled via `annotate` op.
+- `test_question_panel.gd::test_auth_question_highlight_sets_material_on_rendered_node`
+  — runtime check: `material_override` is non-null on the auth_service
+  MeshInstance3D after `ViewSpecRenderer.apply()`.
+- `test_view_spec_renderer.gd::test_show_op_includes_listed_node_in_scene_tree`
+  — direct renderer coverage of the `show` primitive.
+- `test_view_spec_renderer.gd::test_show_op_excludes_non_listed_nodes_from_scene_tree`
+  — direct renderer coverage of de-emphasis logic.
+
+**Scenario: Impact question — COVERED**
+
+- `test_question_panel.gd::test_impact_question_show_op_includes_user_db`
+  — WHEN "what depends on the user database?" THEN `show` op contains
+  `user_db`.
+- `test_question_panel.gd::test_impact_question_show_op_includes_dependents`
+  — AND `auth_service` (dependent) also appears in `show` op.
+- `test_question_panel.gd::test_impact_question_includes_connect_op`
+  — AND dependency relationships are spatially clear via `connect` op.
+- `test_question_panel.gd::test_impact_question_connect_targets_user_db`
+  — `connect` op targets `user_db` specifically.
+- `test_question_panel.gd::test_impact_question_connect_creates_midpoint_node_in_scene`
+  — runtime check: `conn_auth_service_user_db` Node3D exists under root
+  after `ViewSpecRenderer.apply()`.
+- `test_view_spec_renderer.gd::test_connect_op_creates_connector_node_in_scene_tree`
+  — direct renderer coverage.
+- `test_view_spec_renderer.gd::test_connect_op_connector_position_is_midpoint_x`
+  — connector placed at computed midpoint (x=2.5 for auth@0, user_db@5).
+
+---
+
+### Requirement: View Specs as Intermediate Representation — COVERED
+
+**Code:** `godot/scripts/view_spec.gd` → `ViewSpec.from_dict()` defines the
+structured IR (Dictionary with `question` and `operations` keys).
+`LLMViewGenerator.parse_response()` converts raw LLM text → ViewSpec dict
+(never Node objects or geometry). `ViewSpecRenderer.apply()` interprets
+that dict into the spatial scene.
+
+**Scenario: LLM produces view spec — COVERED**
+
+- `test_llm_view_generator.gd::test_parse_response_returns_dictionary`
+  — THEN emits a Dictionary (not raw 3D geometry).
+- `test_llm_view_generator.gd::test_parse_response_has_question_key` /
+  `test_parse_response_has_operations_key` / `test_parse_response_operations_is_array`
+  — structural invariants of the IR are asserted.
+- `test_llm_view_generator.gd::test_parse_response_passes_through_show_op` /
+  `hide_op` / `arrange_op` / `connect_op` / `highlight_op` / `annotate_op`
+  — view spec controls all six element-visibility/arrangement dimensions.
+- `test_llm_view_generator.gd::test_parse_response_all_six_ops_pass_through`
+  — end-to-end: all 6 ops survive parse round-trip.
+- `test_view_spec_renderer.gd::test_renderer_creates_mesh_instance_3d_for_each_shown_node`
+  — AND the 3D renderer interprets the view spec into a spatial scene
+  (3 MeshInstance3D nodes for 3-node graph with empty spec).
+- `test_question_panel.gd::test_renderer_can_apply_auth_spec_to_scene` /
+  `test_renderer_can_apply_impact_spec_to_scene`
+  — end-to-end renderer integration from question → spec → scene.
+- `test_view_spec_renderer.gd` extensively covers `arrange`, `highlight`,
+  `annotate` primitives with property-level assertions (position.x/y/z,
+  albedo_color.r/g/b, Label3D.text, billboard mode, pixel_size).
+
+---
+
+### Requirement: Fixed Visual Primitive Set — COVERED
+
+**Code:** `godot/scripts/view_spec.gd` defines
+`VALID_OPS: Array = ["show", "hide", "highlight", "arrange", "annotate", "connect"]`
+as a module-level constant. `ViewSpec.from_dict()` silently drops any op
+whose `"op"` key is not in `VALID_OPS`. `LLMViewGenerator.build_prompt()`
+embeds `ViewSpec.VALID_OPS` in the prompt so the LLM is explicitly told
+the fixed set. `LLMViewGenerator.parse_response()` delegates to
+`ViewSpec.from_dict()`, ensuring no novel op can enter the renderer.
+
+**Scenario: LLM uses existing primitives — COVERED**
+
+- `test_view_spec.gd::test_valid_ops_contains_show/hide/highlight/arrange/annotate/connect`
+  — each of the six spec-named primitives is in VALID_OPS.
+- `test_view_spec.gd::test_valid_ops_has_exactly_six_primitives`
+  — set is finite (exactly 6).
+- `test_view_spec.gd::test_unknown_op_is_filtered_out`
+  — "invent_new_thing" is dropped; only "show" survives.
+- `test_view_spec.gd::test_all_valid_ops_pass_through`
+  — all 6 valid ops pass through from_dict() unchanged.
+- `test_llm_view_generator.gd::test_parse_response_filters_unknown_ops`
+  — "invent_new_renderer" is filtered; only "show" survives.
+- `test_llm_view_generator.gd::test_parse_response_with_all_unknown_ops_returns_empty_operations`
+  — entirely unknown response yields zero operations.
+- `test_llm_view_generator.gd::test_build_prompt_contains_show/hide/highlight/arrange/annotate/connect_primitive`
+  — prompt advertises every valid primitive to the LLM.
+- `test_question_panel.gd::test_all_ops_in_auth_spec_are_valid_primitives` /
+  `test_all_ops_in_impact_spec_are_valid_primitives`
+  — end-to-end: all ops produced by process_question() are members of
+  VALID_OPS; no runtime invention.
+- `test_view_spec.gd::test_get_valid_ops_returns_a_copy`
+  — defensive: mutating the returned array does not pollute VALID_OPS.
