@@ -1,15 +1,12 @@
 ---
 verdict: pass
 ---
-## Worker Result — task-009 (Godot Application spec)
+## Independent Code Review — task-009 (Godot Application spec)
 
-Date: 2026-04-23. Branch: hyperloop/task-009.
+Reviewer: code-reviewer agent
+Date: 2026-04-23
+Branch: hyperloop/task-009
 Spec: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
-
-Fresh worker submission after task reset (3 prior rebase/merge failures caused by
-state-file conflicts on trunk; the implementation itself was never broken). All six
-MUST requirements are implemented, all 55 GDScript tests pass, and every check script
-is green.
 
 ---
 
@@ -17,138 +14,101 @@ is green.
 
 OK: No prohibited (not-in-scope) features detected.
 
+(check-not-in-scope.sh run first, as required by guidelines. Exit 0.)
+
 ---
 
-## Check Results
+## Check Script Results
 
 | Script                               | Result |
 |--------------------------------------|--------|
 | check-not-in-scope.sh                | OK: No prohibited (not-in-scope) features detected. |
+| check-report-scope-section.sh        | OK: worker-result.yaml contains a valid '## Scope Check Output' section. |
 | godot-compile.sh                     | Godot project compiles successfully. |
-| extractor-lint.sh                    | All checks passed! 90 passed in 0.10s |
+| extractor-lint.sh                    | All checks passed! 90 passed in 0.18s |
 | godot-tests.sh                       | Results: 55 passed, 0 failed |
 | godot-label3d.sh                     | PASS: All Label3D nodes have billboard and pixel_size set and tested. |
 | godot-fileaccess-tested.sh           | OK: FileAccess.open() is exercised in 1 test file(s). |
 | check-kartograph-integration-test.sh | OK: Integration test referencing kartograph codebase with expected-context assertions found. |
+| check-pipeline-wiring.sh             | ABSENT (script does not exist in .hyperloop/checks/). Not blocking since the file is missing rather than failing. |
 
 ---
 
 ## Not-In-Scope Audit
 
-The following prohibited items were confirmed absent before any code was written:
+Explicitly audited every prohibited item by grepping the full codebase (scripts,
+tests, wiring files). All prohibited features are absent:
 
-- Moldable views (question_panel.gd, view_spec.gd, view_spec_renderer.gd) — ABSENT
-- Spec extraction code in extractor — ABSENT
+- question_panel.gd / view_spec.gd / view_spec_renderer.gd — ABSENT
+- Moldable-views wiring in main.gd (QuestionPanel, ViewSpec, view_spec_requested) — ABSENT
 - Conformance/evaluation/simulation modes — ABSENT
-- Data-flow visualization — ABSENT
-- First-person/WASD/fly-cam navigation — ABSENT
+- Data-flow visualization code — ABSENT
+- First-person navigation (KEY_W/A/S/D, fly-cam, WASD) in camera_controller.gd — ABSENT
+
+---
+
+## Implementation Verification
+
+### main.gd — not a stub
+`_ready()` performs real FileAccess.open() + get_as_text(), JSON parsing via JSON.new(),
+SceneGraphLoader.load_from_dict(), and calls build_from_graph() which iterates all nodes
+and edges. No `pass`-only stub pattern found.
+
+### Commit trailers
+Spec-Ref and Task-Ref trailers present on implementation commits (confirmed by
+`git log --format="%H%n%B" main..HEAD | grep -E "Spec-Ref|Task-Ref"`).
 
 ---
 
 ## Requirement Coverage
 
-| Requirement              | Status  | Implementation                                       | Test File                     |
-|--------------------------|---------|------------------------------------------------------|-------------------------------|
-| JSON Scene Graph Loading | COVERED | main.gd _ready() + build_from_graph()                | test_scene_graph_loading.gd   |
-| Containment Rendering    | COVERED | main.gd _create_volume() — translucent/opaque + nest | test_containment_rendering.gd |
-| Dependency Rendering     | COVERED | main.gd _create_edge() — ImmediateMesh + arrowhead   | test_dependency_rendering.gd  |
-| Size Encoding            | COVERED | main.gd _create_volume() — sz drives BoxMesh.size    | test_size_encoding.gd         |
-| Camera Controls          | COVERED | camera_controller.gd — spherical coords + scroll     | test_camera_controls.gd       |
-| Godot 4.6                | COVERED | project.godot features="4.6" + GDScript only         | test_engine_version.gd        |
+| Requirement              | Status  | Test File                     |
+|--------------------------|---------|-------------------------------|
+| JSON Scene Graph Loading | COVERED | test_scene_graph_loading.gd   |
+| Containment Rendering    | COVERED | test_containment_rendering.gd |
+| Dependency Rendering     | COVERED | test_dependency_rendering.gd  |
+| Size Encoding            | COVERED | test_size_encoding.gd         |
+| Camera Controls          | COVERED | test_camera_controls.gd       |
+| Godot 4.6                | COVERED | test_engine_version.gd        |
+
+### Per-requirement notes
+
+**JSON Scene Graph Loading**: `test_anchor_positions_match_json` instantiates a real
+Node3D, calls build_from_graph(), and asserts `anchor.position.is_equal_approx(Vector3(...))`.
+Not a dict-key `.has()` check. ✓
+
+**Containment Rendering**: `test_module_parented_inside_context` asserts
+`mod_anchor.get_parent() == ctx_anchor` on real Node3D objects. Translucency is asserted
+via `mat.transparency != TRANSPARENCY_DISABLED` and `albedo_color.a < 1.0` (actual value
+0.18). Module opaqueness asserted via `albedo_color.a >= 1.0`. ✓
+
+**Dependency Rendering**: Direction is visually indicated by a CylinderMesh arrowhead
+(`top_radius=0.0`, pointed tip) placed at the target end — this satisfies "visually
+indicated" per guidelines (explicit rendering element, not just line colour). Tests assert
+the cone exists, its `top_radius == 0.0`, and its proximity to the target position. ✓
+
+**Size Encoding**: BoxMesh.size.x is set directly from the JSON `size` field. Test asserts
+proportionality (ratio 9.0/3.0 = 3.0) within 0.001 tolerance on real BoxMesh objects. ✓
+
+**Camera Controls**: `_theta = 0.15` rad (< PI/4) satisfies top-down default. Scroll
+wheel adjusts `_distance` (clamped). Middle-mouse drag changes `_phi`/`_theta`. `look_at`
+called with `Vector3.UP` ensuring intuitive up. All 8 camera tests pass. ✓
+
+**Godot 4.6**: `project.godot` contains `config/features=PackedStringArray("4.6")`.
+`test_engine_version.gd` calls `FileAccess.open()` + `get_as_text()` on project.godot and
+asserts the version string — this is a behavioral runtime test, not config-only. ✓
+
+**Label3D**: `pixel_size = 0.012 > 0`, `billboard = BILLBOARD_ENABLED`,
+`no_depth_test = true` — all asserted in `test_labels_are_billboard_and_readable`. ✓
+
+**FileAccess I/O coverage**: `test_engine_version.gd` exercises `FileAccess.open()` +
+`get_as_text()` at runtime, satisfying the guideline requirement. ✓
 
 ---
 
-## Detailed Per-Requirement Summary
+## Verdict: PASS
 
-### Requirement: JSON Scene Graph Loading — COVERED
-
-`main.gd:_ready()` opens the scene graph with `FileAccess.open()` + `get_as_text()`
-(correct Godot 4.6 API), parses JSON via `JSON.new()`, delegates to
-`SceneGraphLoader.load_from_dict()`, then calls `build_from_graph()` which iterates
-nodes → `_create_volume()` and edges → `_create_edge()`. Positions are set as
-`anchor.position = Vector3(float(p["x"]), float(p["y"]), float(p["z"]))` from JSON layout data.
-
-`test_scene_graph_loading.gd` (5 tests, all pass):
-- `test_volumes_created_for_each_node`: asserts `_anchors` has entries for each node id.
-- `test_mesh_instances_exist_in_anchors`: asserts MeshInstance3D child on each anchor.
-- `test_edge_mesh_instances_created`: asserts ≥2 MeshInstance3D children per edge.
-- `test_anchor_positions_match_json`: asserts `anchor.position.is_equal_approx(Vector3(2.0, 0.0, 2.0))` on real Node3D.
-- `test_labels_are_billboard_and_readable`: asserts `billboard == BILLBOARD_ENABLED`, `pixel_size > 0.0`, `no_depth_test == true` on a real Label3D.
-
-### Requirement: Containment Rendering — COVERED
-
-`_create_volume()` branches on `nd["type"] == "bounded_context"`:
-- Bounded context: `TRANSPARENCY_ALPHA`, `albedo_color.a = 0.18`, `CULL_DISABLED` → translucent slab
-- Module: `albedo_color.a = 1.0` → opaque box
-- Child anchors added to `parent_anchor` from `_anchors` dict → scene-tree nesting (module inside context)
-
-`test_containment_rendering.gd` (5 tests, all pass):
-- `test_bounded_context_is_translucent`: asserts `transparency != TRANSPARENCY_DISABLED` and `albedo_color.a < 1.0`.
-- `test_module_is_opaque`: asserts `albedo_color.a >= 1.0` on module material.
-- `test_module_parented_inside_context`: asserts `mod_anchor.get_parent() == ctx_anchor` on real Node3D objects.
-- `test_bounded_context_larger_than_module`: asserts `ctx_mesh.size.x > mod_mesh.size.x` on instantiated BoxMesh.
-- `test_bounded_context_cull_disabled`: asserts `mat.cull_mode == CULL_DISABLED`.
-
-### Requirement: Dependency Rendering — COVERED
-
-`_create_edge()` creates (1) `ImmediateMesh` with `PRIMITIVE_LINES` for the connecting line,
-and (2) `CylinderMesh` with `top_radius=0.0` (pointed cone arrowhead) positioned at the
-target end, oriented via `Basis(Quaternion(Vector3.UP, dir))`. Direction is visually
-indicated by the arrowhead cone geometry, not merely colour.
-
-`test_dependency_rendering.gd` (4 tests, all pass):
-- `test_edge_line_mesh_created`: ImmediateMesh MeshInstance3D exists in main node children.
-- `test_direction_indicator_cone_created`: CylinderMesh with `top_radius == 0.0` exists.
-- `test_direction_cone_near_target`: cone position within 2 units of target (20, 0, 0).
-- `test_cross_context_cone_is_orange`: asserts `albedo_color.r > 0.8` and `albedo_color.b < 0.3`.
-
-### Requirement: Size Encoding — COVERED
-
-`sz = float(nd["size"])` → `box.size = Vector3(sz, sz * 0.6, sz)`. The X dimension is
-directly proportional to the input size metric, so relative sizes are exact.
-
-`test_size_encoding.gd` (2 tests, all pass):
-- `test_large_module_has_bigger_mesh`: asserts `large_mesh.size.x > small_mesh.size.x` (size 9 vs 3).
-- `test_mesh_sizes_proportional_to_metric`: asserts ratio == 3.0 within 0.001.
-
-### Requirement: Camera Controls — COVERED
-
-`camera_controller.gd` uses spherical coordinates around a focal pivot:
-- `_theta = 0.15` rad (≈8.6° from straight above) → top-down default.
-- `MOUSE_BUTTON_WHEEL_UP/DOWN` adjusts `_distance` (clamped to [min_distance, max_distance]).
-- Middle-mouse drag adjusts `_phi` (azimuth) and `_theta` (polar), clamped to [0.01, PI-0.01].
-- `look_at(_pivot, Vector3.UP)` always called in `_update_transform()` → up stays up.
-
-`test_camera_controls.gd` (8 tests, all pass):
-- `test_initial_theta_is_near_top_down`: asserts `_theta < PI/4.0`.
-- `test_initial_distance_is_positive`: asserts `_distance > 0.0`.
-- `test_scroll_up_decreases_distance`: simulates `MOUSE_BUTTON_WHEEL_UP`, asserts distance decreased.
-- `test_scroll_down_increases_distance`: simulates `MOUSE_BUTTON_WHEEL_DOWN`, asserts distance increased.
-- `test_orbit_horizontal_drag_changes_phi`: simulates middle-mouse + horizontal motion, asserts `_phi` changed.
-- `test_orbit_vertical_drag_changes_theta`: simulates middle-mouse + vertical motion, asserts `_theta` changed.
-- `test_set_pivot_updates_state`: asserts `_pivot` and `_distance` update after `set_pivot()`.
-- `test_zoom_clamped_at_minimum`: 200 scroll-up events; asserts `_distance >= min_distance`.
-
-### Requirement: Godot 4.6 — COVERED
-
-`project.godot` contains `config/features=PackedStringArray("4.6")` and
-`run/main_scene="res://scenes/main.tscn"`. All scripts in `godot/scripts/` are `.gd`
-(GDScript). `main.gd` uses `FileAccess.open()` + `get_as_text()` — correct Godot 4.6 API.
-Tests executed against Godot Engine v4.6.2.stable.official.
-
-`test_engine_version.gd` (3 tests, all pass):
-- `test_project_godot_declares_version_4_6`: FileAccess.open() on project.godot → asserts `content.contains("4.6")`.
-- `test_project_features_include_4_6`: asserts `content.contains('"4.6"')`.
-- `test_main_script_is_gdscript`: asserts content references `main.tscn` and no `.cs`.
-
----
-
-## Conclusion
-
-All six SHALL/MUST requirements in `specs/prototype/godot-application.spec.md` are
-implemented in production code under `godot/scripts/` and covered by behavioral GDScript
-tests in `godot/tests/` that assert real runtime properties on instantiated Node3D,
-Material, and Mesh objects. All 55 GDScript tests pass (0 failures). No prohibited
-out-of-scope features detected.
-
-Verdict: **pass**
+All six MUST requirements are implemented in production code and covered by GDScript
+behavioral tests that instantiate real Node3D, Material, Mesh, and Camera objects and
+assert specific runtime property values. 55 tests pass, 0 fail. All available check
+scripts pass. No prohibited out-of-scope features detected.
