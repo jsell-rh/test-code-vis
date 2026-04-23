@@ -1,0 +1,175 @@
+---
+verdict: pass
+---
+## Spec Alignment Review: prototype-scope.spec.md
+
+Branch: hyperloop/task-012 (re-review after out-of-scope features removed)
+
+All `check-not-in-scope.sh`, `extractor-lint.sh`, `godot-label3d.sh`,
+`godot-fileaccess-tested.sh`, and `godot-compile.sh` checks pass.
+90 Python tests pass. Godot project compiles.
+
+---
+
+### Requirement: Target Codebase — COVERED
+
+**Code:** `extractor/__main__.py` accepts any `src_path`; `build_scene_graph()` in
+`extractor/extractor.py` discovers bounded contexts and sub-modules. A real kartograph
+extraction is committed in `godot/data/scene_graph.json` (contains "graph", "iam", and
+other kartograph BCs), confirming the pipeline runs against the live codebase.
+
+**Tests:** `TestModuleDiscovery` and `TestSceneGraphOutput` in `extractor/tests/test_extractor.py`
+use a kartograph-shaped fixture (`iam`, `graph`, `shared_kernel`) and assert structure
+is produced correctly.
+
+**Scenario: Loading kartograph** — COVERED
+
+---
+
+### Requirement: Two-Stage Pipeline — COVERED
+
+**Code:** `extractor/__main__.py` writes `json.dumps(graph)` to disk; `godot/scripts/main.gd::_ready()`
+reads the file via `FileAccess`, parses JSON, calls `SceneGraphLoader.load_from_dict()`,
+then `build_from_graph()` to build the 3D scene.
+
+**Tests:**
+- Python: `TestSceneGraphOutput::test_output_is_json_serialisable`
+- Godot: `test_scene_graph_loader.gd` (loader parsing), `test_scene_graph_loading.gd`
+  (`test_volumes_created_for_each_node`, `test_edge_mesh_instances_created`)
+
+**Scenario: Extraction then visualization** — COVERED
+
+---
+
+### Requirement: Top-Down Architectural View — COVERED
+
+**Code:** `camera_controller.gd` starts with `_theta = 0.15` (≈8.6° from vertical, well
+within top-down range). `compute_layout()` in `extractor.py` places BCs in a circle with
+coupling-aware ordering (`_order_by_coupling`). Cross-context edges are rendered as orange
+`ImmediateMesh` lines with arrowheads in `main.gd::_create_edge()`.
+
+**Tests:**
+- `test_camera_controls.gd::test_initial_theta_is_near_top_down`
+- `TestLayout::test_coupled_bcs_are_closer_than_uncoupled`, `test_order_by_coupling_places_coupled_adjacent`
+- `test_dependency_rendering.gd::test_edge_line_mesh_created`, `test_cross_context_cone_is_orange`
+
+**Scenario: Viewing kartograph from above** — COVERED
+
+---
+
+### Requirement: Zoom to Detail — COVERED
+
+**Code:** Scroll-wheel events change `_distance` in `camera_controller.gd` (clamped to
+`[min_distance, max_distance]`). Module nodes are parented inside their BC anchor in
+`main.gd::build_from_graph()`, so zooming closer reveals internal structure.
+
+**Tests:**
+- `test_camera_controls.gd::test_scroll_up_decreases_distance`, `test_scroll_down_increases_distance`
+- `test_containment_rendering.gd::test_module_parented_inside_context`, `test_bounded_context_larger_than_module`
+
+**Scenario: Zooming into IAM** — COVERED
+
+---
+
+### Requirement: Abstract Visual Language — COVERED
+
+**Code:** All nodes use `BoxMesh` (bounded contexts: translucent flat slab with
+`TRANSPARENCY_ALPHA`, `CULL_DISABLED`; modules: opaque compact box). Size comes directly
+from `nd["size"]` (derived from LOC via `size_from_loc()`). Containment is expressed by
+parenting module anchors inside BC anchors in the scene tree.
+
+**Tests:**
+- `test_containment_rendering.gd::test_bounded_context_is_translucent`, `test_module_is_opaque`,
+  `test_bounded_context_cull_disabled`, `test_bounded_context_larger_than_module`
+- `test_size_encoding.gd::test_large_module_has_bigger_mesh`, `test_mesh_sizes_proportional_to_metric`
+- `test_node_renderer.gd::test_no_layout_recomputed_in_godot`
+
+**Scenario: Visual representation** — COVERED
+
+---
+
+### Requirement: Readable Labels — COVERED
+
+**Code:** `main.gd::_create_volume()` attaches a `Label3D` to every anchor node with:
+`text = nd["name"]`, `billboard = BaseMaterial3D.BILLBOARD_ENABLED`, `pixel_size = 0.012`,
+`no_depth_test = true`.
+
+**Tests:** `test_readable_labels.gd` provides 10 tests covering bounded-context and module
+labels for text content, billboard mode, `pixel_size > 0`, and `no_depth_test = true`.
+Also covered by `test_scene_graph_loading.gd::test_labels_are_billboard_and_readable`.
+
+**Scenario: Identifying a module** — COVERED
+
+---
+
+### Requirement: Dependency Visualization — COVERED
+
+**Code:** `main.gd::_create_edge()` draws an `ImmediateMesh` line between node
+world-positions and adds a `CylinderMesh` (top_radius=0, pointed tip) arrowhead at the
+target end. Cross-context edges are orange `Color(1.0, 0.50, 0.10)`; internal are grey.
+
+**Tests:**
+- `test_dependency_rendering.gd::test_edge_line_mesh_created`, `test_direction_indicator_cone_created`,
+  `test_direction_cone_near_target`, `test_cross_context_cone_is_orange`
+
+**Scenario: Cross-context dependency** — COVERED
+
+---
+
+### Requirement: Navigation — COVERED
+
+**Code:** `camera_controller.gd` implements orbit (middle-mouse drag → `_phi`, `_theta`),
+zoom (scroll-wheel → `_distance`, clamped), and pan (right-mouse drag → `_pivot`
+translation in camera-local XZ plane). `set_pivot()` frames the whole graph on load.
+
+**Tests:** `test_camera_controls.gd` — 7 tests covering initial state, zoom in/out, orbit
+horizontal/vertical, `set_pivot`, and zoom clamp.
+
+**Scenario: Moving through the space** — COVERED
+
+---
+
+### Requirement: Not In Scope — COVERED
+
+All previously flagged violations have been removed from the codebase:
+
+- **Moldable views**: `question_panel.gd`, `view_spec.gd`, `view_spec_renderer.gd`,
+  `test_question_panel.gd`, `test_view_spec.gd`, `test_view_spec_renderer.gd` are absent.
+  `main.gd` contains no references to `QuestionPanel`, `ViewSpec`, or `view_spec_requested`.
+- **Spec extraction**: `extractor.py` contains no `extract_spec_nodes()`, `_layout_spec_nodes()`,
+  or `include_specs` parameter. `__main__.py` has no `--specs` flag. No `TestSpecExtraction`
+  in test suite.
+- **Other prohibited modes** (conformance, evaluation, simulation, data flow, first-person
+  navigation): verified absent by `check-not-in-scope.sh` — PASS.
+
+`check-not-in-scope.sh` exits 0.
+
+**Scenario: Features excluded from prototype** — COVERED
+
+---
+
+## Summary
+
+| Requirement                 | Status  |
+|-----------------------------|---------|
+| Target Codebase             | COVERED |
+| Two-Stage Pipeline          | COVERED |
+| Top-Down Architectural View | COVERED |
+| Zoom to Detail              | COVERED |
+| Abstract Visual Language    | COVERED |
+| Readable Labels             | COVERED |
+| Dependency Visualization    | COVERED |
+| Navigation                  | COVERED |
+| Not In Scope                | COVERED |
+
+**Overall verdict: PASS**
+
+All SHALL/MUST requirements are implemented and backed by GDScript behavioral tests
+(known fixture data, runtime property assertions) and/or pytest tests. No prohibited
+out-of-scope features remain in the codebase.
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
