@@ -2,29 +2,23 @@
 verdict: pass
 ---
 
-## Summary
-
-All prohibited (not-in-scope) artifacts have been removed and all checks now pass.
-
-### Changes made
-
-1. **Deleted** `godot/scripts/view_spec.gd` — moldable views are out of scope.
-2. **Deleted** `godot/scripts/view_spec_renderer.gd` — same reason.
-3. **Deleted** `godot/tests/test_view_spec.gd` — covered an out-of-scope feature.
-4. **Deleted** `godot/tests/test_view_spec_renderer.gd` — same reason.
-5. **Removed** `extract_spec_nodes`, `_layout_spec_nodes`, `include_specs` parameter,
-   `_SPEC_HEADING_RE`, `_SPEC_LINK_RE`, and the `re` import from
-   `extractor/extractor.py`.
-6. **Removed** `--specs` CLI flag and `include_specs` call from
-   `extractor/__main__.py`.
-7. **Removed** `src_with_specs` fixture and `TestSpecExtraction` class from
-   `extractor/tests/test_extractor.py`; removed `extract_spec_nodes` from its imports.
-8. **Updated** `godot/tests/run_tests.gd` to remove the two preload calls that
-   referenced the now-deleted `test_view_spec.gd` and `test_view_spec_renderer.gd`.
-9. **Reformatted** `extractor/tests/test_extractor.py` via `ruff format` to satisfy
-   the extractor-lint check.
-
 ## Scope Check Output
+
+`check-not-in-scope.sh` was run from the `main` branch (the file itself does not exist
+on `hyperloop/task-011` — it appears the branch predates when that script was committed
+to main, but the script was applied against the current working tree):
+
+```
+OK: No prohibited (not-in-scope) features detected.
+```
+
+The script is absent from this branch only because the branch was created before the
+script was committed to main. Running it directly against the working tree confirms all
+prohibited artifacts have been removed.
+
+## ## Scope Check Output (implementer-reported)
+
+The implementer's `worker-result.yaml` also contains:
 
 ```
 OK: No prohibited (not-in-scope) features detected.
@@ -32,9 +26,76 @@ OK: No prohibited (not-in-scope) features detected.
 
 ## Check Results
 
-- `check-not-in-scope.sh` → **OK** (exit 0)
-- `extractor-lint.sh` → **OK** (exit 0): 90 tests pass, ruff clean
-- `godot-compile.sh` → **OK** (exit 0): Godot 4.6.2 compiles the project
-- `godot-fileaccess-tested.sh` → **OK** (exit 0)
-- `godot-label3d.sh` → **OK** (exit 0)
-- `godot-tests.sh` → **OK** (exit 0): all GDScript behavioral tests pass
+| Script | Result |
+|---|---|
+| `check-not-in-scope.sh` (from main) | EXIT 0 — OK: No prohibited features |
+| `check-kartograph-integration-test.sh` (from main) | EXIT 0 — OK |
+| `extractor-lint.sh` | EXIT 0 — ruff clean, 90 pytest tests pass |
+| `godot-compile.sh` | EXIT 0 — Godot 4.6.2 compiles |
+| `godot-fileaccess-tested.sh` | EXIT 0 — FileAccess.open() exercised in 2 test files |
+| `godot-label3d.sh` | EXIT 0 — Label3D billboard + pixel_size set and tested |
+| `godot-tests.sh` | EXIT 0 — all GDScript behavioral tests pass |
+
+## Commit Trailers
+
+Both required trailers are present on the implementation commit (`49d84df`):
+
+```
+Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
+Task-Ref: task-011
+```
+
+## Spec Coverage
+
+### JSON Scene Graph Loading — COVERED
+`test_scene_graph_loading.gd` instantiates `MainScript`, calls `build_from_graph()` with
+fixture data, and asserts: anchors exist for every node, each anchor holds a
+`MeshInstance3D`, ≥2 edge meshes are produced (line + arrowhead), and anchor `.position`
+matches JSON values (real `Node3D` property assertions, not dict `.has()` checks).
+
+### Containment Rendering — COVERED
+`test_containment_rendering.gd` asserts: bounded_context material uses
+`TRANSPARENCY_ALPHA` and `albedo_color.a < 1.0`; module material has `albedo_color.a
+>= 1.0`; module anchor is a direct child of context anchor (scene-tree parenting); bounded_context `BoxMesh.size.x > module BoxMesh.size.x`; bounded_context uses
+`CULL_DISABLED`.
+
+### Dependency Rendering — COVERED
+`test_dependency_rendering.gd` asserts: an `ImmediateMesh` MeshInstance3D exists for the
+line; a `CylinderMesh` with `top_radius == 0.0` (a cone — an explicit rendering element,
+not just a colour difference) exists for the direction indicator; the cone is within 2
+units of the target position; the cross-context cone's material has orange colour
+(`r > 0.8`, `b < 0.3`). This satisfies the "direction is visually indicated" requirement
+per the guidelines (explicit rendering element, not a plain line/colour alone).
+
+### Size Encoding — COVERED
+`test_size_encoding.gd` asserts: large module's `BoxMesh.size.x > small module's`; ratio
+of sizes matches ratio of input metrics within floating-point tolerance.
+
+### Camera Controls — COVERED
+`test_camera_controls.gd` asserts: initial `_theta < PI/4` (top-down view); initial
+`_distance > 0`; scroll-up decreases `_distance`, scroll-down increases it; zoom clamped
+at `min_distance`; horizontal middle-mouse drag changes `_phi`; vertical drag changes
+`_theta`; `set_pivot()` updates `_pivot` and `_distance`. Label readability is covered in
+`test_scene_graph_loading.gd` (`billboard == BILLBOARD_ENABLED`, `pixel_size > 0.0`,
+`no_depth_test == true`).
+
+### Godot 4.6 / Engine Version — COVERED
+`test_engine_version.gd` opens `project.godot` via `FileAccess.open()` + `get_as_text()`
+(exercising the same API path as `main.gd._ready()`), and asserts: content contains
+`"4.6"` in `config/features`; no `"Mono"` or `"C#"` is present; `get_as_text()` returns
+a non-empty string starting with the standard Godot header.
+
+### `_ready()` is not a stub — CONFIRMED
+`main.gd._ready()` calls `FileAccess.open()`, `get_as_text()`, `JSON.parse()`, and
+`build_from_graph()`. Not a pass stub.
+
+### FileAccess.open() tested — CONFIRMED
+`godot-fileaccess-tested.sh` found FileAccess.open() in 1 production script and confirmed
+it is exercised in 2 test files.
+
+## Verdict
+
+**PASS.** All scope checks pass, all project check scripts exit 0, all spec scenarios are
+covered by GDScript tests that make real runtime assertions, commit trailers are present,
+and no prohibited features remain. The implementation is correct and complete with respect
+to the Godot Application spec.
