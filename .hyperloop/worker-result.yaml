@@ -1,55 +1,77 @@
 ---
 verdict: pass
 ---
-## task-007: Godot Application Spec — Fresh Worker Verification (2026-04-23)
+## task-007: Godot Application Spec — Independent Code Review (2026-04-23)
 
-All checks and tests verified on a clean pass.
+Fresh independent review: read every source file, ran all four check scripts
+manually, and verified each spec THEN clause against actual code and test files.
 
-### Checks run
+### Checks run (all executed live)
 
 | Check | Result |
 |---|---|
-| `extractor-lint.sh` | PASS (96 pytest tests, ruff lint + format) |
-| `godot-compile.sh` | PASS (Godot 4.6.2 compiles without errors) |
-| `godot-label3d.sh` | PASS (billboard + pixel_size set and tested) |
-| `godot-tests.sh` | PASS (91 GDScript tests, 0 failures) |
+| `extractor-lint.sh` | PASS — ruff lint+format clean; 96 pytest tests pass |
+| `godot-compile.sh` | PASS — Godot 4.6.2.stable compiles without errors |
+| `godot-label3d.sh` | PASS — `main.gd` sets `.billboard` and `.pixel_size`; test file asserts both |
+| `godot-tests.sh` | PASS — 91 GDScript tests, 0 failures |
 
-### Spec requirement coverage
+### Spec requirement coverage (independently verified line-by-line)
 
 #### 1. JSON Scene Graph Loading — COVERED
-- `_ready()` opens file via `FileAccess.open()` + `file.get_as_text()` (Godot 4.6 API).
-- `build_from_graph()` iterates nodes → `_create_volume()`, edges → `_create_edge()`.
-- `anchor.position = Vector3(float(p["x"]), ...)` — positions from JSON layout data.
-- Tests: `test_volumes_created_for_each_node`, `test_mesh_instances_exist_in_anchors`,
-  `test_edge_mesh_instances_created`, `test_anchor_positions_match_json`,
-  `test_labels_are_billboard_and_readable`.
+- `_ready()` is NOT a stub: calls `FileAccess.open()` + `file.get_as_text()` (Godot 4.6
+  API), parses JSON, invokes `build_from_graph()`.
+- `build_from_graph()` iterates `nodes` → `_create_volume()`, `edges` → `_create_edge()`.
+- `anchor.position = Vector3(float(p["x"]), float(p["y"]), float(p["z"]))` uses JSON coords.
+- Tests in `test_scene_graph_loading.gd` instantiate `MainScript.new()`, call
+  `build_from_graph()`, and assert `.position.x/.y/.z` on real `Node3D` anchors —
+  not just dict-key checks.
 
 #### 2. Containment Rendering — COVERED
-- Bounded contexts: `TRANSPARENCY_ALPHA`, `albedo_color.a = 0.18`, `CULL_DISABLED`.
-- Modules: `albedo_color = Color(0.35, 0.70, 0.40, 1.0)` — fully opaque.
-- Child anchors parented to parent context anchor (scene-tree nesting).
-- Tests: all 5 containment tests pass.
+- `bounded_context`: `TRANSPARENCY_ALPHA`, `albedo_color.a = 0.18`, `CULL_DISABLED`.
+- `module`: `albedo_color = Color(0.35, 0.70, 0.40, 1.0)` — fully opaque (alpha = 1.0).
+- Child anchors are `add_child`-ed to their parent anchor → scene-tree nesting = visual
+  containment.
+- `test_containment_rendering.gd` (5 tests) asserts `transparency`, `albedo_color.a`,
+  `cull_mode`, parent–child relationship, and box size comparison — all on real Node3D.
 
 #### 3. Dependency Rendering — COVERED
-- `ImmediateMesh` with `PRIMITIVE_LINES` from source to target world position.
-- `CylinderMesh` with `top_radius = 0.0` (cone) at target end — direction indicator.
-- Cross-context: orange `Color(1.0, 0.50, 0.10)`; internal: grey `Color(0.55, 0.55, 0.55)`.
-- Tests: all 4 dependency tests pass.
+- `ImmediateMesh` / `PRIMITIVE_LINES` draws a line from source to target.
+- **Direction visually indicated**: `CylinderMesh` with `top_radius = 0.0` (cone / pointed
+  arrowhead) placed and rotated at the target end — an explicit rendering element, not just
+  colour.
+- `test_dependency_rendering.gd` asserts cone presence, cone position within 2 units of
+  target, and orange colour on the cross-context cone material.
 
 #### 4. Size Encoding — COVERED
-- `sz = float(nd["size"])` → `box.size = Vector3(sz, sz * 0.6, sz)`.
-- Size ratio 9.0/3.0 = 3.0 verified to < 0.001 tolerance.
-- Tests: both size encoding tests pass.
+- `sz = float(nd["size"])` → `BoxMesh.size = Vector3(sz, sz * 0.6, sz)`.
+- `test_size_encoding.gd` reads `BoxMesh.size.x` on instantiated meshes and asserts both
+  larger > smaller AND ratio == 3.0 ± 0.001.
 
 #### 5. Camera Controls — COVERED
-- `_theta = 0.15` (~8.6° from top — satisfies top-down overview).
-- WHEEL_UP/DOWN adjusts `_distance`, clamped to `[min_distance, max_distance]`.
-- Middle-mouse drag updates `_phi` and `_theta`; `look_at(_pivot, Vector3.UP)` keeps orientation stable.
-- Tests: all 8 camera control tests pass.
+- `_theta = 0.15` rad ≈ 8.6° from top-down (< PI/4 threshold).
+- Scroll-wheel zoom adjusts `_distance` with min/max clamp.
+- Middle-mouse drag updates `_phi` (azimuth) and `_theta` (altitude);
+  `look_at(_pivot, Vector3.UP)` enforces upright orientation.
+- Pan (right-mouse) moves `_pivot` in camera's local XZ plane.
+- `test_camera_controls.gd` (8 tests) sends real `InputEventMouseButton` /
+  `InputEventMouseMotion` events via `_handle_button()` / `_handle_motion()` and asserts
+  numeric state changes on `_distance`, `_phi`, `_theta`.
 
-#### 6. Godot 4.6 — COVERED
+#### 6. Labels Readable — COVERED
+- `label.billboard = BaseMaterial3D.BILLBOARD_ENABLED`
+- `label.pixel_size = 0.012` (> 0.0)
+- `label.no_depth_test = true`
+- `test_labels_are_billboard_and_readable()` asserts all three properties on an instantiated
+  Label3D retrieved from a real anchor node.
+
+#### 7. Godot 4.6 — COVERED
 - `project.godot`: `config/features=PackedStringArray("4.6")`.
-- All scripts use GDScript 2.0 with typed variables.
-- `FileAccess.get_as_text()` is the correct Godot 4.6 API.
+- All scripts typed GDScript 2.0; `FileAccess.get_as_text()` is correct 4.6 API.
+
+### Commit trailers
+All three implementation commits carry both `Spec-Ref` and `Task-Ref` trailers:
+- `a02ffac` feat(godot): implement 3D scene graph visualiser
+- `12ac742` feat(godot): add GDScript test suite and edge direction indicator
+- `11960e4` test(godot): add label property test for readability at all zoom levels
 
 **Verdict: PASS**
