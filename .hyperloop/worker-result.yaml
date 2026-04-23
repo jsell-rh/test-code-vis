@@ -1,0 +1,48 @@
+---
+verdict: pass
+---
+
+## Review: task-020 — Moldable Views / Question-Driven UI Panel
+
+### Checks
+
+| Check | Result |
+|---|---|
+| extractor-lint.sh | PASS (96 Python tests, ruff clean) |
+| godot-compile.sh | PASS |
+| godot-label3d.sh | PASS |
+| godot-tests.sh | PASS — 113 tests, 0 failures |
+
+### Commit trailers
+
+- `Spec-Ref: specs/interaction/moldable-views.spec.md@6bed97ab44f1e1e464b566f807f5168951259b4e` ✓
+- `Task-Ref: task-020` ✓
+
+### Spec scenario coverage
+
+**Scenario: Architectural question**
+- `process_question("how does authentication work?")` → `show` op for `auth_service` ✓
+- `ViewSpecRenderer.apply()` with show-only spec excludes `payment_service` from scene tree ✓  (tested: `test_auth_question_excludes_unrelated_nodes_from_render`)
+- `highlight` op sets `material_override` on rendered `auth_service` `MeshInstance3D` ✓  (tested: `test_auth_question_highlight_sets_material_on_rendered_node`)
+- `annotate` op present for `auth_service` ✓
+
+**Scenario: Impact question**
+- `process_question("what depends on the user database?")` → `show` op includes both `user_db` and `auth_service` ✓
+- `connect` op creates `conn_auth_service_user_db` `Node3D` at midpoint in scene tree ✓  (position.x=2.5 asserted in pre-existing `test_view_spec_renderer.gd`)
+
+**Scenario: LLM produces view spec**
+- `process_question()` returns a `Dictionary`, never raw geometry ✓
+- All ops drawn from `ViewSpec.VALID_OPS`; `ViewSpec.from_dict()` filters unknown ops ✓
+- `ViewSpecRenderer.apply()` consumes the spec and builds `MeshInstance3D` children ✓
+
+**Scenario: LLM uses existing primitives**
+- Fixed primitive set enforced by `ViewSpec.VALID_OPS` constant ✓
+- No new rendering logic at runtime ✓
+
+### Implementation quality
+
+- `main.gd._ready()` is not a stub — it instantiates `CanvasLayer`, `QuestionPanel`, wires `view_spec_requested`, and creates `_view_root`. ✓
+- `QuestionPanel._init()` builds UI nodes so headless tests work without scene-tree membership. ✓
+- `Label3D` nodes in `view_spec_renderer.gd` correctly set `billboard = BILLBOARD_ENABLED` and `pixel_size = 0.05`. ✓
+- Property-level assertions (albedo RGB channels, connector midpoint x/y, arrange position x/y/z, billboard, pixel_size) are all present in the pre-existing `test_view_spec_renderer.gd`, which continues to pass. New `test_question_panel.gd` tests the integration layer above the renderer. Appropriate layering. ✓
+- No hardcoded extractor paths; extractor untouched by this task. ✓
