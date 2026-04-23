@@ -38,6 +38,8 @@ guidelines: |
     `FileAccess.open()` + `get_as_text()`, verify at least one test file in `godot/tests/`
     also calls `FileAccess.open()` + `get_as_text()`. Verify by grepping test files; if no
     test exercises this path, mark the file-I/O scenario as PARTIAL.
+  - **Trace every THEN-clause to a named test assertion.** For each THEN-clause in the spec, identify the test function that asserts it by name. A correct production implementation without a corresponding test assertion is PARTIAL — not COVERED. Do not accept "indirect coverage" (e.g., another test that incidentally touches the same code path); the test must explicitly assert the observable outcome described in the THEN-clause. Construct the THEN→test mapping yourself during review; any unmapped THEN-clause is a FAIL finding.
+  - **Constraint behaviors require explicit constraint tests.** If a THEN-clause is satisfied by clamping, bounding, or limiting a value (e.g., camera theta clamped to prevent flip), confirm a test exists that drives the input past the limit and asserts the clamped result. A test that only exercises the normal range does not cover the constraint THEN-clause.
   - Verify camera controls work (pan, zoom, orbit).
   - Verify labels are readable (assert `billboard == BILLBOARD_ENABLED` and `pixel_size > 0.0` on any Label3D nodes).
   - Verify containment is visually represented (child volumes inside parent volumes).
