@@ -176,3 +176,6 @@ All four tests pass.
 Every SHALL/MUST requirement in specs/prototype/godot-application.spec.md is implemented
 in code and covered by at least one named GDScript test that exercises the exact
 Given/When/Then conditions with known fixture data and asserts runtime property values.
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
