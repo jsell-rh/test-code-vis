@@ -1,0 +1,106 @@
+---
+verdict: pass
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+## Check Results
+
+| Check | Result |
+|---|---|
+| check-not-in-scope.sh | PASS |
+| check-pipeline-wiring.sh | SKIP (no LLM→view-spec pipeline in this task) |
+| check-kartograph-integration-test.sh | PASS |
+| extractor-lint.sh | PASS (ruff clean, 90 pytest tests pass) |
+| godot-compile.sh | PASS (Godot 4.6.2.stable) |
+| godot-fileaccess-tested.sh | PASS (FileAccess.open() exercised in 2 test files) |
+| godot-label3d.sh | PASS |
+| godot-tests.sh | PASS (58 GDScript tests, 0 failures) |
+
+## Commit Trailers
+
+Both required trailers are present on the implementation commit (8ae363e):
+- `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384`
+- `Task-Ref: task-013`
+
+## Spec Scenario Coverage
+
+### Scenario: Loading kartograph's scene graph — COVERED
+`test_scene_graph_loading.gd` instantiates `MainScript.new()`, calls
+`build_from_graph()` with a fixture, and asserts:
+- Both node IDs appear in `_anchors` (volumes created)
+- Each anchor contains a `MeshInstance3D` (3D volumes)
+- At least 2 `MeshInstance3D` children at scene root (edge + arrowhead cone)
+- Anchor `.position` values match JSON position fields (layout data honoured)
+- Label3D on anchor uses `BILLBOARD_ENABLED`, `pixel_size > 0`, `no_depth_test = true`
+
+`main.gd::_ready()` is not a stub — it contains full `FileAccess.open()` +
+`get_as_text()` + JSON parse + `SceneGraphLoader.load_from_dict()` + `build_from_graph()`.
+
+### Scenario: Modules inside a bounded context — COVERED
+`test_containment_rendering.gd` asserts:
+- Bounded context: `TRANSPARENCY_ALPHA`, `albedo_color.a < 1.0` (translucent)
+- Module: material alpha >= 1.0 (opaque)
+- `mod_anchor.get_parent() == ctx_anchor` (child visually inside parent)
+- `ctx_mesh.size.x > mod_mesh.size.x` (parent boundary larger)
+- `cull_mode == CULL_DISABLED` on context (visually distinct boundary from both sides)
+
+### Scenario: Rendering a cross-context dependency — COVERED
+`test_dependency_rendering.gd` asserts:
+- `ImmediateMesh` line exists (line connects volumes)
+- `CylinderMesh` with `top_radius == 0.0` exists (explicit arrowhead cone)
+- Cone position is within 2 units of `target_pos` (marks arrival point)
+- Cross-context cone material: `r > 0.8`, `b < 0.3` (orange colour)
+
+Direction indicator requirement is satisfied by an explicit arrowhead cone — not
+a colour difference alone.
+
+### Scenario: Large module vs small module — COVERED
+`test_size_encoding.gd` asserts:
+- `large_mesh.size.x > small_mesh.size.x`
+- Ratio of mesh sizes == ratio of input `size` values (proportional encoding)
+
+### Scenarios: Top-down overview, Zooming in, Orbiting — COVERED
+`test_camera_controls.gd` asserts:
+- `_theta < PI/4` at startup (predominantly top-down)
+- `_distance > 0` at startup
+- Scroll-up decreases `_distance` (zoom in)
+- Scroll-down increases `_distance` (zoom out)
+- Zoom clamped at `min_distance` after 200 scroll events
+- Middle-mouse drag changes `_phi` (orbit horizontal)
+- Middle-mouse drag changes `_theta` (orbit vertical)
+- `set_pivot()` updates internal pivot and distance
+
+### Scenario: Engine version — COVERED
+`test_engine_version.gd` and `test_godot_version.gd` each read `project.godot`
+via `FileAccess.open()` + `get_as_text()` and assert:
+- Content contains `"4.6"` (Godot 4.6.x declared)
+- Content contains `"4.6"` in `config/features` array
+- `main.gd` uses `FileAccess.open(` + `get_as_text()` (Godot 4.x API, not deprecated `File.new()`)
+- GDScript-only confirmed via `.gd` script being readable with non-zero content
+
+FileAccess I/O in `_ready()` is exercised by tests (confirmed by `godot-fileaccess-tested.sh`).
+
+## Notes
+
+1. **test_readable_labels.gd deleted**: The prior implementation of task-012's
+   label tests was removed and replaced with `test_godot_version.gd`. This is
+   acceptable because (a) the label readability coverage is retained in
+   `test_scene_graph_loading.gd::test_labels_are_billboard_and_readable()`, and
+   (b) `godot-label3d.sh` confirms label properties are set and tested. The
+   deleted file was a task-012 deliverable outside this task's spec scope.
+
+2. **schema.py NodeType expansion**: The "spec" literal was added to `NodeType`
+   alongside two tests in `test_scene_graph_loader.gd`. This is an additive change
+   that does not conflict with the spec's required scenarios and passed the scope
+   check cleanly.
+
+3. **Implementer's scope-section report**: The submitted `worker-result.yaml`
+   contains the required "Scope Check Output" section with the text
+   "OK: No prohibited". The independent re-run of `check-not-in-scope.sh`
+   confirms this result — no falsification detected.
+
+All 58 GDScript behavioural tests pass. All check scripts exit 0. Implementation
+matches the spec.
