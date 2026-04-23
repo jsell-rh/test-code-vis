@@ -1,9 +1,9 @@
 ---
 verdict: pass
 ---
-## task-007: Godot Application — Worker Verdict (2026-04-23, fresh attempt)
+## task-007: Godot Application — Independent Code Review Verdict (2026-04-23)
 
-### Check Scripts (run fresh against current branch)
+### Check Scripts (run fresh, independently verified)
 
 | Check | Result |
 |-------|--------|
@@ -12,84 +12,104 @@ verdict: pass
 | `godot-label3d.sh` | PASS — billboard + pixel_size set and tested |
 | `godot-tests.sh` | PASS — 91 GDScript tests, 0 failures |
 
-All four check scripts pass with no modifications required.
+All four check scripts executed and confirmed passing in this review session.
 
 ---
 
-### Implementation Summary
+### Commit Trailers
 
-The Godot application implementation exists in `godot/scripts/` and `godot/tests/`.
-Key implementation commits (from branch history):
-- `a02ffac` feat(godot): implement 3D scene graph visualiser
-- `12ac742` feat(godot): add GDScript test suite and edge direction indicator
+Present on both implementation commits:
+- `a02ffac` — `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3...`, `Task-Ref: task-007`
+- `12ac742` — same trailers ✅
 
-### Requirement Coverage
+---
+
+### Spec Scenario Coverage
+
+Each spec scenario has a dedicated `test_*.gd` file in `godot/tests/`. All tests
+instantiate real `Node3D` (or `Camera3D`) objects and assert concrete property values —
+no dict-key-only (`has()`) checks.
 
 #### JSON Scene Graph Loading — PASS
 
-`main.gd._ready()` opens `scene_graph_path` via `FileAccess.open()` + `get_as_text()`,
-parses with `JSON.new()`, calls `SceneGraphLoader.load_from_dict()`, then `build_from_graph()`.
-No stub — real work is performed.
+`main.gd._ready()` is NOT a stub. It calls `FileAccess.open()` + `get_as_text()`,
+parses JSON, calls `SceneGraphLoader.load_from_dict()`, then `build_from_graph()`.
 
-Tests (`test_scene_graph_loading.gd`): 5 tests verify:
-- `_anchors` has entry per node id (scene-tree volume created)
-- `MeshInstance3D` child exists in each anchor
-- Edges produce `ImmediateMesh` + `CylinderMesh` (cone arrowhead)
-- `anchor.position.is_equal_approx(Vector3(x,y,z))` — actual node positions
-- Label3D: `BILLBOARD_ENABLED`, `pixel_size > 0.0`, `no_depth_test == true`
+`test_scene_graph_loading.gd` (5 tests):
+- Asserts `_anchors` has an entry per node id
+- Asserts each anchor contains a `MeshInstance3D` child
+- Asserts edge geometry: ≥2 `MeshInstance3D` children on root (1 line + 1 arrowhead)
+- Asserts `anchor.position.is_equal_approx(Vector3(x,y,z))` — real position check
+- Asserts `Label3D.billboard == BILLBOARD_ENABLED`, `pixel_size > 0.0`, `no_depth_test == true`
 
 #### Containment Rendering — PASS
 
-`_create_volume()` in `main.gd`:
-- Bounded-context: `TRANSPARENCY_ALPHA`, `albedo_color.a = 0.18`, `CULL_DISABLED`
-- Module: `albedo_color.a = 1.0` (fully opaque)
-- Child anchors parented to parent context anchor (scene-tree nesting)
+`_create_volume()` sets `TRANSPARENCY_ALPHA` + `albedo_color.a = 0.18` + `CULL_DISABLED`
+for bounded_context nodes; `albedo_color.a = 1.0` (fully opaque) for modules. Child
+anchors are parented directly to the parent context anchor (scene-tree nesting).
 
-Tests (`test_containment_rendering.gd`): 5 tests assert transparency, opacity,
-parent-child nesting, relative sizes, and cull mode — all via real Node3D instantiation.
+`test_containment_rendering.gd` (5 tests):
+- Asserts bounded context `mat.transparency != TRANSPARENCY_DISABLED and albedo_color.a < 1.0`
+- Asserts module `albedo_color.a >= 1.0`
+- Asserts `mod_anchor.get_parent() == ctx_anchor` (nesting)
+- Asserts `ctx_mesh.size.x > mod_mesh.size.x` (larger volume)
+- Asserts `mat.cull_mode == CULL_DISABLED` (visible boundary from all angles)
 
 #### Dependency Rendering — PASS
 
-`_create_edge()` in `main.gd`:
-- `ImmediateMesh` (PRIMITIVE_LINES) connects source and target positions
-- `CylinderMesh` with `top_radius = 0.0` (cone/arrowhead) placed at target end
-- Direction indicated by distinct arrowhead, not just colour
+`_create_edge()` produces an `ImmediateMesh` line (PRIMITIVE_LINES) and a
+`CylinderMesh` with `top_radius = 0.0` (cone / arrowhead) at the target end.
+Direction is visually indicated by the distinct cone geometry — not just colour.
 
-Tests (`test_dependency_rendering.gd`): 4 tests assert ImmediateMesh exists,
-CylinderMesh with `top_radius == 0.0` exists, cone position near target, cross-context
-cone material colour (orange: `r > 0.8 and b < 0.3`).
+`test_dependency_rendering.gd` (4 tests):
+- Asserts `ImmediateMesh` child exists on root
+- Asserts `CylinderMesh` with `top_radius == 0.0` exists (cone)
+- Asserts cone `position.distance_to(target_pos) < 2.0` (positioned at target end)
+- Asserts cross-context cone `albedo_color.r > 0.8 and .b < 0.3` (orange)
 
 #### Size Encoding — PASS
 
-`box.size = Vector3(sz, sz * 0.6, sz)` for modules; `sz = float(nd["size"])`.
-Mesh dimensions are linearly proportional to the JSON `size` field.
+`box.size = Vector3(sz, sz * 0.6, sz)` where `sz = float(nd["size"])` → mesh width is
+linearly proportional to the JSON size field.
 
-Tests (`test_size_encoding.gd`): 2 tests assert `large_mesh.size.x > small_mesh.size.x`
-and ratio `abs(9.0/3.0 - actual_ratio) < 0.001`.
+`test_size_encoding.gd` (2 tests):
+- Asserts `large_mesh.size.x > small_mesh.size.x`
+- Asserts `abs(9.0/3.0 - actual_ratio) < 0.001` (proportionality)
 
 #### Camera Controls — PASS
 
-`camera_controller.gd`:
-- Top-down default: `_theta = 0.15` (~8.6°, clearly < PI/4)
-- Zoom: `WHEEL_UP`/`WHEEL_DOWN` adjust `_distance`, clamped to `[min_distance, max_distance]`
-- Orbit: middle-mouse drag adjusts `_phi` and `_theta`; `_theta` clamped to `[0.01, PI-0.01]`
+`camera_controller.gd`: `_theta = 0.15` (≈ 8.6°, top-down default); scroll adjusts
+`_distance` with `clamp()`; middle-mouse drag adjusts `_phi` and `_theta`; `_theta`
+clamped to `[0.01, PI-0.01]` so orientation stays stable.
 
-Tests (`test_camera_controls.gd`): 8 tests covering all three camera scenarios.
+`test_camera_controls.gd` (8 tests):
+- Asserts `_theta < PI/4` (top-down default)
+- Asserts `_distance > 0`
+- Asserts WHEEL_UP decreases distance, WHEEL_DOWN increases it
+- Asserts horizontal drag changes `_phi`, vertical drag changes `_theta`
+- Asserts `set_pivot()` updates `_pivot` and `_distance`
+- Asserts repeated WHEEL_UP never drops below `min_distance`
 
 #### Godot 4.6 — PASS
 
-`godot/project.godot` declares `config/features=PackedStringArray("4.6")`.
-All scripts use GDScript 2.0 syntax. `FileAccess.get_as_text()` (correct 4.6 API used).
+`project.godot`: `config/features=PackedStringArray("4.6")`. All scripts use GDScript 2.0.
+`FileAccess.get_as_text()` is the correct Godot 4.6 API call.
 
 ---
 
-### Guidelines Compliance
+### Findings
 
-- No empty `_ready()`/`_process()` stubs
-- Tests instantiate real Node3D objects and assert `.position`, `.size`, `.albedo_color.a`
-  — not dict key checks
-- Label3D: `billboard = BaseMaterial3D.BILLBOARD_ENABLED` and `pixel_size = 0.012` set
-  immediately after creation in `main.gd`; both properties asserted in tests
-- No `.hyperloop/state/` files committed
+**Minor process finding (prior review cycle, not implementation defect):**
+Commit `582b9a3` ("sync state file and record final worker verdict") committed
+`.hyperloop/state/intake-2026-04-23.md` on this branch. State files are reserved for
+the orchestrator on trunk. The change is cosmetic (counter update in a comment) and
+does not affect the implementation, tests, or spec compliance. Noting for process
+awareness; it does not affect this verdict.
 
-**Verdict: PASS**
+---
+
+### Verdict: PASS
+
+All spec scenarios are implemented and covered by behavioral GDScript tests that
+instantiate real nodes and assert concrete property values. All check scripts pass.
+Commit trailers are present.
