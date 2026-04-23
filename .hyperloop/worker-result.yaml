@@ -171,3 +171,6 @@ All six SHALL/MUST requirements from `specs/prototype/godot-application.spec.md`
 
 No prohibited out-of-scope features (conformance mode, evaluation mode, simulation mode,
 data-flow visualization, moldable views, first-person navigation) are present in the codebase.
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
