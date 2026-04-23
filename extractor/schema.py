@@ -7,7 +7,7 @@ between the Python extractor and the Godot application.
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 
 class Position(TypedDict):
@@ -18,8 +18,15 @@ class Position(TypedDict):
     z: float
 
 
-NodeType = Literal["bounded_context", "module"]
+NodeType = Literal["bounded_context", "module", "spec"]
 EdgeType = Literal["cross_context", "internal"]
+
+
+class NodeMetrics(TypedDict):
+    """Raw complexity metrics for a node."""
+
+    loc: int
+    """Total lines of code (Python source files, recursive)."""
 
 
 class Node(TypedDict):
@@ -35,7 +42,7 @@ class Node(TypedDict):
     """Human-readable display name, e.g. 'IAM' or 'Domain'."""
 
     type: NodeType
-    """Level of the node: 'bounded_context' or 'module'."""
+    """Level of the node: 'bounded_context', 'module', or 'spec'."""
 
     position: Position
     """Pre-computed 3D position. Coordinates are relative to the parent node."""
@@ -45,6 +52,9 @@ class Node(TypedDict):
 
     parent: str | None
     """ID of the containing node, or null for top-level nodes."""
+
+    metrics: NotRequired[NodeMetrics]
+    """Raw complexity metrics. Present for code-derived nodes."""
 
 
 class Edge(TypedDict):
