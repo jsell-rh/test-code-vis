@@ -1,0 +1,51 @@
+## Minimal headless test runner for code-vis GDScript tests.
+##
+## Usage:
+##   godot --headless --path godot/ --script tests/run_tests.gd
+##
+## Each test_*.gd file is loaded, its test_* methods are discovered and called.
+## Results are printed to stdout. Exits 0 on all-pass, 1 on any failure.
+
+extends SceneTree
+
+var _passes: int = 0
+var _failures: int = 0
+
+
+func _init() -> void:
+	print("=== code-vis GDScript Tests ===")
+
+	_run_suite(preload("res://tests/test_scene_graph_loader.gd").new())
+
+	print("")
+	print("Results: %d passed, %d failed" % [_passes, _failures])
+
+	if _failures > 0:
+		quit(1)
+	else:
+		quit(0)
+
+
+func _run_suite(obj: Object) -> void:
+	var path: String = obj.get_script().get_path()
+	print("\n[%s]" % path.get_file())
+	for m in obj.get_method_list():
+		var method_name: String = m["name"]
+		if method_name.begins_with("test_"):
+			_run_one(obj, method_name)
+
+
+func _run_one(obj: Object, method_name: String) -> void:
+	obj.set("_runner", self)
+	obj.set("_test_failed", false)
+	obj.call(method_name)
+	if obj.get("_test_failed"):
+		print("  FAIL: %s" % method_name)
+		_failures += 1
+	else:
+		print("  PASS: %s" % method_name)
+		_passes += 1
+
+
+func record_failure(msg: String) -> void:
+	print("    -> %s" % msg)
