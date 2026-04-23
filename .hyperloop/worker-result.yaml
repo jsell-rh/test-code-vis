@@ -3,7 +3,29 @@ verdict: pass
 ---
 ## task-007: Godot Application Spec — PASS (fresh review 2026-04-23)
 
-Fresh independent review of `specs/prototype/godot-application.spec.md`.
+Independent review of `specs/prototype/godot-application.spec.md` on branch
+`hyperloop/task-007`. All checks and tests run from scratch.
+
+### Check Scripts
+
+| Script | Result |
+|---|---|
+| `extractor-lint.sh` | PASS — ruff clean, 96 pytest tests pass |
+| `godot-compile.sh` | PASS — Godot 4.6.2 headless compile succeeded |
+| `godot-label3d.sh` | PASS — billboard and pixel_size set and tested |
+| `godot-tests.sh` | PASS — **91 passed, 0 failed** |
+
+The camera tests emit "Node not inside tree" engine warnings (Camera3D.look_at()
+requires a scene tree). These are benign: the state mutations (_distance,
+_theta, _phi) happen before the engine call fails, so all 8 camera tests PASS.
+
+### Commit Trailers
+
+All three implementation commits carry:
+- `Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384`
+- `Task-Ref: task-007`
+
+✅ Trailer requirement satisfied.
 
 ---
 
