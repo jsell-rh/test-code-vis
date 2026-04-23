@@ -1,0 +1,109 @@
+---
+verdict: pass
+---
+
+## Summary
+
+Implemented all UX Polish requirements from `specs/prototype/ux-polish.spec.md`:
+
+- **Pan with Left Mouse Button** — `MOUSE_BUTTON_LEFT` now pans the pivot. Direction uses `global_transform.basis.x` (no negation), matching drag direction.
+- **Non-Inverted Movement** — Removing the `-` from the right vector ensures rightward drag increases `_pivot.x`.
+- **Zoom Toward Mouse Cursor** — `_zoom_toward_cursor(cursor_world, direction)` shifts `_pivot` proportionally toward/away from the cursor's world point on each scroll event.
+- **Orbit Around Mouse Point** — `MOUSE_BUTTON_RIGHT` now starts orbit; `_set_orbit_pivot(world_point)` recalculates `_pivot`, `_distance`, `_theta`, `_phi` so the camera stays in place while focal point moves to the clicked world location.
+- **Smooth Camera Movement** — Zoom uses `_target_distance` + `lerp` in `_process(delta)` so distance interpolates toward target each frame instead of snapping. Pan is already frame-proportional via drag delta.
+
+## THEN-Clause Coverage
+
+| THEN clause | Test function | Assertion |
+|---|---|---|
+| Camera pans in direction of drag | `test_lmb_pan_moves_pivot` | `cam._pivot != initial_pivot` |
+| Movement direction not inverted (drag right → pivot right) | `test_pan_drag_right_increases_pivot_x` | `cam._pivot.x > initial_x` |
+| Drag left → pivot left (non-inverted) | `test_pan_drag_left_decreases_pivot_x` | `cam._pivot.x < initial_x` |
+| Scene moves same direction as drag | `test_drag_direction_matches_view_movement` | `cam._pivot != Vector3.ZERO` |
+| View zooms toward point under cursor | `test_zoom_toward_cursor_shifts_pivot_toward_cursor` | `cam._pivot.x > 0.0` |
+| Component stays under cursor on zoom in | `test_component_stays_under_cursor_on_zoom_in` | `after > before` |
+| View zooms out from cursor point | `test_zoom_out_from_cursor_shifts_pivot_away` | `cam._pivot.x < 5.0` |
+| Zoom out increases distance | `test_zoom_out_increases_target_distance` | `cam._target_distance > initial_target` |
+| Camera orbits around cursor at orbit start | `test_orbit_pivot_set_to_cursor_point_at_start` | `cam._pivot == world_point` |
+| Component stays at visual center during orbit | `test_orbit_pivot_is_used_during_orbit` / `test_component_remains_at_visual_center_during_orbit` | `cam._pivot == pivot_before` |
+| Zoom is smooth (interpolated, not instantaneous) | `test_zoom_is_interpolated_not_instantaneous` | `after_one_frame < initial` and `after_one_frame > target` |
+| Pan proportional to drag speed | `test_pan_proportional_to_drag_speed` | `move2 > move1` |
+
+Additional boundary tests added per clamp-check requirements:
+- `test_target_distance_clamped_at_minimum` — `_target_distance >= min_distance`
+- `test_target_distance_clamped_at_maximum` — `_target_distance <= max_distance`
+- `test_theta_clamped_at_minimum` — `_theta >= 0.01`
+- `test_theta_clamped_at_maximum` — `_theta <= PI - 0.01`
+
+## Check Script Results
+
+=== run-all-checks.sh ===
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+SKIP: No 'all scripts use GDScript' constraint found in spec
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM→view-spec pipeline.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- extractor-lint.sh ---
+Linting extractor...
+All checks passed!
+7 files already formatted
+Running extractor tests...
+90 passed in 0.09s
+Extractor checks passed.
+[EXIT 0]
+
+--- godot-compile.sh ---
+Compiling Godot project...
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Found 11 GDScript test file(s) in godot/tests/.
+Running custom headless test runner...
+Results: 93 passed, 0 failed
+GDScript behavioral tests passed.
+[EXIT 0]
+
+=== Summary: 12 check(s) run ===
+RESULT: ALL PASS
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.

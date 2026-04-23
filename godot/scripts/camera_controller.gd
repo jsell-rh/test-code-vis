@@ -158,5 +158,10 @@ func _update_transform() -> void:
 	var x: float = _distance * sin(_theta) * cos(_phi)
 	var y: float = _distance * cos(_theta)
 	var z: float = _distance * sin(_theta) * sin(_phi)
-	global_position = _pivot + Vector3(x, y, z)
-	look_at(_pivot, Vector3.UP)
+	var cam_pos: Vector3 = _pivot + Vector3(x, y, z)
+	if is_inside_tree():
+		global_position = cam_pos
+		look_at(_pivot, Vector3.UP)
+	else:
+		# Headless / not-in-tree: update position directly via transform.
+		position = cam_pos
