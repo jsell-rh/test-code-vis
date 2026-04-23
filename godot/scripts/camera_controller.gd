@@ -95,5 +95,13 @@ func _update_transform() -> void:
 	var x: float = _distance * sin(_theta) * cos(_phi)
 	var y: float = _distance * cos(_theta)
 	var z: float = _distance * sin(_theta) * sin(_phi)
-	global_position = _pivot + Vector3(x, y, z)
-	look_at(_pivot, Vector3.UP)
+	var cam_pos: Vector3 = _pivot + Vector3(x, y, z)
+	# Use global_position + look_at only when inside the scene tree.
+	# When instantiated outside a tree (e.g. headless unit tests), store the
+	# position in the local transform so state variables remain testable without
+	# triggering "Node not inside tree" engine errors.
+	if is_inside_tree():
+		global_position = cam_pos
+		look_at(_pivot, Vector3.UP)
+	else:
+		position = cam_pos
