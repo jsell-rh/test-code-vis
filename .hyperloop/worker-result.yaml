@@ -1,13 +1,20 @@
 ---
 verdict: pass
 ---
-## task-007: Godot Application Spec — PASS
+## task-007: Godot Application Spec — PASS (fresh review 2026-04-23)
 
-All four check scripts pass (verified 2026-04-23):
+All four check scripts run and verified fresh:
+- `extractor-lint.sh` — PASS (ruff clean, 96 pytest tests)
 - `godot-compile.sh` — PASS (Godot 4.6.2.stable)
-- `godot-tests.sh` — PASS (91 GDScript behavioral tests, 0 failed)
-- `godot-label3d.sh` — PASS (billboard + pixel_size set and tested)
-- `extractor-lint.sh` — PASS (96 Python tests, ruff clean)
+- `godot-label3d.sh` — PASS (billboard + pixel_size set in main.gd, asserted in tests)
+- `godot-tests.sh`   — PASS (91 GDScript behavioral tests, 0 failed)
+
+### Commit Trailers
+
+Implementation commits carry both required trailers (Spec-Ref + Task-Ref):
+- `a02ffac` feat(godot): implement 3D scene graph visualiser
+- `12ac742` feat(godot): add GDScript test suite and edge direction indicator
+- `11960e4` test(godot): add label property test for readability at all zoom levels
 
 ### Requirement Coverage
 
