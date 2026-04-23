@@ -43,6 +43,7 @@ guidelines: |
     call the function under test, and assert the actual `.position.x`, `.position.y`,
     `.position.z` values on the scene-tree node — not on an intermediate dictionary.
   - **Node properties that produce visual behavior require property-value tests.** If a THEN clause is satisfied by setting a node property (e.g. `billboard`, `pixel_size`, `no_depth_test`, `transparency_mode`, `cull_mode`, `albedo_color.a`), write a test that builds the scene from fixture data and asserts that property value on the resulting node. "The engine renders it correctly" is never a substitute for asserting the property.
+  - **Label3D readability is mandatory, not optional.** Whenever you create a `Label3D` node, you MUST immediately set `label.billboard = BaseMaterial3D.BILLBOARD_ENABLED` and `label.pixel_size = 0.05` (or another legible value > 0.0). These are not style choices — a Label3D at default settings is illegible in a 3D scene. Write tests asserting both `billboard == BaseMaterial3D.BILLBOARD_ENABLED` and `pixel_size > 0.0` on the resulting node, even if the spec's THEN clause only mentions "add an annotation."
   - **Before submitting your verdict**, run all check scripts in `.hyperloop/checks/`.
     Both the Godot compile check and the extractor lint check must pass.
     If a check SKIPs (because the relevant component doesn't exist yet), that's fine.
