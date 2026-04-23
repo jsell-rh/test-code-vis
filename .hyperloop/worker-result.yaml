@@ -1,23 +1,32 @@
 ---
 verdict: pass
 ---
-## Godot Application — task-007 Implementation Verdict
+## task-007 Godot Application — Code Review (2026-04-23)
 
-All three check scripts pass:
-- `extractor-lint.sh`: PASS (ruff + 93 pytest tests)
-- `godot-compile.sh`: PASS (Godot Engine v4.6.2)
-- `godot-tests.sh`: PASS (24 / 24 GDScript behavioral tests)
+### Check Scripts (run fresh this session)
+- `extractor-lint.sh`: PASS — ruff clean, 93 pytest tests pass
+- `godot-compile.sh`: PASS — Godot Engine v4.6.2, project compiles cleanly
+- `godot-tests.sh`: PASS — 24/24 GDScript behavioral tests pass
+
+### Commit Trailers
+All three implementation commits carry `Spec-Ref` and `Task-Ref` trailers pointing to
+`specs/prototype/godot-application.spec.md` and `task-007`.
 
 ### Requirement Coverage
 
-| Requirement              | Code                                                                      | Tests                                           | Status  |
-|--------------------------|---------------------------------------------------------------------------|--------------------------------------------------|---------|
-| JSON Scene Graph Loading | `main.gd` `_load_and_build()` reads JSON; `_build()` creates volumes, edges, positioned anchors | `test_scene_graph_loading.gd`: 5 tests — volumes, mesh instances, edge meshes, anchor positions, label billboard/pixel_size | COVERED |
-| Containment Rendering    | `_create_volume()`: bounded_context → translucent (TRANSPARENCY_ALPHA, alpha=0.18, CULL_DISABLED); module → opaque (alpha=1.0); child anchor parented to parent anchor | `test_containment_rendering.gd`: 5 tests — translucency, opacity, nesting, size ordering, cull mode | COVERED |
-| Dependency Rendering     | `_create_edge()`: ImmediateMesh (PRIMITIVE_LINES) + CylinderMesh cone (top_radius=0) at target as direction indicator; orange for cross_context | `test_dependency_rendering.gd`: 4 tests — line mesh, cone created, cone near target, orange on cross-context | COVERED |
-| Size Encoding            | `sz = float(nd["size"])`; `box.size = Vector3(sz, sz*k, sz)` — direct proportionality | `test_size_encoding.gd`: 2 tests — large module bigger mesh, ratio 3.0 proportional to metric | COVERED |
-| Camera Controls          | `camera_controller.gd`: spherical-coord orbit (middle-mouse), zoom (scroll wheel), pan (right-mouse); initial `_theta=0.15` (≈8.6° from top-down); `look_at(_pivot, Vector3.UP)` preserves orientation; clamped to `[0.01, PI-0.01]` | `test_camera_controls.gd`: 8 tests — initial theta < PI/4, positive distance, scroll up/down, orbit H/V drag, set_pivot, zoom clamp | COVERED |
-| Godot 4                  | `project.godot`: `config/features=PackedStringArray("4.6")`; all scripts are GDScript | Engine version fact — confirmed by compile check | COVERED |
+| Requirement              | Code                                                                                                   | Tests                                                                                                   | Status  |
+|--------------------------|--------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------|---------|
+| JSON Scene Graph Loading | `main.gd _ready()` calls `_load_and_build()` (not a stub); reads JSON; `_build()` creates anchors/volumes/edges and positions them from JSON `position` fields | `test_scene_graph_loading.gd` (5 tests): volumes created, MeshInstance3D present, edge meshes present, anchor `.position.x/y/z` asserted against fixture values, billboard+pixel_size asserted on Label3D | COVERED |
+| Containment Rendering    | `_create_volume()`: bounded_context → TRANSPARENCY_ALPHA, alpha=0.18, CULL_DISABLED; module → alpha=1.0; child anchor parented to parent anchor in scene tree | `test_containment_rendering.gd` (5 tests): translucency flag+alpha, opacity alpha, parent==ctx_anchor, ctx mesh larger, CULL_DISABLED | COVERED |
+| Dependency Rendering     | `_create_edge()`: ImmediateMesh PRIMITIVE_LINES + CylinderMesh (top_radius=0) cone at target; orange Color for cross_context | `test_dependency_rendering.gd` (4 tests): ImmediateMesh created, cone created (top_radius==0), cone within 2 units of target pos, orange color on cross_context | COVERED |
+| Size Encoding            | `sz = float(nd["size"])`; BoxMesh.size = Vector3(sz, sz*k, sz) — direct linear proportionality | `test_size_encoding.gd` (2 tests): large mesh.size.x > small; ratio 9/3 = 3.0 exact within 0.001 | COVERED |
+| Camera Controls          | `camera_controller.gd`: _theta=0.15 (<PI/4) top-down default; scroll-wheel zoom clamped to [2,500]; middle-mouse orbit (phi+theta); right-mouse pan; `look_at(_pivot, Vector3.UP)` stable up-vector | `test_camera_controls.gd` (8 tests): theta<PI/4, distance>0, scroll up/down, orbit H/V drag, set_pivot, zoom clamp | COVERED |
+| Godot 4                  | `project.godot` config/features=PackedStringArray("4.6"); all scripts GDScript | Confirmed by compile check (Godot 4.6.2) | COVERED |
 
-### Test runner
-`godot/tests/run_tests.gd` extends `SceneTree`, loads each `test_*.gd`, instantiates it, calls every `test_*` method, and asserts `true` return. This is a genuine runtime behavioral runner — not compilation-only.
+### Guideline Checks
+- `_ready()` is NOT a stub — calls `_load_and_build()` immediately.
+- Tests instantiate real `Node3D` (MainScript.new() extends Node3D), invoke `_build()`, and assert `.position.x/y/z` on anchor nodes — not dict-key checks only.
+- Direction visually indicated: explicit CylinderMesh arrowhead (top_radius=0) at target end; test asserts cone exists and is within 2 units of target position.
+- Label readability: `test_labels_are_billboard_and_readable` asserts `billboard == BILLBOARD_ENABLED`, `pixel_size > 0.0`, and `no_depth_test == true`.
+- Containment visual: child anchor is a direct scene-tree child of parent anchor, and context mesh is larger than module mesh — both asserted by tests.
+- Test runner (`run_tests.gd`) is a genuine headless runtime runner extending `SceneTree`, not compilation-only.
