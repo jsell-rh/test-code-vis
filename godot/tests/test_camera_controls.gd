@@ -43,42 +43,43 @@ func test_initial_distance_is_positive() -> bool:
 
 
 ## WHEN the user scrolls up THEN the camera moves closer —
-## MOUSE_BUTTON_WHEEL_UP must decrease _distance.
+## MOUSE_BUTTON_WHEEL_UP must decrease _target_distance (smooth-zoom intent).
+## _distance lerps toward _target_distance via _process(); check target here.
 func test_scroll_up_decreases_distance() -> bool:
 	var cam = CameraScript.new()
-	var initial_distance: float = cam._distance
+	var initial_target: float = cam._target_distance
 
 	var event := InputEventMouseButton.new()
 	event.button_index = MOUSE_BUTTON_WHEEL_UP
 	event.pressed = true
 	cam._handle_button(event)
 
-	return cam._distance < initial_distance
+	return cam._target_distance < initial_target
 
 
 ## WHEN the user scrolls down THEN the camera moves farther —
-## MOUSE_BUTTON_WHEEL_DOWN must increase _distance.
+## MOUSE_BUTTON_WHEEL_DOWN must increase _target_distance.
 func test_scroll_down_increases_distance() -> bool:
 	var cam = CameraScript.new()
-	var initial_distance: float = cam._distance
+	var initial_target: float = cam._target_distance
 
 	var event := InputEventMouseButton.new()
 	event.button_index = MOUSE_BUTTON_WHEEL_DOWN
 	event.pressed = true
 	cam._handle_button(event)
 
-	return cam._distance > initial_distance
+	return cam._target_distance > initial_target
 
 
-## WHEN the user middle-mouse drags horizontally THEN the camera orbits —
+## WHEN the user right-mouse drags horizontally THEN the camera orbits —
 ## a horizontal drag must change the azimuth angle _phi.
 func test_orbit_horizontal_drag_changes_phi() -> bool:
 	var cam = CameraScript.new()
 	var initial_phi: float = cam._phi
 
-	# Press middle mouse to begin orbiting.
+	# Press right mouse to begin orbiting.
 	var press := InputEventMouseButton.new()
-	press.button_index = MOUSE_BUTTON_MIDDLE
+	press.button_index = MOUSE_BUTTON_RIGHT
 	press.pressed = true
 	press.position = Vector2(100.0, 100.0)
 	cam._handle_button(press)
@@ -92,15 +93,15 @@ func test_orbit_horizontal_drag_changes_phi() -> bool:
 	return cam._phi != initial_phi
 
 
-## WHEN the user middle-mouse drags vertically THEN the polar angle changes —
+## WHEN the user right-mouse drags vertically THEN the polar angle changes —
 ## a vertical drag must change _theta (camera altitude).
 func test_orbit_vertical_drag_changes_theta() -> bool:
 	var cam = CameraScript.new()
 	var initial_theta: float = cam._theta
 
-	# Press middle mouse to begin orbiting.
+	# Press right mouse to begin orbiting.
 	var press := InputEventMouseButton.new()
-	press.button_index = MOUSE_BUTTON_MIDDLE
+	press.button_index = MOUSE_BUTTON_RIGHT
 	press.pressed = true
 	press.position = Vector2(100.0, 100.0)
 	cam._handle_button(press)
@@ -124,7 +125,9 @@ func test_set_pivot_updates_state() -> bool:
 
 
 ## Zoom is clamped to [min_distance, max_distance] —
-## repeated scroll-up should never push _distance below min_distance.
+## repeated scroll-up should never push _target_distance below min_distance.
+## With smooth zoom, _distance lerps toward _target_distance; _target_distance
+## is the authoritative clamped value.
 func test_zoom_clamped_at_minimum() -> bool:
 	var cam = CameraScript.new()
 	var event := InputEventMouseButton.new()
@@ -133,4 +136,4 @@ func test_zoom_clamped_at_minimum() -> bool:
 	# Scroll in 200 times — must not go below min_distance.
 	for _i: int in range(200):
 		cam._handle_button(event)
-	return cam._distance >= cam.min_distance
+	return cam._distance >= cam.min_distance and cam._target_distance >= cam.min_distance
