@@ -431,6 +431,10 @@ func test_annotate_op_sets_label3d_text() -> void:
 		if label != null:
 			_check(label.text == "Entry point",
 				"Label3D.text must be 'Entry point', got '%s'" % label.text)
+			_check(label.billboard == BaseMaterial3D.BILLBOARD_ENABLED,
+				"annotation Label3D must have billboard enabled for readability in 3D space")
+			_check(label.pixel_size > 0.0,
+				"annotation Label3D must have pixel_size > 0.0 for legibility, got %s" % label.pixel_size)
 
 	root.free()
 
