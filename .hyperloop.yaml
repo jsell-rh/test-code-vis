@@ -4,6 +4,7 @@ runtime: local
 max_workers: 6
 max_task_rounds: 30
 max_cycles: 10000
+repo: jsell-rh/test-code-vis
 
 merge:
   auto_merge: true

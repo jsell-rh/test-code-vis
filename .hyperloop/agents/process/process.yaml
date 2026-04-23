@@ -2,14 +2,21 @@ apiVersion: hyperloop.io/v1
 kind: Process
 metadata:
   name: default
-repo: jsell-rh/test-code-vis
+
 pipeline:
   - loop:
       - agent: implementer
       - agent: verifier
       - agent: spec-reviewer
+      - action: mark-pr-ready
+      # - gate: pr-require-label
+      - action: post-pr-comment
+        args:
+          body: "@coderabbit recheck"
+      - check: pr-feedback-addressed
+        args:
+          require_reviewers: ["coderabbit[bot]"]
   - action: merge-pr
-
 hooks:
   after_reap:
     - type: process-improver

@@ -1,0 +1,114 @@
+---
+task_id: task-009
+round: 1
+role: verifier
+verdict: fail
+---
+## Scope Check Output
+
+```
+OK: No prohibited (not-in-scope) features detected.
+```
+
+## Verdict: FAIL
+
+### Reason: Missing "## Scope Check Output" Section in Implementer's Report
+
+The implementer's worker-result.yaml (commit 55a22dd) does not contain a
+`## Scope Check Output` section with the verbatim output of
+`check-not-in-scope.sh`. The guidelines state:
+
+> **Reject any submission that omits the "## Scope Check Output" section.**
+> If that section is absent or does not contain the text "OK: No prohibited",
+> issue a FAIL even if your own scope check passes — the missing section is
+> evidence the check was not run during implementation.
+
+The implementer's report says "check-not-in-scope.sh: OK (no prohibited
+features detected)" in the `## All Checks Pass` bullet list — but this is NOT
+the verbatim output and there is no `## Scope Check Output` section at all.
+The actual verbatim output from the script is:
+`OK: No prohibited (not-in-scope) features detected.`
+
+**Fix required**: Re-submit the worker-result.yaml with a `## Scope Check
+Output` section containing the verbatim output from running
+`bash .hyperloop/checks/check-not-in-scope.sh`.
+
+---
+
+## Everything Else: PASS
+
+All other checks and requirements are satisfied. For reference:
+
+### check-not-in-scope.sh (reviewer run)
+```
+OK: No prohibited (not-in-scope) features detected.
+```
+
+### Prohibited Features Audit (all clear)
+- conformance mode: absent
+- evaluation mode: absent
+- simulation mode: absent
+- data flow visualization: absent
+- first-person navigation: absent
+- moldable views (view_spec.gd, view_spec_renderer.gd, question_panel.gd): absent
+- spec extraction (extract_spec_nodes, --specs flag, include_specs): absent
+
+### extractor-lint.sh
+```
+All checks passed!
+7 files already formatted
+90 passed in 0.17s
+Extractor checks passed.
+```
+
+### godot-compile.sh
+```
+Godot Engine v4.6.2.stable.official — project compiles successfully.
+```
+
+### godot-tests.sh
+All 30 GDScript behavioral tests pass across 8 test files:
+- test_scene_graph_loader.gd (24 tests — PASS)
+- test_node_renderer.gd (4 tests — PASS)
+- test_scene_graph_loading.gd (5 tests — PASS)
+- test_containment_rendering.gd (5 tests — PASS)
+- test_dependency_rendering.gd (4 tests — PASS)
+- test_size_encoding.gd (2 tests — PASS)
+- test_camera_controls.gd (8 tests — PASS)
+- test_engine_version.gd (3 tests — PASS)
+
+### godot-fileaccess-tested.sh
+```
+OK: FileAccess.open() is exercised in 1 test file(s).
+```
+
+### godot-label3d.sh
+```
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+```
+
+### check-kartograph-integration-test.sh (from main branch)
+```
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+```
+
+### Commit Trailers
+Present on all relevant commits:
+- Spec-Ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
+- Task-Ref: task-009
+
+### Spec Coverage
+
+| Requirement              | Status  | Test File                      |
+|--------------------------|---------|--------------------------------|
+| JSON Scene Graph Loading | COVERED | test_scene_graph_loading.gd    |
+| Containment Rendering    | COVERED | test_containment_rendering.gd  |
+| Dependency Rendering     | COVERED | test_dependency_rendering.gd   |
+| Size Encoding            | COVERED | test_size_encoding.gd          |
+| Camera Controls          | COVERED | test_camera_controls.gd        |
+| Godot 4.6                | COVERED | test_engine_version.gd         |
+
+main.gd `_ready()` is non-empty and performs real FileAccess.open() + get_as_text()
+work. Direction indicator is a CylinderMesh with top_radius=0 (cone), satisfying
+"visually indicated" per the guidelines (explicit rendering element, not just colour).
+Label3D nodes have billboard=BILLBOARD_ENABLED, pixel_size=0.012 > 0, no_depth_test=true.
