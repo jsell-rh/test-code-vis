@@ -1,0 +1,116 @@
+---
+verdict: pass
+---
+## Spec Alignment Review — prototype-scope.spec.md
+
+All check scripts pass, all 90 Python tests pass, all 64 GDScript tests pass.
+
+### Requirement: Target Codebase — COVERED
+- **Code:** `godot/data/scene_graph.json` was extracted from `/home/jsell/code/kartograph/src/api`
+  (37 nodes, 58 edges, bounded contexts: graph, iam, infrastructure, management, query,
+  shared_kernel; timestamp 2026-04-23). `godot/scripts/main.gd` loads it at
+  `res://data/scene_graph.json`. `extractor/__main__.py` accepts the kartograph path.
+- **Tests:** `test_extractor.py` uses a kartograph-mirroring fixture (iam, shared_kernel,
+  graph bounded contexts with real import patterns). `check-kartograph-integration-test.sh`
+  PASSES. Committed scene graph is direct evidence the extractor was run against kartograph.
+
+### Requirement: Two-Stage Pipeline — COVERED
+- **Code:** Stage 1 — `extractor/extractor.py` + `extractor/__main__.py` produce JSON via
+  `build_scene_graph()`. Stage 2 — `godot/scripts/scene_graph_loader.gd` parses the JSON;
+  `godot/scripts/main.gd` calls `build_from_graph()` to render the 3D scene.
+  `extractor/schema.py` defines the contract.
+- **Tests:** Python: `TestSceneGraphOutput` in `test_extractor.py`, full `test_schema.py`.
+  GDScript: `test_scene_graph_loader.gd` (22 tests), `test_scene_graph_loading.gd`
+  (JSON→volume→edge pipeline), `test_node_renderer.gd` (positions from JSON).
+
+### Requirement: Top-Down Architectural View — COVERED
+- **Code:** `camera_controller.gd` initialises `_theta = 0.15` (≈8.6° from top, < 45° =
+  top-down). Spherical-coordinate `_update_transform()` positions camera above pivot.
+  `compute_layout()` uses coupling-aware BC ordering so tightly coupled contexts are
+  adjacent (closer) in the circular arrangement. `_create_edge()` draws connections.
+- **Tests:** `test_camera_controls.gd::test_initial_theta_is_near_top_down` asserts theta <
+  PI/4. `TestLayout::test_coupled_bcs_are_closer_than_uncoupled` (Python) verifies layout
+  coupling semantics. `test_containment_rendering.gd` verifies BCs appear as distinct
+  volumes. `test_dependency_rendering.gd` verifies cross-context connections.
+
+### Requirement: Zoom to Detail — COVERED
+- **Code:** Scroll-wheel zoom in `camera_controller.gd::_handle_button()` (WHEEL_UP/DOWN
+  adjusts `_distance`). Module nodes are parented inside their BC anchor in `main.gd`.
+  `_create_edge()` renders internal edges. `compute_layout()` places child module nodes
+  at offsets from parent BC position (within `bc_radius`).
+- **Tests:** `test_camera_controls.gd` tests `test_scroll_up_decreases_distance`,
+  `test_scroll_down_increases_distance`, `test_zoom_clamped_at_minimum`.
+  `test_containment_rendering.gd::test_module_parented_inside_context` confirms internal
+  structure is parented inside BC. `test_dependency_rendering.gd` confirms internal edges.
+  Python `TestLayout::test_child_nodes_are_near_parent_position` confirms modules stay
+  within parent's spatial bounds.
+
+### Requirement: Abstract Visual Language — COVERED
+- **Code:** `main.gd._create_volume()` uses `BoxMesh` for all nodes. No terrain, buildings,
+  or thematic decoration. Size encoded as `BoxMesh.size = Vector3(sz, ...)` directly from
+  JSON `size` field. Containment via scene-tree parenting (child anchor inside parent anchor).
+  Cross-context BCs positioned by coupling-aware circular layout.
+- **Tests:** `test_size_encoding.gd` asserts larger module has bigger mesh and sizes are
+  proportional. `test_containment_rendering.gd` asserts BC is larger+translucent, modules
+  smaller+opaque and parented inside. `test_node_renderer.gd` confirms positions come
+  directly from JSON (no Godot-side recomputation).
+
+### Requirement: Readable Labels — COVERED
+- **Code:** `main.gd._create_volume()` adds `Label3D` to every anchor with:
+  `label.text = nd["name"]`, `label.billboard = BaseMaterial3D.BILLBOARD_ENABLED`,
+  `label.pixel_size = 0.012`, `label.no_depth_test = true`.
+- **Tests:** `test_readable_labels.gd` (12 tests added in task-012) exhaustively verifies:
+  Label3D exists on both bounded-context and module anchors; text matches node name;
+  billboard ENABLED; pixel_size > 0; no_depth_test = true. `test_scene_graph_loading.gd::
+  test_labels_are_billboard_and_readable` also covers these properties. `godot-label3d.sh`
+  PASSES.
+
+### Requirement: Dependency Visualization — COVERED
+- **Code:** `main.gd._create_edge()` creates:
+  1. `ImmediateMesh` (PRIMITIVE_LINES) line from source to target world position.
+  2. `CylinderMesh` arrowhead cone (`top_radius=0`, oriented along edge direction) placed
+     at the target end — indicating dependency flow direction.
+  Cross-context edges: orange `Color(1.0, 0.50, 0.10)`. Internal: grey `Color(0.55, 0.55, 0.55)`.
+- **Tests:** `test_dependency_rendering.gd` asserts ImmediateMesh line exists, cone exists,
+  cone is near target position (< 2 units), and cross_context cone is orange (R > 0.8, B < 0.3).
+
+### Requirement: Navigation — COVERED
+- **Code:** `camera_controller.gd` implements:
+  - **Pan:** Right-mouse drag moves `_pivot` in camera's local XZ plane.
+  - **Zoom:** Scroll wheel adjusts `_distance` (clamped to [min_distance, max_distance]).
+  - **Orbit/Rotate:** Middle-mouse drag changes `_theta` (altitude) and `_phi` (azimuth).
+  - `set_pivot(pivot, distance)` allows smooth scene-framed transitions.
+  - `_frame_camera()` in `main.gd` auto-frames to whole scene on load.
+- **Tests:** `test_camera_controls.gd` covers 8 tests: initial top-down position, positive
+  distance, scroll-up zoom, scroll-down zoom, orbit horizontal (phi change), orbit vertical
+  (theta change), set_pivot state update, zoom clamped at min_distance.
+
+### Requirement: Not In Scope — COVERED
+- **Code:** `check-not-in-scope.sh` PASSES. No moldable-view scripts, no spec-extraction
+  code, no conformance/evaluation/simulation mode references, no data-flow code, no
+  first-person (WASD) navigation in camera_controller.gd.
+- **Tests:** N/A — verified by absence.
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+## Summary
+
+All 8 positive SHALL/MUST requirements are fully implemented and tested with GDScript
+behavioral tests (assertions on scene-tree nodes, property values, positions) and Python
+pytest tests. The "Not In Scope" prohibition is clean. All automated checks pass:
+
+- `check-kartograph-integration-test.sh` — OK
+- `check-not-in-scope.sh` — OK
+- `extractor-lint.sh` — 90 Python tests passed
+- `godot-compile.sh` — compiles clean under Godot 4.6.2
+- `godot-fileaccess-tested.sh` — OK
+- `godot-label3d.sh` — OK
+- `godot-tests.sh` — 64 GDScript tests passed, 0 failed
+
+The "Check 'pr-feedback-addressed' failed" note in the task Findings is a PR-process
+check (CodeRabbit triggered by `@coderabbit recheck`), not a spec-alignment failure.
+The spec itself is fully satisfied.
