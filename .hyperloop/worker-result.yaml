@@ -1,0 +1,118 @@
+---
+verdict: pass
+---
+## Task-007: Godot Application — Implementation Summary
+
+Branch: hyperloop/task-007
+Spec: specs/prototype/godot-application.spec.md
+
+All check scripts pass:
+- godot-compile.sh: PASS (Godot 4.6.2)
+- godot-tests.sh: PASS (91 tests, 0 failures)
+- godot-label3d.sh: PASS
+- extractor-lint.sh: PASS
+
+---
+
+### Requirement 1: JSON Scene Graph Loading — COVERED
+
+**Implementation (main.gd):**
+- `FileAccess.open()` + `file.get_as_text()` reads the JSON file (Godot 4.6 API)
+- `JSON.new()` / `json.parse()` parses the JSON
+- `build_from_graph()` iterates `nodes` → `_create_volume()` (volumes for each node)
+- `build_from_graph()` iterates `edges` → `_create_edge()` (connections for each edge)
+- `anchor.position = Vector3(float(p["x"]), float(p["y"]), float(p["z"]))` — positions from JSON layout
+
+**Tests (test_scene_graph_loading.gd — 5 tests, all PASS):**
+- `test_volumes_created_for_each_node` — asserts `_anchors` has entry per node id
+- `test_mesh_instances_exist_in_anchors` — asserts MeshInstance3D child in each anchor
+- `test_edge_mesh_instances_created` — asserts ≥2 MeshInstance3D at scene root (line + cone)
+- `test_anchor_positions_match_json` — asserts anchor.position == JSON position fields
+- `test_labels_are_billboard_and_readable` — asserts BILLBOARD_ENABLED, pixel_size > 0, no_depth_test
+
+---
+
+### Requirement 2: Containment Rendering — COVERED
+
+**Implementation (main.gd `_create_volume()`):**
+- `bounded_context`: `TRANSPARENCY_ALPHA`, `albedo_color.a = 0.18` (translucent slab)
+- `bounded_context`: `CULL_DISABLED` (boundary visually distinct from children)
+- `module`: `albedo_color = Color(0.35, 0.70, 0.40, 1.0)` (fully opaque)
+- Child nodes added via `parent_anchor.add_child(anchor)` — nesting = visual containment
+
+**Tests (test_containment_rendering.gd — 5 tests, all PASS):**
+- `test_bounded_context_is_translucent` — TRANSPARENCY != DISABLED and alpha < 1.0
+- `test_module_is_opaque` — albedo_color.a >= 1.0
+- `test_module_parented_inside_context` — mod_anchor.get_parent() == ctx_anchor
+- `test_bounded_context_larger_than_module` — ctx_mesh.size.x > mod_mesh.size.x
+- `test_bounded_context_cull_disabled` — cull_mode == CULL_DISABLED
+
+---
+
+### Requirement 3: Dependency Rendering — COVERED
+
+**Implementation (main.gd `_create_edge()`):**
+- `ImmediateMesh` with `PRIMITIVE_LINES` draws a line between world-space positions
+- `CylinderMesh` with `top_radius = 0.0` (cone) as arrowhead — direction visually indicated
+- Arrow positioned at `to_pos - dir * (cone_mesh.height * 0.5)` — tip at target node
+
+**Tests (test_dependency_rendering.gd — 4 tests, all PASS):**
+- `test_edge_line_mesh_created` — finds MeshInstance3D with ImmediateMesh in children
+- `test_direction_indicator_cone_created` — finds CylinderMesh with top_radius == 0.0
+- `test_direction_cone_near_target` — cone position within 2 units of target
+- `test_cross_context_cone_is_orange` — albedo_color.r > 0.8 and albedo_color.b < 0.3
+
+---
+
+### Requirement 4: Size Encoding — COVERED
+
+**Implementation (main.gd `_create_volume()`):**
+- `sz = float(nd["size"])` → `BoxMesh.size = Vector3(sz, sz * 0.6, sz)` for modules
+- Direct linear mapping: size metric → mesh dimensions → proportional ratio preserved
+
+**Tests (test_size_encoding.gd — 2 tests, all PASS):**
+- `test_large_module_has_bigger_mesh` — large_mesh.size.x > small_mesh.size.x
+- `test_mesh_sizes_proportional_to_metric` — ratio 9/3 = 3.0 within floating-point tolerance
+
+---
+
+### Requirement 5: Camera Controls — COVERED
+
+**Implementation (camera_controller.gd):**
+- Top-down default: `_theta = 0.15` rad (≈8.6° from directly above)
+- Zoom: WHEEL_UP decreases `_distance`; WHEEL_DOWN increases; clamped to [min, max]
+- Orbit: middle-mouse drag updates `_phi` (azimuth) and `_theta` (polar)
+- `look_at(_pivot, Vector3.UP)` — orientation always correct
+
+**Tests (test_camera_controls.gd — 8 tests, all PASS):**
+- `test_initial_theta_is_near_top_down` — _theta < PI/4
+- `test_initial_distance_is_positive` — _distance > 0
+- `test_scroll_up_decreases_distance` — synthetic WHEEL_UP decreases _distance
+- `test_scroll_down_increases_distance` — synthetic WHEEL_DOWN increases _distance
+- `test_orbit_horizontal_drag_changes_phi` — middle-mouse + motion changes _phi
+- `test_orbit_vertical_drag_changes_theta` — middle-mouse + motion changes _theta
+- `test_set_pivot_updates_state` — set_pivot() updates _pivot and _distance
+- `test_zoom_clamped_at_minimum` — 200 scroll-up events, _distance >= min_distance
+
+---
+
+### Requirement 6: Godot 4.6 — COVERED
+
+- `project.godot`: `config/features=PackedStringArray("4.6")` — Godot 4.6.x confirmed
+- All scripts use GDScript (`extends` / `class_name`)
+- `FileAccess.get_as_text()` used (correct Godot 4.6 API)
+
+---
+
+### Summary
+
+| Requirement               | Status  |
+|---------------------------|---------|
+| JSON Scene Graph Loading  | COVERED |
+| Containment Rendering     | COVERED |
+| Dependency Rendering      | COVERED |
+| Size Encoding             | COVERED |
+| Camera Controls           | COVERED |
+| Godot 4.6                 | COVERED |
+
+All 91 GDScript tests pass. No `.hyperloop/state/` files committed.
