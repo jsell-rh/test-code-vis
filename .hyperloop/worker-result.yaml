@@ -81,3 +81,7 @@ pipeline (LLMViewGenerator → ViewSpec dict → SceneInterpreter → Node3D mut
 fully wired in main.gd and tested end-to-end.
 
 **Verdict: PASS**
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
