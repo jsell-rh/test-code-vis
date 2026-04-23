@@ -1,7 +1,173 @@
 ---
 task_id: task-010
 round: 0
-role: orchestrator
+role: verifier
 verdict: fail
 ---
-Branch reset: 3 consecutive rebase/merge failures. The branch likely has state files in its commit history that cause permanent conflicts. Task reset to not-started for a fresh attempt.
+## Code Review — task-010: Godot Application (specs/prototype/godot-application.spec.md)
+
+Branch: hyperloop/task-010
+Reviewer: independent code review
+
+---
+
+## Scope Check Output
+
+```
+OK: No prohibited (not-in-scope) features detected.
+```
+
+---
+
+## Run-All-Checks Output (verbatim)
+
+```
+=== run-all-checks.sh ===
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd -- boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd -- boundary assertion found in test_camera_controls.gd
+OK: All 2 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+SKIP: No 'all scripts use GDScript' constraint found in spec
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM->view-spec pipeline.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+FAIL: .hyperloop/worker-result.yaml is missing a '## Scope Check Output' section header.
+      Add a standalone '## Scope Check Output' heading with the verbatim
+      stdout of '.hyperloop/checks/check-not-in-scope.sh' beneath it.
+      Do NOT summarise the result in a bullet list -- paste the raw output.
+[EXIT 1 -- FAIL]
+
+--- extractor-lint.sh ---
+Linting extractor...
+All checks passed!
+7 files already formatted
+Running extractor tests...
+90 passed in 0.14s
+Extractor checks passed.
+[EXIT 0]
+
+--- godot-compile.sh ---
+Compiling Godot project...
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 1 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Found 8 GDScript test file(s) in godot/tests/.
+Running custom headless test runner...
+Results: 57 passed, 0 failed
+GDScript behavioral tests passed.
+[EXIT 0]
+
+=== Summary: 12 check(s) run ===
+RESULT: FAIL -- one or more checks exited non-zero
+```
+
+---
+
+## Findings
+
+### FAIL-1 — check-report-scope-section.sh (blocking)
+
+**Finding**: The submitted `worker-result.yaml` does not contain a `## Scope Check Output`
+section with the verbatim output of `check-not-in-scope.sh`. `check-report-scope-section.sh`
+exits 1, causing `run-all-checks.sh` to exit non-zero.
+
+**Why blocking**: Project guidelines state: "Reject any submission that omits the
+'## Scope Check Output' section." and "issue a FAIL even if your own scope check passes
+-- the missing section is evidence the check was not run during implementation."
+
+**Action required**: Add the following section to `worker-result.yaml` (verbatim text,
+not summarised in a bullet list):
+
+```
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+```
+
+No code changes are required. This is the sole blocking issue.
+
+---
+
+## THEN-Clause Trace (independent verification)
+
+| Requirement | THEN-clause | Named test | Status |
+|---|---|---|---|
+| JSON Loading | reads the JSON file | `test_fileaccess_open_returns_non_null` (FileAccess.open + get_as_text) | COVERED |
+| JSON Loading | 3D volumes for each node | `test_volumes_created_for_each_node`, `test_mesh_instances_exist_in_anchors` | COVERED |
+| JSON Loading | connections for each edge | `test_edge_mesh_instances_created` (>=2 MeshInstance3D per edge) | COVERED |
+| JSON Loading | positions from layout data | `test_anchor_positions_match_json`, `test_node_rendered_at_json_position` | COVERED |
+| Containment | bounded context translucent + larger | `test_bounded_context_is_translucent`, `test_bounded_context_larger_than_module` | COVERED |
+| Containment | child modules opaque + inside | `test_module_is_opaque`, `test_module_parented_inside_context` | COVERED |
+| Containment | boundary visually distinct | `test_bounded_context_cull_disabled` (CULL_DISABLED asserted on material) | COVERED |
+| Dependency | line connects volumes | `test_edge_line_mesh_created` (ImmediateMesh MeshInstance3D found) | COVERED |
+| Dependency | direction visually indicated | `test_direction_indicator_cone_created` (CylinderMesh top_radius==0.0), `test_direction_cone_near_target` (within 2u of target) | COVERED |
+| Size Encoding | larger module = larger volume | `test_large_module_has_bigger_mesh` | COVERED |
+| Size Encoding | sizes proportional to metric | `test_mesh_sizes_proportional_to_metric` (ratio to 0.001 tolerance) | COVERED |
+| Camera: top-down | defaults to top-down view | `test_initial_theta_is_near_top_down` (_theta=0.15 < PI/4) | COVERED |
+| Camera: zoom | moves closer on scroll | `test_scroll_up_decreases_distance` | COVERED |
+| Camera: zoom | internal structure visible on approach | Headless limitation; structural prerequisite confirmed | NOTE |
+| Camera: zoom | labels remain readable | `test_labels_are_billboard_and_readable` (BILLBOARD_ENABLED, pixel_size>0, no_depth_test) | COVERED |
+| Camera: orbit | rotates around focal point | `test_orbit_horizontal_drag_changes_phi`, `test_orbit_vertical_drag_changes_theta` | COVERED |
+| Camera: orbit | up stays up (theta clamped) | `test_orbit_theta_clamped_prevents_flip` (1M-px drag; asserts theta <= PI-0.01) | COVERED |
+| Godot 4.6 | uses Godot 4.6.x | `test_project_godot_declares_46` (FileAccess+get_as_text asserts "4.6") | COVERED |
+| Godot 4.6 | all scripts use GDScript | `test_scripts_dir_contains_only_gdscript` (DirAccess iteration, .gd extension check on every file) | COVERED |
+| Godot 4.6 | all API calls valid for 4.6 | `test_features_line_contains_46`, `test_fileaccess_open_returns_non_null` | COVERED |
+
+Implementation correctness confirmed:
+- `_create_edge()` uses `ed["source"]`/`ed["target"]` -- consistent with SceneGraphLoader output.
+- Arrowhead cone (CylinderMesh, top_radius=0) satisfies "direction is visually indicated."
+- Label3D nodes: BILLBOARD_ENABLED, pixel_size=0.012, no_depth_test=true.
+- Camera theta clamp [0.01, PI-0.01]; boundary test drives 1M-px drag and asserts the limit.
+- `_create_volume()` produces TRANSPARENCY_ALPHA + CULL_DISABLED bounded-context boxes
+  and opaque alpha=1.0 module boxes, satisfying the containment rendering requirements.
+
+---
+
+## Summary
+
+**Verdict: FAIL**
+
+Sole blocking issue: `check-report-scope-section.sh` exits 1 because the submitted
+`worker-result.yaml` is missing the mandatory `## Scope Check Output` section.
+
+The implementation is substantively correct. All 57 GDScript tests pass, the Godot project
+compiles successfully under Godot 4.6.2, extractor lint+tests pass (90 tests), and all
+other 11 checks pass. All THEN-clauses (except the headless rendering limitation for camera
+approach visibility, which is a known environment constraint, not an implementation gap)
+are covered by named test functions whose assertion predicates correctly match the spec's
+THEN-clause predicates.
+
+Fix: add the `## Scope Check Output` section as shown above. No code changes required.
