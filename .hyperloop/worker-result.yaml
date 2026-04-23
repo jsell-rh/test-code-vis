@@ -1,0 +1,30 @@
+---
+verdict: pass
+---
+Removed all prohibited (not-in-scope) moldable-views and spec-extraction features:
+
+Godot side:
+- Deleted godot/scripts/question_panel.gd, view_spec.gd, view_spec_renderer.gd
+- Deleted godot/tests/test_question_panel.gd, test_view_spec.gd, test_view_spec_renderer.gd
+- Cleaned main.gd: removed QuestionPanel/ViewSpecRenderer preloads, _view_root variable,
+  QuestionPanel instantiation wiring, _on_view_spec_requested() method
+- Cleaned run_tests.gd: removed preloads for deleted test files
+
+Extractor side:
+- Removed extract_spec_nodes() and _layout_spec_nodes() functions from extractor.py
+- Removed include_specs parameter from build_scene_graph()
+- Removed --specs CLI flag from __main__.py
+- Removed TestSpecExtraction class and src_with_specs fixture from test_extractor.py
+- Removed unused 'import re' from extractor.py
+
+All checks pass:
+- check-not-in-scope.sh: OK
+- extractor-lint.sh: 90 tests pass, ruff clean
+- godot-compile.sh: compiles successfully (Godot 4.6.2)
+- godot-label3d.sh: PASS
+- godot-fileaccess-tested.sh: OK
+- godot-tests.sh: 58 tests pass, 0 failed
+- check-kartograph-integration-test.sh: OK
+
+The spec requirements (JSON loading, containment/dependency rendering, size encoding,
+camera controls, Godot 4.6 engine version) remain fully implemented and tested.
