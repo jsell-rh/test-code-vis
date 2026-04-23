@@ -36,6 +36,12 @@ func set_pivot(pivot: Vector3, distance: float) -> void:
 	_update_transform()
 
 
+## Return the current distance from the camera to the pivot.
+## Used by main.gd to query LOD level each frame.
+func get_distance() -> float:
+	return _distance
+
+
 # ---------------------------------------------------------------------------
 # Input handling
 # ---------------------------------------------------------------------------
