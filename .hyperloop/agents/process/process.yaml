@@ -7,6 +7,7 @@ pipeline:
   - loop:
       - agent: implementer
       - agent: verifier
+      - agent: spec-reviewer
   - action: merge-pr
 
 hooks:

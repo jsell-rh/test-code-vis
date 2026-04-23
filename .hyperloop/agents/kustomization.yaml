@@ -1,5 +1,18 @@
 resources:
   - github.com/jsell-rh/hyperloop//base?ref=main
+  - spec-reviewer.yaml
+
+patches:
+  - path: process/process.yaml
+    target: { kind: Process, name: default }
+  - path: process/implementer-overlay.yaml
+    target: { kind: Agent, name: implementer }
+  - path: process/verifier-overlay.yaml
+    target: { kind: Agent, name: verifier }
+  - path: process/pm-overlay.yaml
+    target: { kind: Agent, name: pm }
+  - path: process/spec-reviewer-overlay.yaml
+    target: { kind: Agent, name: spec-reviewer }
 
 components:
   - process
