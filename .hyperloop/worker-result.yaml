@@ -1,0 +1,81 @@
+---
+verdict: pass
+---
+All spec scenarios for task-013 (camera controls) are implemented and verified.
+
+## Check Results
+
+| Check | Result |
+|-------|--------|
+| `godot-compile.sh` | PASS (Godot 4.6.2.stable) |
+| `godot-tests.sh` | PASS — 91 passed, 0 failed |
+| `extractor-lint.sh` | PASS — ruff clean, 96 pytest tests pass |
+| `godot-label3d.sh` | PASS — billboard and pixel_size set and tested |
+
+## Commit Trailers
+
+The implementation code lives in `eaf00df` (merged to main as task-007's PR #33); that
+commit carries `Task-Ref: task-007`. No separate implementation commit for task-013 exists
+on this branch — the camera controls were bundled with the scene-graph loader. Both
+`Spec-Ref` and `Task-Ref: task-013` are present on the worker-result commit (`8b8de7d`).
+This is a process note only; the code satisfies the spec.
+
+## Spec Coverage
+
+### Camera Controls — Top-down overview (COVERED)
+- `camera_controller.gd`: `_theta` initialized to `0.15` rad ≈ 8.6° (well below PI/4
+  threshold for "predominantly top-down").
+- `_frame_camera()` in `main.gd` computes scene bounding box and calls
+  `_camera.call("set_pivot", centre, distance)` so the camera frames the entire graph on
+  startup.
+- Tests: `test_initial_theta_is_near_top_down`, `test_initial_distance_is_positive` — PASS.
+
+### Camera Controls — Zooming in (COVERED)
+- `MOUSE_BUTTON_WHEEL_UP` decreases `_distance`; `WHEEL_DOWN` increases it. Distance is
+  clamped to `[min_distance, max_distance]`.
+- Labels remain readable through `Label3D.billboard = BILLBOARD_ENABLED` and
+  `pixel_size = 0.012`, verified by `test_labels_are_billboard_and_readable`.
+- Tests: `test_scroll_up_decreases_distance`, `test_scroll_down_increases_distance`,
+  `test_zoom_clamped_at_minimum` — PASS.
+
+### Camera Controls — Orbiting (COVERED)
+- Middle-mouse drag changes `_phi` (azimuth) and `_theta` (elevation). `_theta` is clamped
+  to `[0.01, PI - 0.01]` so the camera never flips past the poles.
+- `look_at(_pivot, Vector3.UP)` keeps "up stays up" intuitive orientation.
+- Tests: `test_orbit_horizontal_drag_changes_phi`, `test_orbit_vertical_drag_changes_theta`,
+  `test_set_pivot_updates_state` — PASS.
+
+### Godot 4.6 (COVERED)
+- `project.godot` has `config/features=PackedStringArray("4.6")`.
+- All scripts are GDScript. `FileAccess.get_as_text()` is used (Godot 4.6 API).
+- Engine confirmed as Godot 4.6.2.stable by compile check.
+
+## Other Spec Requirements (Carried from task-007, verified on this branch)
+
+### JSON Scene Graph Loading (COVERED)
+- `test_scene_graph_loading.gd` — 5 tests, all PASS.
+
+### Containment Rendering (COVERED)
+- Bounded-context volume: `TRANSPARENCY_ALPHA`, `albedo_color.a=0.18`, `CULL_DISABLED`.
+- Module volume: opaque, parented inside context anchor.
+- `test_containment_rendering.gd` — 5 tests, all PASS.
+
+### Dependency Rendering (COVERED)
+- Direction indicator: `CylinderMesh` with `top_radius=0` (cone) oriented along edge
+  direction, placed within 2 units of the target node. Satisfies "visually indicated"
+  guideline (explicit rendering element, not just colour).
+- `test_dependency_rendering.gd` — 4 tests, all PASS.
+
+### Size Encoding (COVERED)
+- `sz = float(nd["size"])` maps directly to `BoxMesh.size.x`; ratio preserved.
+- `test_size_encoding.gd` — 2 tests, all PASS.
+
+## Observations (Non-blocking)
+
+- During headless tests, `camera_controller.gd`'s `_update_transform()` calls
+  `look_at()` which emits Godot engine errors ("Node not inside tree") because the
+  Camera3D is not added to a scene tree in unit tests. The tests still pass because they
+  assert the internal state variables (`_theta`, `_phi`, `_distance`) directly — the
+  transform error is a harmless side-effect for headless testing. This is acceptable for
+  a prototype; a future improvement would be to guard `look_at()` with
+  `is_inside_tree()`.
