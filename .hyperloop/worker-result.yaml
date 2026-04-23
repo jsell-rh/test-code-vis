@@ -98,3 +98,9 @@ All `test_scene_interpreter.gd` tests instantiate real `Node3D` / `MeshInstance3
 observable scene-tree properties (visible, position, albedo_color, label.text,
 billboard, pixel_size, child_count). This satisfies the guideline requirement for
 "GDScript behavioral test with known fixture data asserting runtime outputs."
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
