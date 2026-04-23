@@ -1,0 +1,37 @@
+---
+verdict: pass
+---
+Re-review after fix commit 958ea86. The single failure from the previous review
+(Label3D billboard/pixel_size not set or tested) has been fully resolved.
+
+## Fix verified
+
+`godot/scripts/view_spec_renderer.gd` lines 89–90 now set:
+  - `label.billboard = BaseMaterial3D.BILLBOARD_ENABLED`
+  - `label.pixel_size = 0.05`
+
+immediately after `label.text = annotate_map[id]`, exactly as required.
+
+`godot/tests/test_view_spec_renderer.gd` lines 434–437 extend
+`test_annotate_op_sets_label3d_text` with two new assertions inside the
+`if label != null` guard:
+  - `label.billboard == BaseMaterial3D.BILLBOARD_ENABLED`
+  - `label.pixel_size > 0.0`
+
+Both assertions are on a real instantiated Label3D node, not a dict-key check.
+
+## Checks run
+
+| Check              | Result                                   |
+|--------------------|------------------------------------------|
+| extractor-lint.sh  | PASS (ruff clean, 96 pytest tests pass)  |
+| godot-compile.sh   | PASS (Godot 4.6.2 headless compile)      |
+| godot-label3d.sh   | PASS (billboard + pixel_size set/tested) |
+| godot-tests.sh     | PASS (67/67 GDScript tests pass)         |
+| Commit trailers    | PASS (Spec-Ref + Task-Ref on both commits)|
+
+## Spec coverage (unchanged from prior review — all COVERED)
+
+All three requirements and every THEN/AND clause have corresponding behavioral
+tests that instantiate real Node3D/Label3D objects and assert specific property
+values.
