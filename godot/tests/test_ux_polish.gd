@@ -116,7 +116,9 @@ func test_pan_drag_right_increases_pivot_x() -> bool:
 	_press_lmb(cam, Vector2(100.0, 100.0))
 	_move_mouse(cam, Vector2(150.0, 100.0))  # drag right → delta.x = +50
 
-	# drag right → delta.x = +50 → pivot.x increases ✓
+	# drag right → delta.x = +50 → _pivot += basis.x * (+50) * pan_amount
+	# → pivot.x increases → camera shifts right → scene shifts right
+	# → right-side content enters view ✓
 	return cam._pivot.x > initial_x
 
 
@@ -138,7 +140,8 @@ func test_pan_drag_left_decreases_pivot_x() -> bool:
 func test_drag_direction_matches_view_movement() -> bool:
 	# Sign derivation:
 	#   drag right → delta.x = +50 → _pivot += right(1,0,0) * +50 * pan_amount
-	#   → pivot.x > 0 (increases from initial 0) → viewport moved right ✓
+	#   → pivot.x > 0 (increases from initial 0) → camera shifts right
+	#   → scene shifts right → right-side content enters view ✓
 	var cam = _make_cam()
 	var initial_x: float = cam._pivot.x  # starts at 0.0
 
