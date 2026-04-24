@@ -2,77 +2,21 @@
 verdict: pass
 ---
 
-## Worker Verdict — task-024 (UX Polish)
+## Reviewer Verdict — task-024 (UX Polish)
 
 Branch: hyperloop/task-024
-Task: UX Polish — camera controls for Godot 3D visualization
-
+Reviewer: independent code-reviewer pass
 All 15 checks pass. 91/91 GDScript behavioral tests pass. 94/94 pytest tests pass.
 
 ---
 
-## Implementation Summary
-
-The UX Polish spec requirements are implemented in `godot/scripts/camera_controller.gd`
-and tested in `godot/tests/test_camera_controls.gd`.
-
-### Pan with Left Mouse Button (non-inverted)
-`_handle_button()` routes `MOUSE_BUTTON_LEFT` press to set `_panning = true`.
-`_handle_motion()` when `_panning` computes `right = transform.basis.x` and
-`backward` from `basis.z`, then applies `_target_pivot += right * delta.x * pan_amount`
-and `_target_pivot -= backward * delta.y * pan_amount`. Non-inverted: drag right →
-pivot shifts right.
-
-### Zoom Toward Mouse Cursor
-`_zoom_toward_point(world_pt, direction)` adjusts `_target_distance` and then shifts
-`_target_pivot` by `zoom_ratio = _target_distance / old_dist` so the cursor point
-stays fixed. Only targets mutate; `_distance`/`_pivot` interpolate in `_process()`.
-
-### Orbit Around Mouse Point
-`MOUSE_BUTTON_RIGHT` press calls `begin_orbit_at_world_point()` which sets
-`_pivot = world_pt` and recomputes spherical coordinates to avoid camera jump.
-The camera then orbits with `_pivot == world_pt` — the world point stays at visual centre.
-
-### Smooth Camera Movement
-`_process(delta)` uses exponential smoothing:
-`t = 1.0 - pow(0.05, delta * zoom_smooth)` then
-`_distance = lerpf(_distance, _target_distance, t)` and
-`_pivot = _pivot.lerp(_target_pivot, t)`.
-Scroll events only set `_target_distance`; actual distance interpolates across frames.
-
----
-
-## THEN-clause → Test Mapping
-
-| # | THEN-clause (verbatim from spec) | Test function | Assertion |
-|---|---|---|---|
-| 1 | the camera pans in the direction of the drag | `test_lmb_drag_pans_camera` | `cam._pivot != initial_pivot` after LMB+drag |
-| 2 | the movement direction matches the drag direction (not inverted) | `test_pan_direction_not_inverted` | `cam._pivot.x > 0.0` after right drag at phi=PI/2 |
-| 3 | the scene moves in the same direction as the drag | `test_pan_direction_not_inverted` | same test — right drag → +X pivot shift |
-| 4 | the view zooms toward the point under the cursor | `test_zoom_in_shifts_pivot_toward_cursor` | `cam._target_pivot.x > 0.0` when cursor at x=10, zoom in |
-| 5 | the component under the cursor stays under the cursor during the zoom | `test_zoom_in_cursor_point_invariant` | `0 < pivot.x < 20` — new pivot between old pivot and cursor |
-| 6 | the view zooms out from the point under the cursor | `test_zoom_out_shifts_pivot_away_from_cursor` | `cam._target_pivot.x < 0.0` — pivot shifts away |
-| 7 | the camera orbits around the point under the cursor at orbit start | `test_orbit_around_cursor_point` | `cam._pivot == world_pt` after `begin_orbit_at_world_point()` |
-| 8 | the component remains at the visual center during the orbit | `test_orbit_pivot_is_world_point` | `cam._pivot.is_equal_approx(world_pt)` |
-| 9 | the zoom is animated smoothly (interpolated), not instantaneous | `test_smooth_zoom_target_differs_from_distance_after_scroll` | `cam._target_distance < cam._distance` immediately after scroll |
-| 10 | (smooth zoom interpolates each frame) | `test_smooth_zoom_process_interpolates_distance` | `20 < _distance < 40` after `_process(0.1)` with target=20 |
-| 11 | the pan movement is smooth and proportional to drag speed | `test_pan_proportional_to_drag_speed` | 50px drag produces larger pivot.length() than 10px drag |
-
-**Clamping boundary tests** (required by `check-clamp-boundary-tests.sh`):
-- `test_set_pivot_clamps_distance_at_minimum` — `set_pivot(ZERO, 0.0)` → `_distance >= min_distance`
-- `test_theta_clamped_at_minimum` — huge upward drag → `_theta >= 0.01`
-- `test_theta_clamped_at_maximum` — huge downward drag → `_theta <= PI - 0.01`
-- `test_zoom_clamped_at_minimum` — 200 scroll-up events → `_target_distance >= min_distance`
-
----
-
-## run-all-checks.sh Output
+## run-all-checks.sh Output (verbatim)
 
 ```
 === run-all-checks.sh ===
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-024' has 28 commit(s) above main.
+OK: Branch 'hyperloop/task-024' has 29 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -121,7 +65,7 @@ Linting extractor...
 All checks passed!
 8 files already formatted
 Running extractor tests...
-94 passed in 0.16s
+94 passed in 0.13s
 Extractor checks passed.
 [EXIT 0]
 
@@ -157,3 +101,47 @@ RESULT: ALL PASS
 ## Scope Check Output
 
 OK: No prohibited (not-in-scope) features detected.
+
+---
+
+## THEN-clause → Test Mapping (independently verified)
+
+| # | THEN-clause | Test function | Assertion predicate | GREP confirmed | Body verified |
+|---|---|---|---|---|---|
+| 1 | the camera pans in the direction of the drag | `test_lmb_drag_pans_camera` | `cam._pivot != initial_pivot` | ✓ line 147 | ✓ |
+| 2 | the movement direction matches the drag direction (not inverted) | `test_pan_direction_not_inverted` | `cam._pivot.x > 0.0` after right drag with phi=PI/2 | ✓ line 167 | ✓ |
+| 3 | the scene moves in the same direction as the drag | `test_pan_direction_not_inverted` | same assertion covers both drag-direction THEN-clauses | ✓ line 167 | ✓ |
+| 4 | the view zooms toward the point under the cursor | `test_zoom_in_shifts_pivot_toward_cursor` | `cam._target_pivot.x > 0.0` when cursor at x=10 | ✓ line 197 | ✓ |
+| 5 | the component under the cursor stays under the cursor during zoom | `test_zoom_in_cursor_point_invariant` | `0 < cam._target_pivot.x < world_pt.x` (pivot between old and cursor) | ✓ line 213 | ✓ |
+| 6 | the view zooms out from the point under the cursor | `test_zoom_out_shifts_pivot_away_from_cursor` | `cam._target_pivot.x < 0.0` (pivot pushed away from +X cursor) | ✓ line 228 | ✓ |
+| 7 | the camera orbits around the point under the cursor at orbit start | `test_orbit_around_cursor_point` | `cam._pivot == world_pt` after `begin_orbit_at_world_point()` | ✓ line 269 | ✓ |
+| 8 | the component remains at the visual center during the orbit | `test_orbit_pivot_is_world_point` | `cam._pivot.is_equal_approx(world_pt)` | ✓ line 285 | ✓ |
+| 9 | the zoom is animated smoothly (interpolated), not instantaneous | `test_smooth_zoom_target_differs_from_distance_after_scroll` | `cam._target_distance < cam._distance` immediately after scroll event | ✓ line 304 | ✓ |
+| 10 | (interpolation converges each frame) | `test_smooth_zoom_process_interpolates_distance` | `20 < cam._distance < 40` after `_process(0.1)` with target=20 | ✓ line 319 | ✓ |
+| 11 | the pan movement is smooth and proportional to drag speed | `test_pan_proportional_to_drag_speed` | `cam_fast._pivot.length() > cam_slow._pivot.length()` | ✓ line 332 | ✓ |
+
+**Boundary tests (clamp coverage)**
+
+| Test | Predicate | Confirmed |
+|---|---|---|
+| `test_set_pivot_clamps_distance_at_minimum` | `cam._distance >= cam.min_distance` after `set_pivot(ZERO, 0.0)` | ✓ line 363 |
+| `test_theta_clamped_at_minimum` | `cam._theta >= 0.01` after huge upward drag | ✓ line 370 |
+| `test_theta_clamped_at_maximum` | `cam._theta <= PI - 0.01` after huge downward drag | ✓ line 388 |
+| `test_zoom_clamped_at_minimum` | `cam._target_distance >= cam.min_distance` after 200 scroll-up events | ✓ line 406 |
+
+---
+
+## Findings
+
+**All findings: PASS**
+
+- **main.gd `_ready()` is not a stub.** `_ready()` calls `FileAccess.open()`, parses JSON, and invokes `build_from_graph()`. Full implementation confirmed.
+- **Arrowhead satisfies "direction visually indicated".** `_create_edge()` in `main.gd` creates a `CylinderMesh` with `top_radius=0.0` (pointed cone) aligned along the edge direction via `Basis(Quaternion(Vector3.UP, dir))`. Explicit rendering element present.
+- **Orbit uses right-mouse button as specified.** `MOUSE_BUTTON_RIGHT` press triggers `begin_orbit_at_world_point()` in `_handle_button()`. Confirmed by `test_orbit_uses_right_mouse_button`.
+- **Commit trailers present.** `Spec-Ref: specs/prototype/ux-polish.spec.md@7392ee4...` and `Task-Ref: task-024` appear on all implementation commits including the original feat commit and the extractor fix commit.
+- **Checks synced from main before running.** `git checkout main -- .hyperloop/checks/` was run; `check-checks-in-sync.sh` reports all 15 checks present.
+- **No prohibited features detected.** `check-not-in-scope.sh` exits 0; independent grep audit found nothing prohibited.
+- **Label3D nodes are readable.** `main.gd` sets `billboard = BaseMaterial3D.BILLBOARD_ENABLED` and `pixel_size = 0.012` on every `Label3D`. `godot-label3d.sh` confirms testing.
+- **Containment is visually represented.** Child modules are `add_child()`-ed to parent bounded-context anchors. Bounded contexts use a large translucent `BoxMesh`; modules use smaller opaque boxes nested inside.
+- **Smooth zoom implemented correctly.** `_process()` uses `lerpf(_distance, _target_distance, 1 - pow(0.05, delta * zoom_smooth))` — exponential smoothing, not instantaneous snapping.
+- **Pan is non-inverted.** `_handle_motion()` applies `_target_pivot += right * delta.x * pan_amount` — right drag adds to +X pivot, matching expected Google-Maps style panning.
