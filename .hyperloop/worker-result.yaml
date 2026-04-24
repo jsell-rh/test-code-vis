@@ -1,0 +1,83 @@
+---
+verdict: pass
+---
+## Spec Alignment Review: specs/visualization/data-flow.spec.md
+
+All SHALL/MUST requirements are implemented in `godot/scripts/flow_overlay.gd`
+and covered by GDScript behavioral tests in `godot/tests/test_flow_overlay.gd`.
+The test suite is registered in `godot/tests/run_tests.gd` (line 46).
+
+---
+
+### Requirement: Flow is On-Demand — COVERED
+
+**Implementation:**
+- `flow_overlay.gd:52`: `var _path_active: bool = false` — overlay is inactive by default.
+- `show_path()` and `show_aggregate()` must be called explicitly; `setup()` does not activate the overlay.
+
+**Tests:**
+- `test_flow_not_active_by_default()` — creates a fresh `FlowOverlay` and asserts `is_path_active()` returns `false`. ✓
+
+**Scenario: Requesting a flow path — COVERED**
+- THEN the relevant flow path lights up:
+  `test_path_mid_node_lit_up()` — mid-path node gets bright white albedo (all channels ≥ 0.9). ✓
+- AND irrelevant elements are de-emphasized:
+  `test_offpath_nodes_deemphasized()` — off-path node gets DIMMED_COLOR (0.3,0.3,0.3,0.3). ✓
+  `test_offpath_node_transparency_mode()` — off-path node uses TRANSPARENCY_ALPHA. ✓
+- AND flow path is traceable from entry to terminus:
+  `test_entry_node_green()` — entry node gets green (g>0.8, r<0.5, b<0.5). ✓
+  `test_terminus_node_red()` — terminus node gets red (r>0.8, g<0.5, b<0.5). ✓
+
+---
+
+### Requirement: Flow Shows Paths Through Structure — COVERED
+
+**Implementation:**
+- `show_path()` operates entirely on existing anchor `Node3D` objects and edge visuals; no separate scene or view is created.
+- Off-path nodes remain in the scene tree with `visible = true` (dimmed, not hidden or removed).
+- Node `position` properties are never touched by the overlay.
+
+**Tests:**
+
+**Scenario: Flow overlaid on structure — COVERED**
+- THEN the flow is rendered as a path through the structural space:
+  `test_path_edges_visible()` — path edges are visible after `show_path()`. ✓
+  `test_path_edges_cyan()` — path edges have cyan material (r≤0.1, g≥0.8, b≥0.9). ✓
+- AND the structural context remains visible (not replaced):
+  `test_offpath_nodes_still_in_scene()` — off-path anchor has a parent and `visible == true`. ✓
+- AND the human can follow the path spatially:
+  `test_positions_unchanged_when_path_shown()` — node `position` values are unchanged after `show_path()`. ✓
+
+---
+
+### Requirement: Aggregate Flow Patterns — COVERED (SHOULD)
+
+This is a SHOULD requirement; its presence is noted as a bonus, not a gate.
+
+**Implementation:**
+- `show_aggregate()` colorizes edges by traffic level (orange ≥ 500, yellow ≥ 100) and adds a red
+  `BottleneckOverlay` `MeshInstance3D` child to each bottleneck anchor.
+
+**Tests:**
+
+**Scenario: Identifying a bottleneck — COVERED**
+- THEN high-traffic paths are visually prominent:
+  `test_high_traffic_edge_orange()` — traffic=950 → orange edge (r≥0.9, g≤0.6, b≤0.1). ✓
+  `test_medium_traffic_edge_yellow()` — traffic=200 → yellow edge (r≥0.9, g≥0.7, b≤0.1). ✓
+- AND bottleneck points are identifiable:
+  `test_bottleneck_node_has_overlay()` — anchor gains a child named "BottleneckOverlay". ✓
+  `test_bottleneck_overlay_red()` — overlay material is red (r≥0.9, g≤0.1, b≤0.1). ✓
+
+---
+
+### Summary
+
+| Requirement                        | Status  |
+|------------------------------------|---------|
+| Flow is On-Demand (SHALL/MUST)     | COVERED |
+| Flow Shows Paths Through Structure | COVERED |
+| Aggregate Flow Patterns (SHOULD)   | COVERED |
+
+All SHALL/MUST requirements have both a code implementation and a registered
+GDScript behavioral test with fixture data and property-value assertions.
+Verdict: **pass**.
