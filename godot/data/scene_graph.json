@@ -848,6 +848,28 @@
       "type": "internal"
     }
   ],
+  "flows": [
+    {
+      "id": "order_path",
+      "name": "Order Submission",
+      "path": [
+        "graph.presentation",
+        "graph.application",
+        "graph.domain",
+        "graph.infrastructure"
+      ],
+      "entry": "graph.presentation",
+      "terminus": "graph.infrastructure"
+    }
+  ],
+  "aggregate": {
+    "hot_edges": [
+      {"source": "graph.application", "target": "graph.domain", "traffic": 950},
+      {"source": "graph.infrastructure", "target": "graph.domain", "traffic": 750},
+      {"source": "iam", "target": "infrastructure", "traffic": 600}
+    ],
+    "bottlenecks": ["graph.infrastructure", "iam"]
+  },
   "metadata": {
     "source_path": "/home/jsell/code/kartograph/src/api",
     "timestamp": "2026-04-23T13:48:45.458245+00:00"
