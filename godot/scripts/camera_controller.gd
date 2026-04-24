@@ -85,6 +85,16 @@ func _handle_button(event: InputEventMouseButton) -> void:
 
 
 ## Zoom _target_distance and shift _pivot so the cursor world-point stays fixed.
+##
+## Sign derivation — zoom-in (direction < 0):
+##   step < 0 → target_distance decreases →
+##   zoom_fraction = 1 − (smaller / larger) > 0 → pivot.lerp(cursor, +f) →
+##   pivot shifts toward cursor → component stays under cursor ✓
+##
+## Sign derivation — zoom-out (direction > 0):
+##   step > 0 → target_distance increases →
+##   zoom_fraction = 1 − (larger / smaller) < 0 → pivot.lerp(cursor, −f) →
+##   pivot shifts away from cursor → view expands outward from cursor point ✓
 func _zoom_toward_cursor(cursor_world: Vector3, direction: float) -> void:
 	var old_target: float = _target_distance
 	var step: float = direction * (_target_distance * 0.05 + 1.0)
