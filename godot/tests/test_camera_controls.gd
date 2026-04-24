@@ -74,6 +74,7 @@ func test_scroll_down_increases_distance() -> bool:
 ## WHEN the user right-mouse drags horizontally THEN the camera orbits —
 ## a horizontal drag must change the azimuth angle _phi.
 func test_orbit_horizontal_drag_changes_phi() -> bool:
+	# drag right → delta.x = +50 → _phi -= delta.x * orbit_speed → _phi decreases → azimuth changed ✓
 	var cam = CameraScript.new()
 	var initial_phi: float = cam._phi
 
@@ -96,6 +97,7 @@ func test_orbit_horizontal_drag_changes_phi() -> bool:
 ## WHEN the user right-mouse drags vertically THEN the polar angle changes —
 ## a vertical drag must change _theta (camera altitude).
 func test_orbit_vertical_drag_changes_theta() -> bool:
+	# drag up on screen → delta.y = -20 → _theta -= delta.y * orbit_speed → _theta increases → polar angle changed ✓
 	var cam = CameraScript.new()
 	var initial_theta: float = cam._theta
 
