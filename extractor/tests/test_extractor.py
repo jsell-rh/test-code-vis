@@ -566,3 +566,84 @@ class TestSceneGraphOutput:
         for n in graph["nodes"]:
             pos = n["position"]
             assert "x" in pos and "y" in pos and "z" in pos
+
+
+# ---------------------------------------------------------------------------
+# Requirement: CLI entry point
+# ---------------------------------------------------------------------------
+
+
+class TestCLIEntryPoint:
+    """Verify that the CLI main() function works end-to-end."""
+
+    def test_main_runs_and_writes_valid_json(self, src: Path, tmp_path: Path) -> None:
+        """Calling main() with a src_path and --output writes a valid JSON file."""
+        from extractor.__main__ import main
+
+        out = tmp_path / "output.json"
+        rc = main([str(src), "--output", str(out)])
+        assert rc == 0
+        assert out.exists()
+        data = json.loads(out.read_text())
+        assert "nodes" in data
+        assert "edges" in data
+        assert "metadata" in data
+
+    def test_main_returns_nonzero_for_missing_path(self, tmp_path: Path) -> None:
+        """main() returns exit-code 1 when the source path does not exist."""
+        from extractor.__main__ import main
+
+        rc = main([str(tmp_path / "nonexistent_dir")])
+        assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# Requirement: stdlib-only constraint
+# ---------------------------------------------------------------------------
+
+
+class TestStdlibOnlyConstraint:
+    """Verify that the extractor package imports only standard-library modules."""
+
+    def test_extractor_uses_only_stdlib_imports(self) -> None:
+        """Parse every .py file in extractor/ with ast and assert that every
+        top-level import is from the standard library.
+
+        The extractor package itself and its sub-modules are explicitly allowed.
+        """
+        import ast
+        import sys
+        from pathlib import Path
+
+        stdlib = sys.stdlib_module_names
+        # Locate the extractor package on disk relative to this test file.
+        pkg_root = Path(__file__).parent.parent  # .../extractor/
+
+        forbidden: list[str] = []
+        for py_file in sorted(pkg_root.rglob("*.py")):
+            # Skip test files — they may import pytest.
+            if "tests" in py_file.parts:
+                continue
+            source = py_file.read_text(encoding="utf-8")
+            try:
+                tree = ast.parse(source, filename=str(py_file))
+            except SyntaxError:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        top = alias.name.split(".")[0]
+                        if top not in stdlib and top != "extractor":
+                            forbidden.append(f"{py_file.name}: imports '{alias.name}'")
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module is None:
+                        continue
+                    top = node.module.split(".")[0]
+                    if top not in stdlib and top != "extractor":
+                        forbidden.append(
+                            f"{py_file.name}: from '{node.module}' import ..."
+                        )
+
+        assert not forbidden, (
+            "Extractor package contains non-stdlib imports:\n" + "\n".join(forbidden)
+        )

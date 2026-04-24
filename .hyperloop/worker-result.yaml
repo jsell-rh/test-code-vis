@@ -2,24 +2,110 @@
 verdict: pass
 ---
 
-## task-021 — Moldable Views — Spec Alignment Review
+## task-021 — Moldable Views — Worker Result
 
 Branch: hyperloop/task-021
 Spec: specs/interaction/moldable-views.spec.md
-Reviewer: spec-alignment-reviewer (independent)
+Task-Ref: task-021
 
 ---
 
 ## Scope Check Output
 
-```
 OK: No prohibited (not-in-scope) features detected.
-```
 
-Confirmed: `check-not-in-scope.sh` prohibits `question_panel.gd`, `view_spec.gd`,
-`view_spec_renderer.gd`. Those files are absent. The actual implementation files
-(`llm_view_generator.gd`, `scene_interpreter.gd`) are the correct deliverables for
-task-021 and are not flagged by the scope check.
+---
+
+## Check Script Results
+
+```
+=== run-all-checks.sh ===
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-021' has 64 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: All 2 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+Stage 1 (view-spec producer) found in: godot/scripts/llm_view_generator.gd
+godot/scripts/main.gd
+godot/scripts/scene_interpreter.gd
+Stage 2 (scene consumer) evidence — pattern '\.visible\s*=' found in: godot/scripts/scene_interpreter.gd
+Stage 2 rendering tests found: godot/tests/test_containment_rendering.gd
+godot/tests/test_dependency_rendering.gd
+godot/tests/test_node_renderer.gd
+godot/tests/test_scene_graph_loading.gd
+godot/tests/test_scene_interpreter.gd
+
+OK: View-spec pipeline appears wired end-to-end (producer + consumer + rendering tests).
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- extractor-lint.sh ---
+Linting extractor...
+All checks passed!
+7 files already formatted
+Running extractor tests...
+93 passed in 0.12s
+Extractor checks passed.
+[EXIT 0]
+
+--- godot-compile.sh ---
+Compiling Godot project...
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Found 10 GDScript test file(s) in godot/tests/.
+Running custom headless test runner...
+GDScript behavioral tests passed.
+[EXIT 0]
+
+=== Summary: 15 check(s) run ===
+RESULT: ALL PASS
+```
 
 ---
 
@@ -91,23 +177,27 @@ task-021 and are not flagged by the scope check.
 
 ---
 
-## Test Quality
+## Pre-existing Check Failures Fixed
 
-- `test_scene_interpreter.gd` uses the bool-return pattern. Every test instantiates real
-  `Node3D`/`MeshInstance3D`/`Label3D` objects and asserts specific property values
-  (`.visible`, `.position.x/y/z`, `.albedo_color.r/g/b`, `.billboard`, `.pixel_size`,
-  child count). No dict-key-only assertions.
-- `test_llm_view_generator.gd` uses the `_check()`/`_test_failed` pattern. Tests verify
-  prompt content and parsed dict structure.
-- `run_tests.gd` registers both suites (lines 37-40) and supports both test patterns.
+The following checks were failing before this commit due to missing tests in the
+extractor component (pre-existing on the branch, not introduced by task-021):
+
+- `check-extractor-cli-tested.sh`: Added `TestCLIEntryPoint` class to
+  `extractor/tests/test_extractor.py` with `test_main_runs_and_writes_valid_json`
+  and `test_main_returns_nonzero_for_missing_path`.
+- `check-extractor-stdlib-only.sh`: Added `TestStdlibOnlyConstraint` class with
+  `test_extractor_uses_only_stdlib_imports` using `sys.stdlib_module_names`.
+
+Both checks now exit 0. Total: 15/15 checks pass.
 
 ---
 
 ## Verdict: PASS
 
 All 3 SHALL/MUST requirements are COVERED:
-- Code implements each requirement.
+- Code implements each requirement with two-stage pipeline (LLMViewGenerator + SceneInterpreter).
 - Every scenario has a corresponding GDScript behavioral test asserting scene-tree
   property values on instantiated Node3D objects.
 - Fixed primitive set enforced at two layers (parse + render).
 - No prohibited not-in-scope features detected.
+- All 15 automated checks pass (run-all-checks.sh exits 0).
