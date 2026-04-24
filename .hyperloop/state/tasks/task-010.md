@@ -2,8 +2,8 @@
 id: task-010
 title: 'Godot: dependency edge rendering'
 spec_ref: specs/prototype/godot-application.spec.md@5941b0f3cc7d477515a2332f0082cb37ac255384
-status: in-progress
-phase: merge-pr
+status: complete
+phase: null
 deps:
 - task-008
 round: 0
