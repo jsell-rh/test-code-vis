@@ -42,6 +42,9 @@ func _init() -> void:
 	# --- task-026: UX Polish spec ---
 	_run_suite(preload("res://tests/test_ux_polish.gd").new())
 
+	# --- task-034: Desktop platform constraint (nfr.spec.md) ---
+	_run_suite(preload("res://tests/test_desktop_platform.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
