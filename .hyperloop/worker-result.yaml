@@ -1,27 +1,18 @@
 ---
-verdict: fail
----
-## Code Review: task-034 — Prototype Scope Specification
-
-Branch: hyperloop/task-034
-Reviewer: independent code reviewer
-Review date: 2026-04-24
-
+verdict: pass
 ---
 
 ## Scope Check Output
 
 OK: No prohibited (not-in-scope) features detected.
 
----
-
-## run-all-checks.sh Output
+## Check Script Results
 
 ```
 === run-all-checks.sh ===
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-034' has 22 commit(s) above main.
+OK: Branch 'hyperloop/task-034' has 23 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -42,11 +33,24 @@ SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in god
 [EXIT 0]
 
 --- check-direction-test-derivations.sh ---
+OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_increases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_decreases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
+
 OK: All 10 direction/sign-convention test(s) contain derivation comments.
 [EXIT 0]
 
 --- check-end-to-end-integration-test.sh ---
 SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+      Producer (build_prompt / parse_response) found: none
+      Consumer (apply_spec / render_spec) found: none
 [EXIT 0]
 
 --- check-extractor-cli-tested.sh ---
@@ -75,6 +79,7 @@ OK: No prohibited (not-in-scope) features detected.
 
 --- check-pipeline-wiring.sh ---
 SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM→view-spec pipeline.
 [EXIT 0]
 
 --- check-report-scope-section.sh ---
@@ -85,19 +90,45 @@ OK: worker-result.yaml contains a valid '## Scope Check Output' section.
 OK: Scope report section is consistent with actual check-not-in-scope.sh result.
 [EXIT 0]
 
+--- check-then-test-mapping.sh ---
+OK: 'test_anchor_positions_match_json' found in codebase
+OK: 'test_direction_indicator_cone_created' found in codebase
+OK: 'test_edge_line_mesh_created' found in codebase
+OK: 'test_edge_mesh_instances_created' found in codebase
+OK: 'test_kartograph_extraction_produces_modules' found in codebase
+OK: 'test_kartograph_integration_bounded_contexts' found in codebase
+OK: 'test_labels_are_billboard_and_readable' found in codebase
+OK: 'test_large_module_has_bigger_mesh' found in codebase
+OK: 'test_lmb_pan_moves_pivot' found in codebase
+OK: 'test_main_writes_json_output' found in codebase
+OK: 'test_module_parented_inside_context' found in codebase
+OK: 'test_near_distance_shows_all_nodes' found in codebase
+OK: 'test_near_distance_shows_internal_edges_as_fine_detail' found in codebase
+OK: 'test_orbit_horizontal_drag_changes_phi' found in codebase
+OK: 'test_scroll_up_decreases_distance' found in codebase
+OK: 'test_volumes_created_for_each_node' found in codebase
+OK: 'test_zoom_is_interpolated_not_instantaneous' found in codebase
+OK: All 17 mapped test function(s) verified in codebase
+[EXIT 0]
+
 --- extractor-lint.sh ---
+Linting extractor...
 All checks passed!
 9 files already formatted
-95 passed in 0.41s
+Running extractor tests...
+96 passed in 0.61s
 Extractor checks passed.
 [EXIT 0]
 
 --- godot-compile.sh ---
-Godot Engine v4.6.2.stable.official.71f334935
+Compiling Godot project...
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
 Godot project compiles successfully.
 [EXIT 0]
 
 --- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
 OK: FileAccess.open() is exercised in 2 test file(s).
 [EXIT 0]
 
@@ -107,100 +138,51 @@ PASS: All Label3D nodes have billboard and pixel_size set and tested.
 
 --- godot-tests.sh ---
 Found 11 GDScript test file(s) in godot/tests/.
+Running custom headless test runner...
+=== code-vis GDScript Tests ===
 Results: 95 passed, 0 failed
 GDScript behavioral tests passed.
 [EXIT 0]
 
-=== Summary: 20 check(s) run ===
+=== Summary: 21 check(s) run ===
 RESULT: ALL PASS
 ```
 
----
+## THEN→Test Mapping
 
-## Findings
+| THEN-clause | Test function | Status |
+|---|---|---|
+| THEN kartograph's structure is visualized in 3D space | `test_kartograph_integration_bounded_contexts` | PASS |
+| AND the visualization reflects the actual structure of the codebase | `test_kartograph_extraction_produces_modules` | PASS |
+| THEN a JSON scene graph file is produced | `test_main_writes_json_output` | PASS |
+| AND the Godot application can load that file and render the scene | `test_volumes_created_for_each_node` | PASS |
+| THEN all bounded contexts are visible as distinct volumes | `test_volumes_created_for_each_node` | PASS |
+| AND their relative positions reflect their coupling | `test_anchor_positions_match_json` | PASS |
+| AND dependencies between contexts are visible as connections | `test_edge_mesh_instances_created` | PASS |
+| THEN the internal layers become visible | `test_near_distance_shows_all_nodes` | PASS |
+| AND internal dependencies are shown | `test_near_distance_shows_internal_edges_as_fine_detail` | PASS |
+| AND the user can see relative sizes of internal modules | `test_large_module_has_bigger_mesh` | PASS |
+| THEN it appears as a labeled geometric volume | `test_volumes_created_for_each_node`, `test_labels_are_billboard_and_readable` | PASS |
+| AND its size reflects its relative complexity | `test_large_module_has_bigger_mesh` | PASS |
+| AND its position reflects its coupling relationships | `test_anchor_positions_match_json` | PASS |
+| AND containment is shown by nesting | `test_module_parented_inside_context` | PASS |
+| THEN the module's name is visible as a text label | `test_labels_are_billboard_and_readable` | PASS |
+| AND the label remains readable at the current zoom level | `test_labels_are_billboard_and_readable` | PASS |
+| THEN a line or connection is drawn between them | `test_edge_line_mesh_created` | PASS |
+| AND the direction of the dependency is discernible | `test_direction_indicator_cone_created` | PASS |
+| THEN they can pan, zoom, and rotate the view | `test_lmb_pan_moves_pivot`, `test_scroll_up_decreases_distance`, `test_orbit_horizontal_drag_changes_phi` | PASS |
+| AND they can smoothly transition between overview and detail levels | `test_zoom_is_interpolated_not_instantaneous` | PASS |
+| THEN conformance mode is NOT implemented | (prohibited — absent from codebase) | PASS |
+| AND evaluation mode is NOT implemented | (prohibited — absent from codebase) | PASS |
+| AND simulation mode is NOT implemented | (prohibited — absent from codebase) | PASS |
+| AND data flow visualization is NOT implemented | (prohibited — absent from codebase) | PASS |
+| AND moldable views is NOT implemented | (prohibited — absent from codebase) | PASS |
+| AND spec extraction is NOT implemented | (prohibited — absent from codebase) | PASS |
+| AND first-person navigation is NOT implemented | (prohibited — absent from codebase) | PASS |
 
-### FAIL-1: Fabricated test name — `test_kartograph_extraction_produces_bounded_contexts`
+## Untestable THEN-Clauses
 
-The worker's THEN→test mapping asserts:
-> THEN kartograph's structure is visualized in 3D space
-> → `test_kartograph_integration.py::test_kartograph_extraction_produces_bounded_contexts`
-
-**Verification:** `grep -rn "test_kartograph_extraction_produces_bounded_contexts" extractor/ godot/` → **zero results**.
-
-The function does not exist. The actual function in `extractor/tests/test_kartograph_integration.py` is
-`test_kartograph_integration_bounded_contexts`. Per review guidelines, a fabricated test name in the
-THEN→test mapping is an automatic FAIL, regardless of whether a differently-named test covers the
-same behavior.
-
-**Action required:** Correct the THEN→test mapping to reference
-`test_kartograph_integration.py::test_kartograph_integration_bounded_contexts`.
-
----
-
-### FAIL-2: Fabricated test name — `test_kartograph_extraction_produces_modules`
-
-The worker's THEN→test mapping asserts:
-> AND the visualization reflects the actual structure of the codebase
-> → `test_kartograph_integration.py::test_kartograph_extraction_produces_modules`
-
-**Verification:** `grep -rn "test_kartograph_extraction_produces_modules" extractor/ godot/` → **zero results**.
-
-The function does not exist anywhere in the codebase. Furthermore, the only kartograph integration
-test (`test_kartograph_integration_bounded_contexts`) does not verify module nodes — it only checks
-for three bounded-context IDs (`iam`, `graph`, `shared_kernel`). There is no test that verifies the
-extractor produces module-level nodes from the kartograph codebase.
-
-**Action required:** Either (a) add a function `test_kartograph_extraction_produces_modules` that
-invokes `main()` against the kartograph source and asserts module nodes are present in the output
-JSON, or (b) document why the "actual structure" THEN-clause is satisfied by the bounded-context
-test alone and update the mapping to the correct function name.
-
----
-
-### FAIL-3: Fabricated test name — `test_main_produces_output_file`
-
-The worker's THEN→test mapping asserts:
-> THEN a JSON scene graph file is produced
-> → `test_cli.py::test_main_produces_output_file`
-
-**Verification:** `grep -rn "test_main_produces_output_file" extractor/ godot/` → **zero results**.
-
-The function does not exist. The actual function in `extractor/tests/test_cli.py` that verifies file
-production is `test_main_writes_json_output`. This is a fabricated name — the THEN-clause IS
-covered by the real function, but the mapping name is wrong.
-
-**Action required:** Correct the THEN→test mapping to reference
-`test_cli.py::test_main_writes_json_output`.
-
----
-
-## Passing Checks (for completeness)
-
-All 20 automated checks pass. The underlying implementation is sound:
-
-- `main.gd._ready()` is not an empty stub — it loads JSON via FileAccess, calls `build_from_graph()`, and applies LOD.
-- Test bodies for all other THEN-clauses were read and verified to match their predicates:
-  - `test_volumes_created_for_each_node` — asserts `_anchors.has("ctx1")` and `_anchors.has("mod1")` ✓
-  - `test_labels_are_billboard_and_readable` — asserts `billboard == BILLBOARD_ENABLED` and `pixel_size > 0.0` ✓
-  - `test_direction_indicator_cone_created` — asserts `CylinderMesh.top_radius == 0.0` (explicit arrowhead) ✓
-  - `test_module_parented_inside_context` — asserts `mod_anchor.get_parent() == ctx_anchor` ✓
-  - `test_large_module_has_bigger_mesh` — asserts `large_mesh.size.x > small_mesh.size.x` ✓
-  - Camera/orbit/pan/zoom tests verify the correct sign conventions with derivation comments ✓
-- No Pattern-1 suites contain inert bool-returning test functions ✓
-- No prohibited features (moldable views, data flow, conformance, etc.) ✓
-- Commit trailers present: `Spec-Ref` and `Task-Ref` on implementation commits ✓
-
----
-
-## Summary
-
-Three test function names in the THEN→test mapping are fabricated (not present in any test file).
-Two of these (FAIL-1 and FAIL-3) are simple renames — the underlying behavior IS tested under a
-different name. FAIL-2 identifies a genuine gap: no integration test verifies module-level node
-extraction from the kartograph codebase.
-
-The implementation itself is correct and all automated checks pass. These findings require only
-small corrections to the mapping (FAIL-1, FAIL-3) and one new test function (FAIL-2).
-
-Spec-Ref: specs/prototype/prototype-scope.spec.md@12e8314c64416c10c5268a9d0f3ec54edb221c07
-Task-Ref: task-034
+None. All THEN-clauses are testable in the headless/CI environment. The spec requires
+structural properties (volumes, labels, connections, containment, camera behavior) —
+all of which are assertable by instantiating nodes and checking their properties in a
+headless GDScript test runner.
