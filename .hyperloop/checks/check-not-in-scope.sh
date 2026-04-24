@@ -69,8 +69,22 @@ if grep -rq "conformance.mode\|evaluation.mode\|simulation.mode" godot/scripts/ 
   FAIL=1
 fi
 
-if grep -rq "data.flow\|dataflow" godot/scripts/ extractor/ 2>/dev/null; then
-  echo "FAIL: Prohibited data-flow visualization code detected"
+# Data flow visualization: check broad semantic synonyms across scripts AND tests.
+# The prohibited feature covers any implementation of path/flow/aggregate overlay
+# visualisation — regardless of file name or class name.
+DATA_FLOW_PATTERN="data\.flow\|dataflow\|flow_overlay\|FlowOverlay\|show_path\b\|show_aggregate\b\|flow\.path\|flow_path\|clear_path\b\|is_path_active\b\|FlowPath\b"
+if grep -rq "$DATA_FLOW_PATTERN" godot/scripts/ godot/tests/ extractor/ 2>/dev/null; then
+  echo "FAIL: Prohibited data-flow visualization code detected (matched by feature keyword)."
+  echo "  The spec bans the FEATURE (data flow visualization), not just specific file names."
+  echo "  Matched files:"
+  grep -rl "$DATA_FLOW_PATTERN" godot/scripts/ godot/tests/ extractor/ 2>/dev/null || true
+  FAIL=1
+fi
+
+# Data flow: also catch any file whose docstring cites the prohibited spec section.
+if grep -rq "data-flow\.spec\|data_flow\.spec\|visualization/data.flow" godot/ extractor/ 2>/dev/null; then
+  echo "FAIL: A file references specs/visualization/data-flow.spec.md in its docstring — this is an implementation of the prohibited data-flow visualization feature."
+  grep -rl "data-flow\.spec\|data_flow\.spec\|visualization/data.flow" godot/ extractor/ 2>/dev/null || true
   FAIL=1
 fi
 
