@@ -42,6 +42,9 @@ func _init() -> void:
 	# --- task-026: UX Polish spec ---
 	_run_suite(preload("res://tests/test_ux_polish.gd").new())
 
+	# --- task-023: NFR kartograph scale ---
+	_run_suite(preload("res://tests/test_nfr_scale.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
