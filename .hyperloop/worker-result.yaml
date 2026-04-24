@@ -143,3 +143,8 @@ behavioral tests that exercise runtime conditions with known fixture data
 and assert on actual outputs. No scope violations detected.
 
 **VERDICT: PASS**
+
+---
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
