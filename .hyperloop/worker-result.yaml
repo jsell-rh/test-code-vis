@@ -6,13 +6,13 @@ verdict: pass
 
 OK: No prohibited (not-in-scope) features detected.
 
-## Check Script Results
+## run-all-checks.sh Output (post-sync from main)
 
 ```
 === run-all-checks.sh ===
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-034' has 23 commit(s) above main.
+OK: Branch 'hyperloop/task-034' has 24 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -29,28 +29,14 @@ OK: All 4 clamped variable(s) have boundary-asserting tests
 
 --- check-coordinator-calls-pipeline.sh ---
 SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
-      This check only applies to tasks that implement a view-spec consumer.
 [EXIT 0]
 
 --- check-direction-test-derivations.sh ---
-OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
-OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
-OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
-OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
-OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_increases_pivot_x — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_decreases_pivot_x — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
-
 OK: All 10 direction/sign-convention test(s) contain derivation comments.
 [EXIT 0]
 
 --- check-end-to-end-integration-test.sh ---
 SKIP: Both a pipeline producer and consumer must exist for this check to apply.
-      Producer (build_prompt / parse_response) found: none
-      Consumer (apply_spec / render_spec) found: none
 [EXIT 0]
 
 --- check-extractor-cli-tested.sh ---
@@ -79,7 +65,6 @@ OK: No prohibited (not-in-scope) features detected.
 
 --- check-pipeline-wiring.sh ---
 SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
-      This check only applies to tasks that implement the LLM→view-spec pipeline.
 [EXIT 0]
 
 --- check-report-scope-section.sh ---
@@ -112,23 +97,18 @@ OK: All 17 mapped test function(s) verified in codebase
 [EXIT 0]
 
 --- extractor-lint.sh ---
-Linting extractor...
 All checks passed!
 9 files already formatted
-Running extractor tests...
-96 passed in 0.61s
+96 passed in 0.67s
 Extractor checks passed.
 [EXIT 0]
 
 --- godot-compile.sh ---
-Compiling Godot project...
-Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
-
+Godot Engine v4.6.2.stable.official.71f334935
 Godot project compiles successfully.
 [EXIT 0]
 
 --- godot-fileaccess-tested.sh ---
-Found FileAccess.open() in 1 production script file(s).
 OK: FileAccess.open() is exercised in 2 test file(s).
 [EXIT 0]
 
@@ -138,8 +118,6 @@ PASS: All Label3D nodes have billboard and pixel_size set and tested.
 
 --- godot-tests.sh ---
 Found 11 GDScript test file(s) in godot/tests/.
-Running custom headless test runner...
-=== code-vis GDScript Tests ===
 Results: 95 passed, 0 failed
 GDScript behavioral tests passed.
 [EXIT 0]
@@ -180,9 +158,70 @@ RESULT: ALL PASS
 | AND spec extraction is NOT implemented | (prohibited — absent from codebase) | PASS |
 | AND first-person navigation is NOT implemented | (prohibited — absent from codebase) | PASS |
 
-## Untestable THEN-Clauses
+## Findings
 
-None. All THEN-clauses are testable in the headless/CI environment. The spec requires
-structural properties (volumes, labels, connections, containment, camera behavior) —
-all of which are assertable by instantiating nodes and checking their properties in a
-headless GDScript test runner.
+### Prior Reviewer Findings — Resolved
+
+The previous reviewer issued three FAIL findings (FAIL-1, FAIL-2, FAIL-3) against fabricated
+test names in the THEN→test mapping. Fix commit `8007782` addressed all three:
+
+**FAIL-1 (resolved):** Mapping now correctly references
+`test_kartograph_integration_bounded_contexts` (previously the mapping cited
+`test_kartograph_extraction_produces_bounded_contexts` which did not exist).
+`grep` confirms the actual function is present at
+`extractor/tests/test_kartograph_integration.py:35`.
+
+**FAIL-2 (resolved):** `test_kartograph_extraction_produces_modules` now exists at
+`extractor/tests/test_kartograph_integration.py:70`. Body verified: invokes `main()`
+against `~/code/kartograph/src/api`, parses JSON output, and asserts
+`len(module_nodes) > 0` where `module_nodes` filters by `nd.get("type") == "module"`.
+Predicate matches the THEN-clause ("visualization reflects actual structure of codebase").
+
+**FAIL-3 (resolved):** Mapping now correctly references `test_main_writes_json_output`
+(previously cited `test_main_produces_output_file` which did not exist). Present at
+`extractor/tests/test_cli.py:44`. Body verified: invokes `main()`, asserts file exists,
+parses JSON, asserts `nodes`, `edges`, `metadata` keys present.
+
+### Independent Verification — No New Findings
+
+All test predicate bodies were read and verified against their THEN-clause predicates:
+
+- `test_volumes_created_for_each_node` — instantiates `MainScript`, calls
+  `build_from_graph()`, asserts `_anchors.has("ctx1") and _anchors.has("mod1")` ✓
+- `test_labels_are_billboard_and_readable` — asserts `billboard == BILLBOARD_ENABLED`,
+  `pixel_size > 0.0`, `no_depth_test == true` on a real `Label3D` child node ✓
+- `test_direction_indicator_cone_created` — asserts `CylinderMesh.top_radius == 0.0`
+  (explicit arrowhead cone, satisfies "visually indicated" guideline) ✓
+- `test_module_parented_inside_context` — asserts
+  `mod_anchor.get_parent() == ctx_anchor` ✓
+- `test_large_module_has_bigger_mesh` — asserts `large_mesh.size.x > small_mesh.size.x` ✓
+- `test_anchor_positions_match_json` — asserts
+  `position.is_equal_approx(Vector3(x, y, z))` for both anchors ✓
+- `test_bounded_context_is_translucent` — asserts `TRANSPARENCY_ALPHA` mode and
+  `albedo_color.a < 1.0` ✓
+- `test_bounded_context_cull_disabled` — asserts `cull_mode == CULL_DISABLED` ✓
+
+Pattern detection: all four affected test suites (`test_scene_graph_loading.gd`,
+`test_containment_rendering.gd`, `test_dependency_rendering.gd`, `test_size_encoding.gd`)
+use Pattern-2 (bool-return). The runner in `run_tests.gd` correctly handles bool returns
+as pass/fail — NOT inert. ✓
+
+Prohibited features independently audited via keyword grep (llm, build_prompt,
+parse_response, apply_spec, moldable, conformance, evaluation, simulation, data.flow,
+first_person, spec.extract): zero matches in production code. The only match was a
+comment in `test_spatial_structure.gd` line 28 noting that first-person navigation is
+NOT implemented — a correct documentation note, not an implementation. ✓
+
+`main.gd._ready()` verified non-stub: calls `FileAccess.open()`, `get_as_text()`,
+`JSON.new().parse()`, `build_from_graph()`, and LOD application. ✓
+
+Commit trailers `Spec-Ref` and `Task-Ref` present on implementation commit `8007782`. ✓
+
+Note on `understanding_overlay.gd` and related files: `git diff --name-status main..HEAD`
+shows these as deleted, but `git log main..HEAD -- <file>` returns no commits — meaning
+this task never touched those files. They appear as deleted only because main added them
+(in commit `a2f9d13`) after this branch forked. This is a normal branch-divergence
+artifact, not a deletion by this task.
+
+Spec-Ref: specs/prototype/prototype-scope.spec.md@12e8314c64416c10c5268a9d0f3ec54edb221c07
+Task-Ref: task-034
