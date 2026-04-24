@@ -1,7 +1,209 @@
 ---
 task_id: task-034
 round: 0
-role: orchestrator
+role: verifier
 verdict: fail
 ---
-Branch reset: 3 consecutive rebase/merge failures. The branch likely has state files in its commit history that cause permanent conflicts. Task reset to not-started for a fresh attempt.
+## Reviewer Result — task-034: Prototype Scope Specification
+
+Branch: `hyperloop/task-034`
+Spec: `specs/prototype/prototype-scope.spec.md`
+Reviewer: independent (Claude Code)
+
+---
+
+## Scope Check Output
+
+```
+OK: No prohibited (not-in-scope) features detected.
+```
+
+`check-not-in-scope.sh` exits 0. No prohibited features found via the check
+script or via independent manual grep for: `llm`, `build_prompt`, `conformance`,
+`simulation`, `first_person`, `spec_overlay`, `evaluation_mode`, `data_flow`.
+
+---
+
+## run-all-checks.sh (verbatim, 22 checks)
+
+```
+--- check-branch-adds-source-files.sh ---
+OK: Branch adds/modifies 10 source file(s) outside .hyperloop/
+[EXIT 0]
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-034' has 38 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method found (not applicable to this task)
+[EXIT 0]
+
+--- check-direction-test-derivations.sh ---
+OK: All 10 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
+
+--- check-end-to-end-integration-test.sh ---
+SKIP: No producer/consumer pair found (not applicable to this task)
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found
+[EXIT 0]
+
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (4 suite(s) checked)
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found (not applicable)
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+
+--- check-then-test-mapping.sh ---
+OK: All 30 mapped test function(s) verified in codebase
+[EXIT 0]
+
+--- extractor-lint.sh ---
+All checks passed! 96 passed in 0.90s
+[EXIT 0]
+
+--- godot-compile.sh ---
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Results: 95 passed, 0 failed
+[EXIT 0]
+
+=== Summary: 22 check(s) run ===
+RESULT: ALL PASS
+```
+
+Note: checks synced from `main` via `git checkout main -- .hyperloop/checks/` before run.
+
+---
+
+## THEN→test Mapping Audit
+
+The implementer's THEN→test table was verified row-by-row. Three entries have
+**wrong-predicate** mappings. Per guidelines: "Wrong-predicate mappings are FAIL
+findings identical to unmapped THEN-clauses."
+
+### FAIL Finding 1 — Wrong predicate: "the internal layers become visible"
+
+| Field | Value |
+|---|---|
+| THEN-clause | the internal layers become visible (domain, application, infrastructure, presentation) |
+| Worker-reported test | `test_far_distance_shows_only_bounded_contexts` |
+| Predicate asserted by that test | `ctx_anchor.visible == true` AND `mod_anchor.visible == false` (modules hidden at FAR) |
+| Required predicate | modules/layers become VISIBLE when user zooms in |
+| Assessment | **WRONG PREDICATE — the named test asserts the OPPOSITE behavior.** At FAR distance, internal layers are hidden. The THEN-clause says they become visible when zooming into IAM (i.e., at NEAR/MEDIUM distance). |
+| Correct tests that DO cover the clause | `test_near_distance_shows_all_nodes` (asserts `mod_anchor.visible == true` at near distance) and `test_medium_distance_shows_modules` (asserts modules visible at medium distance) |
+
+**Required fix:** Change the mapping for this row to `test_near_distance_shows_all_nodes`
+(and optionally `test_medium_distance_shows_modules`).
+
+---
+
+### FAIL Finding 2 — Wrong predicate: "smoothly transition between overview and detail levels"
+
+| Field | Value |
+|---|---|
+| THEN-clause | they can smoothly transition between overview and detail levels |
+| Worker-reported test | `test_initial_theta_is_near_top_down` |
+| Predicate asserted by that test | `cam._theta < PI / 4.0` — initial camera polar angle |
+| Required predicate | zoom transition is interpolated/animated, not instantaneous; LOD changes as distance changes |
+| Assessment | **WRONG PREDICATE.** `test_initial_theta_is_near_top_down` verifies only that the camera starts in a near-top-down orientation. It asserts nothing about smooth transitions or level-of-detail changes. |
+| Correct tests that DO cover the clause | `test_zoom_is_interpolated_not_instantaneous` (asserts `_distance` lerps toward `_target_distance` over `_process()` frames, never jumps) + `test_far_distance_shows_only_bounded_contexts` / `test_near_distance_shows_all_nodes` (LOD transitions) |
+
+**Required fix:** Change the mapping for this row to `test_zoom_is_interpolated_not_instantaneous`.
+
+---
+
+### FAIL Finding 3 — Partial predicate: "they can pan, zoom, and rotate the view"
+
+| Field | Value |
+|---|---|
+| THEN-clause | they can pan, zoom, and rotate the view |
+| Worker-reported test | `test_camera_supports_zoom_in` |
+| Predicate asserted by that test | `new_distance < initial_distance` on scroll-up — zoom only |
+| Required predicate | pan (LMB drag shifts pivot), zoom (scroll changes distance), AND rotate (RMB drag changes phi/theta) |
+| Assessment | **PARTIAL/WRONG PREDICATE.** `test_camera_supports_zoom_in` tests only zoom. The THEN-clause requires all three capabilities. |
+| Correct tests that cover all three | `test_lmb_pan_moves_pivot` (pan), `test_scroll_up_decreases_distance` (zoom), `test_orbit_horizontal_drag_changes_phi` (rotate) |
+
+**Required fix:** Update the mapping to reference all three capabilities, e.g. map to
+`test_lmb_pan_moves_pivot`, `test_scroll_up_decreases_distance`, and
+`test_orbit_horizontal_drag_changes_phi`.
+
+---
+
+## Implementation Quality (passing, not blocking)
+
+The implementation itself is correct and complete:
+
+- **main.gd `_ready()`** is fully implemented (FileAccess → JSON.parse → build_from_graph). Not a stub.
+- **Containment** (`test_module_parented_inside_context`): module anchor is a direct child of context anchor. ✓
+- **Labels** (`test_labels_are_billboard_and_readable`): BILLBOARD_ENABLED, pixel_size=0.012, no_depth_test=true. ✓
+- **Direction indicator** (`test_direction_indicator_cone_created`): CylinderMesh with top_radius=0 (cone arrowhead) exists. ✓
+- **Translucency** (`test_bounded_context_is_translucent`, `test_bounded_context_cull_disabled`): TRANSPARENCY_ALPHA, alpha=0.18, CULL_DISABLED. ✓
+- **LOD system** (multiple tests): FAR/MEDIUM/NEAR thresholds, modules hidden at far. ✓
+- **Extractor CLI** (`test_main_writes_json_output`, `test_kartograph_integration_bounded_contexts`): exits 0, valid JSON with iam/graph/shared_kernel contexts. ✓
+- **Commit trailers**: Spec-Ref and Task-Ref present on implementation commits. ✓
+- **Clamp boundary tests**: all 4 clamped variables have over-limit tests. ✓
+- **Direction sign derivations**: all 10 direction tests have explicit derivation comments. ✓
+- **Test runner**: Pattern-1 (_test_failed) and Pattern-2 (bool return) both handled correctly — no inert tests. ✓
+
+---
+
+## Verdict
+
+**FAIL** — Three wrong-predicate mappings in the THEN→test table. The implementation
+and tests are behaviorally correct (all 22 checks pass, 95 GDScript + 96 Python tests
+pass), but the mapping documentation incorrectly traces two THEN-clauses to tests that
+assert the opposite or unrelated behavior, and one THEN-clause to only a subset of the
+required behavior.
+
+Fixes required (worker-result.yaml THEN→test table only — no code changes needed):
+1. Row "the internal layers become visible" → change to `test_near_distance_shows_all_nodes`
+2. Row "smoothly transition between overview and detail levels" → change to `test_zoom_is_interpolated_not_instantaneous`
+3. Row "pan, zoom, and rotate" → change to cite all three: `test_lmb_pan_moves_pivot`, `test_scroll_up_decreases_distance`, `test_orbit_horizontal_drag_changes_phi`
