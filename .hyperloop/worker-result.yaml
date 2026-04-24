@@ -77,3 +77,6 @@ All 5 MUST requirements implemented in `godot/scripts/camera_controller.gd` and 
 named behavioral tests with correct assertion predicates in `godot/tests/test_camera_controls.gd`.
 
 ## Verdict: PASS
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
