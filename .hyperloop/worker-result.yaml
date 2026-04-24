@@ -2,13 +2,14 @@
 verdict: pass
 ---
 
-## Spec Alignment Review — task-024 (UX Polish)
+## Worker Result — task-024 (UX Polish)
 
 Branch: hyperloop/task-024
-Spec: specs/prototype/ux-polish.spec.md
-Reviewer: spec-alignment-reviewer (independent)
+Spec: specs/prototype/ux-polish.spec.md@7392ee4176c1f464f5e7c34a11077a5a93cb7e7f
+Task-Ref: task-024
 
-All 15 automated checks pass. 91/91 GDScript behavioral tests pass.
+All 15 automated checks pass (checks synced from main). 91/91 GDScript behavioral tests pass.
+94/94 pytest extractor tests pass.
 
 ---
 
