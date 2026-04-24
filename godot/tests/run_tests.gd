@@ -50,6 +50,9 @@ func _init() -> void:
 	_run_suite(preload("res://tests/test_scene_interpreter.gd").new())
 	_run_suite(preload("res://tests/test_moldable_views_pipeline.gd").new())
 
+	# --- task-033: Understanding modes spec (core/understanding-modes.spec.md) ---
+	_run_suite(preload("res://tests/test_understanding_modes.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
