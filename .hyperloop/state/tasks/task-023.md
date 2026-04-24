@@ -2,8 +2,8 @@
 id: task-023
 title: 'Godot: performance validation at kartograph scale (≥30fps navigation)'
 spec_ref: specs/prototype/nfr.spec.md@e2cac130819f13929ab13e324411ac7a23d66b33
-status: in-progress
-phase: merge-pr
+status: not-started
+phase: null
 deps:
 - task-007
 - task-008
@@ -14,6 +14,6 @@ deps:
 - task-013
 - task-014
 round: 0
-branch: hyperloop/task-023
-pr: https://github.com/jsell-rh/test-code-vis/pull/139
+branch: null
+pr: null
 ---
