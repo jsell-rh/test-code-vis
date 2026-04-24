@@ -149,6 +149,40 @@ func test_drag_direction_matches_view_movement() -> bool:
 	return cam._pivot.x > initial_x
 
 
+## Spec: "Dragging up moves the view up."
+## In headless mode global_transform is identity → forward = basis.z = (0,0,1).
+##
+## Sign derivation — drag down (screen Y increases):
+##   drag down → delta.y = +50 → _pivot += forward(0,0,1) * +50 * pan_amount
+##   → pivot.z increases (view centre moves toward +Z) ✓
+func test_pan_drag_down_increases_pivot_z() -> bool:
+	var cam = _make_cam()
+	var initial_z: float = cam._pivot.z
+
+	_press_lmb(cam, Vector2(100.0, 100.0))
+	_move_mouse(cam, Vector2(100.0, 150.0))  # drag down → delta.y = +50
+
+	# drag down → delta.y = +50 → pivot.z increases ✓
+	return cam._pivot.z > initial_z
+
+
+## Spec: "Dragging up moves the view up."
+## In headless mode global_transform is identity → forward = basis.z = (0,0,1).
+##
+## Sign derivation — drag up (screen Y decreases):
+##   drag up → delta.y = -50 → _pivot += forward(0,0,1) * -50 * pan_amount
+##   → pivot.z decreases (view centre moves toward -Z, i.e. "up" in top-down view) ✓
+func test_pan_drag_up_decreases_pivot_z() -> bool:
+	var cam = _make_cam()
+	var initial_z: float = cam._pivot.z
+
+	_press_lmb(cam, Vector2(100.0, 100.0))
+	_move_mouse(cam, Vector2(100.0, 50.0))  # drag up → delta.y = -50
+
+	# drag up → delta.y = -50 → pivot.z decreases ✓
+	return cam._pivot.z < initial_z
+
+
 # ---------------------------------------------------------------------------
 # Zoom Toward Mouse Cursor
 # THEN the view zooms toward the point under the cursor
