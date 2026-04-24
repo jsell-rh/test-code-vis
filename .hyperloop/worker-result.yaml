@@ -2,8 +2,9 @@
 verdict: pass
 ---
 ## Task: task-033 — Godot: Understanding Modes (Conformance, Evaluation, Simulation)
-## Spec: specs/core/understanding-modes.spec.md
+## Spec: specs/core/understanding-modes.spec.md@5014c7f3eb6eb64b86a2637ffeb78e914f9e1e9c
 ## Branch: hyperloop/task-033
+## Reviewer: independent re-review (fresh check sync from main)
 
 ### Summary
 
@@ -15,13 +16,26 @@ All 22 check scripts exit 0 (after syncing .hyperloop/checks/ from main).
 Implementation: `godot/scripts/understanding_analyzer.gd` (356 lines)
 Test suite:     `godot/tests/test_understanding_modes.gd` (14 test functions, Pattern-1 `_check()`)
 
+Commit trailers verified on both implementation commits (7de7a69, df7dac6):
+  Spec-Ref: specs/core/understanding-modes.spec.md@5014c7f3eb6eb64b86a2637ffeb78e914f9e1e9c
+  Task-Ref: task-033
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+(check-not-in-scope.sh exits 0; check-scope-report-not-falsified.sh exits 0;
+manual grep for llm, build_prompt, parse_response, apply_spec, moldable,
+SceneInterpreter, LlmView, question_ui, flow_overlay, FlowOverlay — no matches
+in godot/scripts/ or godot/tests/ on current worktree)
+
 ---
 
 ## Requirement-by-Requirement Coverage
 
 ### Requirement: Conformance Mode — COVERED
-
-The system MUST allow the human to see whether the as-built system matches the as-specced design.
 
 Implementation: `check_alignment(actual_nodes, spec_node_ids)` returns `{aligned, divergent, missing}`;
 `render_alignment()` applies Label3D annotations ("✓ SPEC ALIGNED", "⚠ MERGED") and highlights
@@ -29,23 +43,21 @@ divergent nodes on the live scene tree.
 
 #### Scenario: Spec-aligned implementation
 
-| THEN-clause (verbatim) | Test function | Status |
+| THEN-clause (verbatim) | Test function | Predicate verified |
 |---|---|---|
-| "the human can see that the realized system has auth and user management as separate components" | test_aligned_nodes_detected_as_separate | PASS |
-| "the correspondence between spec and realization is visually apparent" | test_aligned_nodes_have_annotation_in_scene | PASS |
+| "the human can see that the realized system has auth and user management as separate components" | test_aligned_nodes_detected_as_separate | asserts "auth" and "user_management" in `aligned[]`; `divergent` and `missing` empty |
+| "the correspondence between spec and realization is visually apparent" | test_aligned_nodes_have_annotation_in_scene | creates Node3D anchors; calls render_alignment(); asserts ≥1 Label3D child in scene_root |
 
 #### Scenario: Spec-divergent implementation
 
-| THEN-clause (verbatim) | Test function | Status |
+| THEN-clause (verbatim) | Test function | Predicate verified |
 |---|---|---|
-| "the human can see the divergence between spec and realization" | test_divergent_nodes_detected | PASS |
-| "the specific nature of the divergence is clear (merged vs. separate)" | test_divergent_nodes_annotated_as_merged | PASS |
+| "the human can see the divergence between spec and realization" | test_divergent_nodes_detected | expects payment_service but actual has order_service; asserts payment_service in missing or divergent |
+| "the specific nature of the divergence is clear (merged vs. separate)" | test_divergent_nodes_annotated_as_merged | payment_order contains "payment" substring → divergent; calls render_alignment(); asserts Label3D with "MERGED" in text |
 
 ---
 
 ### Requirement: Evaluation Mode — COVERED
-
-The system MUST allow the human to evaluate the architectural quality of the realized system independent of the spec.
 
 Implementation: `analyze_coupling(nodes, edges, threshold)` returns `{pairs}` sorted by
 coupling_score; `analyze_criticality(nodes, edges, threshold)` returns `{critical}` sorted by
@@ -54,83 +66,80 @@ annotations ("⚠ Coupling: N", "⚠ SPOF Risk (in-degree: N)").
 
 #### Scenario: Detecting tight coupling
 
-| THEN-clause (verbatim) | Test function | Status |
+| THEN-clause (verbatim) | Test function | Predicate verified |
 |---|---|---|
-| "the coupling between those services is apparent" | test_tightly_coupled_pair_detected | PASS |
-| "the human can assess whether the coupling is problematic" | test_coupled_nodes_highlighted | PASS |
+| "the coupling between those services is apparent" | test_tightly_coupled_pair_detected | 3 bidirectional edges → asserts pairs[0].coupling_score >= 2 |
+| "the human can assess whether the coupling is problematic" | test_coupled_nodes_highlighted | calls render_coupling(); asserts mesh_x.material_override.albedo_color == HIGHLIGHT_COLOR AND mesh_y.material_override.albedo_color == HIGHLIGHT_COLOR |
 
 #### Scenario: Identifying single point of failure
 
-| THEN-clause (verbatim) | Test function | Status |
+| THEN-clause (verbatim) | Test function | Predicate verified |
 |---|---|---|
-| "the criticality and centrality of that component is apparent" | test_central_node_detected_as_critical | PASS |
-| "the risk it represents is clear" | test_critical_node_annotated_with_spof_risk | PASS |
+| "the criticality and centrality of that component is apparent" | test_central_node_detected_as_critical | hub has in_degree=3; asserts critical[0].node_id == "hub" and critical[0].in_degree == 3 |
+| "the risk it represents is clear" | test_critical_node_annotated_with_spof_risk | calls render_criticality(); asserts Label3D with "SPOF" in text |
 
 #### Scenario: Spec faithfully implemented but architecturally poor
 
-| THEN-clause (verbatim) | Test function | Status |
+| THEN-clause (verbatim) | Test function | Predicate verified |
 |---|---|---|
-| "architectural problems are visible even though conformance is perfect" | test_coupling_detected_despite_perfect_alignment | PASS |
+| "architectural problems are visible even though conformance is perfect" | test_coupling_detected_despite_perfect_alignment | asserts aligned.size()==2 (perfect conformance) AND coupling.pairs.size()>=1 (problem still visible) |
 
 ---
 
 ### Requirement: Simulation Mode — COVERED
 
-The system MUST allow the human to explore the impact of hypothetical changes.
-
 Implementation: `simulate_split(nodes, edges, node_id)` returns `{dependents, new_interfaces}`;
-`simulate_failure(nodes, edges, node_id)` performs BFS through the reverse dependency graph and
+`simulate_failure(nodes, edges, node_id)` performs BFS through reverse dependency graph and
 returns `{cascade}`; `render_split_impact()` and `render_failure_cascade()` apply highlights
-and Label3D annotations ("◈ SPLITTING", "↯ Affected by split", "✕ FAILED", "⚡ Cascading failure").
+and Label3D annotations.
 
 #### Scenario: Splitting a service
 
-| THEN-clause (verbatim) | Test function | Status |
+| THEN-clause (verbatim) | Test function | Predicate verified |
 |---|---|---|
-| "the impact on dependent services is visible" | test_split_dependents_detected | PASS |
-| "new dependencies or interfaces that would be required are shown" | test_split_new_interfaces_shown | PASS |
+| "the impact on dependent services is visible" | test_split_dependents_detected | asserts dependents.has("client_a") AND dependents.has("client_b") |
+| "new dependencies or interfaces that would be required are shown" | test_split_new_interfaces_shown | asserts new_interfaces.size()>=1; caller mesh highlighted; Label3D with "split" in text |
 
 #### Scenario: Failure injection
 
-| THEN-clause (verbatim) | Test function | Status |
+| THEN-clause (verbatim) | Test function | Predicate verified |
 |---|---|---|
-| "the cascade of effects through the system is visible" | test_failure_cascade_detected | PASS |
-| "components that would be affected are clearly identified" | test_failure_affected_nodes_highlighted | PASS |
+| "the cascade of effects through the system is visible" | test_failure_cascade_detected | BFS: db fails → cascade.has("api") AND cascade.has("frontend") (transitive) |
+| "components that would be affected are clearly identified" | test_failure_affected_nodes_highlighted | consumer_1 mesh.material_override.albedo_color == HIGHLIGHT_COLOR; Label3D with "FAILED" in text |
 
 ---
 
 ## Label3D Readability (mandatory per project guidelines)
 
-| THEN-clause (verbatim) | Test function | Status |
+| Assertion | Test function | Predicate verified |
 |---|---|---|
-| "annotation Label3D must have billboard=BILLBOARD_ENABLED and pixel_size > 0.0" | test_annotation_label3d_has_billboard_and_pixel_size | PASS |
+| billboard==BILLBOARD_ENABLED and pixel_size > 0.0 | test_annotation_label3d_has_billboard_and_pixel_size | calls render_criticality(); reads created Label3D; asserts label.billboard == BaseMaterial3D.BILLBOARD_ENABLED AND label.pixel_size > 0.0 |
+
+---
+
+## main.gd Entry-Point Check
+
+`_ready()` is NOT a stub — it calls `FileAccess.open()` + `get_as_text()`, parses JSON, and
+calls `build_from_graph()`. godot-fileaccess-tested.sh confirms FileAccess is exercised in 2
+test files. godot-compile.sh confirms compilation.
 
 ---
 
 ## Not In Scope Audit
 
-The spec's "Not In Scope" section is empty — no items are prohibited in this spec.
-Manual audit performed for cross-spec prohibited features per project guidelines:
-- No `llm`, `build_prompt`, `parse_response`, `apply_spec` code added
-- No `flow_overlay`, `FlowOverlay`, `moldable`, `SceneInterpreter`, `LlmView` code added
-- No `question_ui` or UI prompt nodes added
-- No `conformance_mode`, `evaluation_mode`, `simulation_mode` identifiers used in .gd files
+The spec's "Not In Scope" section is empty — no items are explicitly prohibited in this spec.
+Manual grep for cross-spec prohibited features:
+- llm, build_prompt, parse_response, apply_spec, moldable, SceneInterpreter, LlmView,
+  question_ui, flow_overlay, FlowOverlay: NO matches in godot/scripts/ or godot/tests/
+- The fix commit df7dac6 removed: llm_view_generator.gd, scene_interpreter.gd,
+  understanding_overlay.gd and their test files (pre-existing artifacts from a prior task,
+  not introduced by task-033). Those files do not exist in the current worktree.
+- New files introduced by task-033: understanding_analyzer.gd, test_understanding_modes.gd.
+  Docstrings reference only specs/core/understanding-modes.spec.md — no scope violations.
 
 ---
 
-## Untestable THEN-Clauses
-
-None. All 13 THEN-clauses are fully testable in the headless environment.
-
----
-
-## Scope Check Output
-
-OK: No prohibited (not-in-scope) features detected.
-
----
-
-## Check Script Results
+## Check Script Results (verbatim run-all-checks.sh output)
 
 === run-all-checks.sh ===
 
@@ -149,7 +158,7 @@ OK: Branch adds/modifies 10 source file(s) outside .hyperloop/:
 [EXIT 0]
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-033' has 22 commit(s) above main.
+OK: Branch 'hyperloop/task-033' has 23 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
