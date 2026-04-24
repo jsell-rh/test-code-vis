@@ -112,3 +112,9 @@ Implementation:
 
 All SHALL/MUST requirements are implemented in code and exercised by GDScript behavioral
 tests that assert runtime scene-tree property values (not just compilation). Verdict: PASS.
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
