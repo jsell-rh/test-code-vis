@@ -1,11 +1,335 @@
 ---
-verdict: pending
+verdict: pass
 ---
+
+## Summary
+
+Task 028 implements behavioral tests for `specs/core/system-purpose.spec.md`, verifying
+that the CodeVis system enables humans to acquire concrete architectural understanding of
+agent-built software systems without requiring them to read source code.
+
+This attempt also fixes the pre-existing scope violation from the previous attempt:
+`godot/scripts/flow_overlay.gd` and `godot/tests/test_flow_overlay.gd` (prohibited
+data-flow visualization) were removed, along with all wiring in `main.gd` and
+`run_tests.gd`. The pre-existing fix is committed separately from the task-028 work.
+
+## THEN-Clause Coverage
+
+### Requirement: Understanding Without Writing Code
+### Scenario: Architect evaluates unfamiliar system
+
+**THEN "the human can correctly answer architectural questions about the system"**
+- `test_bounded_contexts_are_structurally_identifiable` (test_system_purpose.gd:120)
+  Asserts that bounded-context anchors ("auth", "billing") are present in the scene
+  after build_from_graph(), making major system components identifiable.
+- `test_node_names_are_labelled_for_identification` (test_system_purpose.gd:133)
+  Asserts that each anchor has a Label3D child whose .text matches the node name.
+- `test_label_billboard_enabled_for_readability` (test_system_purpose.gd:160)
+  Asserts label.billboard == BaseMaterial3D.BILLBOARD_ENABLED.
+- `test_label_pixel_size_positive_for_readability` (test_system_purpose.gd:187)
+  Asserts label.pixel_size > 0.0.
+
+**AND "the human can identify structural problems in the system"**
+- `test_dependencies_are_visible_as_connections` (test_system_purpose.gd:219)
+  Asserts at least one ImmediateMesh line is added as a scene child after build.
+- `test_cross_context_and_internal_edges_are_distinguishable` (test_system_purpose.gd:241)
+  Asserts _lod_edge_entries has >= 2 distinct albedo_color values (orange vs grey).
+
+**AND "the human can predict the impact of proposed changes"**
+- `test_dependency_direction_is_encoded_in_edges` (test_system_purpose.gd:273)
+  Asserts _path_edge_entries contains entry {source:"billing", target:"auth"},
+  confirming edge direction is correctly tracked for dependency reasoning.
+  Sign chain: # billing→auth edge: source="billing", target="auth" → entry in
+  _path_edge_entries proves direction encoding exists for dependency reasoning.
+- `test_modules_are_contained_within_bounded_contexts` (test_system_purpose.gd:301)
+  Asserts auth.domain anchor's parent == auth anchor (containment via scene parenting).
+
+### Requirement: Spec-Driven Context
+### Scenario: Spec and codebase loaded together
+
+**THEN "the spec is treated as the intended design"** — NOT IN SCOPE FOR PROTOTYPE
+**AND "the codebase is treated as the realized design"** — NOT IN SCOPE FOR PROTOTYPE
+**AND "the relationship between them is available for inspection"** — NOT IN SCOPE FOR PROTOTYPE
+
+Per `specs/prototype/prototype-scope.spec.md § Not In Scope`: conformance mode
+(spec overlay comparison) is explicitly NOT implemented in the prototype.
+
+### Requirement: Support the Architecture Feedback Loop
+### Scenario: Post-build evaluation
+
+**THEN "the human can determine whether the build matches the spec"** — NOT IN SCOPE
+**AND "the human can determine whether the build is architecturally sound"** — NOT IN SCOPE
+**AND "the human can explore the impact of potential changes"** — NOT IN SCOPE
+
+Per `specs/prototype/prototype-scope.spec.md § Not In Scope`: evaluation mode and
+simulation mode are explicitly NOT implemented in the prototype.
 
 ## Scope Check Output
 
-PLACEHOLDER — will be replaced with verbatim check-not-in-scope.sh output
+OK: No prohibited (not-in-scope) features detected.
 
 ## Check Script Results
 
-PLACEHOLDER — will be replaced with verbatim run-all-checks.sh output
+=== run-all-checks.sh ===
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-028' has 6 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+      This check only applies to tasks that implement a view-spec consumer.
+[EXIT 0]
+
+--- check-direction-test-derivations.sh ---
+OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
+OK: godot/tests/test_system_purpose.gd :: test_dependency_direction_is_encoded_in_edges — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_increases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_decreases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
+
+OK: All 11 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
+
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+      Producer (build_prompt / parse_response) found: none
+      Consumer (apply_spec / render_spec) found: none
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (6 suite(s) checked)
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM→view-spec pipeline.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+
+--- extractor-lint.sh ---
+Linting extractor...
+All checks passed!
+8 files already formatted
+Running extractor tests...
+94 passed in 0.10s
+Extractor checks passed.
+[EXIT 0]
+
+--- godot-compile.sh ---
+Compiling Godot project...
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Found 13 GDScript test file(s) in godot/tests/.
+Running custom headless test runner...
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+=== code-vis GDScript Tests ===
+
+[test_scene_graph_loader.gd]
+  PASS: test_nodes_list_is_returned
+  PASS: test_node_count_matches_input
+  PASS: test_node_has_id_field
+  PASS: test_node_has_name_field
+  PASS: test_node_has_type_field
+  PASS: test_node_top_level_has_null_parent
+  PASS: test_node_module_parent_references_bounded_context
+  PASS: test_node_has_metrics_field
+  PASS: test_node_has_position_field
+  PASS: test_node_has_size_field
+  PASS: test_edges_list_is_returned
+  PASS: test_edge_count_matches_input
+  PASS: test_edge_has_source_field
+  PASS: test_edge_has_target_field
+  PASS: test_edge_has_type_field
+  PASS: test_edge_direction_preserved_source_to_target
+  PASS: test_cross_context_edge_type_is_cross_context
+  PASS: test_internal_edge_type_is_internal
+  PASS: test_edge_types_are_distinguishable
+  PASS: test_metadata_is_returned
+  PASS: test_empty_graph_is_handled_gracefully
+  PASS: test_missing_top_level_keys_default_to_empty
+  PASS: test_spec_node_type_is_preserved
+  PASS: test_spec_nodes_have_id_prefixed_with_spec
+
+[test_node_renderer.gd]
+  PASS: test_node_rendered_at_json_position
+  PASS: test_second_node_rendered_at_json_position
+  PASS: test_no_layout_recomputed_in_godot
+  PASS: test_each_json_node_becomes_a_scene_tree_child
+
+[test_scene_graph_loading.gd]
+  PASS: test_volumes_created_for_each_node
+  PASS: test_mesh_instances_exist_in_anchors
+  PASS: test_edge_mesh_instances_created
+  PASS: test_anchor_positions_match_json
+  PASS: test_labels_are_billboard_and_readable
+
+[test_containment_rendering.gd]
+  PASS: test_bounded_context_is_translucent
+  PASS: test_module_is_opaque
+  PASS: test_module_parented_inside_context
+  PASS: test_bounded_context_larger_than_module
+  PASS: test_bounded_context_cull_disabled
+
+[test_dependency_rendering.gd]
+  PASS: test_edge_line_mesh_created
+  PASS: test_direction_indicator_cone_created
+  PASS: test_direction_cone_near_target
+  PASS: test_cross_context_cone_is_orange
+
+[test_size_encoding.gd]
+  PASS: test_large_module_has_bigger_mesh
+  PASS: test_mesh_sizes_proportional_to_metric
+
+[test_camera_controls.gd]
+  PASS: test_initial_theta_is_near_top_down
+  PASS: test_initial_distance_is_positive
+  PASS: test_scroll_up_decreases_distance
+  PASS: test_scroll_down_increases_distance
+  PASS: test_orbit_horizontal_drag_changes_phi
+  PASS: test_orbit_vertical_drag_changes_theta
+  PASS: test_set_pivot_updates_state
+  PASS: test_zoom_clamped_at_minimum
+
+[test_engine_version.gd]
+  PASS: test_project_godot_declares_46_feature
+  PASS: test_project_godot_config_features_line
+  PASS: test_project_does_not_declare_csharp
+  PASS: test_file_access_get_as_text_returns_non_empty_string
+  PASS: test_scripts_dir_contains_only_gdscript
+
+[test_godot_version.gd]
+  PASS: test_project_declares_godot_46
+  PASS: test_main_script_is_gdscript
+  PASS: test_main_uses_godot4_fileaccess_api
+
+[test_spatial_structure.gd]
+  PASS: test_camera_supports_zoom_in
+  PASS: test_camera_supports_zoom_out
+  PASS: test_camera_supports_orbit
+  PASS: test_camera_get_distance_returns_current_distance
+  PASS: test_spatial_layout_creates_node_per_structural_element
+  PASS: test_distinct_contexts_occupy_distinct_regions
+  PASS: test_context_boundary_is_visually_distinct_translucent
+  PASS: test_containment_expressed_as_scene_tree_parenting
+  PASS: test_dependency_expressed_as_visible_connection
+  PASS: test_far_distance_shows_only_bounded_contexts
+  PASS: test_far_distance_hides_all_edges
+  PASS: test_medium_distance_shows_modules
+  PASS: test_medium_distance_shows_cross_context_edges_only
+  PASS: test_near_distance_shows_all_nodes
+  PASS: test_near_distance_shows_internal_edges_as_fine_detail
+  PASS: test_lod_node_entries_populated_after_build
+  PASS: test_lod_edge_entries_populated_after_build
+  PASS: test_lod_integration_far_hides_modules_in_built_scene
+
+[test_ux_polish.gd]
+  PASS: test_lmb_pan_moves_pivot
+  PASS: test_pan_drag_right_increases_pivot_x
+  PASS: test_pan_drag_left_decreases_pivot_x
+  PASS: test_drag_direction_matches_view_movement
+  PASS: test_zoom_toward_cursor_shifts_pivot_toward_cursor
+  PASS: test_component_stays_under_cursor_on_zoom_in
+  PASS: test_zoom_out_from_cursor_shifts_pivot_away
+  PASS: test_zoom_out_increases_target_distance
+  PASS: test_orbit_pivot_set_to_cursor_point_at_start
+  PASS: test_orbit_pivot_is_used_during_orbit
+  PASS: test_component_remains_at_visual_center_during_orbit
+  PASS: test_zoom_is_interpolated_not_instantaneous
+  PASS: test_target_distance_clamped_at_minimum
+  PASS: test_target_distance_clamped_at_maximum
+  PASS: test_theta_clamped_at_minimum
+  PASS: test_theta_clamped_at_maximum
+  PASS: test_pan_proportional_to_drag_speed
+
+[test_system_purpose.gd]
+  PASS: test_bounded_contexts_are_structurally_identifiable
+  PASS: test_node_names_are_labelled_for_identification
+  PASS: test_label_billboard_enabled_for_readability
+  PASS: test_label_pixel_size_positive_for_readability
+  PASS: test_dependencies_are_visible_as_connections
+  PASS: test_cross_context_and_internal_edges_are_distinguishable
+  PASS: test_dependency_direction_is_encoded_in_edges
+  PASS: test_modules_are_contained_within_bounded_contexts
+
+[test_understanding_overlay.gd]
+  PASS: test_aligned_nodes_displayed_as_separate_components
+  PASS: test_aligned_node_receives_aligned_color
+  PASS: test_divergent_node_receives_divergent_color
+  PASS: test_divergent_node_has_divergence_label
+  PASS: test_divergence_label_has_billboard_and_pixel_size
+  PASS: test_coupling_between_services_apparent
+  PASS: test_critical_component_centrality_apparent
+  PASS: test_critical_color_distinct_from_normal
+  PASS: test_quality_overlay_independent_of_alignment
+  PASS: test_split_impact_on_dependents_visible
+  PASS: test_split_shows_required_new_interfaces
+  PASS: test_split_label_has_billboard_and_pixel_size
+  PASS: test_failure_cascade_effects_visible
+  PASS: test_failure_affected_components_clearly_identified
+  PASS: test_failure_label_has_billboard_and_pixel_size
+
+Results: 118 passed, 0 failed
+GDScript behavioral tests passed.
+[EXIT 0]
+
+=== Summary: 20 check(s) run ===
+RESULT: ALL PASS
