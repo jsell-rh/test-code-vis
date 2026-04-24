@@ -1,0 +1,64 @@
+---
+verdict: pass
+---
+## Summary
+
+Task-022 implements the Moldable Views spec (`specs/interaction/moldable-views.spec.md`) for the code-vis Godot application. The implementation delivers a two-stage view-spec pipeline:
+
+- **Stage 1 — `godot/scripts/llm_view_generator.gd`**: Converts a natural-language question + scene graph into a structured view specification. Exposes `build_prompt(question, graph)` and `parse_response(response)`. Enforces a fixed visual primitive set (`VALID_OPS = ["show", "hide", "highlight", "arrange", "annotate", "connect"]`); any op not in this list is discarded at parse time, ensuring no new rendering logic is introduced at runtime.
+
+- **Stage 2 — `godot/scripts/scene_interpreter.gd`**: Consumes the view spec dictionary and applies each operation to the live 3D scene by mutating `Node3D` properties — `anchor.visible`, `anchor.position`, `MeshInstance3D.material_override.albedo_color`, `Label3D` annotation nodes, and `ImmediateMesh` connection lines.
+
+All 164 GDScript tests pass. All 15 checks exit 0.
+
+## THEN-clause → Test Mapping
+
+### Scenario: Architectural question
+
+| THEN clause | Test function | Assertion line |
+|---|---|---|
+| the system generates a view focused on auth-related components | `test_show_op_makes_anchor_visible` | `_check(anchor.visible == true, ...)` |
+| irrelevant components are hidden or de-emphasized | `test_hide_op_hides_irrelevant_components` | `_check(anchors["graph"].visible == false, ...)` |
+| irrelevant components are hidden or de-emphasized | `test_hide_op_sets_visible_false` | `_check(anchors["iam"].visible == false, ...)` |
+| the relevant components are arranged to answer the question | `test_arrange_op_sets_node_position` | `_check(anchor.position.x == 10.0, ...)` |
+| the relevant components are arranged to answer the question | `test_arrange_op_positions_relevant_components` | `_check(anchors["auth"].position.x == 0.0, ...)` |
+
+### Scenario: Impact question
+
+| THEN clause | Test function | Assertion line |
+|---|---|---|
+| the system generates a view showing the user database and all its dependents | `test_apply_spec_with_multiple_show_hide_ops` | `_check(anchors["user_db"].visible == true, ...)` |
+| the dependency relationships are spatially clear | `test_connect_op_creates_line_between_nodes` | `_check(root.get_child_count() > children_before, ...)` |
+| the dependency relationships are spatially clear | `test_connect_op_adds_mesh_instance` | `_check(found_mesh, ...)` |
+
+### Scenario: LLM produces view spec
+
+| THEN clause | Test function | Assertion line |
+|---|---|---|
+| it emits a structured view specification (not raw 3D geometry) | `test_parse_response_returns_dict` | `_check(spec is Dictionary, ...)` |
+| it emits a structured view specification (not raw 3D geometry) | `test_parse_response_has_operations_key` | `_check(spec.has("operations"), ...)` |
+| the view spec controls which elements are shown, hidden, highlighted, and how they are arranged | `test_parse_response_show_op_survives` | `_check(spec["operations"][0]["op"] == "show", ...)` |
+| the view spec controls which elements are shown, hidden, highlighted, and how they are arranged | `test_parse_response_hide_op_survives` | `_check(spec["operations"][0]["op"] == "hide", ...)` |
+| the view spec controls which elements are shown, hidden, highlighted, and how they are arranged | `test_parse_response_highlight_op_survives` | `_check(spec["operations"][0]["op"] == "highlight", ...)` |
+| the view spec controls which elements are shown, hidden, highlighted, and how they are arranged | `test_parse_response_arrange_op_survives` | `_check(spec["operations"][0]["op"] == "arrange", ...)` |
+| the 3D renderer interprets the view spec into a spatial scene | `test_show_op_makes_anchor_visible` | `_check(anchors["iam"].visible == true, ...)` |
+| the 3D renderer interprets the view spec into a spatial scene | `test_highlight_op_changes_albedo_color` | `_check(found_highlight, ...)` |
+| the 3D renderer interprets the view spec into a spatial scene | `test_arrange_op_sets_node_position` | `_check(anchor.position.x == 10.0, ...)` |
+| the 3D renderer interprets the view spec into a spatial scene | `test_annotate_op_creates_label3d` | `_check(found_label, ...)` |
+| the 3D renderer interprets the view spec into a spatial scene | `test_connect_op_creates_line_between_nodes` | `_check(root.get_child_count() > children_before, ...)` |
+
+### Scenario: LLM uses existing primitives
+
+| THEN clause | Test function | Assertion line |
+|---|---|---|
+| it composes the answer from the existing set of primitives (show, hide, highlight, arrange, annotate, connect) | `test_all_six_primitives_survive_round_trip` | `_check(spec["operations"].size() == 6, ...)` |
+| it composes the answer from the existing set of primitives | `test_prompt_lists_all_six_primitives` | `_check(prompt.contains(prim), ...)` for each of 6 primitives |
+| no new rendering logic is generated at runtime | `test_parse_response_rejects_unknown_op` | `_check(spec["operations"].size() == 0, ...)` |
+| no new rendering logic is generated at runtime | `test_parse_response_mixed_ops_filters_invalid` | `_check(spec["operations"].size() == 1, ...)` |
+
+## Untestable THEN-Clauses
+
+None. All THEN-clauses are testable and covered by the GDScript test suite.
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
