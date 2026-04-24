@@ -501,9 +501,7 @@ class TestLayout:
         graph = build_scene_graph(tmp_path)
 
         bc_nodes = {
-            n["id"]: n
-            for n in graph["nodes"]
-            if n["type"] == "bounded_context"
+            n["id"]: n for n in graph["nodes"] if n["type"] == "bounded_context"
         }
 
         # --- Size reflects complexity (LOC) ---
