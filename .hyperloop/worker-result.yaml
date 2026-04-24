@@ -1,116 +1,163 @@
 ---
 verdict: pass
 ---
-## Independent Reviewer Verdict — task-034 (Prototype Scope Specification)
+## Spec Alignment Review — task-034 (Prototype Scope Specification)
 
-Reviewed branch: `hyperloop/task-034`
+Branch: `hyperloop/task-034`
 Spec: `specs/prototype/prototype-scope.spec.md`
-Reviewer: independent code reviewer
+Reviewer: spec-alignment-reviewer agent (fresh review after task reset)
 
 ---
 
-## Verification Steps Performed
+## Requirement Coverage
 
-### 1. Check Script Sync and Master Runner
+### Requirement: Target Codebase — COVERED
 
-Synced `.hyperloop/checks/` from `main` before running checks.
-`check-checks-in-sync.sh` confirmed all 22 check scripts present.
-`run-all-checks.sh` result: **ALL PASS (22/22)**.
+**Implementation:**
+- `extractor/extractor.py → build_scene_graph()` discovers bounded contexts and modules from any Python codebase via filesystem traversal.
 
-Individual check outcomes:
+**Tests:**
+- `extractor/tests/test_kartograph_integration.py → test_kartograph_integration_bounded_contexts()` — runs extractor against real kartograph codebase; asserts bounded contexts `iam`, `graph`, `shared_kernel` are present.
+- `extractor/tests/test_kartograph_integration.py → test_kartograph_extraction_produces_modules()` — asserts module-level nodes are produced (visualization reflects actual internal structure).
 
-| Check | Result |
+---
+
+### Requirement: Two-Stage Pipeline — COVERED
+
+**Implementation:**
+- Python extractor (`extractor/__main__.py`) produces JSON scene graph to disk.
+- Godot `godot/scripts/main.gd → _ready()` reads JSON via `FileAccess.open()`, parses via `JSON.new()`, calls `build_from_graph()`.
+
+**Tests:**
+- `extractor/tests/test_cli.py → test_main_writes_json_output()` — verifies JSON file produced with `nodes`, `edges`, `metadata` keys.
+- `godot/tests/test_scene_graph_loading.gd → test_volumes_created_for_each_node()` — verifies Godot creates an anchor per JSON node.
+- `godot/tests/test_scene_graph_loading.gd → test_edge_mesh_instances_created()` — verifies Godot creates mesh instances for edges.
+
+---
+
+### Requirement: Top-Down Architectural View — COVERED
+
+**Implementation:**
+- `godot/scripts/camera_controller.gd` initialises `_theta = 0.15` (≈ 8.6° from vertical — predominantly top-down).
+- `extractor/extractor.py → _order_by_coupling()` re-orders bounded contexts so tightly-coupled pairs are adjacent in the ring, minimizing their spatial distance.
+- `main.gd → _create_edge()` renders ImmediateMesh lines between context volumes.
+
+**Tests:**
+- `godot/tests/test_camera_controls.gd → test_initial_theta_is_near_top_down()` — asserts `_theta < PI/4`.
+- `extractor/tests/test_extractor.py → test_coupled_bcs_are_closer_than_uncoupled()` — asserts coupled pair `auth↔shared_kernel` is closer than uncoupled pair `auth↔billing`.
+- `godot/tests/test_dependency_rendering.gd → test_edge_line_mesh_created()` — asserts ImmediateMesh line exists between contexts.
+
+---
+
+### Requirement: Zoom to Detail — COVERED
+
+**Implementation:**
+- `godot/scripts/lod_manager.gd` implements three LOD levels:
+  - Far (> FAR_THRESHOLD): only bounded_context volumes visible, all edges hidden.
+  - Medium (NEAR < d < FAR): bounded_context + module volumes visible; cross-context edges visible, internal hidden.
+  - Near (< NEAR_THRESHOLD): all nodes and all edges visible.
+- Scroll wheel controls camera distance; LOD transitions happen as user zooms in.
+
+**Tests:**
+- `godot/tests/test_spatial_structure.gd → test_far_distance_shows_only_bounded_contexts()` — asserts modules hidden at far distance.
+- `godot/tests/test_spatial_structure.gd → test_medium_distance_shows_modules()` — asserts modules visible when closer.
+- `godot/tests/test_spatial_structure.gd → test_near_distance_shows_all_nodes()` — asserts all nodes visible at near distance.
+- `godot/tests/test_spatial_structure.gd → test_near_distance_shows_internal_edges_as_fine_detail()` — asserts internal edges visible at near distance.
+- `godot/tests/test_spatial_structure.gd → test_lod_integration_far_hides_modules_in_built_scene()` — end-to-end: builds graph, applies far LOD, asserts module hidden.
+
+---
+
+### Requirement: Abstract Visual Language — COVERED
+
+**Implementation:**
+- `main.gd → _create_volume()` uses `BoxMesh` for all structural elements (no terrain, buildings, or metaphorical decoration).
+- `nd["size"]` (log-scaled LOC from extractor) drives `box.size` dimensions directly.
+- Position comes from JSON layout (coupling-ordered).
+- Containment: module anchors are children of context anchors in the scene tree.
+
+**Tests:**
+- `godot/tests/test_size_encoding.gd → test_large_module_has_bigger_mesh()` — asserts larger LOC → larger `BoxMesh.size.x`.
+- `godot/tests/test_containment_rendering.gd → test_module_parented_inside_context()` — asserts scene-tree parent-child relationship.
+- `godot/tests/test_containment_rendering.gd → test_bounded_context_larger_than_module()` — asserts context `BoxMesh.size.x > module BoxMesh.size.x`.
+- `extractor/tests/test_extractor.py → test_coupled_bcs_are_closer_than_uncoupled()` — asserts position encodes coupling.
+
+---
+
+### Requirement: Readable Labels — COVERED
+
+**Implementation:**
+- `main.gd → _create_volume()` creates `Label3D` with:
+  - `text = nd["name"]` (human-readable name)
+  - `billboard = BaseMaterial3D.BILLBOARD_ENABLED` (always faces camera)
+  - `pixel_size = 0.012` (positive, readable at zoom levels)
+  - `no_depth_test = true` (visible through geometry)
+
+**Tests:**
+- `godot/tests/test_scene_graph_loading.gd → test_labels_are_billboard_and_readable()` — asserts `billboard == BILLBOARD_ENABLED`, `pixel_size > 0.0`, `no_depth_test == true` on the context anchor's Label3D.
+
+---
+
+### Requirement: Dependency Visualization — COVERED
+
+**Implementation:**
+- `main.gd → _create_edge()` renders:
+  - `ImmediateMesh` (PRIMITIVE_LINES) connecting source and target world positions.
+  - `CylinderMesh` arrowhead (top_radius=0 = pointed tip) at the target end, oriented along edge direction.
+- Cross-context edges use orange (`Color(1.0, 0.50, 0.10)`); internal edges use grey.
+
+**Tests:**
+- `godot/tests/test_dependency_rendering.gd → test_edge_line_mesh_created()` — asserts ImmediateMesh child exists.
+- `godot/tests/test_dependency_rendering.gd → test_direction_indicator_cone_created()` — asserts CylinderMesh with `top_radius == 0.0` exists.
+- `godot/tests/test_dependency_rendering.gd → test_direction_cone_near_target()` — asserts cone position is within 2 units of target end.
+- `godot/tests/test_dependency_rendering.gd → test_cross_context_cone_is_orange()` — asserts cross-context arrowhead has orange color (R > 0.8, B < 0.3).
+
+---
+
+### Requirement: Navigation — COVERED
+
+**Implementation:**
+- `godot/scripts/camera_controller.gd`:
+  - **Zoom:** WHEEL_UP/DOWN adjusts `_target_distance`; `_distance` lerps smoothly each frame.
+  - **Orbit:** RMB drag changes `_phi` (azimuth) and `_theta` (polar).
+  - **Pan:** LMB drag moves `_pivot`.
+  - Zoom clamped to [min_distance, max_distance].
+
+**Tests:**
+- `godot/tests/test_camera_controls.gd → test_scroll_up_decreases_distance()` — scroll-up reduces `_target_distance`.
+- `godot/tests/test_camera_controls.gd → test_scroll_down_increases_distance()` — scroll-down increases `_target_distance`.
+- `godot/tests/test_camera_controls.gd → test_orbit_horizontal_drag_changes_phi()` — RMB drag changes azimuth.
+- `godot/tests/test_camera_controls.gd → test_orbit_vertical_drag_changes_theta()` — RMB drag changes polar angle.
+- `godot/tests/test_camera_controls.gd → test_zoom_clamped_at_minimum()` — 200× scroll-up never pushes below min_distance.
+- `godot/tests/test_ux_polish.gd` — covers LMB pan and smooth zoom interpolation.
+
+---
+
+### Requirement: Not In Scope — COVERED
+
+**Implementation:**
+No conformance mode, evaluation mode, simulation mode, data flow visualization, moldable views, spec extraction, or first-person navigation exists in production code.
+
+**Verification:**
+- Grepped all GDScript production files and `extractor/extractor.py` for: `conformance`, `evaluation`, `simulation`, `data_flow`, `moldable`, `llm`, `first_person`, `CharacterBody`, `KinematicBody` — zero matches.
+- Files deleted on this branch (`understanding_overlay.gd`, etc.) appropriately remove out-of-scope features from main.
+- `schema.py` declares `spec` as a NodeType but the extractor never constructs spec-type nodes — inert schema infrastructure, not spec extraction.
+
+---
+
+## Summary
+
+| Requirement | Status |
 |---|---|
-| check-branch-adds-source-files.sh | OK (9 source files) |
-| check-branch-has-commits.sh | OK (30 commits above main) |
-| check-checks-in-sync.sh | OK |
-| check-clamp-boundary-tests.sh | OK (4 clamped vars, all have boundary tests) |
-| check-coordinator-calls-pipeline.sh | SKIP (no LLM consumer — correct) |
-| check-direction-test-derivations.sh | OK (10 direction tests with derivation comments) |
-| check-end-to-end-integration-test.sh | SKIP (no LLM pipeline — correct) |
-| check-extractor-cli-tested.sh | OK |
-| check-extractor-stdlib-only.sh | OK |
-| check-gdscript-only-test.sh | OK |
-| check-gdscript-test-bool-return.sh | OK (no inert bool-returning tests, 4 suites checked) |
-| check-kartograph-integration-test.sh | OK |
-| check-not-in-scope.sh | OK: No prohibited features detected |
-| check-pipeline-wiring.sh | SKIP (no LLM view-spec pipeline — correct) |
-| check-report-scope-section.sh | OK |
-| check-scope-report-not-falsified.sh | OK |
-| check-then-test-mapping.sh | SKIP (worker used narrative format — verified manually below) |
-| extractor-lint.sh | OK (ruff clean, 96 pytest pass) |
-| godot-compile.sh | OK |
-| godot-fileaccess-tested.sh | OK (FileAccess.open() in 2 test files) |
-| godot-label3d.sh | OK |
-| godot-tests.sh | OK (95 GDScript tests pass) |
+| Target Codebase | COVERED |
+| Two-Stage Pipeline | COVERED |
+| Top-Down Architectural View | COVERED |
+| Zoom to Detail | COVERED |
+| Abstract Visual Language | COVERED |
+| Readable Labels | COVERED |
+| Dependency Visualization | COVERED |
+| Navigation | COVERED |
+| Not In Scope | COVERED |
 
-### 2. Commit Trailers
+All 9 SHALL/MUST requirements are implemented in production code and covered by substantive behavioral tests. Tests assert actual runtime property values and scene-tree structure (not merely compilation). No prohibited features are present in production code.
 
-All implementation commits carry `Spec-Ref: specs/prototype/prototype-scope.spec.md@12e8314c64416c10c5268a9d0f3ec54edb221c07` and `Task-Ref: task-034`. Verified on the 5 earliest task commits.
-
-### 3. main.gd Stub Check
-
-`_ready()` is fully implemented — loads JSON via `FileAccess.open()`, parses it, calls `build_from_graph()`, which creates bounded-context and module volumes (`BoxMesh`), labels (`Label3D`), and edges (ImmediateMesh + CylinderMesh arrowheads). Not a stub.
-
-### 4. Manual Test Body Inspection
-
-Spot-checked key tests:
-
-- `test_labels_are_billboard_and_readable` — instantiates `MainScript`, calls `build_from_graph()`, walks to `Label3D`, asserts `billboard == BILLBOARD_ENABLED`, `pixel_size > 0.0`, `no_depth_test == true`. **Correct predicate.**
-- `test_direction_indicator_cone_created` — instantiates `MainScript`, asserts a `CylinderMesh` child exists with `top_radius == 0.0`. **Correct predicate.**
-- `test_direction_cone_near_target` — asserts cone position is within 2 units of the target vertex. **Correct predicate.**
-- `test_module_parented_inside_context` — asserts `mod_anchor.get_parent() == ctx_anchor`. **Correct predicate for nesting.**
-- `test_zoom_clamped_at_minimum` — scrolls 200× and asserts `_distance >= min_distance` and `_target_distance >= min_distance`. **Correct constraint boundary test.**
-- `test_containment_expressed_as_scene_tree_parenting` — uses `_check()` (Pattern-1), asserts `mod_anchor.get_parent() == ctx_anchor`. **Real assertion, not dict-key check.**
-
-### 5. Manual THEN→test Function Verification
-
-`check-then-test-mapping.sh` SKIPped (worker used narrative format). Independent grep of test names from the worker's report:
-
-All GDScript tests confirmed by the passing godot-tests.sh run (95/95). Key Python tests:
-- `test_coupled_bcs_are_closer_than_uncoupled` — found in `extractor/tests/test_extractor.py:435`. ✓
-- `test_main_writes_json_output` — found in `extractor/tests/test_cli.py:44`. ✓
-- `test_kartograph_integration_bounded_contexts` — found in `extractor/tests/test_kartograph_integration.py:35`. ✓
-
-### 6. Not-In-Scope Semantic Audit
-
-Beyond `check-not-in-scope.sh`, independently grepped for prohibited concepts:
-
-- `first.person|CharacterBody|KinematicBody` — no matches in any GDScript file. ✓
-- `llm|moldable|build_prompt|parse_response|apply_spec` — no matches in production code. ✓
-- `data.flow|DataFlow` — no matches in production code. ✓
-- `conformance|simulation|evaluation` — no matches in production code. ✓
-
-**Deleted files on this branch vs main**: `godot/scripts/understanding_overlay.gd`, `godot/tests/test_understanding_overlay.gd`, `godot/tests/test_system_purpose.gd`. These deletions are appropriate — `understanding_overlay.gd` on `main` implemented conformance-mode and evaluation-mode overlays, both explicitly excluded by prototype-scope. Their removal is correct scope enforcement, not a missing-feature concern.
-
-**`schema.py` declares `spec` as a valid `NodeType`** and two tests in `test_scene_graph_loader.gd` exercise parsing of spec-typed nodes. The extractor never produces spec-type nodes (only `bounded_context` and `module`). This is inert schema infrastructure, not spec extraction. Confirmed by grepping `extractor/extractor.py` — no reference to `NodeType.spec` or spec-type node construction.
-
-### 7. Test Runner Results
-
-- Python (pytest): **96 passed, 0 failed** (0.60s)
-- GDScript (headless Godot): **95 passed, 0 failed** (11 test files)
-
----
-
-## THEN-Clause Coverage
-
-| Requirement | Scenario | THEN-clause | Status |
-|---|---|---|---|
-| Target Codebase | Loading kartograph | kartograph structure visualized | COVERED |
-| Two-Stage Pipeline | Extraction then visualization | JSON scene graph produced; Godot loads it | COVERED |
-| Top-Down View | Viewing kartograph from above | bounded contexts visible, coupling-ordered positions, dependency connections | COVERED |
-| Zoom to Detail | Zooming into IAM | internal layers visible at close range, internal deps shown, relative sizes visible | COVERED |
-| Abstract Visual Language | Visual representation | labeled geometric volumes, size = complexity, position = coupling, containment = nesting | COVERED |
-| Readable Labels | Identifying a module | name label visible, billboard enabled, readable at zoom level | COVERED |
-| Dependency Visualization | Cross-context dependency | line drawn, direction discernible (cone arrowhead) | COVERED |
-| Navigation | Moving through the space | pan (LMB), zoom (scroll), rotate (RMB), smooth LOD transition | COVERED |
-| Not In Scope | Features excluded from prototype | conformance/evaluation/simulation/data-flow/moldable/spec-extraction/first-person — none present | COVERED |
-
----
-
-## Verdict: PASS
-
-All 9 requirements implemented and covered by substantive behavioral tests.
-All 22 automated checks pass.
-No prohibited features detected in production code or test files.
-Commit trailers present on implementation commits.
+**Verdict: PASS**
