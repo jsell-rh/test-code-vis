@@ -2,11 +2,10 @@
 verdict: pass
 ---
 
-## Spec Alignment Review — task-024 (UX Polish: LMB Pan + Non-Inverted Movement)
+## Spec Alignment Review — task-024 (UX Polish)
 
 ### Branch: `hyperloop/task-024`
 ### Spec: `specs/prototype/ux-polish.spec.md`
-### Task: Godot: LMB pan with non-inverted movement
 
 ---
 
@@ -15,96 +14,97 @@ verdict: pass
 ### Requirement: Pan with Left Mouse Button — COVERED
 
 **Implementation** (`godot/scripts/camera_controller.gd`):
-- Lines 100–104: `MOUSE_BUTTON_LEFT` press sets `_panning = true` and records `_last_mouse`.
-- Lines 141–158: `_handle_motion()` when `_panning` is true applies delta to `_target_pivot`
-  using camera-local `basis.x` (right) and horizontal `basis.z` (backward) vectors.
+- Lines 101–104: `MOUSE_BUTTON_LEFT` press sets `_panning = true` and records `_last_mouse`.
+- Lines 141–158: `_handle_motion()` when `_panning` applies camera-local `basis.x` (right)
+  and horizontal `basis.z` (backward) to `_target_pivot`; immediately syncs `_pivot = _target_pivot`.
 
 **Scenario: Panning the view** — COVERED
-- GIVEN top-down camera view: `_theta = 0.15` (near top-down) at initialization.
-- WHEN user holds LMB and drags: `test_lmb_drag_pans_camera` (line 147–161) presses
-  LMB then sends motion event.
-- THEN camera pans: asserts `cam._pivot != initial_pivot`. ✓
-- AND movement matches drag direction (not inverted): see Non-Inverted requirement below.
+- Test `test_lmb_drag_pans_camera` (lines 147–161 of `test_camera_controls.gd`):
+  LMB press at (100,100) + motion to (150,100) → asserts `cam._pivot != initial_pivot`. ✓
 
 ---
 
 ### Requirement: Non-Inverted Movement — COVERED
 
-**Implementation** (`godot/scripts/camera_controller.gd` lines 141–158):
-- Comment: "Non-inverted pan: drag direction matches scene movement direction."
-- `_target_pivot += right * delta.x * pan_amount` — right drag → pivot moves +X (right).
-- `_target_pivot -= backward * delta.y * pan_amount` — upward drag (negative delta.y) →
-  pivot moves forward (not backward).
+**Implementation** (`camera_controller.gd` lines 141–158):
+- `_target_pivot += right * delta.x * pan_amount` — rightward drag → pivot moves +X. ✓
+- `_target_pivot -= backward * delta.y * pan_amount` — upward drag (negative delta.y)
+  → pivot moves forward (not backward). ✓
 
 **Scenario: Drag direction matches view movement** — COVERED
-- `test_pan_direction_not_inverted` (lines 167–188): sets `_phi = PI/2` so camera's local
-  X axis aligns with world +X; drags 50 pixels right; asserts `cam._pivot.x > 0.0`. ✓
+- Test `test_pan_direction_not_inverted` (lines 167–188):
+  Sets `_phi = PI/2` so camera local X = world +X; 50-pixel right drag → asserts
+  `cam._pivot.x > 0.0`. ✓
 
 ---
 
 ### Requirement: Zoom Toward Mouse Cursor — COVERED
 
-**Implementation** (`godot/scripts/camera_controller.gd`):
-- Lines 168–176: `_zoom_toward_point(world_pt, direction)` adjusts `_target_distance` and
-  shifts `_target_pivot` by the zoom ratio to keep cursor world-point invariant.
-- Lines 121–128: Called for `MOUSE_BUTTON_WHEEL_UP` (zoom in) and
-  `MOUSE_BUTTON_WHEEL_DOWN` (zoom out).
+**Implementation** (`camera_controller.gd`):
+- Lines 120–128: `MOUSE_BUTTON_WHEEL_UP/DOWN` call `_get_ground_point_under_cursor(_last_mouse)`,
+  then pass the world point to `_zoom_toward_point(world_pt, direction)`.
+- Lines 168–176: `_zoom_toward_point` computes `zoom_ratio = new_dist / old_dist` and shifts
+  `_target_pivot = world_pt + (_target_pivot - world_pt) * zoom_ratio`, keeping cursor invariant.
 
 **Scenario: Zooming into a specific component** — COVERED
-- `test_zoom_in_shifts_pivot_toward_cursor` (lines 197–206): asserts pivot moves toward
-  cursor point. ✓
-- `test_zoom_in_cursor_point_invariant` (lines 213–223): asserts `0 < pivot.x < world_pt.x`,
-  verifying the cursor-invariant preservation. ✓
+- Test `test_zoom_in_shifts_pivot_toward_cursor` (lines 197–206):
+  Cursor at `(10,0,0)`, zoom in → `cam._target_pivot.x > 0.0`. ✓
+- Test `test_zoom_in_cursor_point_invariant` (lines 213–223):
+  Cursor at `(20,0,0)`, zoom in → `0 < pivot.x < 20`, confirming cursor stays invariant. ✓
 
 **Scenario: Zooming out** — COVERED
-- `test_zoom_out_shifts_pivot_away_from_cursor` (lines 228–240): asserts pivot moves
-  away from cursor on zoom out (`pivot.x < 0.0` when cursor at `+X`). ✓
+- Test `test_zoom_out_shifts_pivot_away_from_cursor` (lines 228–240):
+  Cursor at `(10,0,0)`, zoom out → `cam._target_pivot.x < 0.0` (pivot retreats from cursor). ✓
 
 ---
 
 ### Requirement: Orbit Around Mouse Point — COVERED
 
-**Implementation** (`godot/scripts/camera_controller.gd`):
-- Lines 112–118: RMB press calls `_get_ground_point_under_cursor()` then
+**Implementation** (`camera_controller.gd`):
+- Lines 111–118: RMB press calls `_get_ground_point_under_cursor(event.position)` then
   `begin_orbit_at_world_point(world_pt)`.
-- Lines 73–85: `begin_orbit_at_world_point()` sets `_pivot = world_pt`, recomputes
-  spherical coordinates so camera does not jump.
+- Lines 73–85: `begin_orbit_at_world_point` sets `_pivot = world_pt`, `_target_pivot = world_pt`,
+  recomputes `_theta`/`_phi` from current camera position so no jump occurs.
+- `_update_transform` always calls `look_at(_pivot)`, ensuring orbit centre is visual centre.
 
 **Scenario: Orbiting around a component** — COVERED
-- `test_orbit_uses_right_mouse_button` (lines 249–264): RMB press + rightward drag
-  changes `_phi`. ✓
-- `test_orbit_around_cursor_point` (lines 268–279): `begin_orbit_at_world_point` sets
-  `cam._pivot == world_pt`. ✓
-- `test_orbit_pivot_is_world_point` (lines 283–294): asserts `cam._pivot.is_equal_approx(world_pt)`,
-  confirming component stays at visual center (camera always looks_at `_pivot`). ✓
+- Test `test_orbit_uses_right_mouse_button` (lines 249–264):
+  RMB press + rightward drag → `cam._phi != initial_phi`. ✓
+- Test `test_orbit_around_cursor_point` (lines 267–279):
+  `begin_orbit_at_world_point(Vector3(5,0,3))` → `cam._pivot == world_pt`. ✓
+- Test `test_orbit_pivot_is_world_point` (lines 283–294):
+  `cam._pivot.is_equal_approx(world_pt)`, confirming component stays at visual centre
+  (camera always `look_at(_pivot)`). ✓
 
 ---
 
 ### Requirement: Smooth Camera Movement — COVERED
 
-**Implementation** (`godot/scripts/camera_controller.gd`):
-- Lines 44–46: `_process()` applies exponential smoothing:
-  `t = 1.0 - pow(0.05, delta * zoom_smooth)` then `_distance = lerpf(_distance, _target_distance, t)`.
+**Implementation** (`camera_controller.gd`):
+- Lines 42–47: `_process` uses exponential smoothing:
+  `t = 1.0 - pow(0.05, delta * zoom_smooth)`;
+  `_distance = lerpf(_distance, _target_distance, t)`;
+  `_pivot = _pivot.lerp(_target_pivot, t)`.
 - Scroll events only mutate `_target_distance`/`_target_pivot`; actual values converge each frame.
-- Pan applies immediately (proportional to drag delta) per design intent noted in comment.
+- Pan applies immediately and proportionally per drag delta (no interpolation lag by design).
 
 **Scenario: Smooth zoom** — COVERED
-- `test_smooth_zoom_target_differs_from_distance_after_scroll` (lines 304–315): after
-  scroll event `_target_distance < _distance`, i.e., zoom is not instantaneous. ✓
-- `test_smooth_zoom_process_interpolates_distance` (lines 319–327): after `_process(0.1)`,
-  `20 < _distance < 40`, confirming interpolation. ✓
+- Test `test_smooth_zoom_target_differs_from_distance_after_scroll` (lines 304–315):
+  After scroll up, `cam._target_distance < cam._distance` (zoom is not instantaneous). ✓
+- Test `test_smooth_zoom_process_interpolates_distance` (lines 319–327):
+  After `_process(0.1)` with target=20 and distance=40, `20 < _distance < 40`. ✓
 
 **Scenario: Smooth pan** — COVERED
-- `test_pan_proportional_to_drag_speed` (lines 332–354): 50-pixel drag produces larger
-  pivot displacement than 10-pixel drag. ✓
+- Test `test_pan_proportional_to_drag_speed` (lines 332–354):
+  10-pixel drag vs. 50-pixel drag → 50-pixel drag yields larger pivot displacement. ✓
 
 ---
 
 ## Test Runner Verification
 
 `godot/tests/run_tests.gd` line 33 explicitly loads and runs
-`res://tests/test_camera_controls.gd` in the headless suite. All 13 named test functions
-are discovered via `begins_with("test_")`. Tests use the bool-return pattern.
+`res://tests/test_camera_controls.gd` in the headless suite. All test functions
+are discovered via `begins_with("test_")` and use the bool-return pattern.
 
 ---
 
@@ -123,8 +123,6 @@ are discovered via `begins_with("test_")`. Tests use the bool-return pattern.
 All 5 MUST requirements are implemented with behavioral GDScript tests in
 `godot/tests/test_camera_controls.gd`. Every THEN-clause has a named test function
 with a concrete assertion on runtime property values.
-
-**Verdict: PASS**
 
 ## Scope Check Output
 OK: No prohibited (not-in-scope) features detected.
