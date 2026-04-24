@@ -2,115 +2,35 @@
 verdict: pass
 ---
 
-## Implementation: Non-Functional Requirements (`specs/prototype/nfr.spec.md`)
+## Independent Reviewer Verification: Non-Functional Requirements (`specs/prototype/nfr.spec.md`)
 
 Branch: `hyperloop/task-023`
 Spec-Ref: specs/prototype/nfr.spec.md@e2cac130819f13929ab13e324411ac7a23d66b33
 Task-Ref: task-023
-
----
-
-## Not-In-Scope Inventory
-
-Before writing any code, prohibited items from `specs/prototype/prototype-scope.spec.md`:
-- Moldable views (LLM-powered question-driven views)
-- Spec extraction
-- Conformance / evaluation / simulation modes
-- Data flow visualization
-- First-person navigation (WASD / fly-cam)
-
-None of these are implemented.
-
----
-
-## THEN-Clause → Test Mapping
-
-### Scenario: Engine version
-
-| THEN-clause | Test function | File | Assertion line |
-|---|---|---|---|
-| it opens in Godot 4.6.x | `test_project_godot_declares_46_feature` | `test_engine_version.gd:39` | `_check(content.contains("4.6"), ...)` |
-| it opens in Godot 4.6.x (config/features) | `test_project_godot_config_features_line` | `test_engine_version.gd:52` | `_check(content.contains('"4.6"'), ...)` |
-| all scripts use GDScript | `test_scripts_dir_contains_only_gdscript` | `test_engine_version.gd:98` | DirAccess iteration, `_check(file_name.ends_with(".gd"), ...)` |
-| all API calls valid for Godot 4.6 | `test_file_access_get_as_text_returns_non_empty_string` | `test_engine_version.gd:81` | `_check(content.length() > 0, ...)` confirming `FileAccess.get_as_text()` works |
-| all API calls valid for Godot 4.6 | `test_main_uses_godot4_fileaccess_api` | `test_godot_version.gd` | asserts `FileAccess.open(` present, `File.new()` absent |
-
-### Scenario: Running the extractor
-
-| THEN-clause | Test function | File | Assertion line |
-|---|---|---|---|
-| runs as a standalone Python script or CLI tool | `TestCliEntryPoint.test_main_runs_on_valid_directory` | `extractor/tests/test_cli.py` | `assert result.returncode == 0` |
-| requires no dependencies beyond stdlib and tree-sitter/ast | `TestStdlibOnlyImports.test_extractor_uses_only_stdlib_imports` | `extractor/tests/test_cli.py` | `assert name in sys.stdlib_module_names or ...` (AST walk of every .py file) |
-
-### Scenario: Decoupled pipeline
-
-| THEN-clause | Test function | File | Assertion line |
-|---|---|---|---|
-| does not need access to the Python extractor or source codebase | `test_no_layout_recomputed_in_godot` | `test_node_renderer.gd` | `_check(anchor.position.x == 7.0, ...)` — position from fixture dict, not recomputed |
-| does not need access to the Python extractor or source codebase | `test_anchor_positions_match_json` | `test_scene_graph_loading.gd` | `_check(anchor.position.x == ...json coords..., ...)` |
-| JSON file is self-contained | `test_nodes_list_is_returned` | `test_scene_graph_loader.gd` | `_check(result.has("nodes"), ...)` — pure dict input, no extractor |
-| JSON file is self-contained | `test_missing_top_level_keys_default_to_empty` | `test_scene_graph_loader.gd` | `_check(result["nodes"].size() == 0, ...)` |
-
-### Scenario: Running the prototype (Desktop Platform)
-
-| THEN-clause | Status | Rationale |
-|---|---|---|
-| runs natively without browser, container, or VM | UNTESTABLE — see below | Runtime deployment property; no headless assertion can prove the absence of a browser/VM at the user's desktop |
-
-Structural evidence: no `export_presets.cfg` in the repository; no `Dockerfile`; `project.godot` declares `"4.6"` (not `"Web"`); `godot-compile.sh` exits 0 confirming native execution.
-
-### Scenario: Smooth navigation (Performance at Kartograph Scale)
-
-| THEN-clause | Test function | File | Notes |
-|---|---|---|---|
-| frame rate remains above 30fps | — | — | UNTESTABLE (headless, no GPU pipeline) |
-| no perceptible stutter or pop-in | — | — | UNTESTABLE (headless, no GPU pipeline) |
-| LOD mechanism (structural support for 30fps) | `test_far_distance_shows_only_bounded_contexts` | `test_spatial_structure.gd` | `_check(bc_anchor.visible == true, ...)` |
-| LOD mechanism | `test_far_distance_hides_all_edges` | `test_spatial_structure.gd` | `_check(edge_node.visible == false, ...)` |
-| LOD mechanism | `test_medium_distance_shows_modules` | `test_spatial_structure.gd` | `_check(mod_anchor.visible == true, ...)` |
-| LOD mechanism | `test_near_distance_shows_all_nodes` | `test_spatial_structure.gd` | `_check(mod_anchor.visible == true, ...)` |
-| scene builds at kartograph scale | `test_kartograph_scale_anchor_count` | `test_nfr_scale.gd` | `_check(anchors.size() == 60, ...)` — 6 contexts + 54 modules |
-| scene builds at kartograph scale | `test_kartograph_scale_context_anchors_exist` | `test_nfr_scale.gd` | `_check(anchors.has(ctx_id), ...)` for all 6 contexts |
-| scene builds at kartograph scale | `test_kartograph_scale_module_anchors_exist` | `test_nfr_scale.gd` | `_check(anchors.has(node["id"]), ...)` for all 54 modules |
-| scene builds at kartograph scale | `test_kartograph_scale_build_produces_world_positions` | `test_nfr_scale.gd` | `_check(world_positions.size() == 60, ...)` |
-
-### Scenario: Pivoting after prototype (Prototype Disposability)
-
-SHOULD-level process statement. No behavioral THEN-clause to test. Both `extractor/` and `godot/` can be discarded independently. JSON scene graph is the only inter-component artifact.
-
----
-
-## Untestable THEN-Clauses
-
-### 1. "runs natively without browser, container, or VM dependencies"
-- **Verbatim THEN**: "it runs natively without browser, container, or VM dependencies"
-- **Why untestable**: This is a deployment environment property. A headless GDScript test runs in the same environment it would be trying to assert about — it cannot prove the absence of a container or browser from within a test. There is no GDScript API to query "is this a VM?" or "is there a browser present?".
-- **Architectural evidence**: No `export_presets.cfg` in the repository (no web export target configured). No `Dockerfile` or container config. `project.godot` declares `config/features=PackedStringArray("4.6")` — no `"Web"` feature. `godot-compile.sh` exits 0, confirming the engine binary runs natively.
-
-### 2. "the frame rate remains above 30fps"
-- **Verbatim THEN**: "the frame rate remains above 30fps"
-- **Why untestable**: FPS measurement requires an active GPU render pipeline. Godot headless mode (`--headless --quit`) has no render pipeline. `Engine.get_frames_per_second()` returns 0 in headless mode. There is no way to drive a meaningful FPS assertion without a display server.
-- **Architectural evidence**: `lod_manager.gd` implements three-tier LOD (FAR/MEDIUM/NEAR) that reduces visible geometry at large distances. LOD correctness is verified behaviorally in `test_spatial_structure.gd` (9 tests). `test_nfr_scale.gd` confirms the scene builds correctly with 60 nodes (kartograph-scale fixture) without error.
-
-### 3. "there is no perceptible stutter or pop-in"
-- **Verbatim THEN**: "there is no perceptible stutter or pop-in"
-- **Why untestable**: "Perceptible" is a subjective perceptual property that requires a human observer or a frame-time profiler with a live render pipeline. Neither is available in headless CI.
-- **Architectural evidence**: LOD system hides distant nodes per-frame via `_update_lod()` called from `_process()`, preventing geometry overload. Tested structurally in `test_spatial_structure.gd`.
+Reviewer: independent spec-alignment review
 
 ---
 
 ## Scope Check Output
 
+```
 OK: No prohibited (not-in-scope) features detected.
+```
+
+Conceptual keyword audit (independent of check script):
+- `llm`, `build_prompt`, `parse_response`, `apply_spec`, `moldable`, `SceneInterpreter`: no matches in `godot/`, `extractor/`
+- `wasd`, `fly-cam`, `first_person`, `FlyCamera`: no code matches; only comments in `test_spatial_structure.gd` explicitly stating first-person is NOT implemented (lines 28–30)
+- `conformance`, `simulation mode`, `spec extraction`, `data flow visualization`: no matches
 
 ---
 
-## Check Script Results
+## run-all-checks.sh Output (verbatim, run after syncing checks from main)
 
+```
 === run-all-checks.sh ===
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-023' has 38 commit(s) above main.
+OK: Branch 'hyperloop/task-023' has 39 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -236,3 +156,90 @@ GDScript behavioral tests passed.
 
 === Summary: 20 check(s) run ===
 RESULT: ALL PASS
+```
+
+---
+
+## Independent THEN-Clause Verification
+
+### Scenario: Engine version
+
+| THEN-clause | Verified test | Predicate confirmed |
+|---|---|---|
+| opens in Godot 4.6.x | `test_project_godot_declares_46_feature` (test_engine_version.gd:39) | `_check(content.contains("4.6"))` — reads project.godot via FileAccess.open() + get_as_text() ✅ |
+| opens in Godot 4.6.x (features line) | `test_project_godot_config_features_line` (test_engine_version.gd:52) | `_check(content.contains('"4.6"'))` on config/features entry ✅ |
+| all scripts use GDScript | `test_scripts_dir_contains_only_gdscript` (test_engine_version.gd:98) | DirAccess iterates res://scripts/; `_check(file_name.ends_with(".gd"))` per file — iteration predicate satisfied ✅ |
+| API calls valid for Godot 4.6 | `test_file_access_get_as_text_returns_non_empty_string` (test_engine_version.gd:81) | Exercises FileAccess.get_as_text() and asserts non-empty return ✅ |
+| API calls valid for Godot 4.6 | `test_main_uses_godot4_fileaccess_api` (test_godot_version.gd:45) | Pattern-2 bool-return; asserts `FileAccess.open(` and `get_as_text()` present, `File.new()` and `read_as_text()` absent ✅ |
+
+**Note on test_godot_version.gd Pattern-2**: File declares no `_test_failed` property → run_tests.gd correctly uses Pattern-2 path (returns bool; `true` = PASS). Not inert. `check-gdscript-test-bool-return.sh` confirmed this (5 Pattern-1 suites checked, none violated).
+
+### Scenario: Running the extractor
+
+| THEN-clause | Verified test | Predicate confirmed |
+|---|---|---|
+| runs as standalone CLI tool | `TestCliEntryPoint.test_main_produces_json_output` (test_cli.py:73) | Calls `main([str(src), "--output", str(output)])`; asserts `rc == 0` and valid JSON ✅ |
+| requires no dependencies beyond stdlib | `TestStdlibOnlyImports.test_extractor_uses_only_stdlib_imports` (test_cli.py:154) | AST-walks every .py file; asserts each import ∈ sys.stdlib_module_names or extractor package ✅ |
+
+**Reporting inconsistency (non-blocking)**: The implementer's THEN→test mapping cited `test_main_runs_on_valid_directory` for the CLI THEN-clause. This function name does not exist. The actual covering test is `test_main_produces_json_output`. Grep of `extractor/tests/` confirms the correct name. Coverage is genuine (check-extractor-cli-tested.sh exit 0; 98 pytest tests pass); this is a documentation error in the mapping, not a coverage gap.
+
+### Scenario: Decoupled pipeline
+
+| THEN-clause | Verified test | Predicate confirmed |
+|---|---|---|
+| Godot app needs no extractor access | `test_anchor_positions_match_json` (test_scene_graph_loading.gd) | Position comes from fixture dict, not re-executed extractor ✅ |
+| JSON is self-contained | `test_nodes_list_is_returned` (test_scene_graph_loader.gd) | Pure dict input, no extractor invocation ✅ |
+| JSON is self-contained | `test_missing_top_level_keys_default_to_empty` (test_scene_graph_loader.gd) | Loader handles incomplete dicts gracefully ✅ |
+
+### Scenario: Running the prototype (Desktop Platform)
+
+THEN-clause "runs natively without browser/container/VM" is **UNTESTABLE** — correctly classified.
+Architectural evidence verified:
+- No `export_presets.cfg` in repository (no web export target)
+- No `Dockerfile` or container config
+- `project.godot` declares `config/features=PackedStringArray("4.6")` — no `"Web"` feature
+- `godot-compile.sh` exits 0 using native Godot 4.6.2 binary
+
+### Scenario: Smooth navigation (Performance at Kartograph Scale)
+
+FPS and stutter THEN-clauses are **UNTESTABLE** in headless mode — correctly classified.
+Structural coverage verified:
+- `lod_manager.gd` implements three-tier LOD (FAR/MEDIUM/NEAR)
+- LOD visibility tested in `test_spatial_structure.gd` (all PASS)
+- `test_nfr_scale.gd` exercises `build_from_graph()` with 60-node kartograph-scale fixture:
+  - `test_kartograph_scale_anchor_count`: `_check(anchors.size() == 60)` ✅
+  - `test_kartograph_scale_context_anchors_exist`: asserts all 6 context IDs in anchors ✅
+  - `test_kartograph_scale_module_anchors_exist`: asserts all 54 module IDs in anchors ✅
+  - `test_kartograph_scale_build_produces_world_positions`: `_check(world_positions.size() == 60)` ✅
+
+### Scenario: Pivoting after prototype
+
+SHOULD-level process statement. No behavioral THEN-clause to assert. No code action required. Correctly identified as non-testable.
+
+---
+
+## Additional Checks
+
+**main.gd stub check**: `_ready()` is NOT an empty stub. It opens the scene graph JSON via `FileAccess.open() + get_as_text()`, parses JSON, calls `build_from_graph()`, which creates volumes for all nodes, edge lines, repositions camera, and runs initial LOD pass. Full implementation confirmed.
+
+**Commit trailers**: `Spec-Ref: specs/prototype/nfr.spec.md@e2cac130819f13929ab13e324411ac7a23d66b33` and `Task-Ref: task-023` present on all implementation commits (`fa5980b`, `a0564f1`, `9c07e99`, `7b096c0`, `ce3f872`).
+
+**Checks sync**: `.hyperloop/checks/` synced from main before running `run-all-checks.sh`. `check-checks-in-sync.sh` confirms all check scripts present. 20 check scripts in total; all exit 0.
+
+---
+
+## Verdict Summary
+
+| Area | Result |
+|---|---|
+| Scope check | PASS — no prohibited features |
+| All 20 check scripts | PASS — all exit 0 |
+| Engine version THEN-clauses | COVERED |
+| Extractor CLI THEN-clauses | COVERED (naming error in report, not in implementation) |
+| Decoupled pipeline THEN-clauses | COVERED |
+| Desktop platform THEN-clause | PASS-WITH-NOTE (untestable, architectural evidence sound) |
+| Performance THEN-clauses | PASS-WITH-NOTE (FPS untestable headless, LOD structure verified) |
+| Prototype disposability | N/A (SHOULD-level, no behavioral assertion) |
+| Commit trailers | PRESENT |
+| main.gd stub check | NOT A STUB |
+| Pattern-1 inert test check | CLEAN |
