@@ -1,0 +1,99 @@
+---
+verdict: pass
+---
+All three SHALL/MUST requirements in specs/interaction/moldable-views.spec.md are
+implemented and covered by behavioral GDScript tests that assert runtime scene-tree
+outputs (not compilation-only checks).
+
+Note: prototype-scope.spec.md excludes moldable views from the prototype, but the
+feature is implemented on this branch, so the spec's requirements apply and are met.
+
+---
+
+## Requirement: Question-Driven View Generation — COVERED
+
+Implementation:
+  - godot/scripts/llm_view_generator.gd: build_prompt(question, graph) accepts a
+    natural-language question and embeds it in the LLM prompt.
+  - godot/scripts/scene_interpreter.gd: apply_spec(spec, anchors, scene_root) applies
+    show/hide/highlight/arrange operations that spatially organise components.
+
+Scenario: Architectural question
+  - THEN generates a view focused on auth-related components:
+    test_scene_interpreter.gd::test_show_op_makes_anchor_visible (show op sets
+    anchor.visible = true for auth nodes)
+  - AND irrelevant components are hidden or de-emphasized:
+    test_scene_interpreter.gd::test_hide_op_sets_visible_false,
+    test_hide_op_hides_irrelevant_components
+  - AND relevant components are arranged to answer the question:
+    test_scene_interpreter.gd::test_arrange_op_sets_node_position,
+    test_arrange_op_positions_relevant_components
+
+Scenario: Impact question
+  - THEN generates a view showing the user database and all its dependents:
+    test_scene_interpreter.gd::test_apply_spec_with_multiple_show_hide_ops
+    (shows user_db, orders, billing; hides unrelated — asserts .visible on Node3D)
+  - AND dependency relationships are spatially clear:
+    test_scene_interpreter.gd::test_connect_op_creates_line_between_nodes,
+    test_connect_op_adds_mesh_instance (connect op creates a MeshInstance3D line
+    between the two nodes in the scene tree)
+
+---
+
+## Requirement: View Specs as Intermediate Representation — COVERED
+
+Implementation:
+  - llm_view_generator.gd::parse_response() returns {"operations": [...]}, a
+    structured dictionary — not raw 3D geometry.
+  - scene_interpreter.gd::apply_spec() consumes that dictionary and mutates Node3D
+    properties (visible, position, material albedo_color, child Label3D / ImmediateMesh).
+
+Scenario: LLM produces view spec
+  - THEN emits a structured view specification (not raw 3D geometry):
+    test_llm_view_generator.gd::test_parse_response_returns_dict,
+    test_parse_response_has_operations_key
+  - AND the view spec controls which elements are shown, hidden, highlighted, arranged:
+    Individual show/hide/highlight/arrange tests in both test_llm_view_generator.gd
+    (round-trip parsing) and test_scene_interpreter.gd (runtime Node3D mutations).
+  - AND the 3D renderer interprets the view spec into a spatial scene:
+    All test_scene_interpreter.gd tests instantiate real Node3D objects, call
+    apply_spec(), and assert actual property values (visible, position.x/y/z,
+    material albedo_color, child count) — runtime behavior, not compilation-only.
+
+---
+
+## Requirement: Fixed Visual Primitive Set — COVERED
+
+Implementation:
+  - llm_view_generator.gd: VALID_OPS constant = ["show", "hide", "highlight",
+    "arrange", "annotate", "connect"] — six primitives, fixed at class definition.
+  - parse_response() silently discards any operation whose "op" value is not in
+    VALID_OPS, ensuring no new rendering logic can be introduced at runtime.
+  - build_prompt() instructs the LLM to use ONLY the listed primitives.
+
+Scenario: LLM uses existing primitives
+  - THEN composes the answer from the existing set of primitives:
+    test_llm_view_generator.gd::test_all_six_primitives_survive_round_trip
+      (all six ops pass through parse_response unchanged),
+    test_prompt_lists_all_six_primitives
+      (prompt text includes every primitive name),
+    test_prompt_valid_ops_constant_has_six_entries
+      (VALID_OPS.size() == 6),
+    individual per-primitive survival tests (test_parse_response_show_op_survives,
+    _hide_, _highlight_, _arrange_, _annotate_, _connect_)
+  - AND no new rendering logic is generated at runtime:
+    test_parse_response_rejects_unknown_op
+      (op "explode" → operations list is empty),
+    test_parse_response_mixed_ops_filters_invalid
+      (op "new_render_mode" stripped; valid "show" retained)
+
+---
+
+## Test Registration
+
+Both test suites are registered in godot/tests/run_tests.gd (lines 49-50):
+  _run_suite(preload("res://tests/test_llm_view_generator.gd").new())
+  _run_suite(preload("res://tests/test_scene_interpreter.gd").new())
+
+All tests use the _check()/_test_failed pattern with the shared runner, so failures
+are reported and the process exits non-zero on failure.
