@@ -1,0 +1,209 @@
+---
+verdict: pass
+---
+## Spec: specs/core/understanding-modes.spec.md
+## Task: task-033
+
+All run-all-checks.sh checks pass. All three MUST requirements from
+specs/core/understanding-modes.spec.md (Conformance Mode, Evaluation Mode,
+Simulation Mode) are implemented in understanding_analyzer.gd and covered by
+14 GDScript tests. All 109 GDScript tests pass (0 fail). Extractor: 94 tests pass.
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+---
+
+## Check Script Results
+
+```
+=== run-all-checks.sh ===
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-033' has 12 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+      This check only applies to tasks that implement a view-spec consumer.
+[EXIT 0]
+
+--- check-direction-test-derivations.sh ---
+OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_increases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_decreases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
+OK: All 10 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
+
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+      Producer (build_prompt / parse_response) found: none
+      Consumer (apply_spec / render_spec) found: none
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (5 suite(s) checked)
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM->view-spec pipeline.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+[EXIT 0]
+
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+
+--- extractor-lint.sh ---
+Linting extractor...
+All checks passed!
+8 files already formatted
+Running extractor tests...
+94 passed in 0.14s
+Extractor checks passed.
+[EXIT 0]
+
+--- godot-compile.sh ---
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Results: 109 passed, 0 failed
+GDScript behavioral tests passed.
+[EXIT 0]
+
+=== Summary: 20 check(s) run ===
+RESULT: ALL PASS
+```
+
+---
+
+## THEN-Clause Coverage
+
+Every THEN-clause from specs/core/understanding-modes.spec.md is mapped to an exact
+test function and assertion line in godot/tests/test_understanding_modes.gd.
+
+### Requirement: Conformance Mode
+
+#### Scenario: Spec-aligned implementation
+- **THEN** the human can see that the realized system has auth and user management as separate components
+  → `test_aligned_nodes_detected_as_separate` — asserts `result.get("aligned", []).has("auth")` and `.has("user_management")`
+- **AND** the correspondence between spec and realization is visually apparent
+  → `test_aligned_nodes_have_annotation_in_scene` — instantiates Node3D anchors, calls `render_alignment()`, asserts `label_count >= 1`
+
+#### Scenario: Spec-divergent implementation
+- **THEN** the human can see the divergence between spec and realization
+  → `test_divergent_nodes_detected` — asserts `missing.has("payment_service") or divergent.has("payment_service")`
+- **AND** the specific nature of the divergence is clear (merged vs. separate)
+  → `test_divergent_nodes_annotated_as_merged` — asserts `divergent.has("payment")` AND Label3D with "MERGED" text exists in scene_root
+
+### Requirement: Evaluation Mode
+
+#### Scenario: Detecting tight coupling
+- **THEN** the coupling between those services is apparent
+  → `test_tightly_coupled_pair_detected` — asserts `pairs.size() >= 1` and `pairs[0]["coupling_score"] >= 2`
+- **AND** the human can assess whether the coupling is problematic
+  → `test_coupled_nodes_highlighted` — instantiates Node3D+MeshInstance3D anchors, calls `render_coupling()`, asserts `albedo_color == HIGHLIGHT_COLOR` on both svc_x and svc_y
+
+#### Scenario: Identifying single point of failure
+- **THEN** the criticality and centrality of that component is apparent
+  → `test_central_node_detected_as_critical` — asserts `critical[0]["node_id"] == "hub"` and `critical[0]["in_degree"] == 3`
+- **AND** the risk it represents is clear
+  → `test_critical_node_annotated_with_spof_risk` — instantiates Node3D anchor, calls `render_criticality()`, asserts Label3D with "SPOF" in `.text`
+
+#### Scenario: Spec is faithfully implemented but architecturally poor
+- **THEN** architectural problems are visible even though conformance is perfect
+  → `test_coupling_detected_despite_perfect_alignment` — asserts `aligned.size() == 2` (perfect conformance) then asserts `pairs.size() >= 1` from `analyze_coupling()` (quality problem still detected)
+
+### Requirement: Simulation Mode
+
+#### Scenario: Splitting a service
+- **THEN** the impact on dependent services is visible
+  → `test_split_dependents_detected` — asserts `dependents.has("client_a")` and `dependents.has("client_b")`
+- **AND** new dependencies or interfaces that would be required are shown
+  → `test_split_new_interfaces_shown` — asserts `new_interfaces.size() >= 1` AND caller anchor highlighted (`albedo_color == HIGHLIGHT_COLOR`) AND Label3D with "split" in text
+
+#### Scenario: Failure injection
+- **THEN** the cascade of effects through the system is visible
+  → `test_failure_cascade_detected` — asserts `cascade.has("api")` and `cascade.has("frontend")` (transitive cascade through db→api→frontend)
+- **AND** components that would be affected are clearly identified
+  → `test_failure_affected_nodes_highlighted` — instantiates Node3D+MeshInstance3D anchors, calls `render_failure_cascade()`, asserts `albedo_color == HIGHLIGHT_COLOR` on consumer_1 AND Label3D with "FAILED" text exists
+
+### Label3D readability (mandatory per guidelines)
+  → `test_annotation_label3d_has_billboard_and_pixel_size` — asserts `label.billboard == BaseMaterial3D.BILLBOARD_ENABLED` and `label.pixel_size > 0.0`
+
+---
+
+## Implementation Summary
+
+**File**: `godot/scripts/understanding_analyzer.gd`
+
+### Conformance Mode (alignment check)
+- `check_alignment(actual_nodes, spec_node_ids)` → classifies each spec component as aligned/divergent/missing
+- `render_alignment(alignment_result, anchors, scene_root)` → adds Label3D "✓ SPEC ALIGNED" (aligned) or "⚠ MERGED" + highlight (divergent)
+
+### Evaluation Mode (quality analysis)
+- `analyze_coupling(nodes, edges, threshold)` → detects tightly coupled node pairs by bidirectional edge count
+- `render_coupling(coupling_result, anchors, scene_root)` → highlights both nodes in each pair, annotates with coupling score
+- `analyze_criticality(nodes, edges, threshold)` → detects high-in-degree nodes (SPOF risk) by incoming edge count
+- `render_criticality(criticality_result, anchors, scene_root)` → highlights critical nodes, annotates "⚠ SPOF Risk (in-degree: N)"
+
+### Simulation Mode (impact analysis)
+- `simulate_split(nodes, edges, node_id)` → returns direct dependents and new interface descriptions
+- `render_split_impact(split_result, split_node_id, anchors, scene_root)` → highlights split subject ("◈ SPLITTING") and dependents ("↯ Affected by split")
+- `simulate_failure(nodes, edges, node_id)` → BFS transitive cascade of all affected nodes
+- `render_failure_cascade(failure_result, failed_node_id, anchors, scene_root)` → annotates failed node ("✕ FAILED"), highlights all cascade members ("⚡ Cascading failure")
