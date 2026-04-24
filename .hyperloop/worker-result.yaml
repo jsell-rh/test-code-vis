@@ -2,16 +2,32 @@
 verdict: pass
 ---
 ## Spec Alignment Review — specs/core/system-purpose.spec.md
-### Branch: hyperloop/task-028 (round 3 — independent re-verification)
+### Branch: hyperloop/task-028 (round 4 — post scope-check enforcement)
 
 ---
 
-### Prior-Round Context
+### Summary of Changes in This Round
 
-Round 1 found a critical defect: 7 of 8 test functions in
-`godot/tests/test_system_purpose.gd` were inert under Pattern-1 because they
-returned `bool` without calling `_check()`. Commit `37f00db` fixed that.
-Round 2 confirmed the fix. This is an independent re-verification.
+Round 4 addresses a new failure introduced by an updated `check-not-in-scope.sh`
+on `main`. The script now includes keyword-based detection (sections 1c and 1d)
+that catches moldable-views code regardless of file name. Prior rounds passed
+because the check only matched specific historic filenames.
+
+Actions taken:
+- Deleted `godot/scripts/llm_view_generator.gd`
+- Deleted `godot/scripts/scene_interpreter.gd`
+- Deleted `godot/tests/test_llm_view_generator.gd`
+- Deleted `godot/tests/test_scene_interpreter.gd`
+- Deleted `godot/tests/test_moldable_views_pipeline.gd`
+- Removed all moldable-views wiring from `godot/scripts/main.gd`:
+  `LlmViewGenerator`/`SceneInterpreter` preloads, `_scene_interpreter` /
+  `_question_input` / `_ask_button` variables, `_add_question_ui()`,
+  `_on_ask_button_pressed()`, `_on_question_submitted()`, `_call_llm()`.
+- Removed moldable-views test suite entries from `godot/tests/run_tests.gd`.
+
+Checks that previously required the moldable-views code now SKIP cleanly
+(`check-pipeline-wiring.sh`, `check-coordinator-calls-pipeline.sh`,
+`check-end-to-end-integration-test.sh`) because no producer/consumer exists.
 
 ---
 
@@ -20,7 +36,7 @@ Round 2 confirmed the fix. This is an independent re-verification.
 `test_system_purpose.gd` declares `var _test_failed: bool = false`, so
 `run_tests.gd._run_one()` detects Pattern-1, resets `_test_failed`, calls each
 `test_*` method, and checks `_test_failed` afterward. All 8 test functions are
-now `-> void` and signal failure exclusively through `_check()`. No bool-returning
+`-> void` and signal failure exclusively through `_check()`. No bool-returning
 test functions remain.
 
 ---
@@ -136,3 +152,101 @@ AND — human can predict the impact of proposed changes:
 
 All SHALL requirements are either COVERED or out of prototype scope (N/A).
 No PARTIAL or MISSING items.
+
+---
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
+
+---
+
+## Check Script Results
+
+```
+=== run-all-checks.sh ===
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-028' has 13 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+      This check only applies to tasks that implement a view-spec consumer.
+[EXIT 0]
+
+--- check-direction-test-derivations.sh ---
+OK: All 11 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
+
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+      Producer (build_prompt / parse_response) found: none
+      Consumer (apply_spec / render_spec) found: none
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (5 suite(s) checked)
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM→view-spec pipeline.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- extractor-lint.sh ---
+All checks passed!
+[EXIT 0]
+
+--- godot-compile.sh ---
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Results: 116 passed, 0 failed
+[EXIT 0]
+```
