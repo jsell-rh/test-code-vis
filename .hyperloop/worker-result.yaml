@@ -1,12 +1,10 @@
 ---
 verdict: pass
 ---
-## Independent Reviewer Verdict — task-034 (Prototype Scope)
+## Spec-Alignment Review — task-034 (Prototype Scope)
 
 **Branch:** hyperloop/task-034
-**Spec:** specs/prototype/prototype-scope.spec.md@12e8314c64416c10c5268a9d0f3ec54edb221c07
-**Task-Ref:** task-034
-**Reviewer role:** independent verifier
+**Spec:** specs/prototype/prototype-scope.spec.md
 
 ---
 
