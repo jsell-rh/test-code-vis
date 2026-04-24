@@ -4,21 +4,16 @@ verdict: pass
 ## Task: task-033 — Godot: Understanding Modes (Conformance, Evaluation, Simulation)
 ## Spec: specs/core/understanding-modes.spec.md
 ## Branch: hyperloop/task-033
-## Review date: 2026-04-24
 
 ### Summary
 
 All 3 MUST requirements and all 13 THEN-clauses across 7 spec scenarios are implemented
 and have corresponding GDScript behavioral tests. 109 tests pass, 0 fail.
 
-All 21 check scripts exit 0 (after syncing .hyperloop/checks/ from main).
+All 22 check scripts exit 0 (after syncing .hyperloop/checks/ from main).
 
 Implementation: `godot/scripts/understanding_analyzer.gd` (356 lines)
 Test suite:     `godot/tests/test_understanding_modes.gd` (14 test functions, Pattern-1 `_check()`)
-
-Commit trailers confirmed on implementation commit 7de7a69:
-  Spec-Ref: specs/core/understanding-modes.spec.md@5014c7f3eb6eb64b86a2637ffeb78e914f9e1e9c
-  Task-Ref: task-033
 
 ---
 
@@ -119,6 +114,7 @@ Manual audit performed for cross-spec prohibited features per project guidelines
 - No `llm`, `build_prompt`, `parse_response`, `apply_spec` code added
 - No `flow_overlay`, `FlowOverlay`, `moldable`, `SceneInterpreter`, `LlmView` code added
 - No `question_ui` or UI prompt nodes added
+- No `conformance_mode`, `evaluation_mode`, `simulation_mode` identifiers used in .gd files
 
 ---
 
@@ -138,8 +134,22 @@ OK: No prohibited (not-in-scope) features detected.
 
 === run-all-checks.sh ===
 
+--- check-branch-adds-source-files.sh ---
+OK: Branch adds/modifies 10 source file(s) outside .hyperloop/:
+  extractor/extractor.py
+  extractor/tests/test_extractor.py
+  godot/scripts/lod_manager.gd
+  godot/scripts/main.gd
+  godot/scripts/understanding_analyzer.gd
+  godot/tests/run_tests.gd
+  godot/tests/test_camera_controls.gd
+  godot/tests/test_dependency_rendering.gd
+  godot/tests/test_understanding_modes.gd
+  godot/tests/test_ux_polish.gd
+[EXIT 0]
+
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-033' has 21 commit(s) above main.
+OK: Branch 'hyperloop/task-033' has 22 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -239,7 +249,7 @@ Linting extractor...
 All checks passed!
 8 files already formatted
 Running extractor tests...
-94 passed in 0.21s
+94 passed in 0.14s
 Extractor checks passed.
 [EXIT 0]
 
@@ -263,5 +273,5 @@ Results: 109 passed, 0 failed
 GDScript behavioral tests passed.
 [EXIT 0]
 
-=== Summary: 21 check(s) run ===
+=== Summary: 22 check(s) run ===
 RESULT: ALL PASS
