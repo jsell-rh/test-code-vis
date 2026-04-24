@@ -73,7 +73,11 @@ func _ready() -> void:
 
 ## Build the 3D scene from a parsed scene-graph dictionary.
 ## Called from _ready() at startup and from tests directly.
+## Caches the graph so overlay functions (_apply_alignment_overlay, etc.) can
+## access node/edge data after the scene has been built.
 func build_from_graph(graph: Dictionary) -> void:
+	# Cache graph so overlay functions can use it even when called from tests.
+	_graph = graph
 	var nodes: Array = graph.get("nodes", [])
 	var edges: Array = graph.get("edges", [])
 
@@ -175,14 +179,24 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	_lod_node_entries.append({"anchor": anchor, "node_type": nd["type"]})
 
 	var sz: float = float(nd["size"])
-	var is_context: bool = nd["type"] == "bounded_context"
+	var node_type: String = nd["type"]
+	var is_context: bool = node_type == "bounded_context"
+	var is_spec: bool = node_type == "spec"
 
 	# Mesh ----------------------------------------------------------------
 	var mesh_instance := MeshInstance3D.new()
 	var box := BoxMesh.new()
 
 	var mat := StandardMaterial3D.new()
-	if is_context:
+	if is_spec:
+		# Spec nodes represent the *intended design* — rendered as thin gold slabs
+		# so the human can immediately distinguish them from the realized code nodes.
+		# Gold colour signals "intended / authoritative specification".
+		box.size = Vector3(sz, sz * 0.15, sz)
+		mat.albedo_color = Color(0.95, 0.80, 0.10, 0.55)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	elif is_context:
 		# Larger, flat, translucent slab — acts as a visible floor/boundary.
 		box.size = Vector3(sz, sz * 0.2, sz)
 		mat.albedo_color = Color(0.25, 0.45, 0.85, 0.18)

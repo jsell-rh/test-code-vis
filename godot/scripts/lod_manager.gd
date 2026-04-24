@@ -48,23 +48,25 @@ func update_lod(
 		_apply_near(node_entries, edge_entries)
 
 
-## FAR: only bounded_context anchors visible; all modules and edges hidden.
+## FAR: only bounded_context and spec anchors visible; all modules and edges hidden.
+## Spec nodes (intended design) are top-level like bounded_context nodes and
+## remain visible at all distances so the human can always see the intended design.
 func _apply_far(node_entries: Array, edge_entries: Array) -> void:
 	for entry: Dictionary in node_entries:
 		var anchor: Node3D = entry["anchor"]
 		var ntype: String = entry["node_type"]
-		anchor.visible = (ntype == "bounded_context")
+		anchor.visible = (ntype == "bounded_context" or ntype == "spec")
 	for entry: Dictionary in edge_entries:
 		(entry["visual"] as Node3D).visible = false
 
 
-## MEDIUM: bounded_context and module visible; cross_context edges visible;
+## MEDIUM: bounded_context, module, and spec visible; cross_context edges visible;
 ## internal edges hidden.
 func _apply_medium(node_entries: Array, edge_entries: Array) -> void:
 	for entry: Dictionary in node_entries:
 		var anchor: Node3D = entry["anchor"]
 		var ntype: String = entry["node_type"]
-		anchor.visible = (ntype == "bounded_context" or ntype == "module")
+		anchor.visible = (ntype == "bounded_context" or ntype == "module" or ntype == "spec")
 	for entry: Dictionary in edge_entries:
 		var vis_node: Node3D = entry["visual"]
 		var etype: String = entry["edge_type"]
