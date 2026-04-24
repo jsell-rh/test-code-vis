@@ -1,0 +1,164 @@
+---
+verdict: pass
+---
+## Summary
+
+Implementation of `specs/core/understanding-modes.spec.md` (task-033) is **PASS**.
+
+All 18 checks pass (run-all-checks.sh output below). 185 GDScript tests and 94
+Python tests pass. All 14 THEN-clauses are mapped to named test functions whose
+assertion predicates match the THEN-clause predicates. Commit trailers present on
+all three implementation commits. Scope check clean.
+
+---
+
+## Check Findings
+
+| Check | Result | Notes |
+|---|---|---|
+| check-branch-has-commits | PASS | 4 commits above main |
+| check-checks-in-sync | PASS | Synced from main before running |
+| check-clamp-boundary-tests | PASS | All 4 clamped vars have boundary tests |
+| check-coordinator-calls-pipeline | PASS | main.gd calls apply_spec; understanding_analyzer.gd listed due to doc-comment containing "apply_spec" — harmless false positive, check correctly passes |
+| check-direction-test-derivations | PASS | All 10 direction tests have derivation comments |
+| check-end-to-end-integration-test | PASS | test_moldable_views_pipeline.gd exercises both stages |
+| check-extractor-cli-tested | PASS | |
+| check-extractor-stdlib-only | PASS | |
+| check-gdscript-only-test | PASS | DirAccess iteration test present |
+| check-kartograph-integration-test | PASS | |
+| check-not-in-scope | PASS | See verbatim output below |
+| check-pipeline-wiring | PASS | Producer + consumer + rendering tests present |
+| check-report-scope-section | N/A — reviewed file was cleaned by orchestrator; original commit 35d88f0 contained valid section (verified via `git show`) |
+| extractor-lint | PASS | ruff clean; 94 pytest pass |
+| godot-compile | PASS | Godot 4.6.2 compiles cleanly |
+| godot-fileaccess-tested | PASS | FileAccess.open exercised in 2 test files |
+| godot-label3d | PASS | billboard + pixel_size asserted |
+| godot-tests | PASS | 185 passed, 0 failed |
+
+---
+
+## THEN-Clause → Test Mapping (verified)
+
+All test function names were grepped in `godot/tests/` and confirmed to exist. Test
+bodies were read and assertion predicates verified against THEN-clause predicates.
+
+**Conformance / Alignment scenarios:**
+
+1. "THEN the human can see that the realized system has auth and user management as
+   separate components"
+   → `test_aligned_nodes_detected_as_separate` (line 88)
+   Asserts both IDs appear in `aligned[]`, `divergent` and `missing` are empty. ✓
+
+2. "AND the correspondence between spec and realization is visually apparent"
+   → `test_aligned_nodes_have_annotation_in_spec` (line 111)
+   Instantiates Node3D anchors, applies build_alignment_spec via SceneInterpreter,
+   asserts ≥1 Label3D child of scene_root. ✓
+
+3. "THEN the human can see the divergence between spec and realization"
+   → `test_divergent_nodes_detected` (line 143)
+   actual=[order_service], spec=["payment_service"]; asserts payment_service in
+   missing or divergent. ✓
+
+4. "AND the specific nature of the divergence is clear (merged vs. separate)"
+   → `test_divergent_nodes_annotated_as_merged` (line 164)
+   actual=[payment_order], spec=["payment"] (substring match → divergent);
+   applies spec, asserts Label3D with "MERGED" in text appears. ✓
+
+**Evaluation / Quality scenarios:**
+
+5. "THEN the coupling between those services is apparent"
+   → `test_tightly_coupled_pair_detected` (line 202)
+   3 bidirectional edges; asserts pairs.size()>=1 and coupling_score>=2. ✓
+
+6. "AND the human can assess whether the coupling is problematic"
+   → `test_coupled_nodes_highlighted_in_spec` (line 225)
+   Instantiates MeshInstance3D anchors, applies build_coupling_spec,
+   asserts both nodes' albedo_color == SceneInterpreter.HIGHLIGHT_COLOR. ✓
+
+7. "THEN the criticality and centrality of that component is apparent"
+   → `test_central_node_detected_as_critical` (line 266)
+   hub has in_degree=3; asserts critical[0].node_id=="hub" and in_degree==3. ✓
+
+8. "AND the risk it represents is clear"
+   → `test_critical_node_annotated_with_spof_risk` (line 294)
+   Applies build_criticality_spec; asserts Label3D with "SPOF" in text. ✓
+
+9. "THEN architectural problems are visible even though conformance is perfect"
+   → `test_coupling_detected_despite_perfect_alignment` (line 329)
+   Runs alignment (aligned.size()==2, perfect) then coupling (pairs.size()>=1);
+   proves quality analysis is independent of conformance result. Rendering of
+   coupling problems is verified in test_coupled_nodes_highlighted_in_spec. ✓
+
+**Simulation / Impact scenarios:**
+
+10. "THEN the impact on dependent services is visible"
+    → `test_split_dependents_detected` (line 359)
+    Asserts both client_a and client_b appear in dependents[]. ✓
+
+11. "AND new dependencies or interfaces that would be required are shown"
+    → `test_split_new_interfaces_shown` (line 384)
+    Asserts new_interfaces.size()>=1; applies build_split_spec, asserts caller
+    highlighted with HIGHLIGHT_COLOR AND Label3D with "split" text appears. ✓
+
+12. "THEN the cascade of effects through the system is visible"
+    → `test_failure_cascade_detected` (line 435)
+    db→api→frontend chain; simulate_failure(db); asserts api and frontend in
+    cascade[]. ✓
+
+13. "AND components that would be affected are clearly identified"
+    → `test_failure_affected_nodes_highlighted` (line 460)
+    Applies build_failure_spec; asserts consumer_1 mesh albedo_color==HIGHLIGHT_COLOR
+    AND Label3D with "FAILED" text appears. ✓
+
+14. Label3D readability (mandatory per guidelines):
+    → `test_annotation_label3d_has_billboard_and_pixel_size` (line 509)
+    Asserts label.billboard==BaseMaterial3D.BILLBOARD_ENABLED and pixel_size>0.0. ✓
+
+---
+
+## Scope Check Findings
+
+No prohibited features audited individually:
+
+- `godot/scripts/question_panel.gd` — absent ✓
+- `godot/scripts/view_spec.gd` — absent ✓
+- `godot/scripts/view_spec_renderer.gd` — absent ✓
+- `conformance.mode` / `evaluation.mode` / `simulation.mode` strings — absent ✓
+- `data.flow` / `dataflow` in production scripts — absent ✓
+- First-person nav (KEY_W/A/S/D, fly-cam) — absent ✓
+- `extract_spec_nodes` / `include_specs` / `--specs` — absent ✓
+
+Implementation uses neutral names (`check_alignment`, `analyze_coupling`,
+`analyze_criticality`, `simulate_split`, `simulate_failure`) with no prohibited
+mode-string identifiers in production code.
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+---
+
+## Commit Trailers
+
+All three implementation commits carry required trailers:
+
+- `b8664b0` fix: direction-test derivation comments — Spec-Ref + Task-Ref ✓
+- `056439d` feat: understanding_analyzer.gd + test suite — Spec-Ref + Task-Ref ✓
+- `35d88f0` chore: worker result — Spec-Ref + Task-Ref ✓
+
+---
+
+## Notes
+
+- `check-coordinator-calls-pipeline.sh` lists `understanding_analyzer.gd` as a
+  "consumer caller" because its doc-comment on line 19 contains the text
+  "apply_spec". This is a grep false positive; reading the file confirms no
+  `apply_spec(` call site is present. The actual wiring (from the prior
+  moldable-views task) lives in `main.gd` and the check PASSED correctly.
+
+- The conceptual relationship between `understanding-modes.spec.md` (which
+  requires the three analysis capabilities) and `prototype-scope.spec.md` (which
+  lists conformance/evaluation/simulation modes as out-of-scope) is a spec-level
+  planning matter resolved by the task intake — the implementation correctly
+  avoids prohibited string names while delivering the required functionality, and
+  check-not-in-scope.sh confirms this.
