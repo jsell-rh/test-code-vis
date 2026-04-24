@@ -19,9 +19,6 @@ extends Node3D
 const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
 const LodManager = preload("res://scripts/lod_manager.gd")
 const FlowOverlay = preload("res://scripts/flow_overlay.gd")
-const LlmViewGenerator = preload("res://scripts/llm_view_generator.gd")
-const SceneInterpreter = preload("res://scripts/scene_interpreter.gd")
-const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -58,18 +55,6 @@ var _aggregate: Dictionary = {}
 ## Index of the currently active path (-1 = none).
 var _active_path_index: int = -1
 
-## Moldable-views pipeline: SceneInterpreter consumes view specs from LlmViewGenerator.
-var _scene_interpreter: SceneInterpreter = SceneInterpreter.new()
-
-## Understanding overlay controller — activates alignment, quality, and impact overlays.
-var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
-
-## Question input UI — LineEdit for natural-language questions.
-var _question_input: LineEdit
-
-## Submit button for the question input UI.
-var _ask_button: Button
-
 @onready var _camera: Camera3D = $Camera3D
 
 
@@ -93,9 +78,6 @@ func _ready() -> void:
 		build_from_graph(_graph)
 	else:
 		push_warning("CodeVis: scene graph not found at '%s'." % scene_graph_path)
-
-	# Add natural-language question input UI for moldable-views interaction.
-	_add_question_ui()
 
 ## Build the 3D scene from a parsed scene-graph dictionary.
 ## Called from _ready() at startup and from tests directly.
@@ -342,12 +324,9 @@ func _frame_camera() -> void:
 # Path overlay input (on-demand activation)
 # ---------------------------------------------------------------------------
 
-## Handle keyboard shortcuts for on-demand path overlay and understanding overlays.
+## Handle keyboard shortcuts for on-demand path overlay.
 ##   F → cycle through path definitions (or clear if one is already shown).
 ##   G → toggle aggregate traffic pattern overlay.
-##   H → apply alignment overlay (Conformance Mode — shows spec vs. realization).
-##   J → apply quality overlay  (Evaluation Mode  — shows coupling and centrality).
-##   K → apply failure impact overlay (Simulation Mode — shows cascade from first node).
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed:
 		return
@@ -356,12 +335,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_path_overlay()
 		KEY_G:
 			_toggle_aggregate_overlay()
-		KEY_H:
-			_apply_alignment_overlay()
-		KEY_J:
-			_apply_quality_overlay()
-		KEY_K:
-			_apply_failure_impact_overlay()
 
 
 ## Cycle to the next path definition, or clear the active overlay.
@@ -384,108 +357,3 @@ func _toggle_aggregate_overlay() -> void:
 			_aggregate.get("hot_edges", []),
 			_aggregate.get("bottlenecks", [])
 		)
-
-
-# ---------------------------------------------------------------------------
-# Moldable-views: natural-language question UI → LLM → view-spec pipeline
-# ---------------------------------------------------------------------------
-
-## Add a minimal question input UI (LineEdit + Button) to the scene.
-## Placed on a CanvasLayer so it overlays the 3D view regardless of camera.
-func _add_question_ui() -> void:
-	var canvas := CanvasLayer.new()
-	canvas.layer = 10
-	add_child(canvas)
-
-	var hbox := HBoxContainer.new()
-	hbox.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	hbox.offset_top = -52.0
-	hbox.offset_right = 520.0
-	canvas.add_child(hbox)
-
-	_question_input = LineEdit.new()
-	_question_input.placeholder_text = "Ask a question about the codebase..."
-	_question_input.custom_minimum_size = Vector2(420.0, 40.0)
-	_question_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hbox.add_child(_question_input)
-
-	_ask_button = Button.new()
-	_ask_button.text = "Ask"
-	_ask_button.custom_minimum_size = Vector2(60.0, 40.0)
-	hbox.add_child(_ask_button)
-
-	_ask_button.pressed.connect(_on_ask_button_pressed)
-	_question_input.text_submitted.connect(_on_question_submitted)
-
-
-## Relay button press to the question submission handler.
-func _on_ask_button_pressed() -> void:
-	_on_question_submitted(_question_input.text)
-
-
-## Moldable-views pipeline entry point.
-## Called when the human submits a natural-language question.
-##
-## Pipeline:
-##   1. LlmViewGenerator.build_prompt  — encodes question + graph into an LLM prompt
-##   2. LLM call (mocked in prototype)  — returns a view-spec JSON response
-##   3. LlmViewGenerator.parse_response — produces a validated view-spec dict
-##   4. SceneInterpreter.apply_spec     — applies the spec to the live 3D scene
-func _on_question_submitted(question: String) -> void:
-	if question.is_empty():
-		return
-
-	# Stage 1: build the LLM prompt from the question and the loaded scene graph.
-	var prompt: String = LlmViewGenerator.build_prompt(question, _graph)
-
-	# Stage 1 (continued): obtain a view-spec response.
-	# In this prototype the LLM call is represented by a neutral mock response;
-	# a production integration would replace this with an HTTP request to an LLM endpoint.
-	var llm_response: String = _call_llm(prompt)
-
-	# Stage 1 (continued): parse the response into a validated view-spec dictionary.
-	var spec: Dictionary = LlmViewGenerator.parse_response(llm_response)
-
-	# Stage 2: apply the view spec to the live 3D scene.
-	_scene_interpreter.apply_spec(spec, _anchors, self)
-
-
-## Invoke the LLM with the given prompt and return its response.
-## In this prototype, returns a neutral empty-operations response.
-## A production implementation would send an HTTP POST to an LLM endpoint.
-func _call_llm(_prompt: String) -> String:
-	return '{"operations": []}'
-
-
-# ---------------------------------------------------------------------------
-# Understanding overlays (Conformance / Evaluation / Simulation modes)
-# ---------------------------------------------------------------------------
-
-## Apply alignment overlay (H key) — Conformance Mode.
-## Colours every node in the scene by its spec_status field so the human can
-## see whether the as-built system matches the as-specced design.
-func _apply_alignment_overlay() -> void:
-	var nodes: Array = _graph.get("nodes", [])
-	_understanding_overlay.apply_alignment_overlay(nodes, _anchors)
-
-
-## Apply quality overlay (J key) — Evaluation Mode.
-## Colours nodes by coupling and centrality metrics so the human can evaluate
-## the architectural quality of the realized system independently of the spec.
-func _apply_quality_overlay() -> void:
-	var nodes: Array = _graph.get("nodes", [])
-	var edges: Array = _graph.get("edges", [])
-	_understanding_overlay.apply_quality_overlay(nodes, edges, _anchors)
-
-
-## Apply failure impact overlay (K key) — Simulation Mode (failure injection).
-## Simulates a failure of the first node in the graph and cascades through
-## dependents, colouring all affected components so the human can explore
-## the impact of the hypothetical failure before committing to any change.
-func _apply_failure_impact_overlay() -> void:
-	var nodes: Array = _graph.get("nodes", [])
-	if nodes.is_empty():
-		return
-	var target_id: String = nodes[0].get("id", "")
-	if not target_id.is_empty():
-		_understanding_overlay.apply_failure_overlay(target_id, _graph, _anchors, self)
