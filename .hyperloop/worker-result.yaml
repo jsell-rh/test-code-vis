@@ -5,7 +5,7 @@ verdict: pass
 ## Spec: specs/core/understanding-modes.spec.md
 ## Branch: hyperloop/task-033
 ## Review date: 2026-04-24
-## Reviewer: independent re-review after branch-reset notification
+## Reviewer: spec-alignment-reviewer (fresh review after task reset to not-started)
 
 ### Summary
 
@@ -163,7 +163,7 @@ OK: No prohibited (not-in-scope) features detected.
 === run-all-checks.sh === (run after syncing .hyperloop/checks/ from main)
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-033' has 19 commit(s) above main.
+OK: Branch 'hyperloop/task-033' has 20 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
