@@ -1,0 +1,271 @@
+---
+verdict: pass
+---
+
+## Task: task-028 — System Purpose Spec
+
+Spec: `specs/core/system-purpose.spec.md`
+
+## What Was Done
+
+### Pre-existing Failures Fixed
+
+Six direction test functions in existing test files were missing the required
+sign-chain derivation comments (`check-direction-test-derivations.sh` requires
+a `→` or `->` arrow in a comment inside each direction-sensitive test body):
+
+- `test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi`
+- `test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta`
+- `test_dependency_rendering.gd :: test_direction_indicator_cone_created`
+- `test_dependency_rendering.gd :: test_direction_cone_near_target`
+- `test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor`
+- `test_ux_polish.gd :: test_pan_proportional_to_drag_speed`
+
+Each received a single-line derivation comment tracing the spec's behavioral
+reference to the expected sign/direction.
+
+### System-Purpose Spec Tests
+
+New test files implementing all testable THEN-clauses from
+`specs/core/system-purpose.spec.md`:
+
+- `extractor/tests/test_system_purpose.py` (8 Python tests)
+- `godot/tests/test_system_purpose.gd` (8 GDScript tests)
+- `godot/tests/run_tests.gd` updated to register the new suite
+
+## THEN-Clause → Test Mapping
+
+### Scenario: Architect evaluates unfamiliar system
+
+**THEN the human can correctly answer architectural questions about the system**
+
+- Python: `test_scene_graph_exposes_named_bounded_contexts` — asserts that all
+  bounded contexts (Iam, Graph, Shared Kernel) appear as named nodes of type
+  `bounded_context` in the scene graph.
+- Python: `test_scene_graph_exposes_named_modules_with_types` — asserts every
+  node has a non-empty `name` and a valid `type` (`bounded_context` or `module`).
+- GDScript: `test_all_scene_nodes_have_visible_name_labels` — instantiates Main,
+  builds from fixture, asserts a Label3D with the correct text, billboard=ENABLED,
+  and pixel_size > 0 exists for each BC node.
+- GDScript: `test_bounded_context_nodes_distinguishable_by_type` — asserts BC
+  volumes use `TRANSPARENCY_ALPHA` material so they're visually distinct from modules.
+
+**AND the human can identify structural problems in the system**
+
+- Python: `test_size_encoding_reflects_relative_complexity` — asserts
+  `size_from_loc(500) > size_from_loc(10)` so large modules appear bigger.
+- Python: `test_edge_types_expose_coupling_structure` — asserts all edges carry
+  a `type` field (`cross_context` or `internal`) encoding coupling kind.
+- GDScript: `test_node_size_grows_with_scene_graph_size_value` — builds a scene
+  with a big node (size=5.0) and small node (size=1.0), asserts
+  `big_mesh_x > small_mesh_x` on the resulting BoxMesh dimensions.
+- GDScript: `test_dependency_edges_expose_coupling_in_scene` — builds scene with
+  cross-context edge, asserts an ImmediateMesh line exists in scene children.
+
+**AND the human can predict the impact of proposed changes**
+
+- Python: `test_cross_context_edges_reveal_change_impact_paths` — asserts
+  cross-context edges are present with valid non-self-loop source/target pairs.
+- GDScript: `test_cross_context_edge_has_directional_arrowhead` — asserts a
+  CylinderMesh with `top_radius == 0.0` exists (arrowhead cone at target end).
+
+### Scenario: Spec and codebase loaded together
+
+**AND the codebase is treated as the realized design**
+
+- Python: `test_scene_graph_reflects_actual_source_file_structure` — builds
+  scene graph from kart_src fixture, asserts `iam` and `iam.domain` nodes exist
+  and an edge from iam to shared_kernel is present (matching the import in
+  `iam/domain/user.py`).
+- GDScript: `test_scene_graph_loader_reads_codebase_json` — calls
+  `SceneGraphLoader.load_from_dict()` and asserts the returned graph has nodes
+  and edges, confirming the Godot app can consume extractor output.
+
+### Scenario: Post-build evaluation
+
+**AND the human can determine whether the build is architecturally sound**
+
+- Python: `test_structural_soundness_information_is_complete` — asserts every
+  node has `size > 0`, every edge has `source` and `target`, and metadata has
+  `source_path`.
+- GDScript: `test_structural_metrics_available_in_scene` — builds scene and
+  asserts BOTH a BoxMesh (size-encoded volume) AND an ImmediateMesh (dependency
+  line) are present, confirming structural metrics are visible.
+
+**AND the human can explore the impact of potential changes**
+
+- Python: `test_dependency_graph_is_traversable_for_impact_analysis` — asserts
+  node IDs are unique and every edge endpoint resolves to a known node ID, so
+  the dependency graph can be traversed for impact analysis.
+- GDScript: `test_navigation_methods_exist_on_camera_controller` — instantiates
+  CameraController and asserts `has_method` returns true for `set_pivot`,
+  `get_distance`, `_handle_button`, `_handle_motion`, and `_zoom_toward_cursor`.
+
+## Untestable THEN-Clauses
+
+### "THEN the spec is treated as the intended design"
+
+1. **Verbatim THEN text**: "the spec is treated as the intended design"
+2. **Why untestable**: The prototype-scope spec explicitly lists "spec extraction
+   is NOT implemented" as out of scope. Implementing any mechanism that loads or
+   processes spec files at runtime would violate this constraint. The check script
+   `check-not-in-scope.sh` would reject any use of `include_specs`, `--specs`,
+   `extract_spec_nodes`, etc.
+3. **Architectural evidence**: The system-purpose spec describes the design intent
+   for the full vision. In the prototype, the human author holds the spec mentally;
+   the system visualizes the realized code. The separation is intentional: the
+   extractor only reads source code (verified by `test_extractor_imports_are_stdlib_only`
+   and all extractor tests), and the Godot app only reads the JSON scene graph.
+
+### "AND the relationship between them is available for inspection"
+
+1. **Verbatim THEN text**: "the relationship between them is available for inspection"
+2. **Why untestable**: This requires spec-overlay comparison (showing spec vs.
+   realized design side by side), which is excluded from the prototype by
+   `prototype-scope.spec.md § Not In Scope` ("spec extraction is NOT implemented").
+3. **Architectural evidence**: No spec-overlay, spec-loading, or comparison code
+   exists anywhere in the codebase (`check-not-in-scope.sh` exits 0 confirming
+   this). The relationship is available only in the human's mental model during
+   the evaluation session.
+
+### "THEN the human can determine whether the build matches the spec"
+
+1. **Verbatim THEN text**: "the human can determine whether the build matches the spec"
+2. **Why untestable**: This is the spec-overlay comparison feature excluded from
+   the prototype. There is no automated comparison mechanism to test.
+3. **Architectural evidence**: The prototype provides structural visualization
+   only; the human compares the rendered structure against their spec manually.
+   No spec-comparison code exists (`check-not-in-scope.sh` exits 0).
+
+## Check Script Results
+
+=== run-all-checks.sh ===
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-028' has 2 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-coordinator-calls-pipeline.sh ---
+Pipeline consumer defined in: godot/scripts/scene_interpreter.gd
+Pipeline producer defined in: godot/scripts/llm_view_generator.gd
+Consumer caller(s) found: godot/scripts/main.gd
+Producer caller(s) found: godot/scripts/main.gd
+
+OK: Pipeline consumer (and producer if applicable) are called from coordinator scripts.
+[EXIT 0]
+
+--- check-direction-test-derivations.sh ---
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_increases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_decreases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
+OK: godot/tests/test_system_purpose.gd :: test_cross_context_edge_has_directional_arrowhead — derivation comment found.
+
+OK: All 11 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
+
+--- check-end-to-end-integration-test.sh ---
+Producer class found: godot/scripts/llm_view_generator.gd
+Consumer class found: godot/scripts/scene_interpreter.gd
+
+OK: Integration test found that exercises both pipeline stages: godot/tests/test_moldable_views_pipeline.gd
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+Stage 1 (view-spec producer) found in: godot/scripts/llm_view_generator.gd
+godot/scripts/main.gd
+godot/scripts/scene_interpreter.gd
+Stage 2 (scene consumer) evidence — pattern '\.visible\s*=' found in: godot/scripts/flow_overlay.gd
+godot/scripts/lod_manager.gd
+godot/scripts/scene_interpreter.gd
+Stage 2 rendering tests found: godot/tests/test_containment_rendering.gd
+godot/tests/test_flow_overlay.gd
+godot/tests/test_moldable_views_pipeline.gd
+godot/tests/test_node_renderer.gd
+godot/tests/test_scene_graph_loading.gd
+godot/tests/test_scene_interpreter.gd
+godot/tests/test_spatial_structure.gd
+godot/tests/test_dependency_rendering.gd
+
+OK: View-spec pipeline appears wired end-to-end (producer + consumer + rendering tests).
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- extractor-lint.sh ---
+Linting extractor...
+All checks passed!
+9 files already formatted
+Running extractor tests...
+102 passed in 0.12s
+Extractor checks passed.
+[EXIT 0]
+
+--- godot-compile.sh ---
+Compiling Godot project...
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Found 16 GDScript test file(s) in godot/tests/.
+Running custom headless test runner...
+Results: 179 passed, 0 failed
+GDScript behavioral tests passed.
+[EXIT 0]
+
+=== Summary: 18 check(s) run ===
+RESULT: ALL PASS
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.

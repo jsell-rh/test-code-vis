@@ -127,11 +127,12 @@ func _make_large_module_graph() -> Dictionary:
 # ---------------------------------------------------------------------------
 
 
-func test_all_scene_nodes_have_visible_name_labels() -> bool:
+func test_all_scene_nodes_have_visible_name_labels() -> void:
 	## System-purpose THEN-clause: 'the human can correctly answer architectural
 	## questions about the system' — the first such question is 'what is this
 	## thing?'.  Every volume in the scene must carry a visible Label3D so the
 	## human can identify it by name without reading source code.
+	## Labels must also have billboard=ENABLED and pixel_size > 0 (legibility).
 	var main_node: Node3D = Main.new()
 	main_node.build_from_graph(_make_two_context_graph())
 
@@ -143,12 +144,17 @@ func test_all_scene_nodes_have_visible_name_labels() -> bool:
 			for grandchild: Node in child.get_children():
 				if grandchild is Label3D:
 					var lbl := grandchild as Label3D
+					_check(lbl.billboard == BaseMaterial3D.BILLBOARD_ENABLED,
+						"Label3D must have billboard=ENABLED for legibility in 3D")
+					_check(lbl.pixel_size > 0.0,
+						"Label3D must have pixel_size > 0 for legibility in 3D")
 					if lbl.text == "iam":
 						found_label_for_iam = true
 					if lbl.text == "graph":
 						found_label_for_graph = true
 
-	return found_label_for_iam and found_label_for_graph
+	_check(found_label_for_iam, "Expected a Label3D with text 'iam' in the scene")
+	_check(found_label_for_graph, "Expected a Label3D with text 'graph' in the scene")
 
 
 func test_bounded_context_nodes_distinguishable_by_type() -> bool:
