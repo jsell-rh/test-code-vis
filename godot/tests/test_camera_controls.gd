@@ -333,6 +333,26 @@ func test_smooth_zoom_process_interpolates_distance() -> bool:
 	return cam._distance < 40.0 and cam._distance > 20.0
 
 
+## [THEN] pan movement is smooth — pan is applied immediately without interpolation lag.
+## Unlike zoom (which uses target + lerp), pan sets _pivot = _target_pivot on every
+## motion event, so there is no lag between drag and scene movement.
+func test_pan_applied_immediately_no_lag() -> bool:
+	var cam = CameraScript.new()
+
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = Vector2(100.0, 100.0)
+	cam._handle_button(press)
+
+	var motion := InputEventMouseMotion.new()
+	motion.position = Vector2(130.0, 110.0)
+	cam._handle_motion(motion)
+
+	# Pan must be applied immediately: _pivot == _target_pivot (no lerp lag).
+	return cam._pivot.is_equal_approx(cam._target_pivot)
+
+
 ## [THEN] the pan movement is smooth and proportional to drag speed.
 ## A larger drag delta must produce a proportionally larger pivot displacement.
 func test_pan_proportional_to_drag_speed() -> bool:

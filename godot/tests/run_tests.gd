@@ -39,6 +39,9 @@ func _init() -> void:
 	# --- task-014: Spatial structure spec ---
 	_run_suite(preload("res://tests/test_spatial_structure.gd").new())
 
+	# --- pre-existing: Desktop Platform (nfr.spec.md) ---
+	_run_suite(preload("res://tests/test_desktop_platform.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
