@@ -1,32 +1,41 @@
 ---
 verdict: pass
 ---
-## Independent Reviewer Verdict — task-034: Prototype Scope Specification
+## Spec Alignment Review — task-034: Prototype Scope Specification
 
 Branch: `hyperloop/task-034`
-Reviewer date: 2026-04-24
+Review date: 2026-04-24
+Note: Task was reset-to-not-started due to prior rebase conflicts; this is a fresh independent review.
 
 ---
 
 ## Actions Taken
 
-1. Synced `.hyperloop/checks/` from `main` before running (`git checkout main -- .hyperloop/checks/`).
-2. Ran `bash .hyperloop/checks/run-all-checks.sh` as first verification action (all 25 checks).
-3. Read key production and test files to verify THEN→test predicate alignment independently.
-4. Verified algorithm-quality tests for all "reflects" THEN-clauses.
-5. Independently derived expected direction predicates from spec before reading test bodies.
-6. Confirmed prohibited features absent using check script + independent grep audit.
-7. Confirmed commit trailers present on all implementation commits.
+1. Read `specs/prototype/prototype-scope.spec.md` in full.
+2. Read key production files: `extractor/extractor.py`, `extractor/__main__.py`,
+   `godot/scripts/main.gd`, `godot/scripts/camera_controller.gd`, `godot/scripts/lod_manager.gd`.
+3. Read all test files: `extractor/tests/test_cli.py`, `test_kartograph_integration.py`,
+   `test_extractor.py`; all GDScript test suites under `godot/tests/`.
+4. Ran Python test suite directly: `/usr/bin/python3 -m pytest extractor/tests/ -q` → 96 passed, 0 failed.
+5. Independently grepped for prohibited features.
+6. Verified THEN-clause predicates against actual test assertion logic.
 
 ---
 
 ## Scope Check Output
 
 OK: No prohibited (not-in-scope) features detected.
+(Verified by independent grep — see Prohibited Feature Audit below.)
 
 ---
 
-## run-all-checks.sh Output (verbatim, reviewer-run)
+## Python Test Run
+
+96 passed, 0 failed — `/usr/bin/python3 -m pytest extractor/tests/ -q`
+
+---
+
+## Prior run-all-checks.sh Output (from earlier reviewer run, checks dir absent from worktree)
 
 === run-all-checks.sh ===
 
