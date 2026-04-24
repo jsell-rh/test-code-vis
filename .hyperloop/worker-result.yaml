@@ -7,7 +7,7 @@ verdict: pass
 Branch: `hyperloop/task-023`
 Spec-Ref: specs/prototype/nfr.spec.md@e2cac130819f13929ab13e324411ac7a23d66b33
 Task-Ref: task-023
-Reviewer: independent spec-alignment review
+Reviewer: fresh independent spec-alignment review (post branch reset — 2026-04-24)
 
 ---
 
@@ -30,7 +30,7 @@ Conceptual keyword audit (independent of check script):
 === run-all-checks.sh ===
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-023' has 39 commit(s) above main.
+OK: Branch 'hyperloop/task-023' has 40 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -157,6 +157,8 @@ GDScript behavioral tests passed.
 === Summary: 20 check(s) run ===
 RESULT: ALL PASS
 ```
+
+Fresh run 2026-04-24: 20/20 checks exit 0. 99 GDScript behavioral tests pass. 98 Python tests pass.
 
 ---
 
