@@ -1,0 +1,113 @@
+---
+task_id: task-022
+round: 0
+role: spec-reviewer
+verdict: fail
+---
+## Summary
+
+Task-022 title: "Godot: wire question UI → LLM → view-spec interpreter end-to-end"
+
+The task was not completed. The implementation commit (532007f) only changed a comment in
+`godot/tests/run_tests.gd` (switching `task-021` label to `task-022`). Every file cited in
+that commit's message — `llm_view_generator.gd`, `scene_interpreter.gd`,
+`test_llm_view_generator.gd`, `test_scene_interpreter.gd` — was already committed in
+`b8daf95` (task-021). Task-022 added no new source files.
+
+The critical gap is that the task demanded **end-to-end wiring**: question UI → LLM API call
+→ view-spec → SceneInterpreter applied to the live scene. None of that wiring exists anywhere
+in the codebase. `main.gd` does not import or call `LlmViewGenerator` or `SceneInterpreter`.
+There is no question UI widget, no HTTP client, no LLM API call, and no end-to-end integration
+test.
+
+---
+
+## Requirement-by-Requirement Findings
+
+### Requirement: Question-Driven View Generation
+**Status: MISSING**
+
+Spec says the system MUST accept natural language questions and generate a spatial view in
+response. This requires an end-to-end pipeline with a user-facing entry point and LLM
+integration.
+
+- `LlmViewGenerator.build_prompt()` constructs a prompt string — but nothing calls an LLM
+  with it, and there is no question input UI in the Godot scene.
+- `SceneInterpreter.apply_spec()` can apply a view spec — but `main.gd` never calls it.
+- No end-to-end integration test exists that exercises the full pipeline.
+
+**Scenario: Architectural question — MISSING**
+The THEN clause ("system generates a view focused on auth-related components") requires the
+full pipeline to execute. No such pipeline wiring exists. Individual unit tests for
+`build_prompt` and `apply_spec` do not constitute a test of "the system generates a view".
+
+**Scenario: Impact question — MISSING**
+Same as above. The connect / show / hide unit tests do not test end-to-end behavior for a
+natural-language impact question.
+
+What is needed:
+1. A question input UI (LineEdit + Button or equivalent) in the Godot scene.
+2. An LLM API call (HTTP or mock) triggered by the user's question.
+3. `main.gd` (or a coordinator) must call `LlmViewGenerator.build_prompt()`, pass the result
+   to the LLM, receive the response, call `LlmViewGenerator.parse_response()`, and pass the
+   view spec to `SceneInterpreter.apply_spec()` with `_anchors`.
+4. An integration test (or a mock-LLM test) exercising the complete pipeline from question to
+   scene mutation.
+
+---
+
+### Requirement: View Specs as Intermediate Representation
+**Status: PARTIAL**
+
+The view-spec format (Dictionary with `operations`) and both pipeline stages are implemented
+as isolated classes, with solid unit tests for each class in isolation. This satisfies "LLM
+produces view spec" at the data-format level. However:
+
+- The 3D renderer (`SceneInterpreter`) is never invoked by `main.gd`, so the THEN clause
+  "the 3D renderer interprets the view spec into a spatial scene" is not demonstrated in an
+  end-to-end path.
+- No integration test wires LlmViewGenerator → SceneInterpreter against a live scene graph.
+
+**Scenario: LLM produces view spec — PARTIAL**
+The structural representation is correct and unit-tested. End-to-end interpretation in the
+running app is absent.
+
+What is needed: an integration test or wired coordinator that calls both stages sequentially
+and asserts scene-tree changes after the full pipeline runs.
+
+---
+
+### Requirement: Fixed Visual Primitive Set
+**Status: COVERED**
+
+`LlmViewGenerator.VALID_OPS` defines exactly the six primitives (show, hide, highlight,
+arrange, annotate, connect). `parse_response()` silently discards any operation whose `op`
+value is not in `VALID_OPS`, preventing new rendering logic at runtime.
+
+Tests in `test_llm_view_generator.gd` cover:
+- `test_prompt_valid_ops_constant_has_six_entries` — exactly 6 primitives
+- `test_prompt_lists_all_six_primitives` — all six appear in the LLM prompt
+- `test_all_six_primitives_survive_round_trip` — all six survive parse_response
+- `test_parse_response_rejects_unknown_op` — unknown op is discarded
+- `test_parse_response_mixed_ops_filters_invalid` — mixed valid/invalid, only valid survive
+
+**Scenario: LLM uses existing primitives — COVERED**
+
+---
+
+## What Must Be Fixed
+
+To reach PASS, the implementer must add:
+
+1. **End-to-end wiring in `main.gd`** (or a new coordinator script):
+   - A UI input for natural-language questions (even a minimal LineEdit + Button).
+   - On question submission: call `LlmViewGenerator.build_prompt(question, _graph)`,
+     send the prompt to an LLM endpoint (real or mocked), receive the response, call
+     `LlmViewGenerator.parse_response(response)`, then call
+     `SceneInterpreter.apply_spec(spec, _anchors, self)`.
+
+2. **An end-to-end test** that exercises the full pipeline:
+   - Use a mock LLM response (fixed JSON string) to make the test deterministic.
+   - Assert that after `apply_spec()` the correct anchors are shown/hidden/highlighted and
+     the scene-root has the expected Label3D or MeshInstance3D children.
+   - This test should live in `godot/tests/` and be included in `run_tests.gd`.
