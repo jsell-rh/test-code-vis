@@ -13,9 +13,10 @@
 # hits is fabrication — an automatic FAIL regardless of whether a differently-
 # named test covers the same behavior.
 #
-# Handles two mapping formats implementers use:
+# Handles three mapping formats implementers use:
 #   1. Backtick format:  → `file.py::test_function_name`
 #   2. Table format:     | clause | test_function_name | PASS |
+#   3. Bullet backtick:  - `test_function_name` (non-preferred; still checked)
 
 FAIL=0
 RESULT_FILE=".hyperloop/worker-result.yaml"
@@ -39,8 +40,14 @@ FORMAT2=$(grep -E '^\|' "$RESULT_FILE" \
     | grep -oE '\btest_[a-zA-Z0-9_]+' \
     || true)
 
+# --- Format 3: bullet backtick — lines like "- `test_function_name`" (non-preferred but
+# observed in practice; checking names is more important than enforcing format).
+FORMAT3=$(grep -oE '`test_[a-zA-Z_][a-zA-Z0-9_]*`' "$RESULT_FILE" \
+    | tr -d '`' \
+    || true)
+
 # Combine, deduplicate, sort.
-TEST_NAMES=$(printf '%s\n%s\n' "$FORMAT1" "$FORMAT2" \
+TEST_NAMES=$(printf '%s\n%s\n%s\n' "$FORMAT1" "$FORMAT2" "$FORMAT3" \
     | grep '^test_' \
     | sort -u)
 
