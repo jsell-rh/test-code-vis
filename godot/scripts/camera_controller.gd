@@ -150,8 +150,10 @@ func _handle_motion(event: InputEventMouseMotion) -> void:
 			basis.z.z
 		).normalized()
 		var pan_amount: float = pan_speed * (_distance * 0.05 + 1.0)
-		# Drag right → pivot moves right; drag up (negative delta.y) → pivot moves forward.
-		_target_pivot += right * delta.x * pan_amount
+		# Google Maps convention: drag moves scene in same direction as drag.
+		# Dragging right → scene moves right → camera/pivot move LEFT → subtract right·delta.x.
+		# Dragging up (delta.y < 0) → scene moves up → camera/pivot move forward → subtract backward·delta.y.
+		_target_pivot -= right * delta.x * pan_amount
 		_target_pivot -= backward * delta.y * pan_amount
 		# Apply immediately for responsive, proportional-to-drag feel (no latency on pan).
 		_pivot = _target_pivot

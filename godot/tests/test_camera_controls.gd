@@ -95,6 +95,7 @@ func test_scroll_down_increases_target_distance() -> bool:
 ## WHEN the user middle-mouse drags horizontally THEN the camera orbits —
 ## a horizontal drag must change the azimuth angle _phi.
 func test_orbit_horizontal_drag_changes_phi() -> bool:
+	# drag right → delta.x > 0 → _phi -= delta.x * orbit_speed → _phi decreases ✓
 	var cam = CameraScript.new()
 	var initial_phi: float = cam._phi
 
@@ -113,6 +114,7 @@ func test_orbit_horizontal_drag_changes_phi() -> bool:
 
 ## WHEN the user middle-mouse drags vertically THEN the polar angle changes.
 func test_orbit_vertical_drag_changes_theta() -> bool:
+	# drag up → delta.y < 0 → _theta -= delta.y * orbit_speed → _theta increases → camera tilts toward horizon ✓
 	var cam = CameraScript.new()
 	var initial_theta: float = cam._theta
 
@@ -162,14 +164,17 @@ func test_lmb_drag_pans_camera() -> bool:
 
 
 ## [AND] the movement direction matches the drag direction (not inverted).
-## At phi = PI/2 the camera's local X axis aligns with world +X.
-## A right-ward drag (delta.x > 0) must shift the pivot in the +X direction.
+## Google Maps convention: "dragging left reveals content to the right" (spec).
+## At phi = PI/2 the camera is on the +Z side; its local X axis (basis.x) = world +X.
+## Drag LEFT (delta.x < 0):
+##   _target_pivot -= right * delta.x   → -= (+X) * (negative) → pivot.x increases
+##   → camera moves +X → scene shifts −X (left on screen, same direction as drag) ✓
 func test_pan_direction_not_inverted() -> bool:
 	var cam = CameraScript.new()
 	cam._theta = 0.15
 	cam._phi = PI / 2.0
 	cam._distance = 40.0
-	cam._update_transform()  # set global_transform.basis from spherical state
+	cam._update_transform()  # set transform.basis from spherical state
 
 	# Press LMB.
 	var press := InputEventMouseButton.new()
@@ -178,13 +183,14 @@ func test_pan_direction_not_inverted() -> bool:
 	press.position = Vector2(100.0, 100.0)
 	cam._handle_button(press)
 
-	# Drag 50 pixels to the right.
+	# Drag 50 pixels to the LEFT (position goes from 100 → 50, delta.x = -50).
 	var motion := InputEventMouseMotion.new()
-	motion.position = Vector2(150.0, 100.0)
+	motion.position = Vector2(50.0, 100.0)
 	cam._handle_motion(motion)
 
-	# At phi = PI/2, camera.basis.x = world +X.
-	# Non-inverted: right drag → pivot.x increases.
+	# drag left → delta.x < 0 → × right (+X at phi=PI/2) × minus sign → pivot.x increases
+	# → camera moves +X → scene shifts left (−X) ← drag direction is left ✓
+	# (dragging left → scene moves left → right-side content revealed, Google Maps style)
 	return cam._pivot.x > 0.0
 
 
@@ -330,6 +336,7 @@ func test_smooth_zoom_process_interpolates_distance() -> bool:
 ## [THEN] the pan movement is smooth and proportional to drag speed.
 ## A larger drag delta must produce a proportionally larger pivot displacement.
 func test_pan_proportional_to_drag_speed() -> bool:
+	# larger |delta.x| → larger |right * delta.x * pan_amount| → larger |pivot displacement| ✓
 	var cam_slow = CameraScript.new()
 	var cam_fast = CameraScript.new()
 
