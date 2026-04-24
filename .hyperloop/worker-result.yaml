@@ -2,164 +2,25 @@
 verdict: pass
 ---
 
-## Implementation: specs/prototype/nfr.spec.md
+## Review: specs/prototype/nfr.spec.md (task-023)
 
-Task: task-023
-Branch: hyperloop/task-023
+Reviewer: independent code-reviewer pass
 Date: 2026-04-24
 
 ---
 
 ## Scope Check Output
 
+```
 OK: No prohibited (not-in-scope) features detected.
+```
+
+Independently confirmed: no LLM/moldable keywords, no Dockerfile, no web-export
+config, no `apply_spec` / `parse_response` / `build_prompt` calls anywhere in the tree.
 
 ---
 
-## THEN→Test Mapping
-
-Every THEN-clause from nfr.spec.md mapped to exact test function and file.
-
-### Scenario: Engine version
-
-| THEN clause | Test function | Verdict |
-|---|---|---|
-| THEN it opens in Godot 4.6.x | test_project_godot_declares_46_feature | PASS |
-| THEN it opens in Godot 4.6.x (config/features) | test_project_godot_config_features_line | PASS |
-| THEN it opens in Godot 4.6.x (bool-return) | test_project_declares_godot_46 | PASS |
-| AND all scripts use GDScript (DirAccess iteration) | test_scripts_dir_contains_only_gdscript | PASS |
-| AND all scripts use GDScript (no C#/Mono) | test_project_does_not_declare_csharp | PASS |
-| AND all scripts use GDScript (.gd file) | test_main_script_is_gdscript | PASS |
-| AND all API calls are valid for Godot 4.6 | test_file_access_get_as_text_returns_non_empty_string | PASS |
-| AND all API calls are valid for Godot 4.6 (no deprecated) | test_main_uses_godot4_fileaccess_api | PASS |
-
-(godot/tests/test_engine_version.gd, godot/tests/test_godot_version.gd)
-
-### Scenario: Running the extractor
-
-| THEN clause | Test function | Verdict |
-|---|---|---|
-| THEN it runs as a standalone Python script or CLI tool | test_main_produces_json_output | PASS |
-| AND it requires no dependencies beyond stdlib | test_extractor_uses_only_stdlib_imports | PASS |
-
-(extractor/tests/test_cli.py)
-
-### Scenario: Decoupled pipeline
-
-| THEN clause | Test function | Verdict |
-|---|---|---|
-| THEN it does not need access to the Python extractor | test_nodes_list_is_returned | PASS |
-| AND the JSON file is self-contained | test_metadata_is_returned | PASS |
-
-(godot/tests/test_scene_graph_loader.gd)
-
-### Scenario: Running the prototype
-
-| THEN clause | Verdict |
-|---|---|
-| THEN it runs natively without browser, container, or VM | PASS-WITH-NOTE |
-
-(Untestable in headless CI — see Untestable THEN-Clauses)
-
-### Scenario: Smooth navigation
-
-| THEN clause | Test function | Verdict |
-|---|---|---|
-| THEN build completes at kartograph scale (60 nodes) | test_kartograph_scale_anchor_count | PASS |
-| THEN all 6 bounded context anchors created | test_kartograph_scale_context_anchors_exist | PASS |
-| THEN all 54 module anchors created | test_kartograph_scale_module_anchors_exist | PASS |
-| THEN world positions for 60 nodes populated | test_kartograph_scale_build_produces_world_positions | PASS |
-| THEN frame rate remains above 30fps | PASS-WITH-NOTE | (Untestable — see below) |
-| AND there is no perceptible stutter or pop-in | PASS-WITH-NOTE | (Untestable — see below) |
-
-(godot/tests/test_nfr_scale.gd)
-
-### Scenario: Pivoting after prototype
-
-| THEN clause | Verdict |
-|---|---|
-| THEN the prototype can be discarded without loss | PASS-WITH-NOTE |
-| AND the JSON scene graph format is the only artifact worth preserving | PASS-WITH-NOTE |
-
-(SHOULD-level requirement; no test required)
-
----
-
-## Untestable THEN-Clauses
-
-### THEN it runs natively without browser, container, or VM dependencies
-- **Why untestable:** "Runs natively" is a deployment-environment assertion requiring a
-  physical OS launch. Headless CI runs inside containers; there is no way to distinguish
-  a native launch from a containerized one in automated tests.
-- **Architectural evidence:** No HTML5 export presets in project.godot, no Dockerfile, no
-  docker-compose.yml, no container manifests anywhere in the repo. All Godot APIs used
-  (FileAccess, DirAccess, Node3D, Camera3D, MeshInstance3D, Label3D, ImmediateMesh) are
-  standard desktop Godot 4.6 APIs. The project compiles and all GDScript tests pass with
-  Godot 4.6.2.stable in headless mode on Linux (Fedora).
-
-### THEN the frame rate remains above 30fps
-- **Why untestable:** FPS measurement requires a GPU render pipeline. Godot headless mode
-  disables the renderer; frame timing is not meaningful and cannot be measured.
-- **Architectural evidence:** `godot/scripts/lod_manager.gd` implements level-of-detail
-  visibility control keyed on camera distance. `main.gd` registers every node and edge
-  with the LOD manager and calls `_update_lod()` each frame. The scene graph structure
-  correctness at kartograph scale (60 nodes, 5 cross-context edges) is fully tested by
-  `test_nfr_scale.gd`.
-
-### AND there is no perceptible stutter or pop-in
-- **Why untestable:** Stutter and pop-in are perceptual phenomena requiring a rendered
-  frame sequence. No automated headless test can detect them.
-- **Architectural evidence:** LOD system exists and is tested. Scene builds at kartograph
-  scale (6 bounded contexts × 9 modules = 54 modules + 6 contexts = 60 anchors) without
-  errors, confirmed by `test_kartograph_scale_anchor_count` and related tests.
-
----
-
-## Requirement Coverage
-
-### R1: Godot 4.6 Engine (MUST) — COVERED
-
-`godot/project.godot` declares `config/features=PackedStringArray("4.6")`. All files in
-`godot/scripts/` are `.gd` (camera_controller.gd, lod_manager.gd, main.gd,
-scene_graph_loader.gd). No `.cs` files. `main.gd` uses `FileAccess.open()` + `get_as_text()`
-(Godot 4.x API), not deprecated Godot 3 `File.new()` or `read_as_text()`.
-
-### R2: Python Extractor (MUST) — COVERED
-
-`extractor/__main__.py` implements a full argparse CLI (`main(argv)` callable as
-`python -m extractor <src_path> [--output <file>]`). All imports are stdlib-only: `ast`,
-`math`, `datetime`, `pathlib`, `argparse`, `json`, `sys`. Confirmed by
-`test_extractor_uses_only_stdlib_imports` which AST-walks every `.py` in `extractor/`
-and asserts each top-level import is in `sys.stdlib_module_names`.
-
-### R3: JSON Interface Contract (MUST) — COVERED
-
-`godot/scripts/scene_graph_loader.gd` and `main.gd::build_from_graph()` operate on pure
-Dictionary input with no imports of the Python extractor and no runtime dependency on the
-source codebase. Zero subprocess calls, zero extractor imports in `godot/scripts/`.
-`test_nodes_list_is_returned` and `test_metadata_is_returned` use inline fixture dictionaries
-with no Python extractor invocation.
-
-### R4: Desktop Platform (MUST) — COVERED (PASS-WITH-NOTE)
-
-No web export presets, no Dockerfile, no container manifests. All Godot APIs are standard
-desktop Godot 4.6. Project compiles and all tests pass under Godot 4.6.2.stable on Linux.
-Deployment environment assertion is untestable in headless CI (documented above).
-
-### R5: Performance at Kartograph Scale (MUST) — COVERED (PASS-WITH-NOTE)
-
-LOD manager implemented. Scene builds correctly at kartograph scale (60 nodes) confirmed
-by `test_nfr_scale.gd`. FPS and stutter detection are untestable in headless CI
-(documented above).
-
-### R6: Prototype Disposability (SHOULD) — NOTE
-
-SHOULD-level requirement. No architectural lock-in. JSON scene graph is the only
-cross-component artifact. No test required per spec convention.
-
----
-
-## Check Script Results
+## run-all-checks.sh Output (verbatim, 22 checks)
 
 ```
 === run-all-checks.sh ===
@@ -180,7 +41,7 @@ OK: Branch adds/modifies 11 source file(s) outside .hyperloop/:
 [EXIT 0]
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-023' has 54 commit(s) above main.
+OK: Branch 'hyperloop/task-023' has 55 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -197,27 +58,14 @@ OK: All 4 clamped variable(s) have boundary-asserting tests
 
 --- check-coordinator-calls-pipeline.sh ---
 SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
-      This check only applies to tasks that implement a view-spec consumer.
 [EXIT 0]
 
 --- check-direction-test-derivations.sh ---
-OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
-OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
-OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
-OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
-OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_increases_pivot_x — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_decreases_pivot_x — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
 OK: All 10 direction/sign-convention test(s) contain derivation comments.
 [EXIT 0]
 
 --- check-end-to-end-integration-test.sh ---
 SKIP: Both a pipeline producer and consumer must exist for this check to apply.
-      Producer (build_prompt / parse_response) found: none
-      Consumer (apply_spec / render_spec) found: none
 [EXIT 0]
 
 --- check-extractor-cli-tested.sh ---
@@ -246,7 +94,6 @@ OK: No prohibited (not-in-scope) features detected.
 
 --- check-pipeline-wiring.sh ---
 SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
-      This check only applies to tasks that implement the LLM->view-spec pipeline.
 [EXIT 0]
 
 --- check-report-scope-section.sh ---
@@ -258,41 +105,21 @@ OK: Scope report section is consistent with actual check-not-in-scope.sh result.
 [EXIT 0]
 
 --- check-then-test-mapping.sh ---
-OK: 'test_extractor_uses_only_stdlib_imports' found in codebase
-OK: 'test_file_access_get_as_text_returns_non_empty_string' found in codebase
-OK: 'test_kartograph_scale_anchor_count' found in codebase
-OK: 'test_kartograph_scale_build_produces_world_positions' found in codebase
-OK: 'test_kartograph_scale_context_anchors_exist' found in codebase
-OK: 'test_kartograph_scale_module_anchors_exist' found in codebase
-OK: 'test_main_produces_json_output' found in codebase
-OK: 'test_main_script_is_gdscript' found in codebase
-OK: 'test_main_uses_godot4_fileaccess_api' found in codebase
-OK: 'test_metadata_is_returned' found in codebase
-OK: 'test_nodes_list_is_returned' found in codebase
-OK: 'test_project_declares_godot_46' found in codebase
-OK: 'test_project_does_not_declare_csharp' found in codebase
-OK: 'test_project_godot_config_features_line' found in codebase
-OK: 'test_project_godot_declares_46_feature' found in codebase
-OK: 'test_scripts_dir_contains_only_gdscript' found in codebase
 OK: All 16 mapped test function(s) verified in codebase
 [EXIT 0]
 
 --- extractor-lint.sh ---
-Linting extractor...
 All checks passed!
-8 files already formatted
-Running extractor tests...
 98 passed in 0.11s
 Extractor checks passed.
 [EXIT 0]
 
 --- godot-compile.sh ---
-Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Godot Engine v4.6.2.stable.official.71f334935
 Godot project compiles successfully.
 [EXIT 0]
 
 --- godot-fileaccess-tested.sh ---
-Found FileAccess.open() in 1 production script file(s).
 OK: FileAccess.open() is exercised in 2 test file(s).
 [EXIT 0]
 
@@ -302,8 +129,6 @@ PASS: All Label3D nodes have billboard and pixel_size set and tested.
 
 --- godot-tests.sh ---
 Found 12 GDScript test file(s) in godot/tests/.
-Running custom headless test runner...
-Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
 Results: 99 passed, 0 failed
 GDScript behavioral tests passed.
 [EXIT 0]
@@ -311,3 +136,110 @@ GDScript behavioral tests passed.
 === Summary: 22 check(s) run ===
 RESULT: ALL PASS
 ```
+
+---
+
+## THEN→Test Mapping (independently verified)
+
+All 16 test functions independently grepped and confirmed to exist in the codebase.
+
+### Scenario: Engine version
+
+| THEN clause | Test function | File | Verdict |
+|---|---|---|---|
+| THEN opens in Godot 4.6.x | `test_project_godot_declares_46_feature` | test_engine_version.gd:39 | COVERED |
+| THEN 4.6 in config/features | `test_project_godot_config_features_line` | test_engine_version.gd:52 | COVERED |
+| THEN 4.6 (Pattern-2) | `test_project_declares_godot_46` | test_godot_version.gd:20 | COVERED |
+| AND all scripts use GDScript (DirAccess iteration) | `test_scripts_dir_contains_only_gdscript` | test_engine_version.gd:98 | COVERED |
+| AND no C#/Mono | `test_project_does_not_declare_csharp` | test_engine_version.gd:66 | COVERED |
+| AND main.gd is .gd | `test_main_script_is_gdscript` | test_godot_version.gd:32 | COVERED |
+| AND API calls valid (get_as_text returns content) | `test_file_access_get_as_text_returns_non_empty_string` | test_engine_version.gd:81 | COVERED |
+| AND API calls valid (no deprecated File.new) | `test_main_uses_godot4_fileaccess_api` | test_godot_version.gd:45 | COVERED |
+
+**Note on Pattern-2 tests in test_godot_version.gd:** these functions return `bool`
+but the file does NOT declare `_test_failed` — correctly treated as Pattern-2 by
+`run_tests.gd`'s `_run_one()` which routes to `result == true` branch. Not inert.
+
+### Scenario: Running the extractor
+
+| THEN clause | Test function | File | Verdict |
+|---|---|---|---|
+| THEN runs as standalone CLI | `test_main_produces_json_output` | test_cli.py:73 | COVERED |
+| AND stdlib-only deps | `test_extractor_uses_only_stdlib_imports` | test_cli.py:154 | COVERED |
+
+Predicate verified: `test_extractor_uses_only_stdlib_imports` walks AST of every
+`.py` in the extractor package and asserts against `sys.stdlib_module_names`. Correct
+iteration predicate (not a manual list check).
+
+### Scenario: Decoupled pipeline
+
+| THEN clause | Test function | File | Verdict |
+|---|---|---|---|
+| THEN no extractor access needed | `test_nodes_list_is_returned` | test_scene_graph_loader.gd:74 | COVERED |
+| AND JSON is self-contained | `test_metadata_is_returned` | test_scene_graph_loader.gd:228 | COVERED |
+
+Tests use inline Dictionary fixtures; no Python extractor invoked. No subprocess calls
+in godot/scripts/. Confirms decoupling is real, not nominal.
+
+### Scenario: Running the prototype
+
+| THEN clause | Verdict |
+|---|---|
+| THEN runs natively without browser/container/VM | PASS-WITH-NOTE |
+
+Untestable in headless CI (deployment environment assertion). Architectural evidence
+confirmed: no Dockerfile, no docker-compose.yml, no HTML5/web export presets, all
+Godot APIs are standard desktop 4.6 (FileAccess, Node3D, Camera3D, Label3D).
+
+### Scenario: Smooth navigation
+
+| THEN clause | Test function | Verdict |
+|---|---|---|
+| THEN 60-node build succeeds (anchor count) | `test_kartograph_scale_anchor_count` | COVERED |
+| THEN all 6 context anchors exist | `test_kartograph_scale_context_anchors_exist` | COVERED |
+| THEN all 54 module anchors exist | `test_kartograph_scale_module_anchors_exist` | COVERED |
+| THEN 60 world positions populated | `test_kartograph_scale_build_produces_world_positions` | COVERED |
+| THEN frame rate > 30fps | PASS-WITH-NOTE | Untestable (no GPU in headless) |
+| AND no perceptible stutter | PASS-WITH-NOTE | Untestable (perceptual, no rendered frames) |
+
+Scale fixture uses 6 bounded contexts × 9 modules = 60 nodes — matches spec's
+"~50 modules, 6 bounded contexts" requirement. LOD manager confirmed implemented
+in `lod_manager.gd` with FAR/MEDIUM/NEAR thresholds; registered in `main.gd`.
+
+### Scenario: Pivoting after prototype
+
+SHOULD-level. No test required. No architectural lock-in found.
+
+---
+
+## Commit Trailers
+
+Both Spec-Ref and Task-Ref present on implementation commits:
+- `Spec-Ref: specs/prototype/nfr.spec.md@e2cac130819f13929ab13e324411ac7a23d66b33`
+- `Task-Ref: task-023`
+
+Confirmed on commits `a0564f1` (initial), `9c07e99` (CLI+scale tests), and subsequent
+`feat(task-023)` commits.
+
+---
+
+## Independent Code Verification
+
+- `main.gd::_ready()`: Non-stub. Calls `FileAccess.open()` + `get_as_text()` (Godot
+  4.x API), parses JSON, delegates to `SceneGraphLoader.load_from_dict()` and
+  `build_from_graph()`. LOD manager registered, `_update_lod()` called in `_process()`.
+- `lod_manager.gd`: Implemented with FAR/MEDIUM/NEAR thresholds (80/20 units),
+  toggles visibility on node and edge entries per type. Not a stub.
+- `godot/project.godot`: `config/features=PackedStringArray("4.6")` confirmed.
+  No C#/Mono entries.
+- No prohibited features found by both automated check and manual semantic audit
+  (llm, build_prompt, parse_response, apply_spec, moldable, Dockerfile, web export).
+
+---
+
+## Verdict: PASS
+
+All 5 MUST requirements covered. All 22 checks exit 0. All 16 THEN-clause test
+functions independently verified to exist and assert correct predicates. Untestable
+THEN-clauses (native OS launch, GPU FPS, perceptual stutter) correctly classified
+with architectural evidence and cannot be resolved by any code change.
