@@ -148,3 +148,9 @@ to assert in headless CI and are correctly classified. All verifiable THEN-claus
 tests with correct assertion predicates, verified by reading each test body.
 
 **VERDICT: PASS**
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
