@@ -15,8 +15,11 @@ extends RefCounted
 ##      Computes dependent sets for proposed splits and transitive cascades for failures.
 ##
 ## Each analysis function returns a plain Dictionary result.
-## The build_*_spec() functions convert results into view-spec dicts that
-## SceneInterpreter.apply_spec() can apply directly to the live 3D scene.
+## The render_*() functions apply visual changes directly to the live 3D scene
+## using the anchors dict (node_id → Node3D) and a scene_root node.
+
+## Highlight colour applied to nodes flagged by quality and impact analysis.
+const HIGHLIGHT_COLOR: Color = Color(1.0, 0.9, 0.0, 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -63,17 +66,22 @@ func check_alignment(actual_nodes: Array, spec_node_ids: Array) -> Dictionary:
 	return {"aligned": aligned, "divergent": divergent, "missing": missing}
 
 
-## Build a view-spec dict from an alignment result.
+## Render alignment results directly onto the live 3D scene.
 ##   aligned nodes  → annotate with "✓ SPEC ALIGNED"
 ##   divergent nodes → highlight and annotate with "⚠ MERGED"
-func build_alignment_spec(alignment_result: Dictionary) -> Dictionary:
-	var ops: Array = []
+##
+## Parameters:
+##   alignment_result — dict returned by check_alignment()
+##   anchors          — Dictionary mapping node_id → Node3D
+##   scene_root       — Node3D where annotation labels are added as children
+func render_alignment(alignment_result: Dictionary, anchors: Dictionary, scene_root: Node3D) -> void:
 	for node_id in alignment_result.get("aligned", []):
-		ops.append({"op": "annotate", "target": node_id, "text": "✓ SPEC ALIGNED"})
+		var anchor: Node3D = anchors.get(node_id)
+		_add_annotation(scene_root, anchor, "✓ SPEC ALIGNED")
 	for node_id in alignment_result.get("divergent", []):
-		ops.append({"op": "highlight", "target": node_id})
-		ops.append({"op": "annotate", "target": node_id, "text": "⚠ MERGED"})
-	return {"operations": ops}
+		var anchor: Node3D = anchors.get(node_id)
+		_highlight_node(anchor)
+		_add_annotation(scene_root, anchor, "⚠ MERGED")
 
 
 # ---------------------------------------------------------------------------
@@ -119,21 +127,26 @@ func analyze_coupling(nodes: Array, edges: Array, threshold: int = 2) -> Diction
 	return {"pairs": pairs}
 
 
-## Build a view-spec from coupling analysis.
+## Render coupling analysis results directly onto the live 3D scene.
 ## Both nodes in each tightly coupled pair are highlighted and annotated.
-func build_coupling_spec(coupling_result: Dictionary) -> Dictionary:
-	var ops: Array = []
+##
+## Parameters:
+##   coupling_result — dict returned by analyze_coupling()
+##   anchors         — Dictionary mapping node_id → Node3D
+##   scene_root      — Node3D where annotation labels are added as children
+func render_coupling(coupling_result: Dictionary, anchors: Dictionary, scene_root: Node3D) -> void:
 	for pair in coupling_result.get("pairs", []):
 		var node_a: String = pair.get("node_a", "")
 		var node_b: String = pair.get("node_b", "")
 		var score: int = pair.get("coupling_score", 0)
 		if not node_a.is_empty():
-			ops.append({"op": "highlight", "target": node_a})
-			ops.append({"op": "annotate", "target": node_a, "text": "⚠ Coupling: %d" % score})
+			var anchor_a: Node3D = anchors.get(node_a)
+			_highlight_node(anchor_a)
+			_add_annotation(scene_root, anchor_a, "⚠ Coupling: %d" % score)
 		if not node_b.is_empty():
-			ops.append({"op": "highlight", "target": node_b})
-			ops.append({"op": "annotate", "target": node_b, "text": "⚠ Coupling: %d" % score})
-	return {"operations": ops}
+			var anchor_b: Node3D = anchors.get(node_b)
+			_highlight_node(anchor_b)
+			_add_annotation(scene_root, anchor_b, "⚠ Coupling: %d" % score)
 
 
 # ---------------------------------------------------------------------------
@@ -173,18 +186,21 @@ func analyze_criticality(nodes: Array, edges: Array, threshold: int = 2) -> Dict
 	return {"critical": critical}
 
 
-## Build a view-spec from criticality analysis.
+## Render criticality analysis results directly onto the live 3D scene.
 ## High-in-degree nodes are highlighted and annotated with their SPOF risk label.
-func build_criticality_spec(criticality_result: Dictionary) -> Dictionary:
-	var ops: Array = []
+##
+## Parameters:
+##   criticality_result — dict returned by analyze_criticality()
+##   anchors            — Dictionary mapping node_id → Node3D
+##   scene_root         — Node3D where annotation labels are added as children
+func render_criticality(criticality_result: Dictionary, anchors: Dictionary, scene_root: Node3D) -> void:
 	for item in criticality_result.get("critical", []):
 		var node_id: String = item.get("node_id", "")
 		var deg: int = item.get("in_degree", 0)
 		if not node_id.is_empty():
-			ops.append({"op": "highlight", "target": node_id})
-			ops.append({"op": "annotate", "target": node_id,
-				"text": "⚠ SPOF Risk (in-degree: %d)" % deg})
-	return {"operations": ops}
+			var anchor: Node3D = anchors.get(node_id)
+			_highlight_node(anchor)
+			_add_annotation(scene_root, anchor, "⚠ SPOF Risk (in-degree: %d)" % deg)
 
 
 # ---------------------------------------------------------------------------
@@ -220,17 +236,23 @@ func simulate_split(nodes: Array, edges: Array, node_id: String) -> Dictionary:
 	return {"dependents": dependents, "new_interfaces": new_interfaces}
 
 
-## Build a view-spec from a split-impact result.
+## Render split-impact results directly onto the live 3D scene.
 ## The split node is highlighted as the subject; dependents are highlighted as affected.
-func build_split_spec(split_result: Dictionary, split_node_id: String) -> Dictionary:
-	var ops: Array = []
+##
+## Parameters:
+##   split_result  — dict returned by simulate_split()
+##   split_node_id — the node being considered for splitting
+##   anchors       — Dictionary mapping node_id → Node3D
+##   scene_root    — Node3D where annotation labels are added as children
+func render_split_impact(split_result: Dictionary, split_node_id: String, anchors: Dictionary, scene_root: Node3D) -> void:
 	if not split_node_id.is_empty():
-		ops.append({"op": "highlight", "target": split_node_id})
-		ops.append({"op": "annotate", "target": split_node_id, "text": "◈ SPLITTING"})
+		var anchor: Node3D = anchors.get(split_node_id)
+		_highlight_node(anchor)
+		_add_annotation(scene_root, anchor, "◈ SPLITTING")
 	for dep in split_result.get("dependents", []):
-		ops.append({"op": "highlight", "target": dep})
-		ops.append({"op": "annotate", "target": dep, "text": "↯ Affected by split"})
-	return {"operations": ops}
+		var dep_anchor: Node3D = anchors.get(dep)
+		_highlight_node(dep_anchor)
+		_add_annotation(scene_root, dep_anchor, "↯ Affected by split")
 
 
 # ---------------------------------------------------------------------------
@@ -280,14 +302,54 @@ func simulate_failure(nodes: Array, edges: Array, node_id: String) -> Dictionary
 	return {"cascade": cascade}
 
 
-## Build a view-spec from a failure-cascade result.
+## Render failure-cascade results directly onto the live 3D scene.
 ## The failed node is annotated "✕ FAILED"; all cascade members are highlighted.
-func build_failure_spec(failure_result: Dictionary, failed_node_id: String) -> Dictionary:
-	var ops: Array = []
+##
+## Parameters:
+##   failure_result — dict returned by simulate_failure()
+##   failed_node_id — the component that has failed
+##   anchors        — Dictionary mapping node_id → Node3D
+##   scene_root     — Node3D where annotation labels are added as children
+func render_failure_cascade(failure_result: Dictionary, failed_node_id: String, anchors: Dictionary, scene_root: Node3D) -> void:
 	if not failed_node_id.is_empty():
-		ops.append({"op": "highlight", "target": failed_node_id})
-		ops.append({"op": "annotate", "target": failed_node_id, "text": "✕ FAILED"})
+		var anchor: Node3D = anchors.get(failed_node_id)
+		_highlight_node(anchor)
+		_add_annotation(scene_root, anchor, "✕ FAILED")
 	for affected in failure_result.get("cascade", []):
-		ops.append({"op": "highlight", "target": affected})
-		ops.append({"op": "annotate", "target": affected, "text": "⚡ Cascading failure"})
-	return {"operations": ops}
+		var aff_anchor: Node3D = anchors.get(affected)
+		_highlight_node(aff_anchor)
+		_add_annotation(scene_root, aff_anchor, "⚡ Cascading failure")
+
+
+# ---------------------------------------------------------------------------
+# Private rendering helpers
+# ---------------------------------------------------------------------------
+
+## Apply highlight color to the MeshInstance3D material of the given anchor.
+## No-ops silently when anchor is null or has no MeshInstance3D child.
+func _highlight_node(anchor: Node3D) -> void:
+	if anchor == null:
+		return
+	for child in anchor.get_children():
+		if child is MeshInstance3D:
+			var mesh_child: MeshInstance3D = child as MeshInstance3D
+			var mat: StandardMaterial3D = mesh_child.material_override as StandardMaterial3D
+			if mat != null:
+				mat.albedo_color = HIGHLIGHT_COLOR
+			return
+
+
+## Add a Label3D annotation to scene_root positioned near the given anchor.
+## The label has billboard = BILLBOARD_ENABLED and pixel_size > 0.0 for legibility.
+## No-ops silently when text is empty.
+func _add_annotation(scene_root: Node3D, anchor: Node3D, text: String) -> void:
+	if text.is_empty() or scene_root == null:
+		return
+	var label := Label3D.new()
+	label.text = text
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.pixel_size = 0.05
+	label.no_depth_test = true
+	if anchor != null:
+		label.position = anchor.position + Vector3(0.0, 1.5, 0.0)
+	scene_root.add_child(label)

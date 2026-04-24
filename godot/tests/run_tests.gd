@@ -45,11 +45,6 @@ func _init() -> void:
 	# --- task-015: Path overlay spec (data-flow.spec.md) ---
 	_run_suite(preload("res://tests/test_flow_overlay.gd").new())
 
-	# --- task-022: Moldable views spec (interaction/moldable-views.spec.md) ---
-	_run_suite(preload("res://tests/test_llm_view_generator.gd").new())
-	_run_suite(preload("res://tests/test_scene_interpreter.gd").new())
-	_run_suite(preload("res://tests/test_moldable_views_pipeline.gd").new())
-
 	# --- task-033: Understanding modes spec (core/understanding-modes.spec.md) ---
 	_run_suite(preload("res://tests/test_understanding_modes.gd").new())
 

@@ -2,8 +2,9 @@
 ## specs/core/understanding-modes.spec.md.
 ##
 ## Each test instantiates real Node3D objects where scene-tree assertions are
-## required, calls the analyzer, applies the resulting view-spec via
-## SceneInterpreter, and asserts actual scene-tree property values.
+## required, calls the analyzer, applies the resulting visual changes via
+## UnderstandingAnalyzer.render_*() methods, and asserts actual scene-tree
+## property values.
 ##
 ## THEN-clause → test function mapping
 ## ─────────────────────────────────────────────────────────────────────────────
@@ -12,7 +13,7 @@
 ##        management as separate components
 ##     → test_aligned_nodes_detected_as_separate
 ##   AND the correspondence between spec and realization is visually apparent
-##     → test_aligned_nodes_have_annotation_in_spec
+##     → test_aligned_nodes_have_annotation_in_scene
 ##   THEN the human can see the divergence between spec and realization
 ##     → test_divergent_nodes_detected
 ##   AND the specific nature of the divergence is clear (merged vs. separate)
@@ -22,7 +23,7 @@
 ##   THEN the coupling between those services is apparent
 ##     → test_tightly_coupled_pair_detected
 ##   AND the human can assess whether the coupling is problematic
-##     → test_coupled_nodes_highlighted_in_spec
+##     → test_coupled_nodes_highlighted
 ##   THEN the criticality and centrality of that component is apparent
 ##     → test_central_node_detected_as_critical
 ##   AND the risk it represents is clear
@@ -43,7 +44,6 @@
 ## Label3D readability (mandatory per project guidelines):
 ##   → test_annotation_label3d_has_billboard_and_pixel_size
 
-const SceneInterpreter = preload("res://scripts/scene_interpreter.gd")
 const UnderstandingAnalyzer = preload("res://scripts/understanding_analyzer.gd")
 
 var _test_failed: bool = false
@@ -108,7 +108,7 @@ func test_aligned_nodes_detected_as_separate() -> void:
 
 
 ## AND the correspondence between spec and realization is visually apparent
-func test_aligned_nodes_have_annotation_in_spec() -> void:
+func test_aligned_nodes_have_annotation_in_scene() -> void:
 	_test_failed = false
 	var analyzer := UnderstandingAnalyzer.new()
 
@@ -117,9 +117,7 @@ func test_aligned_nodes_have_annotation_in_spec() -> void:
 		{"id": "user_mgmt", "type": "bounded_context"},
 	]
 	var alignment: Dictionary = analyzer.check_alignment(actual_nodes, ["auth", "user_mgmt"])
-	var spec: Dictionary = analyzer.build_alignment_spec(alignment)
 
-	# Apply to real Node3D anchors and assert annotation Label3D nodes appear.
 	var auth_anchor := _make_anchor("auth")
 	var user_anchor := _make_anchor("user_mgmt")
 	var scene_root := Node3D.new()
@@ -127,10 +125,9 @@ func test_aligned_nodes_have_annotation_in_spec() -> void:
 	scene_root.add_child(user_anchor)
 	var anchors: Dictionary = {"auth": auth_anchor, "user_mgmt": user_anchor}
 
-	var interp := SceneInterpreter.new()
-	interp.apply_spec(spec, anchors, scene_root)
+	analyzer.render_alignment(alignment, anchors, scene_root)
 
-	# Alignment annotations are added as Label3D children of scene_root.
+	# render_alignment adds Label3D children to scene_root for aligned nodes.
 	var label_count: int = 0
 	for child in scene_root.get_children():
 		if child is Label3D:
@@ -176,16 +173,12 @@ func test_divergent_nodes_annotated_as_merged() -> void:
 	_check(result.get("divergent", []).has("payment"),
 		"'payment' should be divergent because it is merged into 'payment_order'")
 
-	var spec_dict: Dictionary = analyzer.build_alignment_spec(result)
-
-	# Apply and check that a Label3D with "MERGED" text appears.
 	var merged_anchor := _make_anchor("payment")
 	var scene_root := Node3D.new()
 	scene_root.add_child(merged_anchor)
 	var anchors: Dictionary = {"payment": merged_anchor}
 
-	var interp := SceneInterpreter.new()
-	interp.apply_spec(spec_dict, anchors, scene_root)
+	analyzer.render_alignment(result, anchors, scene_root)
 
 	var found_merged: bool = false
 	for child in scene_root.get_children():
@@ -222,7 +215,7 @@ func test_tightly_coupled_pair_detected() -> void:
 
 
 ## AND the human can assess whether the coupling is problematic
-func test_coupled_nodes_highlighted_in_spec() -> void:
+func test_coupled_nodes_highlighted() -> void:
 	_test_failed = false
 	var analyzer := UnderstandingAnalyzer.new()
 
@@ -236,7 +229,6 @@ func test_coupled_nodes_highlighted_in_spec() -> void:
 	]
 
 	var coupling: Dictionary = analyzer.analyze_coupling(nodes, edges, 1)
-	var spec: Dictionary = analyzer.build_coupling_spec(coupling)
 
 	var anchor_x := _make_anchor_with_mesh("svc_x")
 	var anchor_y := _make_anchor_with_mesh("svc_y")
@@ -245,11 +237,9 @@ func test_coupled_nodes_highlighted_in_spec() -> void:
 	scene_root.add_child(anchor_y)
 	var anchors: Dictionary = {"svc_x": anchor_x, "svc_y": anchor_y}
 
-	var interp := SceneInterpreter.new()
-	interp.apply_spec(spec, anchors, scene_root)
+	analyzer.render_coupling(coupling, anchors, scene_root)
 
-	# SceneInterpreter.highlight sets albedo_color to HIGHLIGHT_COLOR.
-	var expected_color: Color = SceneInterpreter.HIGHLIGHT_COLOR
+	var expected_color: Color = UnderstandingAnalyzer.HIGHLIGHT_COLOR
 	var mesh_x: MeshInstance3D = anchor_x.get_child(0) as MeshInstance3D
 	_check(
 		mesh_x.material_override.get("albedo_color") == expected_color,
@@ -306,15 +296,13 @@ func test_critical_node_annotated_with_spof_risk() -> void:
 	]
 
 	var criticality: Dictionary = analyzer.analyze_criticality(nodes, edges, 2)
-	var spec: Dictionary = analyzer.build_criticality_spec(criticality)
 
 	var central_anchor := _make_anchor("central")
 	var scene_root := Node3D.new()
 	scene_root.add_child(central_anchor)
 	var anchors: Dictionary = {"central": central_anchor}
 
-	var interp := SceneInterpreter.new()
-	interp.apply_spec(spec, anchors, scene_root)
+	analyzer.render_criticality(criticality, anchors, scene_root)
 
 	# The risk annotation must contain "SPOF" to communicate the risk clearly.
 	var found_spof: bool = false
@@ -401,9 +389,6 @@ func test_split_new_interfaces_shown() -> void:
 		"new_interfaces must be populated to show what the split would require"
 	)
 
-	# Apply view spec and verify caller is highlighted with annotation in scene.
-	var spec: Dictionary = analyzer.build_split_spec(split_result, "big_svc")
-
 	var big_anchor := _make_anchor_with_mesh("big_svc")
 	var caller_anchor := _make_anchor_with_mesh("caller")
 	var scene_root := Node3D.new()
@@ -411,11 +396,10 @@ func test_split_new_interfaces_shown() -> void:
 	scene_root.add_child(caller_anchor)
 	var anchors: Dictionary = {"big_svc": big_anchor, "caller": caller_anchor}
 
-	var interp := SceneInterpreter.new()
-	interp.apply_spec(spec, anchors, scene_root)
+	analyzer.render_split_impact(split_result, "big_svc", anchors, scene_root)
 
 	# 'caller' (a dependent) must be highlighted to show it is impacted.
-	var expected_color: Color = SceneInterpreter.HIGHLIGHT_COLOR
+	var expected_color: Color = UnderstandingAnalyzer.HIGHLIGHT_COLOR
 	var mesh_caller: MeshInstance3D = caller_anchor.get_child(0) as MeshInstance3D
 	_check(
 		mesh_caller.material_override.get("albedo_color") == expected_color,
@@ -470,7 +454,6 @@ func test_failure_affected_nodes_highlighted() -> void:
 	]
 
 	var failure_result: Dictionary = analyzer.simulate_failure(nodes, edges, "core_svc")
-	var spec: Dictionary = analyzer.build_failure_spec(failure_result, "core_svc")
 
 	var core_anchor := _make_anchor_with_mesh("core_svc")
 	var c1_anchor := _make_anchor_with_mesh("consumer_1")
@@ -479,11 +462,10 @@ func test_failure_affected_nodes_highlighted() -> void:
 	scene_root.add_child(c1_anchor)
 	var anchors: Dictionary = {"core_svc": core_anchor, "consumer_1": c1_anchor}
 
-	var interp := SceneInterpreter.new()
-	interp.apply_spec(spec, anchors, scene_root)
+	analyzer.render_failure_cascade(failure_result, "core_svc", anchors, scene_root)
 
 	# consumer_1 is in the cascade and must be highlighted.
-	var expected_color: Color = SceneInterpreter.HIGHLIGHT_COLOR
+	var expected_color: Color = UnderstandingAnalyzer.HIGHLIGHT_COLOR
 	var mesh_c1: MeshInstance3D = c1_anchor.get_child(0) as MeshInstance3D
 	_check(
 		mesh_c1.material_override.get("albedo_color") == expected_color,
@@ -504,8 +486,8 @@ func test_failure_affected_nodes_highlighted() -> void:
 # ===========================================================================
 
 ## All annotation Label3D nodes must have billboard enabled and pixel_size > 0.
-## The SceneInterpreter._apply_annotate() sets both; this test asserts the
-## values on nodes created through the understanding-analyzer → spec pipeline.
+## UnderstandingAnalyzer._add_annotation() sets both; this test asserts the
+## values on nodes created through the analyzer pipeline.
 func test_annotation_label3d_has_billboard_and_pixel_size() -> void:
 	_test_failed = false
 	var analyzer := UnderstandingAnalyzer.new()
@@ -522,24 +504,22 @@ func test_annotation_label3d_has_billboard_and_pixel_size() -> void:
 	]
 
 	var criticality: Dictionary = analyzer.analyze_criticality(nodes, edges, 1)
-	var spec: Dictionary = analyzer.build_criticality_spec(criticality)
 
 	var anchor := _make_anchor("watched_svc")
 	var scene_root := Node3D.new()
 	scene_root.add_child(anchor)
 	var anchors: Dictionary = {"watched_svc": anchor}
 
-	var interp := SceneInterpreter.new()
-	interp.apply_spec(spec, anchors, scene_root)
+	analyzer.render_criticality(criticality, anchors, scene_root)
 
-	# Find the annotation Label3D added by SceneInterpreter.
+	# Find the annotation Label3D added by render_criticality.
 	var label: Label3D = null
 	for child in scene_root.get_children():
 		if child is Label3D:
 			label = child as Label3D
 			break
 
-	_check(label != null, "annotation Label3D must be created by the apply_spec pipeline")
+	_check(label != null, "annotation Label3D must be created by the render_criticality pipeline")
 	if label != null:
 		_check(
 			label.billboard == BaseMaterial3D.BILLBOARD_ENABLED,
