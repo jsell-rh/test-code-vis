@@ -2,6 +2,9 @@
 verdict: pass
 ---
 
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
+
 ## Spec Alignment Review — specs/prototype/nfr.spec.md (task-023)
 
 Branch: `hyperloop/task-023`
