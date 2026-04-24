@@ -48,6 +48,9 @@ func _init() -> void:
 	# --- task-031: Understanding modes spec (core/understanding-modes.spec.md) ---
 	_run_suite(preload("res://tests/test_understanding_overlay.gd").new())
 
+	# --- task-033: Understanding analyzer (core/understanding-modes.spec.md) ---
+	_run_suite(preload("res://tests/test_understanding_modes.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
