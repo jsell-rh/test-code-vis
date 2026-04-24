@@ -157,7 +157,7 @@ func test_all_scene_nodes_have_visible_name_labels() -> void:
 	_check(found_label_for_graph, "Expected a Label3D with text 'graph' in the scene")
 
 
-func test_bounded_context_nodes_distinguishable_by_type() -> bool:
+func test_bounded_context_nodes_distinguishable_by_type() -> void:
 	## System-purpose THEN-clause: 'human can correctly answer architectural
 	## questions' — the human must be able to distinguish bounded contexts from
 	## internal modules.  Bounded context volumes must use a different material
@@ -176,7 +176,8 @@ func test_bounded_context_nodes_distinguishable_by_type() -> bool:
 						if mat.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA:
 							found_transparent_bc = true
 
-	return found_transparent_bc
+	_check(found_transparent_bc,
+		"Expected at least one bounded-context MeshInstance3D with TRANSPARENCY_ALPHA material")
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +185,7 @@ func test_bounded_context_nodes_distinguishable_by_type() -> bool:
 # ---------------------------------------------------------------------------
 
 
-func test_node_size_grows_with_scene_graph_size_value() -> bool:
+func test_node_size_grows_with_scene_graph_size_value() -> void:
 	## System-purpose THEN-clause: 'human can identify structural problems' —
 	## a module with high LOC must appear visually larger so problems like
 	## god classes or oversized bounded contexts stand out immediately.
@@ -198,8 +199,10 @@ func test_node_size_grows_with_scene_graph_size_value() -> bool:
 	var big_anchor: Node3D = main_node.get_node_or_null("big")
 	var small_anchor: Node3D = main_node.get_node_or_null("small")
 
+	_check(big_anchor != null, "Expected anchor node 'big' in scene")
+	_check(small_anchor != null, "Expected anchor node 'small' in scene")
 	if big_anchor == null or small_anchor == null:
-		return false
+		return
 
 	for child: Node in big_anchor.get_children():
 		if child is MeshInstance3D:
@@ -215,10 +218,11 @@ func test_node_size_grows_with_scene_graph_size_value() -> bool:
 				small_mesh_x = (mi.mesh as BoxMesh).size.x
 				break
 
-	return big_mesh_x > small_mesh_x
+	_check(big_mesh_x > small_mesh_x,
+		"Expected big node BoxMesh.size.x (%s) > small node BoxMesh.size.x (%s)" % [big_mesh_x, small_mesh_x])
 
 
-func test_dependency_edges_expose_coupling_in_scene() -> bool:
+func test_dependency_edges_expose_coupling_in_scene() -> void:
 	## System-purpose THEN-clause: 'human can identify structural problems' —
 	## coupling between bounded contexts must be visible as line geometry in the
 	## scene so the human can see which contexts are tightly coupled.
@@ -234,7 +238,7 @@ func test_dependency_edges_expose_coupling_in_scene() -> bool:
 				found_line = true
 				break
 
-	return found_line
+	_check(found_line, "Expected a MeshInstance3D with ImmediateMesh for coupling line geometry")
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +246,7 @@ func test_dependency_edges_expose_coupling_in_scene() -> bool:
 # ---------------------------------------------------------------------------
 
 
-func test_cross_context_edge_has_directional_arrowhead() -> bool:
+func test_cross_context_edge_has_directional_arrowhead() -> void:
 	## System-purpose THEN-clause: 'human can predict the impact of proposed
 	## changes' — to follow the dependency graph and assess change impact, the
 	## direction of each dependency must be discernible.  A CylinderMesh with
@@ -251,15 +255,18 @@ func test_cross_context_edge_has_directional_arrowhead() -> bool:
 	var main_node: Node3D = Main.new()
 	main_node.build_from_graph(_make_two_context_graph())
 
+	var found_arrowhead := false
 	for child: Node in main_node.get_children():
 		if child is MeshInstance3D:
 			var mi := child as MeshInstance3D
 			if mi.mesh is CylinderMesh:
 				var cone := mi.mesh as CylinderMesh
 				if cone.top_radius == 0.0:
-					return true
+					found_arrowhead = true
+					break
 
-	return false
+	_check(found_arrowhead,
+		"Expected a MeshInstance3D with CylinderMesh (top_radius=0) as directional arrowhead")
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +274,7 @@ func test_cross_context_edge_has_directional_arrowhead() -> bool:
 # ---------------------------------------------------------------------------
 
 
-func test_scene_graph_loader_reads_codebase_json() -> bool:
+func test_scene_graph_loader_reads_codebase_json() -> void:
 	## System-purpose THEN-clause: 'the codebase is treated as the realized
 	## design' — the Godot application loads the JSON produced by the extractor
 	## (which reads the actual codebase) and builds the 3D scene from it.
@@ -276,7 +283,10 @@ func test_scene_graph_loader_reads_codebase_json() -> bool:
 	var raw := _make_two_context_graph()
 	var graph: Dictionary = SceneGraphLoader.load_from_dict(raw)
 
-	return graph.has("nodes") and graph.has("edges") and graph["nodes"].size() == 2
+	_check(graph.has("nodes"), "SceneGraphLoader output must have 'nodes' key")
+	_check(graph.has("edges"), "SceneGraphLoader output must have 'edges' key")
+	_check(graph["nodes"].size() == 2,
+		"Expected 2 nodes in graph, got %d" % graph["nodes"].size())
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +294,7 @@ func test_scene_graph_loader_reads_codebase_json() -> bool:
 # ---------------------------------------------------------------------------
 
 
-func test_structural_metrics_available_in_scene() -> bool:
+func test_structural_metrics_available_in_scene() -> void:
 	## System-purpose THEN-clause: 'human can determine whether the build is
 	## architecturally sound regardless of spec compliance' — soundness
 	## evaluation requires seeing complexity (node size) and coupling (edges).
@@ -306,7 +316,8 @@ func test_structural_metrics_available_in_scene() -> bool:
 			if (child as MeshInstance3D).mesh is ImmediateMesh:
 				has_edge_line = true
 
-	return has_size_encoded_box and has_edge_line
+	_check(has_size_encoded_box, "Expected at least one BoxMesh (size-encoded) in scene")
+	_check(has_edge_line, "Expected at least one ImmediateMesh (coupling edge) in scene")
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +325,7 @@ func test_structural_metrics_available_in_scene() -> bool:
 # ---------------------------------------------------------------------------
 
 
-func test_navigation_methods_exist_on_camera_controller() -> bool:
+func test_navigation_methods_exist_on_camera_controller() -> void:
 	## System-purpose THEN-clause: 'human can explore the impact of potential
 	## changes before updating the spec' — exploration requires navigating the
 	## 3D space (pan, zoom, orbit).  The camera controller must expose these
@@ -323,11 +334,10 @@ func test_navigation_methods_exist_on_camera_controller() -> bool:
 
 	# The controller must expose set_pivot (framing), get_distance (LOD),
 	# and the internal state variables used for pan, orbit, and zoom.
-	var has_set_pivot: bool = cam.has_method("set_pivot")
-	var has_get_distance: bool = cam.has_method("get_distance")
-	var has_handle_button: bool = cam.has_method("_handle_button")
-	var has_handle_motion: bool = cam.has_method("_handle_motion")
-	var has_zoom: bool = cam.has_method("_zoom_toward_cursor")
+	_check(cam.has_method("set_pivot"), "CameraController must have set_pivot method")
+	_check(cam.has_method("get_distance"), "CameraController must have get_distance method")
+	_check(cam.has_method("_handle_button"), "CameraController must have _handle_button method")
+	_check(cam.has_method("_handle_motion"), "CameraController must have _handle_motion method")
+	_check(cam.has_method("_zoom_toward_cursor"), "CameraController must have _zoom_toward_cursor method")
 
 	cam.free()
-	return has_set_pivot and has_get_distance and has_handle_button and has_handle_motion and has_zoom
