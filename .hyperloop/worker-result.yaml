@@ -1,0 +1,154 @@
+---
+verdict: pass
+---
+## Summary
+
+Task-016 implements `specs/visualization/data-flow.spec.md`: on-demand flow
+path visualization overlaid on the persistent structural geography.
+
+### What was already present on main (PR #88)
+
+The full implementation was merged before this branch was cut:
+
+- `godot/scripts/flow_overlay.gd` — FlowOverlay class with `setup()`,
+  `show_path()`, `clear_path()`, `show_aggregate()`, and `is_path_active()`.
+- `godot/tests/test_flow_overlay.gd` — 21 GDScript tests covering every
+  THEN-clause in the spec.
+- `godot/tests/run_tests.gd` — headless runner already wires in
+  `test_flow_overlay.gd`.
+
+### What this branch adds
+
+Two pre-existing check failures prevented `run-all-checks.sh` from exiting 0:
+
+1. `check-extractor-cli-tested.sh` — no test exercised `main()` in
+   `extractor/__main__.py`.
+2. `check-extractor-stdlib-only.sh` — no test verified the extractor uses
+   only stdlib imports via `sys.stdlib_module_names`.
+
+This branch adds `extractor/tests/test_cli.py` to address both failures.
+
+---
+
+## THEN-clause → Test Mapping
+
+### Requirement: Flow is On-Demand
+
+| THEN-clause | Test function | Assertion |
+|---|---|---|
+| Flow NOT shown by default | `test_flow_not_active_by_default` | `not overlay.is_path_active()` (line 119) |
+
+### Scenario: Requesting a flow path
+
+| THEN-clause | Test function | Assertion |
+|---|---|---|
+| Relevant flow path lights up through structure | `test_path_mid_node_lit_up` | `col.r >= 0.9 and col.g >= 0.9 and col.b >= 0.9` (line 136) |
+| Irrelevant structural elements are de-emphasized | `test_offpath_nodes_deemphasized` | `col.r <= 0.4 and col.g <= 0.4 and col.b <= 0.4 and col.a <= 0.4` (line 181) |
+| Irrelevant elements de-emphasized (transparency) | `test_offpath_node_transparency_mode` | `mat.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA` (line 194) |
+| Flow path traceable from entry point | `test_entry_node_green` | `col.g > 0.8 and col.r < 0.5 and col.b < 0.5` (line 151) |
+| Flow path traceable to terminus | `test_terminus_node_red` | `col.r > 0.8 and col.g < 0.5 and col.b < 0.5` (line 166) |
+
+### Scenario: Flow overlaid on structure
+
+| THEN-clause | Test function | Assertion |
+|---|---|---|
+| Flow rendered as path through structural space | `test_path_edges_visible` | `e1.visible and e2.visible` (line 233) |
+| Flow rendered as path (cyan highlight) | `test_path_edges_cyan` | `col.r <= 0.1 and col.g >= 0.8 and col.b >= 0.9` (line 248) |
+| Structural context remains visible (not replaced) | `test_offpath_nodes_still_in_scene` | `other.get_parent() != null and other.visible` (line 207) |
+| Human can follow path spatially | `test_positions_unchanged_when_path_shown` | `entry.position.is_equal_approx(...)` (line 221) |
+
+### Scenario: Identifying a bottleneck
+
+| THEN-clause | Test function | Assertion |
+|---|---|---|
+| High-traffic paths visually prominent (orange) | `test_high_traffic_edge_orange` | `col.r >= 0.9 and col.g <= 0.6 and col.b <= 0.1` (line 317) |
+| High-traffic paths visually prominent (yellow) | `test_medium_traffic_edge_yellow` | `col.r >= 0.9 and col.g >= 0.7 and col.b <= 0.1` (line 332) |
+| Bottleneck points identifiable (overlay exists) | `test_bottleneck_node_has_overlay` | child.name == "BottleneckOverlay" (line 343) |
+| Bottleneck points identifiable (red color) | `test_bottleneck_overlay_red` | `col.r >= 0.9 and col.g <= 0.1 and col.b <= 0.1` (line 361) |
+
+---
+
+## Check Script Results
+
+```
+=== run-all-checks.sh ===
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-016' has 1 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM→view-spec pipeline.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- extractor-lint.sh ---
+Linting extractor...
+All checks passed!
+8 files already formatted
+Running extractor tests...
+95 passed in 0.10s
+Extractor checks passed.
+[EXIT 0]
+
+--- godot-compile.sh ---
+Compiling Godot project...
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+All GDScript tests PASS (including test_flow_overlay.gd).
+[EXIT 0]
+
+=== Summary: 15 check(s) run ===
+ALL PASS
+```
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
