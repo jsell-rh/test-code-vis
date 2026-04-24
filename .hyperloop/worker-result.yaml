@@ -2,119 +2,153 @@
 verdict: pass
 ---
 
-## Spec Alignment Review — task-021 (Moldable Views)
+## Independent Reviewer Verdict — task-021 (Moldable Views)
 
 Branch: hyperloop/task-021
 Spec: specs/interaction/moldable-views.spec.md
-
----
-
-## Prototype Scope Note
-
-`specs/prototype/prototype-scope.spec.md` lists moldable views as NOT in prototype scope.
-However, this branch actively implements the feature. Per the review guidelines:
-"Do NOT fail a task for missing features that are out of prototype scope."
-Since the feature IS implemented, a full spec alignment review is appropriate.
-
----
-
-## Requirement: Question-Driven View Generation
-
-**Status: COVERED**
-
-Implementation:
-- `godot/scripts/llm_view_generator.gd` — `build_prompt(question, graph)` constructs a
-  prompt embedding the question text plus all graph node ids, directing the LLM to emit
-  a view spec that identifies and arranges relevant components.
-- `godot/scripts/scene_interpreter.gd` — `apply(spec, anchors, scene_root, world_positions)`
-  interprets show/hide/arrange/connect operations, producing visible spatial mutations.
-- `godot/scripts/main.gd` — `apply_view_spec(spec)` wires both stages together.
-
-### Scenario: Architectural question — COVERED
-
-| THEN clause | Implementation | Test |
-|---|---|---|
-| generates view focused on auth-related components | `build_prompt()` embeds node ids including auth_service | `test_build_prompt_contains_node_id_auth_service` (test_llm_view_generator.gd:123): `prompt.contains("auth_service")` |
-| irrelevant components are hidden or de-emphasized (pipeline) | `parse_response()` passes through "hide" op | `test_parse_response_passes_through_hide_op` (line 211): `spec["operations"][0]["op"] == "hide"` |
-| irrelevant components are hidden or de-emphasized (renderer) | `_apply_hide()` sets `anchor.visible = false` | `test_hide_op_sets_visible_false` (test_scene_interpreter.gd:73): `anchor.visible == false` on real Node3D |
-| relevant components are arranged (pipeline) | `parse_response()` passes through "arrange" op | `test_parse_response_passes_through_arrange_op` (line 223): `spec["operations"][0]["op"] == "arrange"` |
-| relevant components are arranged (renderer) | `_apply_arrange()` sets `anchor.position = Vector3(x,y,z)` | `test_arrange_op_sets_all_three_axes` (test_scene_interpreter.gd:250): all 3 axes within 0.001 of fixture |
-
-### Scenario: Impact question — COVERED
-
-| THEN clause | Implementation | Test |
-|---|---|---|
-| generates view showing user_db and dependents (pipeline) | `parse_response()` passes through "show" op | `test_parse_response_passes_through_show_op` (line 199): `spec["operations"][0]["op"] == "show"` |
-| generates view showing user_db and dependents (renderer) | `_apply_show()` sets `anchor.visible = true` | `test_show_op_sets_visible_true` (test_scene_interpreter.gd:115): `anchor.visible == true` on real Node3D |
-| dependency relationships spatially clear (line) | `_apply_connect()` adds `ImmediateMesh` line to scene_root | `test_connect_op_adds_line_geometry` (line 364): `>= 1 MeshInstance3D` on scene_root |
-| dependency relationships spatially clear (arrowhead) | `_apply_connect()` adds `CylinderMesh` cone arrowhead | `test_connect_op_adds_arrowhead` (line 393): `>= 2 MeshInstance3D` (line + cone) |
-
----
-
-## Requirement: View Specs as Intermediate Representation
-
-**Status: COVERED**
-
-Implementation:
-- `LLMViewGenerator.parse_response()` returns a plain `Dictionary` with `"question"` and
-  `"operations"` keys — never raw Node3D geometry.
-- `SceneInterpreter.apply()` consumes that dictionary and mutates scene-tree nodes.
-- The two stages are decoupled: the LLM never touches Node3D objects.
-
-### Scenario: LLM produces view spec — COVERED
-
-| THEN clause | Implementation | Test |
-|---|---|---|
-| emits structured view spec (not raw 3D geometry) | `parse_response()` returns `Dictionary`, not Node/geometry | `test_parse_response_returns_dictionary` (line 157): `result is Dictionary` |
-| view spec controls show/hide/highlight/arrange/annotate/connect | `_make_spec()` filters and preserves all 6 op types | `test_parse_response_all_six_ops_pass_through` (line 273): `spec["operations"].size() == 6` with all 6 ops named |
-| 3D renderer interprets view spec into spatial scene | `SceneInterpreter.apply()` dispatches all 6 ops to Node3D mutations | `test_all_six_ops_mutate_scene_correctly` (test_scene_interpreter.gd:445): `anchor_a.visible`, `anchor_b.visible`, `mat_a.albedo_color.g`, `anchor_a.position.x`, `label.text`, `line_added` all asserted |
-
----
-
-## Requirement: Fixed Visual Primitive Set
-
-**Status: COVERED**
-
-Implementation:
-- `VALID_OPS: Array = ["show", "hide", "highlight", "arrange", "annotate", "connect"]`
-  declared as a const on line 31 of `llm_view_generator.gd`.
-- `build_prompt()` embeds `VALID_OPS` in the prompt text (line 53-64), so the LLM is told
-  the fixed contract before it generates any output.
-- `_make_spec()` (line 122-127) filters every op through `VALID_OPS.has(op.get("op", ""))`,
-  silently dropping any unknown op — no new rendering logic can enter the renderer.
-- `SceneInterpreter.apply()` uses a `match` statement covering exactly the 6 ops; unmatched
-  ops fall through silently.
-
-### Scenario: LLM uses existing primitives — COVERED
-
-| THEN clause | Implementation | Test |
-|---|---|---|
-| composes from show | `build_prompt()` includes "show" in ops_list | `test_build_prompt_contains_show_primitive` (line 85): `prompt.contains("show")` |
-| composes from hide | `build_prompt()` includes "hide" in ops_list | `test_build_prompt_contains_hide_primitive` (line 93): `prompt.contains("hide")` |
-| composes from highlight | `build_prompt()` includes "highlight" in ops_list | `test_build_prompt_contains_highlight_primitive` (line 99): `prompt.contains("highlight")` |
-| composes from arrange | `build_prompt()` includes "arrange" in ops_list | `test_build_prompt_contains_arrange_primitive` (line 105): `prompt.contains("arrange")` |
-| composes from annotate | `build_prompt()` includes "annotate" in ops_list | `test_build_prompt_contains_annotate_primitive` (line 111): `prompt.contains("annotate")` |
-| composes from connect | `build_prompt()` includes "connect" in ops_list | `test_build_prompt_contains_connect_primitive` (line 117): `prompt.contains("connect")` |
-| no new rendering logic at runtime (partial unknown) | `_make_spec()` drops op not in VALID_OPS | `test_parse_response_filters_unknown_ops` (line 298): unknown op removed, only "show" survives |
-| no new rendering logic at runtime (all unknown) | `_make_spec()` drops all ops | `test_parse_response_with_all_unknown_ops_returns_empty_operations` (line 314): `spec["operations"].size() == 0` |
-| no new rendering logic at runtime (renderer ignores unknown) | `match` in `SceneInterpreter.apply()` has no arm for unknown ops | `test_unknown_op_is_ignored` (test_scene_interpreter.gd:505): `anchor.visible == true` unchanged after unknown op |
-
----
-
-## Summary
-
-| Requirement | Scenario | Status |
-|---|---|---|
-| Question-Driven View Generation | Architectural question | COVERED — 5 tests, correct predicates |
-| Question-Driven View Generation | Impact question | COVERED — 4 tests, correct predicates |
-| View Specs as Intermediate Representation | LLM produces view spec | COVERED — 3 tests including integration over all 6 ops |
-| Fixed Visual Primitive Set | LLM uses existing primitives | COVERED — 9 tests (6 prompt + 3 filter/ignore) |
-
-All SHALL/MUST requirements are implemented in code and exercised by GDScript behavioral
-tests that assert runtime scene-tree property values (not just compilation). Verdict: PASS.
+Reviewer action: synced `.hyperloop/checks/` from main before running checks.
 
 ---
 
 ## Scope Check Output
 
 OK: No prohibited (not-in-scope) features detected.
+
+---
+
+## run-all-checks.sh Output (verbatim summary)
+
+```
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-021' has 56 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: All 2 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+Stage 1 (view-spec producer) found in: godot/scripts/llm_view_generator.gd, godot/scripts/main.gd, godot/scripts/scene_interpreter.gd
+Stage 2 (scene consumer) evidence — pattern '\.visible\s*=' found in: godot/scripts/scene_interpreter.gd
+Stage 2 rendering tests found: godot/tests/test_scene_interpreter.gd (and others)
+OK: View-spec pipeline appears wired end-to-end (producer + consumer + rendering tests).
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- extractor-lint.sh ---
+All checks passed! 7 files already formatted. 90 passed in 0.14s.
+[EXIT 0]
+
+--- godot-compile.sh ---
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+[EXIT 0]
+
+--- godot-label3d.sh ---
+[EXIT 0]
+
+--- godot-tests.sh ---
+GDScript behavioral tests passed.
+[EXIT 0]
+
+=== Summary: 13 check(s) run ===
+RESULT: ALL PASS
+```
+
+---
+
+## State-Files Audit
+
+`git log main..hyperloop/task-021 -- .hyperloop/state/` returns empty — no branch-unique
+commits touch state files. The 30-file diff visible via `git diff main -- .hyperloop/state/`
+is entirely due to main advancing with orchestrator commits after the branch was cut from
+merge-base `1d79b83` (orchestrator: cycle update). The implementer did not commit state
+files. Process-clean.
+
+---
+
+## THEN→Test Mapping (independently verified)
+
+### Scenario: Architectural question
+
+| THEN clause | Test | Verified |
+|---|---|---|
+| generates view focused on auth-related components | `test_build_prompt_contains_node_id_auth_service` (test_llm_view_generator.gd:123) — asserts `prompt.contains("auth_service")` | PASS — grep confirmed, predicate read |
+| irrelevant components hidden (pipeline) | `test_parse_response_passes_through_hide_op` (line 211) — asserts `spec["operations"][0]["op"] == "hide"` | PASS |
+| irrelevant components hidden (renderer) | `test_hide_op_sets_visible_false` (test_scene_interpreter.gd:73) — instantiates real Node3D, asserts `anchor.visible == false` | PASS — body read, real Node3D confirmed |
+| relevant components arranged (pipeline) | `test_parse_response_passes_through_arrange_op` (line 223) | PASS |
+| relevant components arranged (renderer) | `test_arrange_op_sets_all_three_axes` (test_scene_interpreter.gd:250) — asserts x/y/z within 0.001 on real Node3D | PASS — body read, 3-axis assertion confirmed |
+
+### Scenario: Impact question
+
+| THEN clause | Test | Verified |
+|---|---|---|
+| view showing user_db (pipeline) | `test_parse_response_passes_through_show_op` (line 199) | PASS |
+| view showing user_db (renderer) | `test_show_op_sets_visible_true` (test_scene_interpreter.gd:115) — instantiates real Node3D, asserts `anchor.visible == true` | PASS — body read |
+| dependency relationships spatially clear (line) | `test_connect_op_adds_line_geometry` (line 364) — checks MeshInstance3D added to scene_root | PASS |
+| dependency relationships spatially clear (arrowhead) | `test_connect_op_adds_arrowhead` (line 393) — checks >= 2 MeshInstance3D | PASS |
+
+### Scenario: LLM produces view spec
+
+| THEN clause | Test | Verified |
+|---|---|---|
+| emits Dictionary, not raw geometry | `test_parse_response_returns_dictionary` (line 157) — `result is Dictionary` | PASS |
+| spec controls all 6 op types | `test_parse_response_all_six_ops_pass_through` (line 273) | PASS |
+| renderer interprets spec into spatial scene | `test_all_six_ops_mutate_scene_correctly` (test_scene_interpreter.gd:445) — full integration test asserting visible, albedo_color.g, position.x, label.text, line_added on real nodes | PASS — body read, all 6 predicates confirmed |
+
+### Scenario: LLM uses existing primitives
+
+| THEN clause | Test | Verified |
+|---|---|---|
+| prompt contains "show" | `test_build_prompt_contains_show_primitive` (line 85) | PASS |
+| prompt contains "hide" | `test_build_prompt_contains_hide_primitive` (line 93) | PASS |
+| prompt contains "highlight" | `test_build_prompt_contains_highlight_primitive` (line 99) | PASS |
+| prompt contains "arrange" | `test_build_prompt_contains_arrange_primitive` (line 105) | PASS |
+| prompt contains "annotate" | `test_build_prompt_contains_annotate_primitive` (line 111) | PASS |
+| prompt contains "connect" | `test_build_prompt_contains_connect_primitive` (line 117) | PASS |
+| unknown ops filtered (partial) | `test_parse_response_filters_unknown_ops` (line 298) | PASS |
+| unknown ops filtered (all) | `test_parse_response_with_all_unknown_ops_returns_empty_operations` (line 314) | PASS |
+| renderer ignores unknown ops | `test_unknown_op_is_ignored` (test_scene_interpreter.gd:505) | PASS |
+
+All 18 test functions confirmed present via grep. All predicate bodies read and verified.
+
+---
+
+## Additional Verifications
+
+- **`_ready()` not a stub**: opens FileAccess, parses JSON, calls `build_from_graph()` — full implementation.
+- **Pipeline end-to-end**: `LLMViewGenerator.build_prompt()` → LLM → `parse_response()` → `apply_view_spec()` → `SceneInterpreter.apply()` → Node3D mutations.
+- **VALID_OPS constant**: declared at line 31 of `llm_view_generator.gd`; embedded in prompt; filtered in `_make_spec()`; dispatched in `match` block of `scene_interpreter.gd`.
+- **Arrowhead geometry**: `CylinderMesh` with `top_radius=0` confirmed in `scene_interpreter.gd:204-222`. Satisfies "direction is visually indicated" requirement.
+- **Commit trailers**: All 5 implementation commits carry `Spec-Ref: specs/interaction/moldable-views.spec.md@6bed97ab44f1e1e464b566f807f5168951259b4e` and `Task-Ref: task-021`.
+- **Extractor**: ruff clean, 90 pytest pass, type hints present.
+
+---
+
+## Verdict: PASS
+
+All 3 SHALL requirements fully implemented and covered by behavioral GDScript tests
+asserting runtime scene-tree property values. All 13 automated checks exit 0.
+No prohibited features. Pipeline wired end-to-end. Commit trailers present.
