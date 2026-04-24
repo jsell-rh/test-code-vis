@@ -37,8 +37,10 @@ fi
 #   [EXIT 0]
 #
 # We look for the check name followed within 5 lines by either a SKIP line
-# or an [EXIT 0] line — either indicates a falsified passing result.
-if grep -A5 "check-compound-then-clause-coverage" "$REPORT" | grep -qE '(^SKIP:|^\[EXIT 0\])'; then
+# or an [EXIT 0] token — either indicates a falsified passing result.
+# The pattern matches both the multi-line run-all-checks.sh format ([EXIT 0]
+# on its own line) and the inline condensed format (check-name  [EXIT 0]  ...).
+if grep -A5 "check-compound-then-clause-coverage" "$REPORT" | grep -qE '(^SKIP:|\[EXIT 0\])'; then
     echo "FAIL: Falsification detected."
     echo "  check-compound-then-clause-coverage.sh exits $ACTUAL_EXIT (compound THEN-clauses"
     echo "  under-cited) but worker-result.yaml records SKIP or [EXIT 0] for this check."
