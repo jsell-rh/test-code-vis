@@ -179,11 +179,28 @@ func test_zoom_out_from_cursor_shifts_pivot_away() -> bool:
 	# Place pivot between origin and cursor.
 	cam._pivot = Vector3(5.0, 0.0, 0.0)
 	var cursor_world := Vector3(10.0, 0.0, 0.0)
-
+	# zoom out (direction > 0) → step > 0 → target_distance increases →
+	# zoom_fraction = 1 − (larger / smaller) < 0 → pivot.lerp(cursor, negative) →
+	# pivot shifts away from cursor → pivot.x decreases below 5.0 ✓
 	cam._zoom_toward_cursor(cursor_world, cam.zoom_speed)  # zoom out
 
 	# Pivot should move away from cursor (x decreases below 5).
 	return cam._pivot.x < 5.0
+
+
+# Cursor exactly at pivot: zoom_fraction applied via lerp(pivot, pivot, f) = pivot → no shift.
+# Spec: "the component under the cursor stays under the cursor during the zoom" —
+# edge case where cursor is already at pivot must not corrupt pivot state.
+func test_zoom_cursor_at_pivot_does_not_shift_pivot() -> bool:
+	# cursor == pivot → lerp(cursor, cursor, zoom_fraction) = cursor → pivot unchanged ✓
+	var cam = _make_cam()
+	cam._pivot = Vector3(3.0, 0.0, 3.0)
+	var initial_pivot: Vector3 = cam._pivot
+
+	# Cursor is exactly at the pivot — pivot must stay fixed regardless of zoom direction.
+	cam._zoom_toward_cursor(cam._pivot, -cam.zoom_speed)  # zoom in with cursor at pivot
+
+	return cam._pivot == initial_pivot
 
 
 func test_zoom_out_increases_target_distance() -> bool:
