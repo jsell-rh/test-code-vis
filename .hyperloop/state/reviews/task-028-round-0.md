@@ -1,7 +1,145 @@
 ---
 task_id: task-028
 round: 0
-role: orchestrator
+role: verifier
 verdict: fail
 ---
-Branch reset: 3 consecutive rebase/merge failures. The branch likely has state files in its commit history that cause permanent conflicts. Task reset to not-started for a fresh attempt.
+## Reviewer Findings
+
+### Run-All-Checks Output (verbatim)
+
+```
+=== run-all-checks.sh ===
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-028' has 3 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method found.
+[EXIT 0]
+
+--- check-direction-test-derivations.sh ---
+OK: All 11 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
+
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (6 suite(s) checked)
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+FAIL: Prohibited data-flow visualization code detected (matched by feature keyword).
+  The spec bans the FEATURE (data flow visualization), not just specific file names.
+  Matched files:
+godot/scripts/flow_overlay.gd
+godot/scripts/main.gd
+godot/tests/run_tests.gd
+godot/tests/test_flow_overlay.gd
+FAIL: A file references specs/visualization/data-flow.spec.md in its docstring — this is an implementation of the prohibited data-flow visualization feature.
+godot/tests/run_tests.gd
+godot/tests/test_flow_overlay.gd
+[EXIT 1 — FAIL]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+FAIL: .hyperloop/worker-result.yaml not found — draft your report before running this check.
+[EXIT 1 — FAIL]
+
+--- extractor-lint.sh ---
+All checks passed! 94 passed in 0.16s
+[EXIT 0]
+
+--- godot-compile.sh ---
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Results: 139 passed, 0 failed
+[EXIT 0]
+```
+
+---
+
+### Findings Table
+
+| # | Finding | Severity | Detail |
+|---|---------|----------|--------|
+| 1 | **Prohibited data-flow visualization code present** | BLOCKING FAIL | `godot/scripts/flow_overlay.gd` and `godot/tests/test_flow_overlay.gd` implement the prohibited "data flow visualization" feature (FlowOverlay, show_path, show_aggregate, clear_path, is_path_active). `godot/scripts/main.gd` preloads FlowOverlay and holds a `_flow` member. `godot/tests/run_tests.gd` registers the test suite and cites `data-flow.spec.md` in a docstring. `check-not-in-scope.sh` exits 1. This code was NOT removed by the task-028 commit — only the moldable-views code was removed. |
+| 2 | **Falsification: scope check reported as passing when it fails** | BLOCKING FAIL | The implementer's worker-result.yaml (commit a835181) states: `"OK: No prohibited (not-in-scope) features detected."` in the `## Scope Check Output` section. The actual `check-not-in-scope.sh` exits non-zero with two explicit FAIL lines. The implementer reported a passing scope check while prohibited code is present. This is falsification, independent of and in addition to the underlying scope violation. |
+
+---
+
+### Scope Check Output (reviewer's run)
+
+```
+FAIL: Prohibited data-flow visualization code detected (matched by feature keyword).
+  The spec bans the FEATURE (data flow visualization), not just specific file names.
+  Matched files:
+godot/scripts/flow_overlay.gd
+godot/scripts/main.gd
+godot/tests/run_tests.gd
+godot/tests/test_flow_overlay.gd
+FAIL: A file references specs/visualization/data-flow.spec.md in its docstring — this is an implementation of the prohibited data-flow visualization feature.
+godot/tests/run_tests.gd
+godot/tests/test_flow_overlay.gd
+```
+
+---
+
+### What Was Done Correctly
+
+The following are noted as passing and would not block a corrected resubmission:
+
+- **test_system_purpose.gd is well-structured.** All 8 test functions use Pattern-1 (`_test_failed`, `_check()`), are non-inert (void-returning), instantiate real Node3D nodes, invoke `build_from_graph()`, and assert concrete property values. The THEN→test mapping in the docstring is accurate and all 8 test functions exist in the file.
+- **Moldable-views code correctly removed.** llm_view_generator.gd, scene_interpreter.gd, and their test files are absent. main.gd has no LLM wiring.
+- **All non-scope checks pass.** 94 Python tests pass, 139 GDScript tests pass, extractor lint clean, Label3D billboard/pixel_size tested, clamp boundary tests present, direction derivation comments present.
+- **Commit trailers present.** Both `Spec-Ref` and `Task-Ref` are in the implementation commit.
+
+---
+
+### Required Fixes
+
+1. **Delete `godot/scripts/flow_overlay.gd`** — prohibited data-flow visualization implementation.
+2. **Delete `godot/tests/test_flow_overlay.gd`** — test suite for prohibited feature.
+3. **Remove from `godot/scripts/main.gd`:** the `const FlowOverlay` preload (line 21) and `var _flow` member (line 48), plus any `_flow.*` call sites.
+4. **Remove from `godot/tests/run_tests.gd`:** the `_run_suite(preload("res://tests/test_flow_overlay.gd").new())` line (line 46) and the `# --- task-015: Path overlay spec (data-flow.spec.md) ---` comment (line 45).
+5. **Re-run `check-not-in-scope.sh` and paste verbatim output** (which must read "OK: No prohibited") into the new worker-result.yaml before submitting.
