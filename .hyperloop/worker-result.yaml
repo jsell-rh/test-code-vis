@@ -1,21 +1,12 @@
 ---
-verdict: pass
+verdict: fail
 ---
 
+## Reviewer: Independent spec-alignment review
 ## Task: task-024 — UX Polish
 ## Spec: specs/prototype/ux-polish.spec.md
 ## Branch: hyperloop/task-024
 ## Date: 2026-04-24
-
-All 5 SHALL/MUST requirements from `specs/prototype/ux-polish.spec.md` are
-implemented in `godot/scripts/camera_controller.gd` and covered by behavioral
-GDScript tests in `godot/tests/test_camera_controls.gd`. 96/96 GDScript tests
-pass. Two pre-existing check failures (compound THEN-clause coverage and
-desktop-platform test) were fixed in this revision:
-- Added `test_pan_applied_immediately_no_lag` to cover the "smooth" half of the
-  compound THEN-clause "smooth and proportional to drag speed".
-- Added `godot/tests/test_desktop_platform.gd` with `OS.has_feature()` tests to
-  satisfy `check-desktop-platform-tested.sh` (required by `nfr.spec.md`).
 
 ---
 
@@ -25,148 +16,13 @@ OK: No prohibited (not-in-scope) features detected.
 
 ---
 
-## THEN-Clause Coverage
+## run-all-checks.sh Output (verbatim)
 
-| THEN-Clause | Test Function(s) | Status |
-|---|---|---|
-| THEN the camera pans in the direction of the drag | test_lmb_drag_pans_camera | PASS |
-| THEN the movement direction is not inverted (matches drag) | test_pan_direction_not_inverted | PASS |
-| THEN the scene moves in the same direction as the drag (Google Maps) | test_pan_direction_not_inverted | PASS |
-| THEN the view zooms toward the point under the cursor | test_zoom_in_shifts_pivot_toward_cursor | PASS |
-| THEN the component under cursor stays under cursor during zoom | test_zoom_in_cursor_point_invariant | PASS |
-| THEN the view zooms out from the point under the cursor | test_zoom_out_shifts_pivot_away_from_cursor | PASS |
-| THEN the camera orbits around the point under cursor at orbit start (RMB binding) | test_orbit_uses_right_mouse_button | PASS |
-| THEN the camera orbits around the point under cursor at orbit start (pivot set) | test_orbit_around_cursor_point | PASS |
-| THEN the component at orbit centre remains at visual centre | test_orbit_pivot_is_world_point | PASS |
-| THEN zoom is animated smoothly not instantaneous (target diverges) | test_smooth_zoom_target_differs_from_distance_after_scroll | PASS |
-| THEN zoom is animated smoothly not instantaneous (process interpolates) | test_smooth_zoom_process_interpolates_distance | PASS |
-| THEN pan movement is smooth and proportional to drag speed | test_pan_applied_immediately_no_lag + test_pan_proportional_to_drag_speed | PASS |
-
----
-
-## Requirement Coverage
-
-### REQ-1: Pan with Left Mouse Button (MUST) — COVERED
-
-**Implementation** (`camera_controller.gd`):
-- `_handle_button()` sets `_panning = event.pressed` on `MOUSE_BUTTON_LEFT`.
-- `_handle_motion()` when `_panning` applies:
-  `_target_pivot -= right * delta.x * pan_amount` and
-  `_target_pivot -= backward * delta.y * pan_amount`,
-  then immediately `_pivot = _target_pivot`.
-
-**Scenario: Panning the view**
-- `test_lmb_drag_pans_camera`: LMB press at (100,100), motion to (150,100);
-  asserts `_pivot != initial_pivot`. PASS.
-- `test_pan_direction_not_inverted`: direction matches drag. PASS (see REQ-2).
-
----
-
-### REQ-2: Non-Inverted Movement (MUST) — COVERED
-
-**Implementation**: At `_phi = PI/2`, `basis.x = world +X`. Dragging left
-(`delta.x = −50`): `_target_pivot -= (+X)(−50)(pan_amount)` → `pivot.x > 0` →
-camera moves +X → scene shifts left. Google Maps convention satisfied.
-
-**Scenario: Drag direction matches view movement**
-- `test_pan_direction_not_inverted`: phi=PI/2, drag 50 px left; asserts
-  `cam._pivot.x > 0.0`. Derivation comment explains each sign-convention step. PASS.
-
----
-
-### REQ-3: Zoom Toward Mouse Cursor (MUST) — COVERED
-
-**Implementation** (`_zoom_toward_point(world_pt, direction)`):
-- `zoom_ratio = _target_distance / old_dist`
-- `_target_pivot = world_pt + (_target_pivot - world_pt) * zoom_ratio`
-- Only targets mutated; `_process()` smoothly interpolates `_distance`/`_pivot`.
-- `_handle_button()` passes `_get_ground_point_under_cursor(_last_mouse)` for
-  both WHEEL_UP and WHEEL_DOWN.
-
-**Scenario: Zooming into a specific component**
-- `test_zoom_in_shifts_pivot_toward_cursor`: cursor at (10,0,0), zoom in;
-  asserts `_target_pivot.x > 0`. PASS.
-- `test_zoom_in_cursor_point_invariant`: cursor at (20,0,0), zoom in;
-  asserts `0 < _target_pivot.x < 20` (geometric invariant). PASS.
-
-**Scenario: Zooming out**
-- `test_zoom_out_shifts_pivot_away_from_cursor`: cursor at (10,0,0), zoom out;
-  asserts `_target_pivot.x < 0`. PASS.
-
----
-
-### REQ-4: Orbit Around Mouse Point (MUST) — COVERED
-
-**Implementation**:
-- `MOUSE_BUTTON_RIGHT` pressed → `begin_orbit_at_world_point(
-  _get_ground_point_under_cursor(event.position))`.
-- `begin_orbit_at_world_point(world_pt)` sets `_pivot = world_pt`, recomputes
-  `_distance`, `_theta`, `_phi` from current camera position (no jump).
-- `_handle_motion()` while `_orbiting` adjusts `_phi` and `_theta`.
-
-**Scenario: Orbiting around a component**
-- `test_orbit_uses_right_mouse_button`: RMB press + horizontal motion;
-  asserts `_phi != initial_phi`. PASS.
-- `test_orbit_around_cursor_point`: `begin_orbit_at_world_point((5,0,3))`;
-  asserts `_pivot == world_pt`. PASS.
-- `test_orbit_pivot_is_world_point`: asserts `_pivot.is_equal_approx(world_pt)`.
-  Camera `look_at`s `_pivot` on every transform update, so world_pt is always
-  at the visual centre. PASS.
-
----
-
-### REQ-5: Smooth Camera Movement (MUST) — COVERED
-
-**Implementation**:
-- Zoom: `_process()` applies exponential smoothing
-  `t = 1.0 - pow(0.05, delta * zoom_smooth)` then `lerpf`/`lerp` to converge
-  `_distance → _target_distance` and `_pivot → _target_pivot`.
-- Pan: directly proportional to drag delta (no snapping); applied immediately
-  (`_pivot = _target_pivot` each motion event → no lerp lag).
-
-**Scenario: Smooth zoom**
-- `test_smooth_zoom_target_differs_from_distance_after_scroll`: scroll up;
-  asserts `_target_distance < _distance`. PASS.
-- `test_smooth_zoom_process_interpolates_distance`: target=20, current=40,
-  `_process(0.1)`; asserts `20 < _distance < 40`. PASS.
-
-**Scenario: Smooth pan**
-- `test_pan_applied_immediately_no_lag`: drag to (130,110); asserts
-  `_pivot.is_equal_approx(_target_pivot)` — pan is applied without lerp lag. PASS.
-- `test_pan_proportional_to_drag_speed`: 10 px vs 50 px drag; asserts
-  larger drag produces larger pivot displacement. PASS.
-
----
-
-## Untestable THEN-Clauses
-
-None. All THEN-clauses in ux-polish.spec.md are fully testable in the headless
-GDScript environment via property-value assertions.
-
----
-
-## Summary
-
-| Requirement | Status |
-|---|---|
-| Pan with Left Mouse Button (MUST) | COVERED |
-| Non-Inverted Movement (MUST) | COVERED |
-| Zoom Toward Mouse Cursor (MUST) | COVERED |
-| Orbit Around Mouse Point (MUST) | COVERED |
-| Smooth Camera Movement (MUST) | COVERED |
-
-All 5 SHALL/MUST requirements are implemented and covered by behavioral GDScript
-tests with known fixture data and direct property assertions.
-No PARTIAL or MISSING findings.
-
----
-
-## Check Script Results
-
+```
 === run-all-checks.sh ===
 
 --- check-branch-adds-source-files.sh ---
-OK: Branch adds/modifies 11 source file(s) outside .hyperloop/:
+OK: Branch adds/modifies 12 source file(s) outside .hyperloop/:
   extractor/extractor.py
   extractor/tests/test_cli.py
   extractor/tests/test_extractor.py
@@ -177,11 +33,11 @@ OK: Branch adds/modifies 11 source file(s) outside .hyperloop/:
   godot/tests/run_tests.gd
   godot/tests/test_camera_controls.gd
   godot/tests/test_dependency_rendering.gd
-  ... (and 1 more)
+  ... (and 2 more)
 [EXIT 0]
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-024' has 82 commit(s) above main.
+OK: Branch 'hyperloop/task-024' has 83 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -203,33 +59,28 @@ OK: All 1 compound THEN-clause(s) cite multiple tests.
 
 --- check-coordinator-calls-pipeline.sh ---
 SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
-      This check only applies to tasks that implement a view-spec consumer.
 [EXIT 0]
 
 --- check-desktop-platform-tested.sh ---
-INFO: Desktop/native-platform constraint detected in spec(s):
-  specs/prototype/nfr.spec.md
+INFO: Desktop/native-platform constraint detected in spec(s): specs/prototype/nfr.spec.md
 OK: OS.has_feature() test(s) found covering desktop-platform constraint:
   godot/tests/test_desktop_platform.gd
 [EXIT 0]
 
 --- check-direction-test-derivations.sh ---
-OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
-OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
-OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
 OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
 OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
 OK: godot/tests/test_camera_controls.gd :: test_lmb_drag_pans_camera — derivation comment found.
 OK: godot/tests/test_camera_controls.gd :: test_pan_direction_not_inverted — derivation comment found.
 OK: godot/tests/test_camera_controls.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
-
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
 OK: All 8 direction/sign-convention test(s) contain derivation comments.
 [EXIT 0]
 
 --- check-end-to-end-integration-test.sh ---
 SKIP: Both a pipeline producer and consumer must exist for this check to apply.
-      Producer (build_prompt / parse_response) found: none
-      Consumer (apply_spec / render_spec) found: none
 [EXIT 0]
 
 --- check-extractor-cli-tested.sh ---
@@ -258,12 +109,12 @@ OK: No prohibited (not-in-scope) features detected.
 
 --- check-pipeline-wiring.sh ---
 SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
-      This check only applies to tasks that implement the LLM→view-spec pipeline.
 [EXIT 0]
 
 --- check-reflects-mapping-consistency.sh ---
-SKIP: No 'reflect(s)' THEN-clauses found in mapping table.
-[EXIT 0]
+/home/jsell/code/sandbox/code-vis/worktrees/workers/task-024/.hyperloop/checks/check-reflects-mapping-consistency.sh: line 100: concept_to_test: unbound variable
+/home/jsell/code/sandbox/code-vis/worktrees/workers/task-024/.hyperloop/checks/check-reflects-mapping-consistency.sh: line 101: count: unbound variable
+[EXIT 1 — FAIL]
 
 --- check-report-scope-section.sh ---
 OK: worker-result.yaml contains a valid '## Scope Check Output' section.
@@ -294,16 +145,11 @@ Linting extractor...
 All checks passed!
 8 files already formatted
 Running extractor tests...
-........................................................................ [ 76%]
-......................                                                   [100%]
-94 passed in 0.19s
+94 passed in 0.12s
 Extractor checks passed.
 [EXIT 0]
 
 --- godot-compile.sh ---
-Compiling Godot project...
-Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
-
 Godot project compiles successfully.
 [EXIT 0]
 
@@ -317,135 +163,121 @@ PASS: All Label3D nodes have billboard and pixel_size set and tested.
 [EXIT 0]
 
 --- godot-tests.sh ---
-Found 11 GDScript test file(s) in godot/tests/.
-Running custom headless test runner...
-Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
-
-=== code-vis GDScript Tests ===
-
-[test_scene_graph_loader.gd]
-  PASS: test_nodes_list_is_returned
-  PASS: test_node_count_matches_input
-  PASS: test_node_has_id_field
-  PASS: test_node_has_name_field
-  PASS: test_node_has_type_field
-  PASS: test_node_top_level_has_null_parent
-  PASS: test_node_module_parent_references_bounded_context
-  PASS: test_node_has_metrics_field
-  PASS: test_node_has_position_field
-  PASS: test_node_has_size_field
-  PASS: test_edges_list_is_returned
-  PASS: test_edge_count_matches_input
-  PASS: test_edge_has_source_field
-  PASS: test_edge_has_target_field
-  PASS: test_edge_has_type_field
-  PASS: test_edge_direction_preserved_source_to_target
-  PASS: test_cross_context_edge_type_is_cross_context
-  PASS: test_internal_edge_type_is_internal
-  PASS: test_edge_types_are_distinguishable
-  PASS: test_metadata_is_returned
-  PASS: test_empty_graph_is_handled_gracefully
-  PASS: test_missing_top_level_keys_default_to_empty
-  PASS: test_spec_node_type_is_preserved
-  PASS: test_spec_nodes_have_id_prefixed_with_spec
-
-[test_node_renderer.gd]
-  PASS: test_node_rendered_at_json_position
-  PASS: test_second_node_rendered_at_json_position
-  PASS: test_no_layout_recomputed_in_godot
-  PASS: test_each_json_node_becomes_a_scene_tree_child
-
-[test_scene_graph_loading.gd]
-  PASS: test_volumes_created_for_each_node
-  PASS: test_mesh_instances_exist_in_anchors
-  PASS: test_edge_mesh_instances_created
-  PASS: test_anchor_positions_match_json
-  PASS: test_labels_are_billboard_and_readable
-
-[test_containment_rendering.gd]
-  PASS: test_bounded_context_is_translucent
-  PASS: test_module_is_opaque
-  PASS: test_module_parented_inside_context
-  PASS: test_bounded_context_larger_than_module
-  PASS: test_bounded_context_cull_disabled
-
-[test_dependency_rendering.gd]
-  PASS: test_edge_line_mesh_created
-  PASS: test_direction_indicator_cone_created
-  PASS: test_direction_cone_near_target
-  PASS: test_cross_context_cone_is_orange
-
-[test_size_encoding.gd]
-  PASS: test_large_module_has_bigger_mesh
-  PASS: test_mesh_sizes_proportional_to_metric
-
-[test_camera_controls.gd]
-  PASS: test_initial_theta_is_near_top_down
-  PASS: test_initial_distance_is_positive
-  PASS: test_scroll_up_decreases_target_distance
-  PASS: test_scroll_down_increases_target_distance
-  PASS: test_orbit_horizontal_drag_changes_phi
-  PASS: test_orbit_vertical_drag_changes_theta
-  PASS: test_set_pivot_updates_state
-  PASS: test_lmb_drag_pans_camera
-  PASS: test_pan_direction_not_inverted
-  PASS: test_zoom_in_shifts_pivot_toward_cursor
-  PASS: test_zoom_in_cursor_point_invariant
-  PASS: test_zoom_out_shifts_pivot_away_from_cursor
-  PASS: test_orbit_uses_right_mouse_button
-  PASS: test_orbit_around_cursor_point
-  PASS: test_orbit_pivot_is_world_point
-  PASS: test_smooth_zoom_target_differs_from_distance_after_scroll
-  PASS: test_smooth_zoom_process_interpolates_distance
-  PASS: test_pan_applied_immediately_no_lag
-  PASS: test_pan_proportional_to_drag_speed
-  PASS: test_set_pivot_clamps_distance_at_minimum
-  PASS: test_theta_clamped_at_minimum
-  PASS: test_theta_clamped_at_maximum
-  PASS: test_zoom_clamped_at_minimum
-
-[test_engine_version.gd]
-  PASS: test_project_godot_declares_version_4_6
-  PASS: test_project_features_include_4_6
-  PASS: test_main_script_is_gdscript
-  PASS: test_scripts_dir_contains_only_gdscript
-
-[test_godot_version.gd]
-  PASS: test_project_declares_godot_46
-  PASS: test_main_script_is_gdscript
-  PASS: test_main_uses_godot4_fileaccess_api
-
-[test_spatial_structure.gd]
-  PASS: test_camera_supports_zoom_in
-  PASS: test_camera_supports_zoom_out
-  PASS: test_camera_supports_orbit
-  PASS: test_camera_get_distance_returns_current_distance
-  PASS: test_spatial_layout_creates_node_per_structural_element
-  PASS: test_distinct_contexts_occupy_distinct_regions
-  PASS: test_context_boundary_is_visually_distinct_translucent
-  PASS: test_containment_expressed_as_scene_tree_parenting
-  PASS: test_dependency_expressed_as_visible_connection
-  PASS: test_far_distance_shows_only_bounded_contexts
-  PASS: test_far_distance_hides_all_edges
-  PASS: test_medium_distance_shows_modules
-  PASS: test_medium_distance_shows_cross_context_edges_only
-  PASS: test_near_distance_shows_all_nodes
-  PASS: test_near_distance_shows_internal_edges_as_fine_detail
-  PASS: test_lod_node_entries_populated_after_build
-  PASS: test_lod_edge_entries_populated_after_build
-  PASS: test_lod_integration_far_hides_modules_in_built_scene
-
-[test_desktop_platform.gd]
-  PASS: test_not_running_in_web_context
-  PASS: test_not_running_on_android
-  PASS: test_not_running_on_ios
-  PASS: test_project_godot_has_no_web_export
-
 Results: 96 passed, 0 failed
 GDScript behavioral tests passed.
 [EXIT 0]
 
-=== Summary: 25 check(s) run ===
-RESULT: ALL PASS
+=== Summary ===
+FAIL: check-reflects-mapping-consistency.sh exited 1
+```
 
-**VERDICT: PASS**
+---
+
+## Findings
+
+### BLOCKING: check-reflects-mapping-consistency.sh exits 1 (infrastructure bug)
+
+**Finding:** `check-reflects-mapping-consistency.sh` crashes with a bash unbound-variable
+error at line 100 (`concept_to_test`) and line 101 (`count`). This is a pre-existing bug in
+the check script itself — present on `main` too — not an implementation defect.
+
+**Root cause (two compounding bugs in the check script):**
+
+1. **BRE `\|` alternation bug:** The script uses `grep '^\|'` to filter for markdown table
+   rows beginning with `|`. In GNU grep BRE mode, `\|` is the alternation operator, so
+   `'^\|'` is parsed as `^` OR (empty string), which matches **every line** — not just lines
+   starting with `|`. Confirmed by manual testing: `echo "normal line" | grep '^\|'` prints
+   the line (matches).
+
+2. **bash 5.2 `declare -A` + `set -u` bug:** With `set -uo pipefail`, accessing an empty
+   associative array with `${#array[@]}` fails with "unbound variable" even when the array
+   was declared with `declare -A`. Confirmed: `bash -c 'set -u; declare -A arr; echo
+   ${#arr[@]}'` exits 1 in bash 5.2.37.
+
+**How the bug is triggered now:** The embedded `## Check Script Results` section of
+`worker-result.yaml` includes the line `--- check-reflects-mapping-consistency.sh ---`.
+This line contains the word "reflects". The first grep (`grep -iP '\breflects?\b'`) matches
+it. The second grep (`grep '^\|'`) — due to the BRE alternation bug — passes it through
+instead of filtering it. The while loop receives this non-table-row and all iterations hit
+`continue` (because `then_clause` is empty). `concept_to_test` is declared but never
+populated. `${#concept_to_test[@]}` then fails under `set -u`.
+
+**Why this was working before:** The check ran before the full check output was embedded
+in `worker-result.yaml`. At that time, `worker-result.yaml` did not yet contain
+`--- check-reflects-mapping-consistency.sh ---`, so the first grep found nothing and the
+script exited via the SKIP path.
+
+**This is not falsification.** The worker's report shows SKIP (which is what the check
+returned at the time of their run). The failure only appears in subsequent runs after the
+embedded output is present.
+
+**Fix required (in the check script, not the implementation):**
+- Line 41: change `grep '^\|'` to `grep '^|'` (remove the backslash; `|` is literal in
+  BRE without backslash, and `^|` anchors to line start followed by literal pipe).
+- Line 100: initialize `count` before the while loop or use `${#concept_to_test[@]:-0}`
+  to handle the empty-array case safely under `set -u`.
+
+**Classification:** Pre-existing check infrastructure bug, introduced before this task
+branch was created. The implementation is not responsible for it. However, per reviewer
+protocol ("A FAIL line from any check is blocking"), this remains a blocking FAIL.
+
+---
+
+## THEN-Clause Verification
+
+Independent derivation and test-body verification for all 12 THEN-clauses:
+
+| THEN-Clause | Mapped Test | Predicate Correct? |
+|---|---|---|
+| Camera pans in direction of drag | test_lmb_drag_pans_camera | YES — asserts `_pivot != initial_pivot` after LMB drag |
+| Movement direction not inverted | test_pan_direction_not_inverted | YES — phi=PI/2, drag left (delta.x=-50), asserts `_pivot.x > 0` (correct per Google Maps convention) |
+| Scene moves same direction as drag | test_pan_direction_not_inverted | YES — same test, same correct predicate |
+| View zooms toward cursor | test_zoom_in_shifts_pivot_toward_cursor | YES — cursor at (10,0,0), zoom in, asserts `_target_pivot.x > 0` |
+| Component stays under cursor during zoom | test_zoom_in_cursor_point_invariant | YES — asserts `0 < _target_pivot.x < 20` (geometric invariant) |
+| View zooms out from cursor | test_zoom_out_shifts_pivot_away_from_cursor | YES — cursor at (10,0,0), zoom out, asserts `_target_pivot.x < 0` |
+| Camera orbits around cursor at start (RMB) | test_orbit_uses_right_mouse_button | YES — RMB press+motion, asserts `_phi != initial_phi` |
+| Camera orbits around cursor at start (pivot) | test_orbit_around_cursor_point | YES — asserts `_pivot == world_pt` after begin_orbit_at_world_point |
+| Component remains at visual centre | test_orbit_pivot_is_world_point | YES — asserts `_pivot.is_equal_approx(world_pt)` |
+| Zoom animated smoothly (target diverges) | test_smooth_zoom_target_differs_from_distance_after_scroll | YES — asserts `_target_distance < _distance` immediately after scroll |
+| Zoom animated smoothly (process interpolates) | test_smooth_zoom_process_interpolates_distance | YES — asserts `20 < _distance < 40` after one _process(0.1) frame |
+| Pan smooth and proportional to drag speed | test_pan_applied_immediately_no_lag + test_pan_proportional_to_drag_speed | YES — first tests no-lag (pivot==target_pivot), second tests proportionality (larger delta → larger displacement) |
+
+All 12 THEN-clause predicates independently verified against test bodies. No wrong-predicate
+mappings found.
+
+**Pan direction sign-convention derivation (independent):**
+
+Spec: "dragging left reveals content to the right (Google Maps)." At phi=PI/2, camera sits
+on the +Z side. basis.x = world +X. Drag left means delta.x < 0. Code:
+`_target_pivot -= right * delta.x * pan_amount` = `-=(+X)(negative)(positive)` → pivot.x
+increases. Camera pivot moves right (+X in world), so left-side content exits screen and
+right-side content enters. This matches Google Maps: "dragging left reveals content to the
+right." Test asserts `_pivot.x > 0.0` — correct direction. ✓
+
+---
+
+## Implementation Quality
+
+- `camera_controller.gd`: well-structured; clear spherical-coordinate orbit, cursor-aligned
+  zoom with ratio-based pivot shift, smooth lerp via `_process()`. Headless-safe.
+- `test_camera_controls.gd`: 23 tests, all Pattern-2 (bool-return), no inert tests.
+  Derivation comments present on all direction/sign tests.
+- Commit trailers present on both implementation commits:
+  `Spec-Ref: specs/prototype/ux-polish.spec.md@7392ee4176c1f464f5e7c34a11077a5a93cb7e7f`
+  `Task-Ref: task-024`
+
+---
+
+## Verdict
+
+**FAIL** — `check-reflects-mapping-consistency.sh` exits 1 (blocking per protocol).
+
+The failure is caused by two pre-existing bugs in the check script (`grep '^\|'` BRE
+alternation matches all lines; `${#declare -A arr[@]}` unbound under bash 5.2 `set -u`).
+The implementation itself is correct and complete: all 5 MUST requirements are covered,
+all 12 THEN-clauses have correct algorithm-level tests, 96/96 GDScript tests pass,
+94/94 Python tests pass.
+
+**Required action:** Fix `check-reflects-mapping-consistency.sh` on `main` (change
+`grep '^\|'` → `grep '^|'` and guard the empty-array case) so the check exits 0 (SKIP)
+for specs with no "reflects" THEN-clauses.
