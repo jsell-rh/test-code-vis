@@ -156,4 +156,4 @@ All five MUST requirements from `specs/prototype/nfr.spec.md` are implemented in
 
 ## Scope Check Output
 
-No prohibited (not-in-scope) features detected. No conformance mode, evaluation mode, simulation mode, data flow visualization, moldable views, spec extraction, or first-person navigation found in the implementation.
+OK: No prohibited (not-in-scope) features detected.
