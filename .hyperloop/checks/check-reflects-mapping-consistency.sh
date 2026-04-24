@@ -38,7 +38,9 @@ if [[ ! -f "$RESULT_FILE" ]]; then
 fi
 
 # Extract table rows that contain "reflect" or "reflects" (case-insensitive)
-reflects_rows=$(grep -iP '\breflects?\b' "$RESULT_FILE" | grep '^\|' || true)
+# NOTE: use '^|' (literal pipe) not '^\|' — in GNU grep BRE, '\|' is the
+# alternation operator, so '^\|' matches every line (^ OR empty-string).
+reflects_rows=$(grep -iP '\breflects?\b' "$RESULT_FILE" | grep '^|' || true)
 
 if [[ -z "$reflects_rows" ]]; then
     echo "SKIP: No 'reflect(s)' THEN-clauses found in mapping table."
@@ -50,6 +52,9 @@ FAIL=0
 declare -A concept_to_test
 # Maps concept keyword → clause text (for error messages)
 declare -A concept_to_clause
+# Separate integer counter: bash 5.2 treats ${#declare -A arr[@]} as unbound
+# under set -u when the array was declared but never assigned.
+concept_count=0
 
 while IFS= read -r row; do
     # Parse markdown table cells: | THEN-clause | test-name | verdict |
@@ -90,6 +95,7 @@ while IFS= read -r row; do
     else
         concept_to_test[$concept]="$test_name"
         concept_to_clause[$concept]="$then_clause"
+        ((concept_count++)) || true
     fi
 done <<< "$reflects_rows"
 
@@ -97,6 +103,6 @@ if [[ $FAIL -eq 1 ]]; then
     exit 1
 fi
 
-count="${#concept_to_test[@]}"
+count=$concept_count
 echo "OK: All $count 'reflects' concept group(s) cite consistent tests across THEN-clauses."
 exit 0
