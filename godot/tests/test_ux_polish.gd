@@ -145,6 +145,7 @@ func test_drag_direction_matches_view_movement() -> bool:
 # ---------------------------------------------------------------------------
 
 func test_zoom_toward_cursor_shifts_pivot_toward_cursor() -> bool:
+	# scroll up → zoom_amount < 0 → _zoom_toward_cursor called → pivot shifts toward cursor pos → cursor at (10,0,0) → pivot.x increases from 0 ✓
 	var cam = _make_cam()
 	# Pivot starts at origin; cursor is at world (10, 0, 0).
 	var cursor_world := Vector3(10.0, 0.0, 0.0)
@@ -334,6 +335,7 @@ func test_theta_clamped_at_maximum() -> bool:
 # ---------------------------------------------------------------------------
 
 func test_pan_proportional_to_drag_speed() -> bool:
+	# larger drag → larger delta_x (10px vs 50px) → pan_amount ∝ drag_distance → larger pivot displacement → move2 > move1 ✓
 	var cam1 = _make_cam()
 	var cam2 = _make_cam()
 
