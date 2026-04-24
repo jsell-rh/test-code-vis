@@ -461,6 +461,78 @@ class TestLayout:
             "pair auth↔billing."
         )
 
+    def test_complexity_and_coupling_both_reflected(self, tmp_path: Path) -> None:
+        """Both size (reflects complexity) and position (reflects coupling) are correct.
+
+        Fixture: 4 bounded contexts where:
+          - big_ctx has 100 LOC (large) and imports from ctx_c (coupled)
+          - small_ctx has 1 LOC (small) and no coupling to big_ctx
+          - ctx_c is coupled to big_ctx (import target)
+          - ctx_d has no coupling (uncoupled)
+
+        THEN big_ctx.size > small_ctx.size  (size reflects complexity / LOC)
+        AND  dist(big_ctx, ctx_c) < dist(big_ctx, ctx_d)
+             (position reflects coupling — coupled pair is adjacent in the ring,
+              uncoupled ctx_d is diagonally opposite)
+
+        Layout mechanics (4 nodes, greedy nearest-neighbour ordering):
+          Sorted order: big_ctx, ctx_c, ctx_d, small_ctx (alphabetical).
+          Start: [big_ctx].
+          coupling[big_ctx][ctx_c] = 1  → pick ctx_c next.
+          No remaining coupling → pick ctx_d, then small_ctx.
+          Ring: big_ctx(0°) → ctx_c(90°) → ctx_d(180°) → small_ctx(270°).
+          dist(big_ctx, ctx_c)  = 2R·sin(45°) ≈ 0.707·2R  (1 step, adjacent) ✓
+          dist(big_ctx, ctx_d)  = 2R·sin(90°) = 2R         (2 steps, diagonal) ✓
+          → dist(big_ctx, ctx_c) < dist(big_ctx, ctx_d)    (coupled closer) ✓
+        """
+        for bc in ["big_ctx", "ctx_c", "ctx_d", "small_ctx"]:
+            pkg = tmp_path / bc
+            pkg.mkdir()
+            (pkg / "__init__.py").write_text("")
+
+        # big_ctx: 100 LOC → large size
+        (tmp_path / "big_ctx" / "heavy.py").write_text("x = 1\n" * 100)
+        # big_ctx imports ctx_c → cross-context coupling edge
+        (tmp_path / "big_ctx" / "refs.py").write_text("from ctx_c import something\n")
+
+        # small_ctx: 1 LOC → small size, no coupling to big_ctx
+        (tmp_path / "small_ctx" / "light.py").write_text("y = 1\n")
+
+        graph = build_scene_graph(tmp_path)
+
+        bc_nodes = {
+            n["id"]: n
+            for n in graph["nodes"]
+            if n["type"] == "bounded_context"
+        }
+
+        # --- Size reflects complexity (LOC) ---
+        # big_ctx has ~102 lines vs small_ctx ~1 line → size must differ
+        assert bc_nodes["big_ctx"]["size"] > bc_nodes["small_ctx"]["size"], (
+            f"big_ctx (100+ LOC) must be larger than small_ctx (1 LOC). "
+            f"Got big_ctx.size={bc_nodes['big_ctx']['size']:.3f}, "
+            f"small_ctx.size={bc_nodes['small_ctx']['size']:.3f}"
+        )
+
+        # --- Position reflects coupling ---
+        # big_ctx ↔ ctx_c are coupled (import relationship) → adjacent in ring
+        # big_ctx ↔ ctx_d are uncoupled → diagonally opposite in ring
+        def dist(a: str, b: str) -> float:
+            pa = bc_nodes[a]["position"]
+            pb = bc_nodes[b]["position"]
+            return math.sqrt(
+                (pa["x"] - pb["x"]) ** 2
+                + (pa["y"] - pb["y"]) ** 2
+                + (pa["z"] - pb["z"]) ** 2
+            )
+
+        assert dist("big_ctx", "ctx_c") < dist("big_ctx", "ctx_d"), (
+            "Coupled pair big_ctx↔ctx_c must be closer than uncoupled "
+            f"big_ctx↔ctx_d. "
+            f"dist(big_ctx, ctx_c)={dist('big_ctx', 'ctx_c'):.2f}, "
+            f"dist(big_ctx, ctx_d)={dist('big_ctx', 'ctx_d'):.2f}"
+        )
+
     def test_order_by_coupling_places_coupled_adjacent(self) -> None:
         """Unit test for _order_by_coupling: coupled BCs end up next to each other."""
         from extractor.schema import Edge
