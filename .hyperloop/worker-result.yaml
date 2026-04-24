@@ -117,7 +117,7 @@ OK: No prohibited (not-in-scope) features detected.
 === run-all-checks.sh ===
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-023' has commits above main.
+OK: Branch 'hyperloop/task-023' has 1 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
