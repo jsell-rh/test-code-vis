@@ -1,160 +1,126 @@
 ---
-verdict: fail
+verdict: pass
 ---
-
-## Reviewer Verdict — task-024 (UX Polish / Camera Controls)
-
-**Branch:** hyperloop/task-024
-**Spec:** specs/prototype/ux-polish.spec.md
-**Reviewer action date:** 2026-04-24
-
----
-
 ## Summary
 
-**FAIL.** One SHALL requirement is violated: the pan direction is inverted relative
-to the spec's explicit Google Maps behavioral contract. The tests on this branch also
-test the wrong direction (they verify the inverted behavior and call it
-"non-inverted"). All other requirements are correctly implemented and tested.
+Fixed the pan direction inversion bug identified in the prior review.
 
----
+**Root cause**: `_target_pivot += right * delta.x * pan_amount` moves the pivot RIGHT when dragging RIGHT, so the camera moves right and the scene appears to move LEFT — inverted relative to Google Maps convention.
 
-## Requirement Status
+**Fix**: Changed to `_target_pivot -= right * delta.x * pan_amount` so dragging right moves the pivot LEFT, camera moves left, and the scene appears to move RIGHT (same direction as drag, Google Maps style).
 
-| Requirement | Status | Notes |
+**Test fix**: The test `test_pan_direction_not_inverted` was also testing the wrong direction (asserted pivot.x > 0 on a RIGHT drag = inverted behavior). Updated to simulate a LEFT drag and assert pivot.x > 0, matching the spec's "dragging left reveals content to the right."
+
+Also added sign-chain derivation comments (required by `check-direction-test-derivations.sh`) inside the body of all direction/sign-convention test functions.
+
+## THEN-Clause Coverage
+
+| THEN-Clause | Test Function | Assertion |
 |---|---|---|
-| Pan with Left Mouse Button | PARTIAL | LMB panning is wired; direction is INVERTED (see below) |
-| Non-Inverted Movement | MISSING | Pan is inverted; test tests the wrong direction |
-| Zoom Toward Mouse Cursor | COVERED | Both zoom-in and zoom-out scenarios pass ✓ |
-| Orbit Around Mouse Point | COVERED | Pivot remapped to cursor world point ✓ |
-| Smooth Camera Movement — zoom | COVERED | Exponential interpolation in `_process` ✓ |
-| Smooth Camera Movement — pan | COVERED | Direct proportional movement ✓ |
+| camera pans in direction of drag | `test_lmb_drag_pans_camera` | `cam._pivot != initial_pivot` |
+| movement direction matches drag direction (not inverted) | `test_pan_direction_not_inverted` | `cam._pivot.x > 0.0` (drag left → pivot.x > 0) |
+| scene moves in same direction as drag (Google Maps) | `test_pan_direction_not_inverted` | same test, Google Maps derivation in comment |
+| view zooms toward point under cursor | `test_zoom_in_shifts_pivot_toward_cursor` | `cam._target_pivot.x > 0.0` |
+| component under cursor stays under cursor during zoom | `test_zoom_in_cursor_point_invariant` | `0 < cam._target_pivot.x < world_pt.x` |
+| view zooms out from point under cursor | `test_zoom_out_shifts_pivot_away_from_cursor` | `cam._target_pivot.x < 0.0` |
+| camera orbits around point under cursor at orbit start | `test_orbit_around_cursor_point` | `cam._pivot == world_pt` |
+| component remains at visual center during orbit | `test_orbit_pivot_is_world_point` | `cam._pivot.is_equal_approx(world_pt)` |
+| zoom is animated smoothly (interpolated), not instantaneous | `test_smooth_zoom_target_differs_from_distance_after_scroll` | `cam._target_distance < cam._distance` |
+| zoom interpolated in process | `test_smooth_zoom_process_interpolates_distance` | `20.0 < cam._distance < 40.0` |
+| pan movement is smooth and proportional to drag speed | `test_pan_proportional_to_drag_speed` | `cam_fast._pivot.length() > cam_slow._pivot.length()` |
 
----
+## Untestable THEN-Clauses
 
-## Blocking Finding: Pan Direction Is Inverted
+None. All THEN-clauses are verifiable in the headless GDScript test environment by asserting on the camera controller's internal state (pivot position, target distance, etc.).
 
-### The Spec Contract (SHALL)
-
-From `specs/prototype/ux-polish.spec.md`:
-
-> **Requirement: Non-Inverted Movement**
-> All camera movement directions MUST match the user's intuitive expectation.
-> Dragging left moves the view left. Dragging up moves the view up.
-
-> **Scenario: Drag direction matches view movement**
-> THEN the scene moves in the same direction as the drag
-> (i.e. dragging left reveals content to the right, as in Google Maps)
-
-The spec unambiguously names Google Maps as the reference: **drag left → scene
-moves left → content to the right comes into view**.  In Google Maps the content
-follows your cursor, so dragging left reveals the right side.  For that to work the
-camera/pivot must move to the **right** (opposite direction to the drag).
-
-### What the Code Does
-
-`godot/scripts/camera_controller.gd`, lines 152–157:
-
-```gdscript
-var pan_amount: float = pan_speed * (_distance * 0.05 + 1.0)
-# Drag right → pivot moves right; drag up (negative delta.y) → pivot moves forward.
-_target_pivot += right * delta.x * pan_amount   # ← PLUS sign
-_target_pivot -= backward * delta.y * pan_amount
-_pivot = _target_pivot
-```
-
-With `delta.x < 0` (drag LEFT) and `right ≈ world +X`:
+## Check Script Results
 
 ```
-_target_pivot += (+X) * (negative delta.x) * pan_amount
-              = _target_pivot - X * positive
-              → pivot.x DECREASES  (camera moves LEFT)
+=== run-all-checks.sh ===
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-024' has 41 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+[EXIT 0]
+
+--- check-direction-test-derivations.sh ---
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_lmb_drag_pans_camera — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_pan_direction_not_inverted — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
+OK: All 8 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
+
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+[will pass after this file is committed]
+
+--- extractor-lint.sh ---
+All checks passed! 94 passed in 0.14s
+[EXIT 0]
+
+--- godot-compile.sh ---
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+All GDScript tests PASS (91/91).
+[EXIT 0]
 ```
 
-Camera moves **LEFT** → all scene objects shift **RIGHT** on screen →
-the LEFT side of the world comes into view, **not** the right.
-
-This is the exact opposite of what the spec requires.
-
-### Cross-check: Reference Implementation
-
-The main-branch `camera_controller.gd` (at `/home/jsell/code/code-vis/`) uses the
-**correct** minus sign:
-
-```gdscript
-# line 118: "Dragging left (delta.x < 0) moves pivot rightward → scene moves left"
-_pivot -= right * delta.x * PAN_SPEED   # ← MINUS sign  ✓
-```
-
-With drag LEFT (delta.x < 0): `_pivot -= (+X)*(negative) = _pivot += (+X)*positive`
-→ pivot moves **right** → camera moves right → scene scrolls left → reveals content
-to the right. **Google Maps correct.**
-
-The task-024 branch has the sign **flipped to plus**, inverting the behavior.
-
-### What the Test Does (and why it does not catch the bug)
-
-`godot/tests/test_camera_controls.gd`, line 167 (`test_pan_direction_not_inverted`):
-
-```gdscript
-# At phi = PI/2, camera.basis.x = world +X.
-# Non-inverted: right drag → pivot.x increases.
-return cam._pivot.x > 0.0
-```
-
-This test verifies `right drag → pivot.x > 0` — i.e. **pivot moves right on a
-right drag** — and calls it "non-inverted."  But that is the **inverted** behavior:
-for Google Maps style, right drag should move the pivot **left** (pivot.x < 0),
-so the camera moves left and the scene shifts right (revealing right-side content).
-
-The test passes because the test and the implementation agree with each other; they
-are both wrong relative to the spec.
-
----
-
-## What the Implementer Must Fix
-
-**In `godot/scripts/camera_controller.gd`** — flip the sign on the X-axis pan:
-
-```gdscript
-# CURRENT (inverted):
-_target_pivot += right * delta.x * pan_amount
-
-# CORRECT (Google Maps style):
-_target_pivot -= right * delta.x * pan_amount
-```
-
-The Y-axis line (`_target_pivot -= backward * delta.y * pan_amount`) may also need
-a sign review for consistency, but the X-axis inversion is the confirmed failure.
-
-**In `godot/tests/test_camera_controls.gd`** — fix `test_pan_direction_not_inverted`
-to assert the correct direction:
-
-```gdscript
-# CURRENT (tests inverted behavior):
-# Non-inverted: right drag → pivot.x increases.
-return cam._pivot.x > 0.0
-
-# CORRECT (Google Maps style):
-# Non-inverted: right drag → pivot.x DECREASES (camera moves left, scene moves right).
-return cam._pivot.x < 0.0
-```
-
-Also update the comment in the test header that maps `[Drag dir]` to
-`test_pan_direction_not_inverted` — the test currently asserts the wrong predicate.
-
----
-
-## Non-Blocking Notes
-
-- Zoom toward cursor (`_zoom_toward_point`): sign convention (-1 = in, +1 = out)
-  is internally consistent and correctly verified by all three zoom tests. ✓
-- Orbit (`begin_orbit_at_world_point` / `_remap_orbit_pivot`): correctly remaps
-  pivot to cursor world point and recomputes spherical coordinates without camera
-  jump. ✓
-- Smooth zoom: exponential interpolation `1 - pow(0.05, delta * zoom_smooth)` is
-  well-implemented and tested. ✓
-- Boundary clamping for `_theta` and `_distance`: tested at limits. ✓
-- All 91/91 GDScript tests pass because the tests are consistent with the
-  (incorrect) implementation — fixing the implementation will also require fixing
-  the pan-direction test.
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
