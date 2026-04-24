@@ -21,6 +21,7 @@ const LodManager = preload("res://scripts/lod_manager.gd")
 const FlowOverlay = preload("res://scripts/flow_overlay.gd")
 const LlmViewGenerator = preload("res://scripts/llm_view_generator.gd")
 const SceneInterpreter = preload("res://scripts/scene_interpreter.gd")
+const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -59,6 +60,9 @@ var _active_path_index: int = -1
 
 ## Moldable-views pipeline: SceneInterpreter consumes view specs from LlmViewGenerator.
 var _scene_interpreter: SceneInterpreter = SceneInterpreter.new()
+
+## Understanding overlay controller — activates alignment, quality, and impact overlays.
+var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
 
 ## Question input UI — LineEdit for natural-language questions.
 var _question_input: LineEdit
@@ -338,9 +342,12 @@ func _frame_camera() -> void:
 # Path overlay input (on-demand activation)
 # ---------------------------------------------------------------------------
 
-## Handle keyboard shortcuts for on-demand path overlay.
+## Handle keyboard shortcuts for on-demand path overlay and understanding overlays.
 ##   F → cycle through path definitions (or clear if one is already shown).
 ##   G → toggle aggregate traffic pattern overlay.
+##   H → apply alignment overlay (Conformance Mode — shows spec vs. realization).
+##   J → apply quality overlay  (Evaluation Mode  — shows coupling and centrality).
+##   K → apply failure impact overlay (Simulation Mode — shows cascade from first node).
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed:
 		return
@@ -349,6 +356,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_path_overlay()
 		KEY_G:
 			_toggle_aggregate_overlay()
+		KEY_H:
+			_apply_alignment_overlay()
+		KEY_J:
+			_apply_quality_overlay()
+		KEY_K:
+			_apply_failure_impact_overlay()
 
 
 ## Cycle to the next path definition, or clear the active overlay.
@@ -442,3 +455,37 @@ func _on_question_submitted(question: String) -> void:
 ## A production implementation would send an HTTP POST to an LLM endpoint.
 func _call_llm(_prompt: String) -> String:
 	return '{"operations": []}'
+
+
+# ---------------------------------------------------------------------------
+# Understanding overlays (Conformance / Evaluation / Simulation modes)
+# ---------------------------------------------------------------------------
+
+## Apply alignment overlay (H key) — Conformance Mode.
+## Colours every node in the scene by its spec_status field so the human can
+## see whether the as-built system matches the as-specced design.
+func _apply_alignment_overlay() -> void:
+	var nodes: Array = _graph.get("nodes", [])
+	_understanding_overlay.apply_alignment_overlay(nodes, _anchors)
+
+
+## Apply quality overlay (J key) — Evaluation Mode.
+## Colours nodes by coupling and centrality metrics so the human can evaluate
+## the architectural quality of the realized system independently of the spec.
+func _apply_quality_overlay() -> void:
+	var nodes: Array = _graph.get("nodes", [])
+	var edges: Array = _graph.get("edges", [])
+	_understanding_overlay.apply_quality_overlay(nodes, edges, _anchors)
+
+
+## Apply failure impact overlay (K key) — Simulation Mode (failure injection).
+## Simulates a failure of the first node in the graph and cascades through
+## dependents, colouring all affected components so the human can explore
+## the impact of the hypothetical failure before committing to any change.
+func _apply_failure_impact_overlay() -> void:
+	var nodes: Array = _graph.get("nodes", [])
+	if nodes.is_empty():
+		return
+	var target_id: String = nodes[0].get("id", "")
+	if not target_id.is_empty():
+		_understanding_overlay.apply_failure_overlay(target_id, _graph, _anchors, self)

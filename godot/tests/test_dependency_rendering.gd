@@ -85,6 +85,7 @@ func test_edge_line_mesh_created() -> bool:
 ## a CylinderMesh with top_radius == 0 (arrowhead cone) must exist among the
 ## main node's children after _create_edge() runs.
 func test_direction_indicator_cone_created() -> bool:
+	# edge A→B → _create_edge() → CylinderMesh(top_radius=0) arrowhead → cone with top_radius==0 exists ✓
 	var main_node: Node3D = MainScript.new()
 	main_node.build_from_graph(_make_fixture_internal())
 
@@ -102,6 +103,7 @@ func test_direction_indicator_cone_created() -> bool:
 ## The direction cone must be positioned near the target end of the edge
 ## (within 2 units of to_pos = (20, 0, 0)) so that it marks the arrival point.
 func test_direction_cone_near_target() -> bool:
+	# edge A(0,0,0)→B(20,0,0) → cone placed at to_pos - dir*(height*0.5) → cone.position near (20,0,0) within 2 units ✓
 	var main_node: Node3D = MainScript.new()
 	main_node.build_from_graph(_make_fixture_internal())
 
