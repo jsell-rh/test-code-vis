@@ -1,212 +1,169 @@
 ---
 verdict: pass
 ---
-## Spec Alignment Review — task-024: Godot UX Polish (full ux-polish.spec.md)
+## Worker Result — task-024: Godot UX Polish (ux-polish.spec.md)
 
 Branch: hyperloop/task-024
 Spec: specs/prototype/ux-polish.spec.md
-Reviewer date: 2026-04-24
+Date: 2026-04-24
+Checks synced from main before run: yes
 
 ---
 
 ## Scope Check Output
 
-```
 OK: No prohibited (not-in-scope) features detected.
-```
 
 ---
 
-## run-all-checks.sh Output (verbatim summary)
+## Check Script Results
 
-```
-check-branch-has-commits.sh      [EXIT 0]  OK: 49 commit(s) above main
-check-checks-in-sync.sh          [EXIT 0]  OK: All check scripts from main present
-check-clamp-boundary-tests.sh    [EXIT 0]  OK: All 4 clamped variables have boundary tests
-check-coordinator-calls-pipeline [EXIT 0]  SKIP: no pipeline consumer (correct for this task)
-check-direction-test-derivations [EXIT 0]  OK: 8 direction/sign tests with derivation comments
-check-end-to-end-integration-test[EXIT 0]  SKIP: no producer+consumer (correct for this task)
-check-extractor-cli-tested.sh    [EXIT 0]  OK
-check-extractor-stdlib-only.sh   [EXIT 0]  OK
-check-gdscript-only-test.sh      [EXIT 0]  OK: DirAccess iteration test found
-check-gdscript-test-bool-return  [EXIT 0]  OK: No inert bool-returning tests (3 suites checked)
-check-kartograph-integration-test[EXIT 0]  OK
-check-not-in-scope.sh            [EXIT 0]  OK: No prohibited features
-check-pipeline-wiring.sh         [EXIT 0]  SKIP: no parse_response/view_spec (correct)
-check-report-scope-section.sh    [EXIT 0]  OK: worker-result.yaml contains valid scope section
-extractor-lint.sh                [EXIT 0]  94 passed in 0.10s
-godot-compile.sh                 [EXIT 0]  Godot compiles successfully
-godot-fileaccess-tested.sh       [EXIT 0]  OK: FileAccess.open() exercised in 2 test files
-godot-label3d.sh                 [EXIT 0]  PASS: Label3D billboard+pixel_size set and tested
-godot-tests.sh                   [EXIT 0]  91 passed, 0 failed
+=== run-all-checks.sh ===
 
-RESULT: ALL PASS (19/19 checks)
-```
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-024' has 50 commit(s) above main.
+[EXIT 0]
 
----
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
 
-## Requirement Coverage
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
 
-### Requirement: Pan with Left Mouse Button — COVERED
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+      This check only applies to tasks that implement a view-spec consumer.
+[EXIT 0]
 
-**Code:** `camera_controller.gd` lines 101–104: `MOUSE_BUTTON_LEFT` sets `_panning = true`.
-Lines 141–160: `_handle_motion` pans `_target_pivot` via:
-```
-_target_pivot -= right * delta.x * pan_amount
-_target_pivot -= backward * delta.y * pan_amount
-_pivot = _target_pivot  # immediate for responsive feel
-```
+--- check-direction-test-derivations.sh ---
+OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_lmb_drag_pans_camera — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_pan_direction_not_inverted — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
+OK: All 8 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
 
-**Scenario: Panning the view** — COVERED
-- GIVEN top-down camera view: `_theta = 0.15` (near-vertical) ✓
-- WHEN user holds LMB and drags: `MOUSE_BUTTON_LEFT` → `_panning = true` ✓
-- THEN camera pans in direction of drag: pivot shifts ✓
-- AND direction not inverted: no double-negation; sign verified below ✓
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+      Producer (build_prompt / parse_response) found: none
+      Consumer (apply_spec / render_spec) found: none
+[EXIT 0]
 
-Tests: `test_lmb_drag_pans_camera`, `test_pan_direction_not_inverted`
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
 
----
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
 
-### Requirement: Non-Inverted Movement — COVERED
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
 
-**Code:** Same pan path. Comment at line 153–155 documents convention:
-"Google Maps convention: drag moves scene in same direction as drag.
-Dragging right → scene moves right → camera/pivot move LEFT → subtract right·delta.x."
-Code: `_target_pivot -= right * delta.x * pan_amount`
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (3 suite(s) checked)
+[EXIT 0]
 
-**Pan Direction Sign Derivation (independent):**
-- At phi=PI/2, camera is on +Z side; basis.x = world +X
-- Drag LEFT: delta.x = -50
-- `_target_pivot -= (+X) * (-50) * k → pivot.x += 50k` → pivot moves RIGHT → scene shifts LEFT ✓
-- "dragging left reveals content to the right" (Google Maps) ✓
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
 
-**Scenario: Drag direction matches view movement** — COVERED
-Tests: `test_pan_direction_not_inverted` (asserts `cam._pivot.x > 0.0` after 50px left drag at phi=PI/2)
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
 
----
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM→view-spec pipeline.
+[EXIT 0]
 
-### Requirement: Zoom Toward Mouse Cursor — COVERED
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
 
-**Code:** `_zoom_toward_point(world_pt, direction)` lines 170–179:
-```
-var zoom_ratio = _target_distance / old_dist
-_target_pivot = world_pt + (_target_pivot - world_pt) * zoom_ratio
-```
-On zoom-in (direction < 0): `zoom_ratio < 1` → pivot shifts toward `world_pt` → cursor stays fixed.
-On zoom-out (direction > 0): `zoom_ratio > 1` → pivot moves away from `world_pt`.
-Called from `_handle_button` with `_get_ground_point_under_cursor` (lines 120–128).
+--- extractor-lint.sh ---
+Linting extractor...
+All checks passed!
+8 files already formatted
+Running extractor tests...
+94 passed in 0.14s
+Extractor checks passed.
+[EXIT 0]
 
-**Scenario: Zooming into a specific component** — COVERED
-- GIVEN cursor over bounded context: `world_pt = Vector3(20, 0, 0)` ✓
-- WHEN scrolls to zoom in: `_zoom_toward_point(world_pt, -1)` ✓
-- THEN view zooms toward cursor: `_target_pivot.x > 0` ✓
-- AND component stays under cursor: `0 < _target_pivot.x < world_pt.x` (invariant) ✓
+--- godot-compile.sh ---
+Compiling Godot project...
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Godot project compiles successfully.
+[EXIT 0]
 
-Tests: `test_zoom_in_shifts_pivot_toward_cursor`, `test_zoom_in_cursor_point_invariant`
+--- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
 
-**Scenario: Zooming out** — COVERED
-- GIVEN zoomed-in view ✓
-- WHEN scrolls to zoom out: `_zoom_toward_point(world_pt, 1)` ✓
-- THEN view zooms out from cursor: `_target_pivot.x < 0` (pivot pushed away from +X cursor) ✓
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
 
-Tests: `test_zoom_out_shifts_pivot_away_from_cursor`, `test_scroll_down_increases_target_distance`
+--- godot-tests.sh ---
+Found 10 GDScript test file(s) in godot/tests/.
+Running custom headless test runner...
+Results: 91 passed, 0 failed
+GDScript behavioral tests passed.
+[EXIT 0]
 
----
-
-### Requirement: Orbit Around Mouse Point — COVERED
-
-**Code:** `begin_orbit_at_world_point(world_pt)` lines 73–85:
-Sets `_pivot = world_pt`, recomputes spherical angles from camera's current position so the
-camera does not jump — only the orbit centre changes. Called from `_handle_button` on
-`MOUSE_BUTTON_RIGHT` press (lines 111–116). Subsequent `_handle_motion` with `_orbiting = true`
-changes `_phi`/`_theta` without moving `_pivot`.
-
-**Scenario: Orbiting around a component** — COVERED
-- GIVEN cursor over specific component: `world_pt = Vector3(5, 0, 3)` ✓
-- WHEN user holds RMB and drags: `MOUSE_BUTTON_RIGHT` → `begin_orbit_at_world_point` → orbit motion ✓
-- THEN camera orbits around cursor point: `cam._pivot == world_pt` after `begin_orbit_at_world_point` ✓
-- AND component remains at visual center: `_pivot` unchanged during orbit (only `_phi`/`_theta` move) ✓
-
-Tests: `test_orbit_uses_right_mouse_button`, `test_orbit_around_cursor_point`,
-`test_orbit_pivot_is_world_point`
-
----
-
-### Requirement: Smooth Camera Movement — COVERED
-
-**Code:** `_process(delta)` lines 42–47:
-```
-var t = 1.0 - pow(0.05, delta * zoom_smooth)  # exponential smoothing
-_distance = lerpf(_distance, _target_distance, t)
-_pivot = _pivot.lerp(_target_pivot, t)
-```
-Zoom: `_target_distance` changes instantly on scroll; `_distance` interpolates per-frame.
-Pan: pivot moves immediately and proportionally to `delta.x * pan_amount` (no target queuing
-needed — direct drag is already proportional to drag speed).
-
-**Scenario: Smooth zoom** — COVERED
-- GIVEN any camera position ✓
-- WHEN user scrolls: `_target_distance` changes, `_distance` unchanged until `_process` ✓
-- THEN zoom is animated (interpolated), not instantaneous ✓
-
-Tests: `test_smooth_zoom_target_differs_from_distance_after_scroll`
-       (asserts `_target_distance < _distance` immediately after scroll — i.e., they differ),
-       `test_smooth_zoom_process_interpolates_distance`
-       (asserts `20 < _distance < 40` after one `_process(0.1)` call)
-
-**Scenario: Smooth pan** — COVERED
-- GIVEN any camera position ✓
-- WHEN user drags to pan ✓
-- THEN pan is proportional to drag speed: 50px drag produces larger displacement than 10px ✓
-
-Tests: `test_pan_proportional_to_drag_speed`
-       (asserts `cam_fast._pivot.length() > cam_slow._pivot.length()`)
+=== Summary: 19 check(s) run ===
+RESULT: ALL PASS
 
 ---
 
 ## THEN-Clause → Test Mapping
 
-| # | Requirement | THEN-clause | Test | Status |
+| # | Requirement | THEN-clause | Test function | Status |
 |---|---|---|---|---|
 | 1 | Pan/LMB | Camera pans in direction of drag | `test_lmb_drag_pans_camera` | COVERED |
 | 2 | Pan/LMB | Direction not inverted (AND) | `test_pan_direction_not_inverted` | COVERED |
 | 3 | Non-Inverted | Scene moves same direction as drag | `test_pan_direction_not_inverted` | COVERED |
-| 4 | Zoom | View zooms toward cursor | `test_zoom_in_shifts_pivot_toward_cursor` | COVERED |
-| 5 | Zoom | Component stays under cursor (AND) | `test_zoom_in_cursor_point_invariant` | COVERED |
+| 4 | Zoom-in | View zooms toward cursor | `test_zoom_in_shifts_pivot_toward_cursor` | COVERED |
+| 5 | Zoom-in | Component stays under cursor (AND) | `test_zoom_in_cursor_point_invariant` | COVERED |
 | 6 | Zoom-out | View zooms out from cursor | `test_zoom_out_shifts_pivot_away_from_cursor` | COVERED |
 | 7 | Orbit | Camera orbits around cursor point | `test_orbit_around_cursor_point` | COVERED |
 | 8 | Orbit | RMB activates orbit | `test_orbit_uses_right_mouse_button` | COVERED |
-| 9 | Orbit | Component at visual center (AND) | `test_orbit_pivot_is_world_point` | COVERED |
+| 9 | Orbit | Component remains at visual center (AND) | `test_orbit_pivot_is_world_point` | COVERED |
 | 10 | Smooth | Zoom interpolated, not instantaneous | `test_smooth_zoom_target_differs_from_distance_after_scroll` | COVERED |
 | 11 | Smooth | Zoom lerps toward target in _process | `test_smooth_zoom_process_interpolates_distance` | COVERED |
 | 12 | Smooth | Pan proportional to drag speed | `test_pan_proportional_to_drag_speed` | COVERED |
 
-All 12 THEN-clauses across all 5 requirements are COVERED.
+All 12 THEN-clauses across all 5 requirements: COVERED.
 
 ---
 
-## Findings Summary
+## Implementation Summary
 
-| Requirement | Status | Notes |
-|---|---|---|
-| Pan with Left Mouse Button | COVERED | Code + 2 tests |
-| Non-Inverted Movement | COVERED | Code + sign-verified test |
-| Zoom Toward Mouse Cursor | COVERED | Code + 3 tests (zoom-in, invariant, zoom-out) |
-| Orbit Around Mouse Point | COVERED | Code + 3 tests (RMB, cursor point, visual center) |
-| Smooth Camera Movement | COVERED | Code + 3 tests (target gap, interpolation, proportional pan) |
-| All 19 automated checks | PASS | run-all-checks.sh exits 0 |
-| 91 GDScript behavioral tests | PASS | 0 failures |
-| 94 pytest tests | PASS | 0 failures |
-| Prohibited-feature scan | PASS | check-not-in-scope exits 0 |
-
-No FAIL or PARTIAL findings.
-
----
-
-## Summary
-
-All 5 SHALL requirements from `specs/prototype/ux-polish.spec.md` are fully implemented in
+All 5 requirements from `specs/prototype/ux-polish.spec.md` are implemented in
 `godot/scripts/camera_controller.gd` and covered by named GDScript behavioral tests in
-`godot/tests/test_camera_controls.gd`. Every THEN-clause has a corresponding test that
-asserts the correct predicate. All 19 automated checks pass. The pan direction sign was
-independently verified: drag-left → pivot-right → scene-left (Google Maps convention).
+`godot/tests/test_camera_controls.gd`.
+
+Key implementation points:
+- **Pan (LMB):** `_handle_motion` subtracts `right * delta.x * pan_amount` and `backward * delta.y * pan_amount`
+  from `_target_pivot`. Google Maps convention: drag-left → pivot moves right → scene shifts left. ✓
+- **Non-inverted:** Sign chain verified: at phi=PI/2, drag-left (delta.x=-50) → pivot.x += 50k → scene left. ✓
+- **Zoom toward cursor:** `_zoom_toward_point` scales pivot toward/away from the world point under cursor
+  using `zoom_ratio = _target_distance / old_dist`. ✓
+- **Orbit around cursor:** `begin_orbit_at_world_point` sets `_pivot = world_pt` and recomputes spherical
+  coordinates; subsequent motion changes only `_phi`/`_theta`, not `_pivot`. ✓
+- **Smooth movement:** `_process` uses exponential smoothing `t = 1 - pow(0.05, delta * zoom_smooth)` to
+  interpolate `_distance` and `_pivot` toward their targets each frame. ✓
+
+All 19 automated checks pass. 91 GDScript tests pass. 94 Python tests pass.
