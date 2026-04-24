@@ -1,0 +1,103 @@
+---
+verdict: pass
+---
+
+All three SHALL requirements from specs/core/understanding-modes.spec.md are fully
+implemented and covered by GDScript behavioral tests that exercise real Godot runtime
+objects (Node3D, MeshInstance3D, Label3D) with known fixture data and assert on
+property values (albedo_color, label text, scene-tree children).
+
+Note: specs/prototype/prototype-scope.spec.md explicitly excludes conformance, evaluation,
+and simulation modes from the prototype. Task-031 was assigned specifically to implement
+understanding-modes.spec.md, so the implementation was in scope for this task. The review
+validates the spec contract, not the scoping decision.
+
+---
+
+## Requirement: Conformance Mode — COVERED
+
+Implementation: `godot/scripts/understanding_overlay.gd` → `apply_alignment_overlay()`
+  - Reads `spec_status` field from each node entry.
+  - "aligned"   → ALIGNED_COLOR (green)  — separate components are visually distinct.
+  - "divergent" → DIVERGENT_COLOR (red) + Label3D annotation from `spec_divergence` field.
+  - other/absent → UNSPECIFIED_COLOR (grey).
+  Wired into the live application via `main.gd::_apply_alignment_overlay()` (H key).
+
+### Scenario: Spec-aligned implementation — COVERED
+- Code: `apply_alignment_overlay()` colours auth + user_mgmt anchors independently.
+- Test: `test_aligned_nodes_displayed_as_separate_components` — GIVEN auth + user_mgmt
+  both with spec_status "aligned", WHEN overlay applied, THEN both anchors are distinct
+  objects each receiving ALIGNED_COLOR.
+- Test: `test_aligned_node_receives_aligned_color` — confirms single aligned node
+  receives ALIGNED_COLOR and changes from the pre-overlay default.
+
+### Scenario: Spec-divergent implementation — COVERED
+- Code: divergent branch applies DIVERGENT_COLOR and calls `_add_overlay_label()` with
+  the `spec_divergence` string (e.g. "merged with order service").
+- Test: `test_divergent_node_receives_divergent_color` — GIVEN payment node with
+  spec_status "divergent", WHEN overlay applied, THEN receives DIVERGENT_COLOR (distinct
+  from ALIGNED_COLOR).
+- Test: `test_divergent_node_has_divergence_label` — confirms Label3D child exists on
+  the divergent anchor with text == spec_divergence value.
+
+---
+
+## Requirement: Evaluation Mode — COVERED
+
+Implementation: `godot/scripts/understanding_overlay.gd` → `apply_quality_overlay()`
+  - Computes in_degree per node from edges_data.
+  - Detects mutual (bidirectional) edge pairs.
+  - in_degree >= 3  → CRITICAL_COLOR (deep red, single-point-of-failure risk).
+  - in_degree == 2 or mutual edge → COUPLED_COLOR (orange, tight coupling).
+  - Operates independently of spec_status so architectural problems are visible
+    even when conformance is perfect.
+  Wired via `main.gd::_apply_quality_overlay()` (J key).
+
+### Scenario: Detecting tight coupling — COVERED
+- Test: `test_coupling_between_services_apparent` — GIVEN svc_a→svc_b AND svc_b→svc_a
+  mutual edges, WHEN quality overlay applied, THEN both receive COUPLED_COLOR.
+
+### Scenario: Identifying single point of failure — COVERED
+- Test: `test_critical_component_centrality_apparent` — GIVEN hub with three incoming
+  edges (svc1, svc2, svc3 all depend on hub), WHEN quality overlay applied, THEN hub
+  receives CRITICAL_COLOR.
+- Test: `test_critical_color_distinct_from_normal` — confirms CRITICAL_COLOR ≠
+  COUPLED_COLOR and CRITICAL_COLOR ≠ ALIGNED_COLOR (risk levels are distinguishable).
+
+### Scenario: Spec is faithfully implemented but architecturally poor — COVERED
+- Test: `test_quality_overlay_independent_of_alignment` — GIVEN hub with
+  spec_status "aligned" (perfect conformance) but in_degree == 3, WHEN quality overlay
+  applied, THEN hub still receives CRITICAL_COLOR regardless of alignment status.
+
+---
+
+## Requirement: Simulation Mode — COVERED
+
+Implementation: `godot/scripts/understanding_overlay.gd`
+  - `apply_split_overlay()`: finds all nodes with an edge → target_id (dependents),
+    colours each AFFECTED_COLOR, annotates each with "requires new interface" label.
+  - `apply_failure_overlay()`: BFS from target_id through reverse-adjacency graph,
+    colours every transitively affected node AFFECTED_COLOR, annotates each "AFFECTED".
+  Wired via `main.gd::_apply_failure_impact_overlay()` (K key).
+  (apply_split_overlay is implemented and tested; the K-key wires failure injection.)
+
+### Scenario: Splitting a service — COVERED
+- Test: `test_split_impact_on_dependents_visible` — GIVEN svc_a depending on monolith,
+  WHEN split overlay applied to "monolith", THEN svc_a receives AFFECTED_COLOR.
+- Test: `test_split_shows_required_new_interfaces` — confirms scene root contains
+  a Label3D with text "requires new interface".
+
+### Scenario: Failure injection — COVERED
+- Test: `test_failure_cascade_effects_visible` — GIVEN chain svc_b→svc_a, svc_c→svc_b,
+  WHEN failure overlay applied to "svc_a", THEN both svc_b (direct) and svc_c
+  (transitive) receive AFFECTED_COLOR.
+- Test: `test_failure_affected_components_clearly_identified` — confirms scene root
+  contains a Label3D with text "AFFECTED" for the affected component.
+
+---
+
+All 15 tests in `godot/tests/test_understanding_overlay.gd` are registered in
+`godot/tests/run_tests.gd` under the task-031 block. Tests use the `_check()/_test_failed`
+pattern with real Godot Node3D/MeshInstance3D/Label3D fixture objects and assert on
+runtime property values (albedo_color via is_equal_approx, Label3D.text exact match,
+scene-tree child presence). This satisfies the GDScript behavioral test requirement.
