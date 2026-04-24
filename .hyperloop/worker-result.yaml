@@ -2,41 +2,10 @@
 verdict: pass
 ---
 
-## Reviewer: spec-alignment-reviewer (independent verification, 2026-04-24)
+## Reviewer: spec-alignment-reviewer
 ## Branch: hyperloop/task-023
 ## Spec: specs/prototype/nfr.spec.md
-
----
-
-## Checks Run (run-all-checks.sh — all 17 checks)
-
-| Check | Result |
-|---|---|
-| check-branch-has-commits.sh | EXIT 0 — 21 commits above main |
-| check-checks-in-sync.sh | EXIT 0 — all check scripts from main present |
-| check-clamp-boundary-tests.sh | EXIT 0 — 4 clamped variables, all have boundary tests |
-| check-coordinator-calls-pipeline.sh | EXIT 0 (SKIP — no view-spec consumer in this NFR task) |
-| check-end-to-end-integration-test.sh | EXIT 0 (SKIP — no producer/consumer pipeline in this NFR task) |
-| check-extractor-cli-tested.sh | EXIT 0 — main() call-site test found |
-| check-extractor-stdlib-only.sh | EXIT 0 — stdlib import inspection test found |
-| check-gdscript-only-test.sh | EXIT 0 — DirAccess iteration test found |
-| check-kartograph-integration-test.sh | EXIT 0 — integration test referencing kartograph found |
-| check-not-in-scope.sh | EXIT 0 — No prohibited features detected |
-| check-pipeline-wiring.sh | EXIT 0 (SKIP — no parse_response / view-spec pipeline) |
-| check-report-scope-section.sh | EXIT 0 — scope section present in worker-result.yaml |
-| extractor-lint.sh | EXIT 0 — ruff clean, 98 pytest passed |
-| godot-compile.sh | EXIT 0 — compiles |
-| godot-fileaccess-tested.sh | EXIT 0 |
-| godot-label3d.sh | EXIT 0 |
-| godot-tests.sh | EXIT 0 — 99 GDScript tests passed |
-
-**ALL 17 CHECKS PASS (2 legitimate SKIPs for pipeline checks not applicable to NFR task)**
-
----
-
-## Process Note
-
-Two check scripts (`check-coordinator-calls-pipeline.sh`, `check-end-to-end-integration-test.sh`) were absent from the worktree before syncing `.hyperloop/checks/` from main. Both were added to main AFTER the branch was committed — this is NOT a process violation by the implementer. Both correctly SKIP on this branch (no view-spec consumer pipeline exists in the NFR task).
+## Review date: 2026-04-24
 
 ---
 
@@ -46,84 +15,119 @@ OK: No prohibited (not-in-scope) features detected.
 
 ---
 
-## THEN→Test Mapping (independently verified)
+## Requirement Coverage
 
-### Requirement 1: Godot 4.6 Engine
+### 1. Godot 4.6 Engine — COVERED
 
-| THEN clause | Test function | Verified |
+**Code:** `godot/project.godot` declares `config/features=PackedStringArray("4.6")`. All four
+scripts in `godot/scripts/` (`main.gd`, `scene_graph_loader.gd`, `camera_controller.gd`,
+`lod_manager.gd`) are GDScript (`.gd`). No `.cs` files exist. `main.gd` uses
+`FileAccess.open()` + `get_as_text()` — valid Godot 4.6 API, not the deprecated `read_as_text()`.
+
+**Tests (`godot/tests/test_engine_version.gd`):**
+
+| THEN clause | Test function | Status |
 |---|---|---|
-| Opens in Godot 4.6.x | `test_project_godot_declares_46_feature` | PASS — `FileAccess.open("res://project.godot")` + `content.contains("4.6")` ✓ |
-| Opens in Godot 4.6.x (config/features) | `test_project_godot_config_features_line` | PASS — asserts `config/features` key + `"4.6"` value ✓ |
-| All scripts use GDScript | `test_scripts_dir_contains_only_gdscript` | PASS — DirAccess iterates `res://scripts/`; asserts each `.ends_with(".gd")` ✓ |
-| No C# / Mono | `test_project_does_not_declare_csharp` | PASS — asserts `"Mono"` and `"C#"` absent ✓ |
-| API calls valid for Godot 4.6 | `test_file_access_get_as_text_returns_non_empty_string` | PASS — calls `FileAccess.get_as_text()` live, asserts non-empty ✓ |
-| FileAccess code path (`_ready()`) | `test_main_uses_godot4_fileaccess_api` | PASS — reads main.gd source, asserts `FileAccess.open(` + `get_as_text()` present ✓ |
+| Opens in Godot 4.6.x | `test_project_godot_declares_46_feature` | COVERED |
+| config/features declares "4.6" | `test_project_godot_config_features_line` | COVERED |
+| No C# / Mono | `test_project_does_not_declare_csharp` | COVERED |
+| FileAccess.get_as_text() is valid 4.6 API | `test_file_access_get_as_text_returns_non_empty_string` | COVERED |
+| All scripts use GDScript (DirAccess iteration) | `test_scripts_dir_contains_only_gdscript` | COVERED |
 
-All 6 function names confirmed present by grep. Test bodies read and assertion predicates verified.
-
-### Requirement 2: Python Extractor
-
-| THEN clause | Test function | Verified |
-|---|---|---|
-| Runs as standalone CLI tool | `TestCliEntryPoint::test_main_produces_json_output` | PASS — calls `main([str(src), "--output", str(output)])`, asserts `rc == 0` + valid JSON ✓ |
-| No deps beyond stdlib (and ast) | `TestStdlibOnlyImports::test_extractor_uses_only_stdlib_imports` | PASS — AST-walks every `.py` in extractor/, asserts each import in `sys.stdlib_module_names` ✓ |
-
-All function names confirmed by grep. Bodies read; predicates match THEN clauses.
-
-### Requirement 3: JSON Interface Contract
-
-| THEN clause | Evidence | Verified |
-|---|---|---|
-| Godot does not need extractor/source | All 22 tests in `test_scene_graph_loader.gd` use pure dict fixtures | PASS ✓ |
-| JSON is self-contained | `test_scene_graph_loading.gd` 5 tests — `build_from_graph()` with dict fixtures only | PASS ✓ |
-
-### Requirement 4: Desktop Platform — PASS-WITH-NOTE
-
-No web export presets, no Dockerfile, no container manifests. APIs used are native desktop Godot APIs. The THEN clause "runs natively without browser, container, or VM" is a deployment-environment assertion that is genuinely untestable in automated headless CI. Structural verification is the maximum achievable. **PASS-WITH-NOTE.**
-
-### Requirement 5: Performance at Kartograph Scale
-
-| THEN clause | Test function | Verified |
-|---|---|---|
-| Scene builds at kartograph scale (6 BC, 54 modules) | `test_kartograph_scale_anchor_count` | PASS — 60-node fixture; asserts `_anchors.size() == 60` ✓ |
-| All 6 bounded context anchors exist | `test_kartograph_scale_context_anchors_exist` | PASS — iterates all 6 context IDs ✓ |
-| All 54 module anchors exist | `test_kartograph_scale_module_anchors_exist` | PASS — asserts `module_count == 54`; iterates all module IDs ✓ |
-| World positions populated for all nodes | `test_kartograph_scale_build_produces_world_positions` | PASS — asserts `_world_positions.size() == 60` ✓ |
-| Frame rate remains above 30fps | PASS-WITH-NOTE | Genuinely untestable in headless CI (no render pipeline). LOD architecture correct. |
-| No perceptible stutter or pop-in | PASS-WITH-NOTE | Genuinely untestable (subjective + requires GPU). LOD system covers the approach. |
-
-All 4 scale test function names confirmed by grep. Bodies read; assertion predicates match THEN clauses with correct scale (60 nodes = 6 BC + 54 modules).
-
-### Requirement 6: Prototype Disposability — NOTE (SHOULD-level, no test required)
+All five tests read `project.godot` via `FileAccess.open()` + `get_as_text()` and assert content
+strings, or use `DirAccess` to iterate `res://scripts/` asserting every file ends with `.gd`.
+These are runtime behavioral tests, not compilation-only checks.
 
 ---
 
-## Commit Trailer Verification
+### 2. Python Extractor — COVERED
 
-- `Spec-Ref: specs/prototype/nfr.spec.md@e2cac130819f13929ab13e324411ac7a23d66b33` — PRESENT
-- `Task-Ref: task-023` — PRESENT
+**Code:** `extractor/__main__.py` implements a full argparse CLI (`main(argv)`, invocable as
+`python -m extractor <src_path> [--output <file>]`). All imports across extractor source files
+are stdlib-only: `ast`, `math`, `datetime`, `pathlib`, `typing`, `argparse`, `json`, `sys`.
+No third-party packages.
+
+**Tests (`extractor/tests/test_cli.py`):**
+
+| THEN clause | Test function | Status |
+|---|---|---|
+| Runs as standalone CLI tool | `TestCliEntryPoint::test_main_produces_json_output` | COVERED |
+| Stdlib-only dependencies | `TestStdlibOnlyImports::test_extractor_uses_only_stdlib_imports` | COVERED |
+
+`test_main_produces_json_output` calls `main([str(src), "--output", str(output)])`, asserts
+`rc == 0`, and validates JSON output contains `nodes`/`edges`/`metadata` keys.
+`test_extractor_uses_only_stdlib_imports` AST-walks every `.py` in `extractor/` (excluding
+`tests/`) and asserts every top-level import name is in `sys.stdlib_module_names`.
 
 ---
 
-## Test Counts
+### 3. JSON Interface Contract — COVERED
 
-- GDScript behavioral tests: **99 PASSED, 0 FAILED**
-- Python (pytest): **98 PASSED, 0 FAILED**
-- All check scripts: **17 EXIT 0** (15 pass, 2 legitimate SKIPs)
+**Code:** `godot/scripts/scene_graph_loader.gd` loads and validates JSON as pure dictionary
+operations. `godot/scripts/main.gd::build_from_graph()` accepts a `Dictionary` and contains no
+import of the Python extractor and no runtime dependency on any external source codebase.
+
+**Tests:** All 22 tests in `test_scene_graph_loader.gd` and 5 tests in
+`test_scene_graph_loading.gd` use inline `Dictionary` fixtures — no Python extractor invocation,
+no filesystem reads of source code. The Godot loading path is fully exercised with self-contained
+data, confirming the decoupled contract.
 
 ---
 
-## Conclusion
+### 4. Desktop Platform — COVERED (PASS-WITH-NOTE)
 
-All five MUST requirements from `specs/prototype/nfr.spec.md` are implemented and covered by behavioral tests with correct assertion predicates, verified independently:
+**Code:** No web export presets, no `Dockerfile`, no container manifests exist in the repo.
+All Godot APIs used (`FileAccess`, `DirAccess`, `Node3D`, `Camera3D`, `MeshInstance3D`,
+`Label3D`) are standard desktop Godot 4.6 APIs.
 
-1. **Godot 4.6 Engine** — COVERED (6 explicit tests in `test_engine_version.gd`)
-2. **Python Extractor CLI** — COVERED (`test_cli.py`: CLI entry-point + stdlib-only import inspection)
-3. **JSON Interface Contract** — COVERED (pure dict fixture tests; no extractor access)
-4. **Desktop Platform** — COVERED (PASS-WITH-NOTE: deployment clause untestable in headless CI)
-5. **Performance at Kartograph Scale** — COVERED (PASS-WITH-NOTE: FPS untestable; scale build fully tested)
-6. **Prototype Disposability** — NOTE (SHOULD-level; no test required)
+**Note:** The THEN clause "runs natively without browser, container, or VM dependencies" is a
+deployment-environment assertion that cannot be automatically verified in headless CI. Structural
+evidence (API selection, absence of web/container config) is the maximum achievable. Not a FAIL.
 
-No prohibited features detected. Commit trailers present. All checks exit 0.
+---
+
+### 5. Performance at Kartograph Scale — COVERED (PASS-WITH-NOTE)
+
+**Code:** `godot/scripts/lod_manager.gd` implements LOD visibility control keyed on camera
+distance (far → bounded_context nodes only; medium → + modules; near → all nodes + edges).
+`main.gd` registers every node and edge in `_lod_node_entries` / `_lod_edge_entries` and calls
+`_lod.apply()` each frame, directly addressing the "no perceptible stutter" design concern.
+
+**Tests (`godot/tests/test_nfr_scale.gd`):**
+
+| THEN clause | Test function | Status |
+|---|---|---|
+| Scene builds at kartograph scale (60 nodes) | `test_kartograph_scale_anchor_count` | COVERED |
+| All 6 bounded context anchors created | `test_kartograph_scale_context_anchors_exist` | COVERED |
+| All 54 module anchors created | `test_kartograph_scale_module_anchors_exist` | COVERED |
+| World positions for all 60 nodes populated | `test_kartograph_scale_build_produces_world_positions` | COVERED |
+
+The fixture models 6 bounded contexts × 9 modules = 60 nodes, matching kartograph's real scale.
+FPS measurement (>30fps) and subjective stutter detection require a GPU render pipeline and
+cannot be automated in headless CI. The structural correctness of the full build path at scale
+is tested and sufficient. Not a FAIL.
+
+---
+
+### 6. Prototype Disposability — NOTE (SHOULD-level; no test required)
+
+No architectural lock-in detected. JSON scene graph is the only cross-component artifact.
+
+---
+
+## Summary
+
+| # | Requirement | Status |
+|---|---|---|
+| 1 | Godot 4.6 Engine | COVERED |
+| 2 | Python Extractor | COVERED |
+| 3 | JSON Interface Contract | COVERED |
+| 4 | Desktop Platform | COVERED (PASS-WITH-NOTE) |
+| 5 | Performance at Kartograph Scale | COVERED (PASS-WITH-NOTE) |
+| 6 | Prototype Disposability | NOTE (SHOULD-level) |
+
+All five SHALL/MUST requirements from `specs/prototype/nfr.spec.md` are implemented and covered
+by behavioral tests with correct assertion predicates, independently verified by reading code and
+test bodies. No prohibited features detected.
 
 **VERDICT: PASS**
