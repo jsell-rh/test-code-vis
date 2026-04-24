@@ -1,0 +1,125 @@
+---
+task_id: task-027
+round: 0
+role: spec-reviewer
+verdict: fail
+---
+## Summary
+
+The implementation fails on the **Non-Inverted Movement** requirement and its
+AND-clause in the **Pan with Left Mouse Button** scenario. All other requirements
+are fully covered. Root cause: the pan direction is inverted relative to the
+Google Maps behavior the spec defines with "i.e." — dragging left moves the pivot
+left (camera looks left, old-center content drifts right on screen), whereas the
+spec requires dragging left to reveal content to the right (pivot moves right,
+old-center content drifts left on screen, new content from the right enters view).
+
+---
+
+## Requirement Status
+
+| Requirement | Scenario | THEN-clause | Test(s) | Status |
+|---|---|---|---|---|
+| Pan with Left Mouse Button | Panning the view | THEN the camera pans in the direction of the drag | test_lmb_pan_moves_pivot | COVERED |
+| Pan with Left Mouse Button | Panning the view | AND the movement direction matches the drag direction (not inverted) | test_pan_drag_right_increases_pivot_x, test_pan_drag_left_decreases_pivot_x | FAIL |
+| Non-Inverted Movement | Drag direction matches view movement | THEN the scene moves in the same direction as the drag (dragging left reveals content to the right, as in Google Maps) | test_drag_direction_matches_view_movement, test_pan_drag_left_decreases_pivot_x | FAIL |
+| Zoom Toward Mouse Cursor | Zooming into a specific component | THEN the view zooms toward the point under the cursor | test_zoom_toward_cursor_shifts_pivot_toward_cursor | COVERED |
+| Zoom Toward Mouse Cursor | Zooming into a specific component | AND the component under the cursor stays under the cursor during the zoom | test_component_stays_under_cursor_on_zoom_in, test_zoom_cursor_at_pivot_does_not_shift_pivot | COVERED |
+| Zoom Toward Mouse Cursor | Zooming out | THEN the view zooms out from the point under the cursor | test_zoom_out_from_cursor_shifts_pivot_away, test_zoom_out_increases_target_distance | COVERED |
+| Orbit Around Mouse Point | Orbiting around a component | THEN the camera orbits around the point under the cursor at orbit start | test_orbit_pivot_set_to_cursor_point_at_start, test_orbit_pivot_is_used_during_orbit | COVERED |
+| Orbit Around Mouse Point | Orbiting around a component | AND the component remains at the visual center during the orbit | test_component_remains_at_visual_center_during_orbit, test_orbit_pivot_is_used_during_orbit | COVERED |
+| Smooth Camera Movement | Smooth zoom | THEN the zoom is animated smoothly (interpolated), not instantaneous | test_zoom_is_interpolated_not_instantaneous | COVERED |
+| Smooth Camera Movement | Smooth pan | THEN the pan movement is smooth and proportional to drag speed | test_pan_proportional_to_drag_speed | COVERED |
+
+---
+
+## FAIL Details
+
+### Non-Inverted Movement (and AND-clause of Pan with LMB)
+
+**Spec says (using "i.e." = definition, not example):**
+> THEN the scene moves in the same direction as the drag
+> (i.e. dragging left reveals content to the right, as in Google Maps)
+
+**What the implementation actually does (camera_controller.gd line 143):**
+```gdscript
+_pivot += right * delta.x * pan_amount   # drag left → delta.x<0 → pivot.x decreases
+_pivot += forward * delta.y * pan_amount
+```
+
+When the user drags **left** (delta.x = −50):
+
+1. `pivot.x` **decreases** — the camera now looks at a point to the **left**.
+2. The object that was at the old pivot is now **to the right** of the new look-at
+   point → it drifts **right** on screen.
+3. Content that was to the **left** of the old view comes toward center.
+
+Net effect: drag left → scene appears to move **right** → reveals content from
+the **left**. The spec requires the opposite: drag left → scene moves left →
+reveals content from the **right** (Google Maps grab-and-drag model).
+
+The implementation uses the **camera-pan** model (pivot follows drag; the viewport
+window pans in drag direction) instead of the **map-grab** model (content follows
+drag; pivot moves against drag direction so content to the opposite side is
+revealed). These two models are behaviorally opposite for the same input.
+
+**Tests assert the wrong predicate:**
+
+`test_drag_direction_matches_view_movement` asserts `pivot.x > initial_x` after
+a right drag, labelling this "viewport moved right ✓." But "viewport center moved
+right" and "scene moved right" are **opposites**: when the pivot moves right, the
+old-center content drifts left on screen. The test verifies camera-pan behavior
+and passes, but the spec requires map-grab behavior — the test should assert
+`pivot.x < initial_x` for a right drag (pivot shifts left so content from the
+right enters view).
+
+The same inversion applies to all directional pan tests:
+- `test_pan_drag_right_increases_pivot_x` — wrong direction
+- `test_pan_drag_left_decreases_pivot_x` — wrong direction
+- `test_pan_drag_down_increases_pivot_z` — wrong direction
+- `test_pan_drag_up_decreases_pivot_z` — wrong direction
+
+**To fix:**
+
+Negate the pan delta in `_handle_motion`:
+```gdscript
+_pivot -= right * delta.x * pan_amount    # was +=
+_pivot -= forward * delta.y * pan_amount  # was +=
+```
+And update all directional test assertions to expect pivot movement **opposite**
+to drag direction.
+
+---
+
+## Covered Requirements (detail)
+
+### Zoom Toward Mouse Cursor — COVERED
+- `_zoom_toward_cursor` is called with `_mouse_to_ground(event.position)` on both
+  WHEEL_UP and WHEEL_DOWN. For zoom-in, `zoom_fraction > 0` → pivot lerps toward
+  cursor. For zoom-out, `zoom_fraction < 0` → pivot shifts away from cursor.
+- Tests: `test_zoom_toward_cursor_shifts_pivot_toward_cursor`,
+  `test_component_stays_under_cursor_on_zoom_in`, `test_zoom_out_from_cursor_shifts_pivot_away`,
+  `test_zoom_cursor_at_pivot_does_not_shift_pivot`, `test_zoom_out_increases_target_distance`.
+
+### Orbit Around Mouse Point — COVERED
+- On RMB press, `_set_orbit_pivot(_mouse_to_ground(event.position))` is called,
+  recording the ground point under cursor as the new `_pivot` before computing new
+  spherical angles. Subsequent orbit motion changes `_phi`/`_theta` only — `_pivot`
+  stays fixed, so the component at orbit-start remains at the visual center.
+- Tests: `test_orbit_pivot_set_to_cursor_point_at_start`,
+  `test_orbit_pivot_is_used_during_orbit`,
+  `test_component_remains_at_visual_center_during_orbit`.
+
+### Smooth Camera Movement — COVERED
+- Zoom: `_zoom_toward_cursor` only updates `_target_distance`; `_process` lerps
+  `_distance` toward target each frame at rate `zoom_smoothing * delta`. No
+  instantaneous snap.
+- Pan: pivot updated proportionally to drag delta — smooth by construction.
+- Tests: `test_zoom_is_interpolated_not_instantaneous`,
+  `test_pan_proportional_to_drag_speed`.
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
