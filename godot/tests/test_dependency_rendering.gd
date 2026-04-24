@@ -88,6 +88,7 @@ func test_direction_indicator_cone_created() -> bool:
 	var main_node: Node3D = MainScript.new()
 	main_node.build_from_graph(_make_fixture_internal())
 
+	# source (0,0,0) → target (20,0,0) → direction = +X → cone (CylinderMesh, top_radius=0) placed near target → pointed tip marks arrival direction ✓
 	for child: Node in main_node.get_children():
 		if child is MeshInstance3D:
 			var mi := child as MeshInstance3D
@@ -105,6 +106,7 @@ func test_direction_cone_near_target() -> bool:
 	main_node.build_from_graph(_make_fixture_internal())
 
 	var target_pos := Vector3(20.0, 0.0, 0.0)
+	# source (0,0,0) → target (20,0,0) → cone positioned ≈ at target → distance_to(target) < 2.0 ✓
 	for child: Node in main_node.get_children():
 		if child is MeshInstance3D:
 			var mi := child as MeshInstance3D
