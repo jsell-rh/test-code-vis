@@ -196,6 +196,10 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
     Module nodes are placed in a smaller circle *offset by their parent BC's
     absolute position* so that child nodes are always within the spatial bounds
     of their parent.
+
+    Spec nodes are placed in a row beyond the far edge of the code circle so
+    that the intended design (specs) is spatially distinct from the realized
+    design (code).  See :func:`_position_spec_nodes`.
     """
     bc_nodes = [n for n in nodes if n["type"] == "bounded_context"]
 
@@ -230,10 +234,88 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
                 "z": pz + pos[2],
             }
 
+    # Position spec nodes beyond the code circle so intended and realized
+    # design occupy distinct spatial regions.
+    spec_nodes = [n for n in nodes if n["type"] == "spec"]
+    _position_spec_nodes(spec_nodes, bc_radius)
+
 
 # ---------------------------------------------------------------------------
 # Discovery
 # ---------------------------------------------------------------------------
+
+
+def discover_spec_nodes(src_path: Path) -> list[Node]:
+    """Discover spec files adjacent to the source tree and include them as nodes.
+
+    Searches for a ``specs/`` (or ``spec/``) directory:
+    - next to *src_path* (i.e. ``src_path.parent / "specs"``)
+    - inside *src_path* itself (i.e. ``src_path / "specs"``)
+
+    Each Markdown file found becomes a ``spec`` type node whose size is derived
+    from the file size.  No content analysis is performed — only structure
+    (existence and size of spec files) is recorded.  This makes the intended
+    design visible alongside the realized design in the 3D scene.
+
+    Returns an empty list when no spec directory is found.
+    """
+    spec_nodes: list[Node] = []
+    seen_paths: set[Path] = set()
+
+    for root in (src_path.parent, src_path):
+        for spec_dir_name in ("specs", "spec"):
+            spec_dir = root / spec_dir_name
+            if not spec_dir.is_dir() or spec_dir in seen_paths:
+                continue
+            seen_paths.add(spec_dir)
+            for spec_file in sorted(spec_dir.rglob("*.md")):
+                # Derive a stable, dot-separated ID from the relative path.
+                rel = spec_file.relative_to(spec_dir)
+                parts = rel.with_suffix("").parts
+                # Replace separators and normalise to a safe ID string.
+                safe_parts = [p.replace("-", "_").replace(" ", "_") for p in parts]
+                spec_id = "spec." + ".".join(safe_parts)
+                name = spec_file.stem.replace("-", " ").replace("_", " ").title()
+                try:
+                    size_bytes = spec_file.stat().st_size
+                except OSError:
+                    size_bytes = 0
+                size = max(0.5, math.log1p(size_bytes) / math.log(10))
+                node: Node = {
+                    "id": spec_id,
+                    "name": name,
+                    "type": "spec",
+                    "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+                    "size": size,
+                    "parent": None,
+                }
+                spec_nodes.append(node)
+
+    return spec_nodes
+
+
+def _position_spec_nodes(spec_nodes: list[Node], code_radius: float) -> None:
+    """Assign positions to spec nodes, placing them as a row beyond the code circle.
+
+    Spec nodes are laid out along the X-axis at ``z = -(code_radius + 5)``,
+    centred on ``x = 0``.  They are separated by 3.0 scene units and placed
+    at ``y = 0`` so they sit on the same horizontal plane as bounded contexts.
+
+    This spatial separation makes it immediately visible that spec nodes belong
+    to the *intended design* layer rather than the *realized code* layer.
+    """
+    if not spec_nodes:
+        return
+    spacing = 3.0
+    total_width = (len(spec_nodes) - 1) * spacing
+    start_x = -total_width / 2.0
+    z_offset = -(code_radius + 5.0)
+    for i, node in enumerate(spec_nodes):
+        node["position"] = {
+            "x": start_x + i * spacing,
+            "y": 0.0,
+            "z": z_offset,
+        }
 
 
 def discover_bounded_contexts(src_path: Path) -> list[Node]:
@@ -378,10 +460,18 @@ def build_scene_graph(src_path: Path) -> SceneGraph:
     # 3. Build dependency edges first so the layout can use coupling info.
     edges = build_dependency_edges(src_path, nodes)
 
-    # 4. Compute layout with coupling-aware BC ordering (mutates positions in-place).
+    # 4. Discover spec files and include them as structural nodes.
+    #    Spec nodes represent the *intended design* alongside the *realized code*.
+    #    No content analysis is performed — only the existence and size of spec
+    #    files is recorded.
+    spec_nodes = discover_spec_nodes(src_path)
+    nodes.extend(spec_nodes)
+
+    # 5. Compute layout with coupling-aware BC ordering (mutates positions in-place).
+    #    Spec nodes are positioned beyond the code circle by compute_layout().
     compute_layout(nodes, edges)
 
-    # 5. Assemble metadata.
+    # 6. Assemble metadata.
     metadata: Metadata = {
         "source_path": str(src_path),
         "timestamp": datetime.now(timezone.utc).isoformat(),
