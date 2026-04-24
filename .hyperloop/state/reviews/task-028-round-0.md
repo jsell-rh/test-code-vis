@@ -1,0 +1,154 @@
+---
+task_id: task-028
+round: 0
+role: spec-reviewer
+verdict: fail
+---
+## Spec Alignment Review — specs/core/system-purpose.spec.md
+
+Branch: hyperloop/task-028
+
+---
+
+### CRITICAL DEFECT: Test runner pattern mismatch renders 7 of 8 tests inert
+
+`test_system_purpose.gd` declares `var _test_failed: bool = false` at the class level.
+`run_tests.gd` detects this via `script.get_script_property_list()` and treats the
+entire suite under **Pattern 1** (the `_check()`/`_test_failed` pattern).
+
+Under Pattern 1 the runner:
+1. Resets `_test_failed = false`
+2. Calls the method **and ignores its return value**
+3. Checks whether `_test_failed` became `true`
+
+Only `test_all_scene_nodes_have_visible_name_labels` calls `_check()` and can ever set
+`_test_failed = true`. The other 7 test functions each `return bool` without calling
+`_check()`, so `_test_failed` is never set. They will **always report PASS** regardless
+of whether the assertion holds — they are inert.
+
+---
+
+### Requirement-by-Requirement Status
+
+#### Requirement 1: Understanding Without Writing Code (SHALL)
+The system MUST provide humans with a concrete understanding of how a software system
+is actually built, without requiring them to read or write any of its source code.
+
+**Scenario: Architect evaluates unfamiliar system**
+
+THEN — human can correctly answer architectural questions:
+- Implementation: `main.gd._create_volume` sets `Label3D.billboard = BILLBOARD_ENABLED`
+  and `pixel_size = 0.012`; bounded-context uses `TRANSPARENCY_ALPHA` mat, module uses
+  opaque. ✓
+- `test_all_scene_nodes_have_visible_name_labels` → uses `_check()` → **COVERED** ✓
+- `test_bounded_context_nodes_distinguishable_by_type` → returns `bool`, no `_check()`
+  call → inert under Pattern 1 → **PARTIAL**
+
+AND — human can identify structural problems:
+- Implementation: `BoxMesh.size` is proportional to the node's `size` field; cross-context
+  edges are drawn as `ImmediateMesh PRIMITIVE_LINES`. ✓
+- `test_node_size_grows_with_scene_graph_size_value` → returns `bool`, no `_check()`
+  → inert → **PARTIAL**
+- `test_dependency_edges_expose_coupling_in_scene` → returns `bool`, no `_check()`
+  → inert → **PARTIAL**
+
+AND — human can predict the impact of proposed changes:
+- Implementation: `CylinderMesh` with `top_radius = 0.0` placed at target end. ✓
+- `test_cross_context_edge_has_directional_arrowhead` → returns `bool`, no `_check()`
+  → inert → **PARTIAL**
+
+**Verdict for Requirement 1: FAIL** (three of four sub-tests are inert)
+
+---
+
+#### Requirement 2: Spec-Driven Context (SHALL)
+The system MUST accept human-authored specifications as input alongside the codebase,
+treating specs as the authoritative expression of human intent.
+
+**Scenario: Spec and codebase loaded together**
+
+THEN — spec is treated as intended design:
+- Out of prototype scope (spec-extraction excluded per prototype-scope.spec.md §Not In
+  Scope). Test file correctly documents this. → **N/A (out of scope)**
+
+AND — codebase is treated as realized design:
+- Implementation: `SceneGraphLoader.load_from_dict()` converts raw JSON into a scene
+  graph; `main.gd._ready()` loads the JSON file produced by the Python extractor. ✓
+- `test_scene_graph_loader_reads_codebase_json` → returns `bool`, no `_check()`
+  → inert under Pattern 1 → **PARTIAL**
+
+AND — relationship between them available for inspection:
+- Out of prototype scope (spec-overlay comparison excluded). → **N/A (out of scope)**
+
+**Verdict for Requirement 2: FAIL** (the one in-scope test is inert)
+
+---
+
+#### Requirement 3: Support the Architecture Feedback Loop (SHALL)
+The system MUST support the iterative loop of: human writes spec, agent builds, human
+evaluates, human refines spec.
+
+**Scenario: Post-build evaluation**
+
+THEN — human can determine whether the build matches the spec:
+- Out of prototype scope (conformance mode excluded per prototype-scope.spec.md). → **N/A**
+
+AND — human can determine whether the build is architecturally sound:
+- Implementation: `main.gd` renders both `BoxMesh` (size-encoded) and `ImmediateMesh`
+  edges (coupling lines) into the same scene. ✓
+- `test_structural_metrics_available_in_scene` → returns `bool`, no `_check()`
+  → inert → **PARTIAL**
+
+AND — human can explore the impact of potential changes:
+- Implementation: `camera_controller.gd` exposes `set_pivot`, `get_distance`,
+  `_handle_button`, `_handle_motion`, `_zoom_toward_cursor`. ✓
+- `test_navigation_methods_exist_on_camera_controller` → returns `bool`, no `_check()`
+  → inert → **PARTIAL**
+
+**Verdict for Requirement 3: FAIL** (both in-scope tests are inert)
+
+---
+
+### Summary Table
+
+| Requirement / THEN-clause                        | Code | Test       | Status  |
+|--------------------------------------------------|------|------------|---------|
+| R1 · correct architectural answers (labels)      | ✓    | ✓ (_check) | COVERED |
+| R1 · correct architectural answers (type visual) | ✓    | inert      | PARTIAL |
+| R1 · identify structural problems (size)         | ✓    | inert      | PARTIAL |
+| R1 · identify structural problems (coupling)     | ✓    | inert      | PARTIAL |
+| R1 · predict impact (directional arrowhead)      | ✓    | inert      | PARTIAL |
+| R2 · spec as intended design                     | N/A  | N/A (OOS)  | N/A     |
+| R2 · codebase as realized design                 | ✓    | inert      | PARTIAL |
+| R2 · relationship available for inspection       | N/A  | N/A (OOS)  | N/A     |
+| R3 · build matches spec                          | N/A  | N/A (OOS)  | N/A     |
+| R3 · architecturally sound                       | ✓    | inert      | PARTIAL |
+| R3 · explore impact of changes                   | ✓    | inert      | PARTIAL |
+
+---
+
+### Fix Required
+
+All 7 bool-returning test methods must be converted to use `_check()` so failures are
+propagated through the `_test_failed` flag that Pattern 1 checks. Example fix for one:
+
+```gdscript
+# BEFORE (inert — runner ignores return value under Pattern 1)
+func test_bounded_context_nodes_distinguishable_by_type() -> bool:
+    ...
+    return found_transparent_bc
+
+# AFTER (functional)
+func test_bounded_context_nodes_distinguishable_by_type() -> void:
+    ...
+    _check(found_transparent_bc,
+        "Expected at least one bounded-context MeshInstance3D with TRANSPARENCY_ALPHA material")
+```
+
+Apply the same pattern to:
+- `test_node_size_grows_with_scene_graph_size_value`
+- `test_dependency_edges_expose_coupling_in_scene`
+- `test_cross_context_edge_has_directional_arrowhead`
+- `test_scene_graph_loader_reads_codebase_json`
+- `test_structural_metrics_available_in_scene`
+- `test_navigation_methods_exist_on_camera_controller`
