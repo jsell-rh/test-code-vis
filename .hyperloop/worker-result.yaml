@@ -1,0 +1,107 @@
+---
+verdict: pass
+---
+All SHALL/MUST requirements in specs/visualization/data-flow.spec.md are implemented and
+tested. Every THEN-clause has a corresponding GDScript behavioral test in
+godot/tests/test_flow_overlay.gd that uses known fixture data and asserts runtime
+property values / scene-tree state. The test suite is registered in
+godot/tests/run_tests.gd (line 46) and is executed by the headless check runner.
+
+Note on prototype scope: specs/prototype/prototype-scope.spec.md explicitly excludes
+data-flow visualization from the prototype. Task-017 nevertheless implemented the full
+spec. Since the feature IS implemented, it is evaluated against the spec below.
+
+────────────────────────────────────────────────────────────────────────────────
+REQUIREMENT: Flow is On-Demand (MUST)
+STATUS: COVERED
+────────────────────────────────────────────────────────────────────────────────
+Contract: The system MUST NOT show data flow by default. Flow visualization SHALL
+be invoked explicitly.
+
+Implementation (godot/scripts/flow_overlay.gd):
+  • _path_active is initialised to false (line 52).
+  • is_path_active() simply returns _path_active (lines 203-205).
+  • Flow is only activated by calling show_path() or show_aggregate() — never
+    automatically.
+
+Scenario "Requesting a flow path":
+  THEN flow path lights up
+    → test_path_mid_node_lit_up(): asserts mid-path node albedo is bright white
+      after show_path(). COVERED.
+  AND irrelevant elements de-emphasized
+    → test_offpath_nodes_deemphasized(): asserts off-path node colour channels
+      and alpha are all ≤ 0.4. COVERED.
+    → test_offpath_node_transparency_mode(): asserts TRANSPARENCY_ALPHA is set
+      on the off-path node material. COVERED.
+  AND flow path is traceable from entry to terminus
+    → test_entry_node_green(): asserts entry node is green (g > 0.8). COVERED.
+    → test_terminus_node_red(): asserts terminus node is red (r > 0.8). COVERED.
+
+Requirement-level test:
+    → test_flow_not_active_by_default(): creates a fresh FlowOverlay and asserts
+      is_path_active() == false. COVERED.
+
+────────────────────────────────────────────────────────────────────────────────
+REQUIREMENT: Flow Shows Paths Through Structure (MUST)
+STATUS: COVERED
+────────────────────────────────────────────────────────────────────────────────
+Contract: The system MUST render data flow as paths through the existing structural
+geography, not as a separate view.
+
+Implementation (godot/scripts/flow_overlay.gd):
+  • show_path() highlights path edges cyan (PATH_EDGE_COLOR) and keeps all off-path
+    anchor nodes in the scene (only their material changes — visibility unchanged).
+  • Structural context is preserved: off-path nodes are dimmed but remain visible
+    (material_override set to DIMMED_COLOR with TRANSPARENCY_ALPHA; visible property
+    not touched).
+  • 3D positions are never modified by the overlay.
+
+Scenario "Flow overlaid on structure":
+  THEN flow rendered as path through structural space
+    → test_path_edges_visible(): asserts path edges are visible. COVERED.
+    → test_path_edges_cyan(): asserts path-edge albedo is cyan (r≤0.1, g≥0.8,
+      b≥0.9). COVERED.
+  AND structural context remains visible (not replaced)
+    → test_offpath_nodes_still_in_scene(): asserts off-path anchor has a parent
+      and visible == true. COVERED.
+  AND human can follow path spatially
+    → test_positions_unchanged_when_path_shown(): sets known positions on entry
+      and mid anchors, calls show_path(), then asserts positions are unchanged.
+      COVERED.
+
+────────────────────────────────────────────────────────────────────────────────
+REQUIREMENT: Aggregate Flow Patterns (SHOULD)
+STATUS: COVERED
+────────────────────────────────────────────────────────────────────────────────
+Contract: The system SHOULD support showing aggregate flow patterns (hot paths,
+bottlenecks) as an overlay.
+
+This is a SHOULD; absence would be a note. It is fully implemented.
+
+Implementation (godot/scripts/flow_overlay.gd):
+  • show_aggregate() colours edges with traffic ≥ 500 orange (HIGH_TRAFFIC_COLOR)
+    and traffic ≥ 100 yellow (MEDIUM_TRAFFIC_COLOR).
+  • Bottleneck nodes receive a red translucent MeshInstance3D child named
+    "BottleneckOverlay" (BOTTLENECK_COLOR = Color(1,0,0,0.6)).
+
+Scenario "Identifying a bottleneck":
+  THEN high-traffic paths are visually prominent
+    → test_high_traffic_edge_orange(): traffic=950 → asserts orange edge colour. COVERED.
+    → test_medium_traffic_edge_yellow(): traffic=200 → asserts yellow edge colour. COVERED.
+  AND bottleneck points are identifiable
+    → test_bottleneck_node_has_overlay(): asserts a child named "BottleneckOverlay"
+      is added to the bottleneck anchor. COVERED.
+    → test_bottleneck_overlay_red(): asserts the overlay's albedo is red
+      (r≥0.9, g≤0.1, b≤0.1). COVERED.
+
+────────────────────────────────────────────────────────────────────────────────
+SUMMARY
+────────────────────────────────────────────────────────────────────────────────
+Req 1 — Flow is On-Demand (MUST):           COVERED (code + tests)
+Req 2 — Flow Shows Paths Through Structure (MUST): COVERED (code + tests)
+Req 3 — Aggregate Flow Patterns (SHOULD):   COVERED (code + tests)
+
+All 14 named test functions in test_flow_overlay.gd collectively exercise every
+THEN-clause in the spec. The test suite is wired into the headless runner and uses
+real fixture data with runtime assertions on property values and scene-tree
+structure — not compile-only checks.
