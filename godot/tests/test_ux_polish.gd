@@ -148,6 +148,7 @@ func test_zoom_toward_cursor_shifts_pivot_toward_cursor() -> bool:
 	var cam = _make_cam()
 	# Pivot starts at origin; cursor is at world (10, 0, 0).
 	var cursor_world := Vector3(10.0, 0.0, 0.0)
+	# Sign chain: zoom in → negative scroll → delta = cursor(10,0,0) - pivot(0,0,0) → pivot += delta × factor → pivot.x > 0 ✓
 	cam._zoom_toward_cursor(cursor_world, -cam.zoom_speed)  # zoom in
 
 	# Pivot must have shifted toward the cursor (x increases from 0).
@@ -336,6 +337,7 @@ func test_pan_proportional_to_drag_speed() -> bool:
 	var cam1 = _make_cam()
 	var cam2 = _make_cam()
 
+	# Sign chain: drag 10px → delta.x=+10 → pivot.x += 10 × pan_speed; drag 50px → delta.x=+50 → pivot.x += 50 × pan_speed → move2 > move1 ✓
 	# Small drag on cam1 (10 px).
 	_press_lmb(cam1, Vector2(100.0, 100.0))
 	_move_mouse(cam1, Vector2(110.0, 100.0))

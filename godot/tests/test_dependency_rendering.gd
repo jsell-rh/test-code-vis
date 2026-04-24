@@ -88,6 +88,7 @@ func test_direction_indicator_cone_created() -> bool:
 	var main_node: Node3D = MainScript.new()
 	main_node.build_from_graph(_make_fixture_internal())
 
+	# Sign chain: edge source → target → cone placed at target end → top_radius=0 makes pointed tip → marks flow direction ✓
 	for child: Node in main_node.get_children():
 		if child is MeshInstance3D:
 			var mi := child as MeshInstance3D
@@ -104,6 +105,7 @@ func test_direction_cone_near_target() -> bool:
 	var main_node: Node3D = MainScript.new()
 	main_node.build_from_graph(_make_fixture_internal())
 
+	# Sign chain: edge flows source(0,0,0) → target(20,0,0) → cone placed at target end → distance to (20,0,0) < 2 ✓
 	var target_pos := Vector3(20.0, 0.0, 0.0)
 	for child: Node in main_node.get_children():
 		if child is MeshInstance3D:
