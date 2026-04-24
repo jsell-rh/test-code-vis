@@ -1,0 +1,126 @@
+---
+verdict: pass
+---
+## Review Summary
+
+Reviewed `specs/prototype/nfr.spec.md` (Non-Functional Requirements) on branch
+`hyperloop/task-023`.
+
+---
+
+## run-all-checks.sh Output (verbatim, condensed)
+
+```
+check-branch-adds-source-files.sh  → OK: 2 source files added (test_nfr_scale.gd, run_tests.gd)
+check-branch-has-commits.sh        → OK: 3 commits above main
+check-checks-in-sync.sh            → OK: All check scripts from main present
+check-clamp-boundary-tests.sh      → OK: All 4 clamped variables have boundary-asserting tests
+check-compound-then-clause-coverage→ SKIP: No worker-result.yaml in worktree (see below)
+check-coordinator-calls-pipeline   → SKIP: Not applicable (no pipeline consumer)
+check-direction-test-derivations   → OK: All 11 direction tests have derivation comments
+check-end-to-end-integration-test  → SKIP: Not applicable (no producer/consumer)
+check-extractor-cli-tested         → OK: main() called in tests
+check-extractor-stdlib-only        → OK: sys.stdlib_module_names test found
+check-gdscript-only-test           → OK: DirAccess iteration test found
+check-gdscript-test-bool-return    → OK: No inert bool-returning functions in Pattern-1 suites
+check-kartograph-integration-test  → OK: Integration test with expected-context assertions found
+check-not-in-scope                 → OK: No prohibited features detected
+check-pipeline-wiring              → SKIP: Not applicable
+check-report-scope-section         → FAIL: recovery from 7cccf5e returned empty (deletion commit)
+check-scope-report-not-falsified   → SKIP: worker-result.yaml not in worktree
+check-then-test-mapping            → SKIP: worker-result.yaml not in worktree
+extractor-lint.sh                  → OK: ruff clean; 110 pytest tests pass
+godot-compile.sh                   → OK: Godot 4.6.2 compiles successfully
+godot-fileaccess-tested.sh         → OK: FileAccess.open() exercised in 2 test files
+godot-label3d.sh                   → PASS: All Label3D nodes have billboard and pixel_size tested
+godot-tests.sh                     → OK: 142 GDScript tests pass, 0 fail
+```
+
+---
+
+## check-report-scope-section.sh FAIL — Root Cause (Script Bug, Not Implementer Failure)
+
+The script failed because `worker-result.yaml` was deleted by the orchestrator's
+"clean worker verdict" commit (`7cccf5e`). The script runs:
+  git log --oneline -- .hyperloop/worker-result.yaml | head -1
+which returns `7cccf5e` (the deletion commit), then
+  git show 7cccf5e:.hyperloop/worker-result.yaml
+which returns empty because that commit deleted the file.
+
+Manual recovery from the implementer's submission commit:
+  git show af21817:.hyperloop/worker-result.yaml
+Returns the full content — which contains a valid `## Scope Check Output` section
+with the required "OK: No prohibited" text.
+
+Per review guidelines: "worker-result.yaml was deleted by an orchestrator cleanup
+commit; content recovered from git — do not issue a separate FAIL for file absence
+alone." This is a script recovery limitation, not an implementer failure.
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+Independent semantic audit — grepped for: llm, build_prompt, parse_response,
+apply_spec, moldable, SceneInterpreter, LlmView, question_ui.
+Result: no matches in godot/ or extractor/. Scope confirmed.
+
+---
+
+## Commit Trailers
+
+Both implementation commits carry valid trailers:
+- f6aeacc: Spec-Ref: specs/prototype/nfr.spec.md@e2cac130819f13929ab13e324411ac7a23d66b33 / Task-Ref: task-023 ✓
+- af21817: same Spec-Ref and Task-Ref ✓
+
+---
+
+## THEN→Test Mapping Verification
+
+All 12 THEN-clauses from specs/prototype/nfr.spec.md accounted for.
+
+| THEN-clause | Test(s) | Predicate match | Result |
+|---|---|---|---|
+| it opens in Godot 4.6.x | test_project_godot_declares_46_feature, test_project_godot_config_features_line | Reads project.godot, asserts "4.6" and '"4.6"' present | PASS |
+| all scripts use GDScript | test_scripts_dir_contains_only_gdscript, test_project_does_not_declare_csharp | DirAccess iterates all files; asserts .ends_with(".gd"); also asserts no "Mono"/"C#" in project.godot | PASS |
+| all API calls valid for 4.6 | test_file_access_get_as_text_returns_non_empty_string, test_main_uses_godot4_fileaccess_api | Calls get_as_text(); asserts non-empty + header. Asserts FileAccess.open() present, File.new() absent in main.gd | PASS |
+| runs as standalone CLI tool | test_main_exits_zero, test_main_writes_json_output | Calls main() directly; asserts rc==0 and valid JSON with nodes/edges/metadata | PASS |
+| no deps beyond stdlib | test_extractor_imports_are_stdlib_only | AST-parses all production files; checks sys.stdlib_module_names; asserts violations==[] | PASS |
+| does not need access to extractor or codebase | test_volumes_created_for_each_node | Uses hardcoded dict fixture; no extractor call; asserts _anchors.has() | PASS (marginal — predicate is volume creation; architectural evidence: no Python imports in godot/) |
+| JSON file is self-contained | test_mesh_instances_exist_in_anchors | Pure dict fixture; asserts MeshInstance3D children exist | PASS (marginal — same architectural note as above) |
+| runs natively without browser/container/VM | (untestable) | Runtime env not assertable in headless CI; no Dockerfile/HTML5 export in repo | PASS-WITH-NOTE |
+| frame rate above 30fps | test_kartograph_scale_anchor_count, test_kartograph_scale_build_produces_world_positions | Proxy: build_from_graph() succeeds at 60-node kartograph scale; LOD system architectural evidence | PASS-WITH-NOTE |
+| no perceptible stutter or pop-in | test_kartograph_scale_context_anchors_exist, test_kartograph_scale_module_anchors_exist | Same headless limitation; LOD system and scale-correctness tests as proxy | PASS-WITH-NOTE |
+| prototype can be discarded without loss | (untestable) | Team process decision; sole interface is JSON file | PASS-WITH-NOTE |
+| JSON format is only artifact worth preserving | (untestable) | Product intent; schema in pure Python dataclasses with no Godot bindings | PASS-WITH-NOTE |
+
+---
+
+## Test Body Verification
+
+- test_project_godot_declares_46_feature: asserts content.contains("4.6") — correct ✓
+- test_project_godot_config_features_line: asserts config/features and '"4.6"' — correct ✓
+- test_scripts_dir_contains_only_gdscript: DirAccess iterates files, asserts .ends_with(".gd") per file — correct iteration predicate ✓
+- test_project_does_not_declare_csharp: asserts NOT contains("Mono") AND NOT contains("C#") — correct direction ✓
+- test_file_access_get_as_text_returns_non_empty_string: asserts length > 0 and correct header prefix ✓
+- test_main_uses_godot4_fileaccess_api (Pattern-2 bool): returns uses_godot4_api AND no_deprecated_api — correct direction ✓
+- test_main_exits_zero: assert rc == 0 ✓
+- test_main_writes_json_output: assert nodes/edges/metadata in parsed JSON ✓
+- test_extractor_imports_are_stdlib_only: AST parse + sys.stdlib_module_names; assert violations == [] ✓
+- NFR scale tests (4x): Pattern-1 _check() on anchors.size()==60, anchor presence, world_positions.size()==60 — correct direction ✓
+
+test_godot_version.gd uses Pattern-2 (bool-return); runner handles it correctly.
+Not Pattern-1, so check-gdscript-test-bool-return.sh correctly skipped it. ✓
+
+---
+
+## Process Notes
+
+1. worker-result.yaml deleted by orchestrator commit 7cccf5e; content recovered from
+   af21817. Not an implementer failure per review guidelines.
+2. Checks synced from main before review (git checkout main -- .hyperloop/checks/).
+   check-checks-in-sync.sh confirms scripts were already present at implementation time.
+3. Marginal predicate for Decoupled Pipeline THEN-clauses: tests verify rendering from
+   a pure dict fixture rather than explicitly asserting extractor-absence. Architectural
+   evidence (no Python imports in godot/) is sound. Not blocking for a prototype.
