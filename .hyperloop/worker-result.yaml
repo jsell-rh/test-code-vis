@@ -1,135 +1,167 @@
 ---
-verdict: pass
----
-## Reviewer Verdict: PASS
-
-All 15 automated checks exit 0. 98 Python tests pass; 99 GDScript tests pass.
-Both actionable PARTIAL findings from the prior review are now fully addressed.
-
+verdict: fail
 ---
 
-## Scope Check Output
+## Spec Alignment Review — specs/prototype/nfr.spec.md (task-023)
 
-```
-OK: No prohibited (not-in-scope) features detected.
-[EXIT 0]
-```
-
-No prohibited features detected in any form (code, tests, CLI flags, imports, signal
-connections). Scope check section is present in prior worker-result.yaml with matching
-text. No falsification detected.
+Branch: `hyperloop/task-023`
+Python tests confirmed: 98 passed, 0 failed (`/usr/bin/python3 -m pytest extractor/tests/`)
+Godot test runner: registered in `run_tests.gd` (read-only verification, headless binary unavailable)
 
 ---
 
-## Checks Master Runner Output (run-all-checks.sh)
+### Requirement 1: Godot 4.6 Engine (MUST) — COVERED
 
-All 15 checks run and all exit 0:
+**Implementation:**
+- `godot/project.godot` declares `config/features=PackedStringArray("4.6")`.
+- All files in `godot/scripts/` are `.gd` GDScript files (no `.cs` present).
+- `main.gd` uses `FileAccess.open()` + `get_as_text()` — valid Godot 4.x API.
+  No `File.new()` or `read_as_text()` (deprecated Godot 3 API) found.
 
-| Check | Result |
+**Tests:**
+- `godot/tests/test_engine_version.gd` (5 tests): reads `project.godot` via
+  `FileAccess.open()` + `get_as_text()`, asserts `"4.6"` present, no C#/Mono declared,
+  `DirAccess` iteration confirms all files in `res://scripts/` end with `.gd`.
+- `godot/tests/test_godot_version.gd` (3 tests): checks project declares Godot 4.6,
+  main script exists as `.gd`, `main.gd` uses `FileAccess.open()` + `get_as_text()`.
+- Both suites registered in `run_tests.gd`.
+
+All GIVEN/WHEN/THEN clauses covered.
+
+---
+
+### Requirement 2: Python Extractor (MUST) — COVERED
+
+**Implementation:**
+- `extractor/__main__.py` provides `python -m extractor <src_path> [--output <file>]`.
+- `main()` validates path, calls `build_scene_graph()`, writes JSON, returns 0 on
+  success / 1 on error. Confirmed via direct code read.
+- Imports across the entire package: `ast`, `argparse`, `json`, `sys`, `pathlib`,
+  `typing`, `math`, `datetime` — all Python stdlib. No `requirements.txt`.
+
+**Tests:** `extractor/tests/test_cli.py` — 8 tests, all passing (confirmed by running
+`/usr/bin/python3 -m pytest extractor/tests/test_cli.py -v`).
+
+| Scenario THEN clause | Test |
 |---|---|
-| check-branch-has-commits | OK: 9 commits above main |
-| check-checks-in-sync | OK: all check scripts from main present |
-| check-clamp-boundary-tests | OK: all 4 clamped variables have boundary tests |
-| check-extractor-cli-tested | OK: test calls main() from CLI entry point |
-| check-extractor-stdlib-only | OK: test using sys.stdlib_module_names found |
-| check-gdscript-only-test | OK: DirAccess iteration test found |
-| check-kartograph-integration-test | OK: integration test with expected-context assertions found |
-| check-not-in-scope | OK: No prohibited features detected |
-| check-pipeline-wiring | SKIP (legitimate: no LLM→view-spec pipeline in this task) |
-| check-report-scope-section | OK: valid Scope Check Output section present |
-| extractor-lint | OK: ruff clean, 98 tests pass |
-| godot-compile | OK: project compiles |
-| godot-fileaccess-tested | OK: FileAccess.open() exercised in 2 test files |
-| godot-label3d | OK: Label3D billboard + pixel_size set and tested |
-| godot-tests | OK: 99 passed, 0 failed |
+| Runs as standalone CLI tool (rc=0, valid JSON) | `TestCliEntryPoint::test_main_produces_json_output` |
+| Correct default output filename | `TestCliEntryPoint::test_main_default_output_filename` |
+| rc=1 on missing src path | `TestCliEntryPoint::test_main_returns_1_on_missing_src` |
+| rc=1 when src is a file, not dir | `TestCliEntryPoint::test_main_returns_1_on_file_src` |
+| Output nodes have required keys | `TestCliEntryPoint::test_main_output_nodes_have_required_keys` |
+| Output edges have required keys | `TestCliEntryPoint::test_main_output_edges_have_required_keys` |
+| At least one node produced | `TestCliEntryPoint::test_main_nodes_are_non_empty` |
+| No non-stdlib imports in package | `TestStdlibOnlyImports::test_extractor_uses_only_stdlib_imports` (AST-walks all `.py` in `extractor/`, asserts every top-level import resolves in `sys.stdlib_module_names`) |
 
-**RESULT: ALL PASS**
+Both THEN clauses of the scenario are fully covered. This resolves the prior PARTIAL.
 
 ---
 
-## Commit Trailers
+### Requirement 3: JSON Interface Contract (MUST) — COVERED
 
-Both implementation commits carry required trailers (verified via `git log`):
+**Implementation:**
+- Extractor writes `{"nodes": [...], "edges": [...], "metadata": {...}}` via `json.dumps()`.
+- `main.gd` loads JSON via `SceneGraphLoader.load_from_dict(json.data)`. No import of,
+  or reference to, the Python extractor exists anywhere in `godot/`.
 
-```
-Spec-Ref: specs/prototype/nfr.spec.md@e2cac130819f13929ab13e324411ac7a23d66b33
-Task-Ref: task-023
-```
+**Tests:**
+- `godot/tests/test_scene_graph_loader.gd` (24 tests): pure dict fixtures, never calls
+  extractor — demonstrates Godot does not need the Python extractor.
+- `godot/tests/test_scene_graph_loading.gd` (5 tests): `build_from_graph()` consumes a
+  JSON-shaped dict and creates correct 3D volumes and edges.
+- `extractor/tests/test_schema.py` (19 tests): verifies schema TypedDicts are
+  JSON-serialisable and self-contained.
+
+Decoupling confirmed. All scenario THEN clauses covered.
 
 ---
 
-## THEN-Clause → Test Mapping (independently verified)
+### Requirement 4: Desktop Platform (MUST) — MISSING
 
-### Requirement 2: Python Extractor
+**Implementation:**
+- `godot/project.godot` is a standard Godot desktop project. No HTML5/web export
+  preset, no `Dockerfile`, no container manifest found in the repository.
+- The Godot runtime handles OS integration for Linux natively.
 
-**THEN "it runs as a standalone Python script or CLI tool"**
-- Mapped to: `TestCliEntryPoint::test_main_produces_json_output`
-  in `extractor/tests/test_cli.py` (line 73).
-- Verified: function exists (grep confirmed); calls
-  `main([str(src), "--output", str(output)])`; asserts `rc == 0`, output
-  file exists, and JSON dict contains `nodes`, `edges`, `metadata` keys.
-- Predicate match: PASS — the test explicitly invokes the CLI entry point and
-  asserts exit code 0 with valid JSON output.
+**Tests:**
+- No test exists that verifies the scenario THEN clause: "it runs natively without
+  browser, container, or VM dependencies."
 
-**THEN "it requires no dependencies beyond the Python standard library"**
-- Mapped to: `TestStdlibOnlyImports::test_extractor_uses_only_stdlib_imports`
-  in `extractor/tests/test_cli.py` (line 154).
-- Verified: function exists (grep confirmed); iterates every `.py` file in
-  `extractor/` package (excluding tests/) via `ast.walk()`; collects each
-  `import` and `from … import` name; checks top-level module against
-  `frozenset(sys.stdlib_module_names)`; asserts `not violations`.
-- Predicate match: PASS — the test iterates files and checks each import,
-  which is the correct predicate for "no non-stdlib dependencies."
+**Assessment:**
+The implementation satisfies the requirement architecturally (native Godot desktop
+project with no web or container artifacts). However, the scenario's THEN clause is a
+deployment property that cannot be verified by GDScript headless unit tests:
+- `OS.get_name()` returns the CI host OS, not "Fedora 42".
+- "No browser/container dependency" is not observable at the GDScript runtime level.
+This gap is inherent to the headless test framework and not addressable by a meaningful
+automated unit test. No code change by the implementer can close this gap.
 
-### Requirement 5: Performance at Kartograph Scale
+---
 
-**THEN "frame rate remains above 30fps / no perceptible stutter"**
-- 30fps cannot be measured in a headless Godot test (no render pipeline).
-  This is an inherent limitation of the headless framework — not an
-  implementation gap. The architectural solution (LOD manager) is already
-  tested in `test_spatial_structure.gd`.
+### Requirement 5: Performance at Kartograph Scale (MUST) — PARTIAL
 
-**THEN "scene graph loads and builds correctly at kartograph scale (6 bounded contexts,
-~50 modules)"**
-- Mapped to four tests in `godot/tests/test_nfr_scale.gd` (all grep-verified):
+**Implementation:**
+- `godot/scripts/lod_manager.gd`: LOD system (`FAR_THRESHOLD`, `NEAR_THRESHOLD`,
+  `_apply_far()`, `_apply_medium()`, `_apply_near()`).
+- `godot/scripts/main.gd`: registers all nodes/edges with LOD manager; calls
+  `_update_lod()` in `_process()` every frame.
 
-| Test function | Predicate | Status |
+**Tests (kartograph-scale build correctness):** `godot/tests/test_nfr_scale.gd` (4
+tests), registered in `run_tests.gd`:
+
+| THEN sub-clause | Test | Predicate |
 |---|---|---|
-| `test_kartograph_scale_anchor_count` | `anchors.size() == 60` after `build_from_graph()` with 6-context, 54-module fixture | PASS |
-| `test_kartograph_scale_context_anchors_exist` | each of 6 context IDs present in `_anchors` | PASS |
-| `test_kartograph_scale_module_anchors_exist` | each of 54 module IDs present in `_anchors`; asserts `module_count == 54` | PASS |
-| `test_kartograph_scale_build_produces_world_positions` | `world_positions.size() == 60` confirming full pipeline ran | PASS |
+| Build 60 anchors (6 contexts + 54 modules) | `test_kartograph_scale_anchor_count` | `anchors.size() == 60` |
+| All 6 context anchors present | `test_kartograph_scale_context_anchors_exist` | each of 6 IDs in `_anchors` |
+| All 54 module anchors present | `test_kartograph_scale_module_anchors_exist` | each of 54 IDs in `_anchors`; asserts `module_count == 54` |
+| World positions computed for all 60 nodes | `test_kartograph_scale_build_produces_world_positions` | `world_positions.size() == 60` |
 
-All four functions exist in the test file (grep-confirmed at lines 120, 138, 156,
-182). Predicates are structurally sound: they use `_check()` → `_test_failed` pattern
-registered via `run_tests.gd`; they instantiate `MainScript.new()`, call
-`build_from_graph()` with a real 60-node fixture, and assert count properties on
-the returned dictionaries.
+LOD mechanism tested in `godot/tests/test_spatial_structure.gd` (12 LOD tests:
+`test_far_distance_shows_only_bounded_contexts`, `test_far_distance_hides_all_edges`, etc.).
 
----
-
-## Requirement Status After This Task
-
-| Requirement | Status |
-|---|---|
-| Godot 4.6 Engine (MUST) | COVERED (unchanged from prior review) |
-| Python Extractor (MUST) | COVERED (was PARTIAL — CLI + stdlib tests added) |
-| JSON Interface Contract (MUST) | COVERED (unchanged from prior review) |
-| Desktop Platform (MUST) | MISSING (inherently untestable via headless tests; unchanged) |
-| Performance at Kartograph Scale (MUST) | COVERED (scale build tests added; 30fps inherently untestable) |
-| Prototype Disposability (SHOULD) | NOTE (unchanged; no test required) |
+**Remaining gap:**
+The scenario THEN clause "the frame rate remains above 30fps" is not covered by any test.
+Headless Godot has no render pipeline — FPS measurement is physically impossible in the
+current test environment. This is an inherent framework limitation, not an implementation
+oversight.
 
 ---
 
-## Notes
+### Requirement 6: Prototype Disposability (SHOULD) — NOTE
 
-- Requirement 4 (Desktop Platform) remains without an automated test. This was
-  pre-existing before this task and is not addressable by headless unit tests — it is
-  a deployment platform property, not a runtime code property. No action from the
-  implementer could close this gap within the current test framework.
-- The "30fps" clause in Requirement 5 remains inherently unverifiable in headless
-  Godot. The implementer correctly bounded the scope of the new tests to the
-  structural correctness of `build_from_graph()` at scale, which is the only
-  verifiable sub-claim.
-- `.hyperloop/checks/` was synced from `main` before running `run-all-checks.sh`.
-  `check-checks-in-sync.sh` also confirmed all check scripts from main are present.
+SHOULD requirement. No test required. JSON scene graph is the only artifact identified
+for preservation; the prototype code is explicitly disposable.
+
+---
+
+## Summary
+
+| Requirement                            | Status   |
+|----------------------------------------|----------|
+| Godot 4.6 Engine (MUST)               | COVERED  |
+| Python Extractor (MUST)               | COVERED  |
+| JSON Interface Contract (MUST)        | COVERED  |
+| Desktop Platform (MUST)               | MISSING  |
+| Performance at Kartograph Scale (MUST) | PARTIAL  |
+| Prototype Disposability (SHOULD)       | NOTE     |
+
+**Verdict: FAIL**
+
+Two SHALL/MUST requirements lack complete test coverage:
+
+1. **Requirement 4 (Desktop Platform)**: No test covers the THEN clause "runs natively
+   without browser, container, or VM dependencies." This is an inherent limitation of the
+   headless test framework — the clause describes a deployment/OS property that cannot be
+   asserted by GDScript unit tests. The implementation is architecturally correct.
+
+2. **Requirement 5 (Performance at Kartograph Scale)**: The THEN clause "frame rate
+   remains above 30fps" is not covered. Headless Godot has no render pipeline, making FPS
+   measurement impossible. The kartograph-scale scene-build correctness is now tested
+   (resolving the prior PARTIAL gap on that dimension), but the end-to-end FPS guarantee
+   remains unverifiable by automated test.
+
+Both failures stem from inherent constraints of the headless test infrastructure. If the
+project accepts these THEN clauses as untestable by definition, and considers the
+architectural evidence sufficient (native desktop project + LOD mechanism), the two
+previously actionable FAILs (Req 2 CLI entry point and Req 5 kartograph-scale build) have
+been fully resolved on this branch.
