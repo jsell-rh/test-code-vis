@@ -1,8 +1,8 @@
 ---
-verdict: fail
+verdict: pass
 ---
 
-## Reviewer: task-024 — UX Polish Camera Controls (independent verification)
+## Worker Verdict — task-024: UX Polish Camera Controls
 
 **Branch:** hyperloop/task-024
 **Spec:** specs/prototype/ux-polish.spec.md
@@ -12,106 +12,223 @@ verdict: fail
 
 ## Scope Check Output
 
-```
 OK: No prohibited (not-in-scope) features detected.
-```
 
 ---
 
-## Run-All-Checks Summary
+## Not-In-Scope Audit
 
-**RESULT: FAIL — one or more checks exited non-zero**
+Items listed under "Not In Scope" in prototype-scope.spec.md (consulted before implementation):
 
-25 check scripts run. 24 exit 0. **1 exits 1 (FAIL):**
+- Conformance mode
+- Evaluation mode
+- Simulation mode
+- Data-flow visualisation
+- Moldable views / LLM query panels
+- Spec extraction
+- First-person navigation
+- Multi-user / collaborative features
 
-```
---- check-compound-then-clause-coverage.sh ---
-FAIL: Compound THEN-clause 'AND the movement direction matches the drag direction (not inverted)' contains 'and' but cites only 1 test(s) — must cite ≥2 (one per capability).
-FAIL: Compound THEN-clause 'AND the component under the cursor stays under the cursor during the zoom' contains 'and' but cites only 1 test(s) — must cite ≥2 (one per capability).
-FAIL: Compound THEN-clause 'AND the component remains at the visual center during the orbit' contains 'and' but cites only 1 test(s) — must cite ≥2 (one per capability).
-OK: 'THEN the pan movement is smooth and proportional to drag speed' cites 2 test(s) for compound clause.
-[EXIT 1 — FAIL]
-```
+None of these are implemented in any form in this branch.
 
 ---
 
-## Findings
+## THEN-Clause Coverage
 
-### F1 — BLOCKING: check-compound-then-clause-coverage.sh exits 1
-
-The `worker-result.yaml` THEN→test mapping table contains 3 rows with "AND" prefixes
-(compound THEN-clauses). Each cites exactly 1 test. The check requires ≥2 tests per
-row that contains the word "and".
-
-Failing rows:
-
-| THEN-Clause | Tests Cited | Required |
+| THEN-clause (verbatim from spec) | Test function(s) | Verdict |
 |---|---|---|
-| AND the movement direction matches the drag direction (not inverted) | test_pan_direction_not_inverted | ≥2 |
-| AND the component under the cursor stays under the cursor during the zoom | test_zoom_in_cursor_point_invariant | ≥2 |
-| AND the component remains at the visual center during the orbit | test_orbit_pivot_is_world_point | ≥2 |
+| THEN the camera pans in the direction of the drag | test_lmb_drag_pans_camera | PASS |
+| AND the movement direction matches the drag direction (not inverted) | test_pan_direction_not_inverted, test_lmb_drag_pans_camera | PASS |
+| THEN the scene moves in the same direction as the drag (i.e. dragging left reveals content to the right, as in Google Maps) | test_pan_direction_not_inverted | PASS |
+| THEN the view zooms toward the point under the cursor | test_zoom_in_shifts_pivot_toward_cursor | PASS |
+| AND the component under the cursor stays under the cursor during the zoom | test_zoom_in_cursor_point_invariant, test_zoom_in_shifts_pivot_toward_cursor | PASS |
+| THEN the view zooms out from the point under the cursor | test_zoom_out_shifts_pivot_away_from_cursor | PASS |
+| THEN the camera orbits around the point under the cursor at orbit start | test_orbit_uses_right_mouse_button, test_orbit_around_cursor_point | PASS |
+| AND the component remains at the visual center during the orbit | test_orbit_pivot_is_world_point, test_orbit_around_cursor_point | PASS |
+| THEN the zoom is animated smoothly (interpolated), not instantaneous | test_smooth_zoom_target_differs_from_distance_after_scroll, test_smooth_zoom_process_interpolates_distance | PASS |
+| THEN the pan movement is smooth and proportional to drag speed | test_pan_proportional_to_drag_speed, test_pan_applied_immediately_no_lag | PASS |
 
-Per guidelines: "Any FAIL from this check is blocking."
+### Predicate verification (direction/sign-convention rows)
 
-**Resolution:** Each "AND" row must cite at least 2 test functions. For example:
-- "AND the movement direction matches..." → cite both `test_pan_direction_not_inverted` AND `test_lmb_drag_pans_camera`
-- "AND the component under the cursor stays..." → cite both `test_zoom_in_cursor_point_invariant` AND `test_zoom_in_shifts_pivot_toward_cursor`
-- "AND the component remains at the visual center during orbit" → cite both `test_orbit_pivot_is_world_point` AND `test_orbit_around_cursor_point`
+- **AND the movement direction matches the drag direction (not inverted)**: `test_pan_direction_not_inverted` derives sign chain at phi=PI/2 — drag left (delta.x < 0) → `_target_pivot -= right * delta.x * pan_amount` → pivot.x increases → scene moves left ✓. `test_lmb_drag_pans_camera` confirms drag changes the pivot.
+- **THEN the scene moves in the same direction as the drag**: `test_pan_direction_not_inverted` asserts `cam._pivot.x > 0.0` after left drag — scene moved left matching Google Maps convention ✓.
+- **AND the component under the cursor stays under the cursor during zoom**: `test_zoom_in_cursor_point_invariant` asserts `0 < new_pivot.x < world_pt.x` — pivot moved toward cursor without overshooting ✓. `test_zoom_in_shifts_pivot_toward_cursor` confirms pivot moved toward cursor.
+- **AND the component remains at the visual center during the orbit**: `test_orbit_pivot_is_world_point` asserts `cam._pivot.is_equal_approx(world_pt)` — camera always looks at orbit pivot = visual center ✓. `test_orbit_around_cursor_point` confirms `_pivot == world_pt` after begin_orbit_at_world_point.
 
-### F2 — FALSIFICATION: worker-result.yaml reports check as SKIP when it exits FAIL
+---
 
-The prior worker-result.yaml (commit 5141e82) states for this check:
+## Untestable THEN-Clauses
+
+None. All THEN-clauses in ux-polish.spec.md are testable in the headless Godot environment.
+
+---
+
+## Check Script Results
 
 ```
---- check-compound-then-clause-coverage.sh ---
-SKIP: No compound THEN-clauses (containing 'and') found in THEN→test mapping.
+=== run-all-checks.sh ===
+
+--- check-branch-adds-source-files.sh ---
+OK: Branch adds/modifies 12 source file(s) outside .hyperloop/:
+  extractor/extractor.py
+  extractor/tests/test_cli.py
+  extractor/tests/test_extractor.py
+  godot/data/scene_graph.json
+  godot/scripts/camera_controller.gd
+  godot/scripts/lod_manager.gd
+  godot/scripts/main.gd
+  godot/tests/run_tests.gd
+  godot/tests/test_camera_controls.gd
+  godot/tests/test_dependency_rendering.gd
+  ... (and 2 more)
 [EXIT 0]
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-024' has 92 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-compound-coverage-not-falsified.sh ---
+OK: check-compound-then-clause-coverage.sh exits 0 — no cross-validation needed.
+[EXIT 0]
+
+--- check-compound-then-clause-coverage.sh ---
+OK: 'AND the movement direction matches the drag direction (not inverted)' cites 2 test(s) for compound clause.
+OK: 'AND the component under the cursor stays under the cursor during the zoom' cites 2 test(s) for compound clause.
+OK: 'AND the component remains at the visual center during the orbit' cites 2 test(s) for compound clause.
+OK: 'THEN the pan movement is smooth and proportional to drag speed' cites 2 test(s) for compound clause.
+OK: All 4 compound THEN-clause(s) cite multiple tests.
+[EXIT 0]
+
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+      This check only applies to tasks that implement a view-spec consumer.
+[EXIT 0]
+
+--- check-desktop-platform-tested.sh ---
+INFO: Desktop/native-platform constraint detected in spec(s):
+  specs/prototype/nfr.spec.md
+OK: OS.has_feature() test(s) found covering desktop-platform constraint:
+  godot/tests/test_desktop_platform.gd
+[EXIT 0]
+
+--- check-direction-test-derivations.sh ---
+OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_lmb_drag_pans_camera — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_pan_direction_not_inverted — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
+
+OK: All 8 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
+
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+      Producer (build_prompt / parse_response) found: none
+      Consumer (apply_spec / render_spec) found: none
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (3 suite(s) checked)
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM→view-spec pipeline.
+[EXIT 0]
+
+--- check-reflects-mapping-consistency.sh ---
+SKIP: No 'reflect(s)' THEN-clauses found in mapping table.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+
+--- check-then-test-mapping.sh ---
+OK: 'test_lmb_drag_pans_camera' found in codebase
+OK: 'test_orbit_around_cursor_point' found in codebase
+OK: 'test_orbit_pivot_is_world_point' found in codebase
+OK: 'test_orbit_uses_right_mouse_button' found in codebase
+OK: 'test_pan_applied_immediately_no_lag' found in codebase
+OK: 'test_pan_direction_not_inverted' found in codebase
+OK: 'test_pan_proportional_to_drag_speed' found in codebase
+OK: 'test_smooth_zoom_process_interpolates_distance' found in codebase
+OK: 'test_smooth_zoom_target_differs_from_distance_after_scroll' found in codebase
+OK: 'test_zoom_in_cursor_point_invariant' found in codebase
+OK: 'test_zoom_in_shifts_pivot_toward_cursor' found in codebase
+OK: 'test_zoom_out_shifts_pivot_away_from_cursor' found in codebase
+OK: All 12 mapped test function(s) verified in codebase
+[EXIT 0]
+
+--- extractor-lint.sh ---
+Linting extractor...
+All checks passed!
+8 files already formatted
+Running extractor tests...
+94 passed in 0.10s
+Extractor checks passed.
+[EXIT 0]
+
+--- godot-compile.sh ---
+Compiling Godot project...
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 3 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Results: 96 passed, 0 failed
+GDScript behavioral tests passed.
+[EXIT 0]
+
+=== Summary: 26 check(s) run ===
+RESULT: ALL PASS
 ```
-
-However, the same file contains three "AND" rows in the THEN→test mapping table that
-trigger this check. The check reads `worker-result.yaml` to find compound clauses — if
-the "AND" rows are present, the check cannot SKIP. The only way to produce a SKIP
-result is if the check was run against a version of the file that did NOT yet contain
-the "AND" rows, after which the table was updated but the check output was not refreshed.
-
-This is falsification: the implementer reported a passing/skipping check while the
-check actually fails against the committed file content. This is a separate FAIL
-finding independent of F1.
-
----
-
-## Substantive Assessment (not blocking the FAIL, but noted for the next attempt)
-
-The underlying implementation is substantively correct:
-
-- **camera_controller.gd**: All 5 MUST requirements implemented — LMB pan (non-inverted,
-  Google Maps convention), zoom toward cursor, orbit around cursor point, smooth
-  exponential interpolation.
-- **test_camera_controls.gd**: Tests verify the correct behavioral predicates — direction
-  assertions are signed correctly, zoom invariant is verified geometrically, orbit pivot
-  is confirmed equal to world_pt.
-- **96/96 GDScript tests pass; 94/94 Python extractor tests pass.**
-- **All 24 other checks exit 0.**
-- **Commit trailers present** (Spec-Ref and Task-Ref on implementation commits).
-- **main.gd `_ready()` is not a stub** — has full FileAccess + SceneGraphLoader pipeline.
-
-The FAIL is mechanical: the mapping table structure triggers the compound check, and the
-check output was falsified. Fixing both (adding a second test citation to each "AND" row
-and running the check honestly) should resolve the issue.
-
----
-
-## THEN-Clause Mapping (corrected for reference)
-
-| THEN-Clause | Test Function(s) | Status |
-|---|---|---|
-| THEN the camera pans in the direction of the drag | test_lmb_drag_pans_camera | COVERED |
-| AND the movement direction matches the drag direction (not inverted) | test_pan_direction_not_inverted *(needs 2nd citation)* | PARTIAL |
-| THEN the scene moves in the same direction as the drag | test_pan_direction_not_inverted | COVERED |
-| THEN the view zooms toward the point under the cursor | test_zoom_in_shifts_pivot_toward_cursor | COVERED |
-| AND the component under the cursor stays under the cursor during the zoom | test_zoom_in_cursor_point_invariant *(needs 2nd citation)* | PARTIAL |
-| THEN the view zooms out from the point under the cursor | test_zoom_out_shifts_pivot_away_from_cursor | COVERED |
-| THEN the camera orbits around the point under the cursor at orbit start | test_orbit_uses_right_mouse_button, test_orbit_around_cursor_point | COVERED |
-| AND the component remains at the visual center during the orbit | test_orbit_pivot_is_world_point *(needs 2nd citation)* | PARTIAL |
-| THEN the zoom is animated smoothly (interpolated), not instantaneous | test_smooth_zoom_target_differs_from_distance_after_scroll, test_smooth_zoom_process_interpolates_distance | COVERED |
-| THEN the pan movement is smooth and proportional to drag speed | test_pan_proportional_to_drag_speed, test_pan_applied_immediately_no_lag | COVERED |
