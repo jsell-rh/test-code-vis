@@ -1,0 +1,136 @@
+---
+task_id: task-013
+round: 0
+role: spec-reviewer
+verdict: fail
+---
+## Spec Alignment Review — Godot Application Spec
+### Branch: hyperloop/task-013
+### Spec: specs/prototype/godot-application.spec.md
+
+---
+
+## Requirement: JSON Scene Graph Loading — COVERED
+
+**Implementation:** `godot/scripts/main.gd`
+- `_ready()` reads the JSON file using `FileAccess.open()` + `file.get_as_text()` then calls `SceneGraphLoader.load_from_dict()` and `build_from_graph()`.
+- `build_from_graph()` creates a `Node3D` anchor + `MeshInstance3D` (BoxMesh) + `Label3D` for every node, and calls `_create_edge()` for every edge.
+- Positions are set from `nd["position"]` directly onto `anchor.position`.
+
+**Tests:** `godot/tests/test_scene_graph_loading.gd`
+- `test_volumes_created_for_each_node()` — asserts `_anchors` contains an entry per node id. ✓
+- `test_mesh_instances_exist_in_anchors()` — asserts each anchor has a MeshInstance3D child. ✓
+- `test_edge_mesh_instances_created()` — asserts ≥2 MeshInstance3D children at scene root per edge (line + cone). ✓
+- `test_anchor_positions_match_json()` — asserts anchor.position equals JSON position values. ✓
+- `test_labels_are_billboard_and_readable()` — asserts BILLBOARD_ENABLED, pixel_size > 0, no_depth_test=true (covers "labels scale to remain readable"). ✓
+
+All GIVEN/WHEN/THEN conditions of the scenario are exercised.
+
+---
+
+## Requirement: Containment Rendering — COVERED
+
+**Implementation:** `godot/scripts/main.gd` `_create_volume()`
+- `bounded_context` nodes: `TRANSPARENCY_ALPHA`, `albedo_color.a = 0.18`, `CULL_DISABLED` (visible from all angles).
+- `module` nodes: `albedo_color.a = 1.0` (fully opaque), default cull.
+- Child nodes are added to the parent anchor node, so they are visually nested.
+
+**Tests:** `godot/tests/test_containment_rendering.gd`
+- `test_bounded_context_is_translucent()` — TRANSPARENCY_ALPHA + alpha < 1. ✓
+- `test_module_is_opaque()` — alpha >= 1. ✓
+- `test_module_parented_inside_context()` — mod_anchor.get_parent() == ctx_anchor. ✓
+- `test_bounded_context_larger_than_module()` — ctx BoxMesh.size.x > mod BoxMesh.size.x. ✓
+- `test_bounded_context_cull_disabled()` — CULL_DISABLED on parent material. ✓
+
+All GIVEN/WHEN/THEN conditions of the scenario are exercised.
+
+---
+
+## Requirement: Dependency Rendering — COVERED
+
+**Implementation:** `godot/scripts/main.gd` `_create_edge()`
+- Draws an `ImmediateMesh` (PRIMITIVE_LINES) line from `from_pos` to `to_pos`.
+- Adds a `CylinderMesh` with `top_radius=0` (pointed cone) at the target end, rotated along edge direction — indicates dependency flow direction.
+- Cross-context edges are orange `Color(1.0, 0.50, 0.10)`; internal edges are grey.
+
+**Tests:** `godot/tests/test_dependency_rendering.gd`
+- `test_edge_line_mesh_created()` — ImmediateMesh MeshInstance3D exists at scene root. ✓
+- `test_direction_indicator_cone_created()` — CylinderMesh with top_radius=0 exists. ✓
+- `test_direction_cone_near_target()` — cone is within 2 units of target position. ✓
+- `test_cross_context_cone_is_orange()` — orange material on cross-context cone. ✓
+
+All GIVEN/WHEN/THEN conditions of the scenario are exercised.
+
+---
+
+## Requirement: Size Encoding — COVERED
+
+**Implementation:** `godot/scripts/main.gd` `_create_volume()`
+- `sz = float(nd["size"])` is applied directly: `BoxMesh.size = Vector3(sz, sz * 0.6, sz)` for modules, so mesh width is linearly proportional to the `size` field.
+
+**Tests:** `godot/tests/test_size_encoding.gd`
+- `test_large_module_has_bigger_mesh()` — large_mod BoxMesh.size.x > small_mod BoxMesh.size.x (9.0 vs 3.0). ✓
+- `test_mesh_sizes_proportional_to_metric()` — ratio large/small == 3.0 within float tolerance. ✓
+
+All GIVEN/WHEN/THEN conditions of the scenario are exercised.
+
+---
+
+## Requirement: Camera Controls — COVERED
+
+**Implementation:** `godot/scripts/camera_controller.gd`
+- Uses spherical coordinates (`_theta`, `_phi`, `_distance`) around `_pivot`, updates with `look_at(_pivot, Vector3.UP)`.
+- `_theta = 0.15` rad on init ≈ 8.6° from top-down — satisfies "top-down overview".
+- Scroll wheel decreases/increases `_distance` (zoom).
+- Middle-mouse drag changes `_phi` (azimuth) and `_theta` (altitude) — orbit.
+- `_theta` clamped to `[0.01, PI - 0.01]` — camera never flips past poles, "up stays up".
+- `set_pivot()` called from `main.gd::_frame_camera()` to fit entire scene.
+
+**Tests:** `godot/tests/test_camera_controls.gd`
+- `test_initial_theta_is_near_top_down()` — _theta < PI/4. ✓  (top-down scenario)
+- `test_initial_distance_is_positive()` — _distance > 0. ✓  (top-down scenario)
+- `test_scroll_up_decreases_distance()` — WHEEL_UP decreases _distance. ✓  (zooming scenario)
+- `test_scroll_down_increases_distance()` — WHEEL_DOWN increases _distance. ✓  (zooming scenario)
+- `test_zoom_clamped_at_minimum()` — 200 scroll-ups never go below min_distance. ✓
+- `test_orbit_horizontal_drag_changes_phi()` — middle-mouse drag changes _phi. ✓  (orbiting scenario)
+- `test_orbit_vertical_drag_changes_theta()` — middle-mouse drag changes _theta. ✓  (orbiting scenario)
+- `test_set_pivot_updates_state()` — set_pivot() updates _pivot and _distance. ✓  (orbiting/framing scenario)
+
+All GIVEN/WHEN/THEN conditions of all three camera sub-scenarios are exercised.
+
+---
+
+## Requirement: Godot 4.6 — PARTIAL
+
+**Implementation:**
+- `godot/project.godot` declares `config/features=PackedStringArray("4.6")`. ✓
+- All scripts are `.gd` files (GDScript only — no `.cs` or other script files). ✓
+- `main.gd` uses `FileAccess.open()` and `file.get_as_text()` (Godot 4.x API); no deprecated `read_as_text()` or Godot 3-style `File.new()` calls. ✓
+
+**Tests:** MISSING — there is no GDScript behavioral test in `godot/tests/` that exercises the "Engine version" scenario's THEN conditions.
+
+Specifically:
+- No test asserts that the project declares engine version 4.6.x (e.g., by reading and parsing `project.godot`).
+- The `FileAccess.open()` + `get_as_text()` code path in `_ready()` is never exercised by any test — all tests call `build_from_graph()` directly, bypassing the file-reading path. A test that writes a temp fixture file and reads it via `FileAccess.open()` + `get_as_text()` is needed to exercise this API path.
+- No test verifies that all scripts are GDScript.
+
+**What is needed to fix this:**
+1. Add a test (e.g., `test_godot_version.gd`) that reads `res://project.godot` using `FileAccess.open()` + `get_as_text()` and asserts the version string contains "4.6". This simultaneously verifies the API call and the version.
+2. Optionally: a test that reads `res://scripts/main.gd` via `FileAccess` and confirms the `get_as_text()` API path works end-to-end with a known fixture file.
+
+---
+
+## Summary
+
+| Requirement            | Status  |
+|------------------------|---------|
+| JSON Scene Graph Loading | COVERED |
+| Containment Rendering  | COVERED |
+| Dependency Rendering   | COVERED |
+| Size Encoding          | COVERED |
+| Camera Controls        | COVERED |
+| Godot 4.6              | PARTIAL — no behavioral test for "Engine version" scenario |
+
+**Overall verdict: FAIL**
+
+One SHALL requirement (Godot 4.6 / Engine version scenario) lacks behavioral test coverage. The implementation is correct, but the guideline requires a GDScript test exercising the scenario's THEN conditions with asserted runtime outputs.
