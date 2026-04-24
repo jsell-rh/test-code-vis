@@ -1,0 +1,126 @@
+---
+verdict: pass
+---
+## Spec Alignment Review — specs/core/understanding-modes.spec.md
+
+All three SHALL requirements are implemented in `godot/scripts/understanding_overlay.gd`
+and fully covered by behavioral GDScript tests in `godot/tests/test_understanding_overlay.gd`.
+The test suite is registered in `run_tests.gd` (line 49) and uses real Node3D fixture objects
+with asserted runtime outputs — this constitutes valid Godot behavioral test coverage.
+
+> **Prototype-scope note:** `specs/prototype/prototype-scope.spec.md` marks all three modes
+> as out of prototype scope (§ "Not In Scope"). The guidelines instruct reviewers not to FAIL
+> for *missing* out-of-scope features; since the implementation *is* present and correct, the
+> scope exclusion is immaterial to this verdict.
+
+---
+
+### Requirement: Conformance Mode — COVERED
+
+> The system MUST allow the human to see whether the as-built system matches the as-specced design.
+
+**Implementation:** `apply_alignment_overlay(nodes_data, anchors)` in `understanding_overlay.gd`
+colours each node by its `spec_status` field: `"aligned"` → `ALIGNED_COLOR` (green),
+`"divergent"` → `DIVERGENT_COLOR` (red) plus a `Label3D` annotation containing the
+`spec_divergence` text, anything else → `UNSPECIFIED_COLOR` (grey).
+
+#### Scenario: Spec-aligned implementation — COVERED
+- THEN "human can see auth and user management as separate components"
+  → `test_aligned_nodes_displayed_as_separate_components`: two distinct `Node3D` anchors
+    each receive `ALIGNED_COLOR`; anchor identity confirms they are separate objects.
+- AND "correspondence between spec and realization is visually apparent"
+  → `test_aligned_node_receives_aligned_color`: asserts the node's `albedo_color` equals
+    `ALIGNED_COLOR` and differs from the pre-overlay default.
+
+#### Scenario: Spec-divergent implementation — COVERED
+- THEN "human can see the divergence between spec and realization"
+  → `test_divergent_node_receives_divergent_color`: asserts `DIVERGENT_COLOR` is applied
+    and is distinct from `ALIGNED_COLOR`.
+- AND "specific nature of the divergence is clear (merged vs. separate)"
+  → `test_divergent_node_has_divergence_label`: asserts a `Label3D` child exists whose
+    `.text` equals the `spec_divergence` field value ("merged with order service").
+
+---
+
+### Requirement: Evaluation Mode — COVERED
+
+> The system MUST allow the human to evaluate the architectural quality of the realized
+> system independent of the spec.
+
+**Implementation:** `apply_quality_overlay(nodes_data, edges_data, anchors)` computes
+in-degree per node and detects mutual bidirectional edges. Nodes with `in_degree >= 3`
+receive `CRITICAL_COLOR`; nodes with `in_degree >= 2` or mutual coupling receive
+`COUPLED_COLOR`. Overlay is applied regardless of each node's `spec_status`.
+
+#### Scenario: Detecting tight coupling — COVERED
+- THEN "coupling between those services is apparent"
+  AND "human can assess whether the coupling is problematic"
+  → `test_coupling_between_services_apparent`: two services with mutual edges (A→B and B→A)
+    both receive `COUPLED_COLOR`; color is distinct from the default, making coupling apparent.
+
+#### Scenario: Identifying single point of failure — COVERED
+- THEN "criticality and centrality of that component is apparent"
+  → `test_critical_component_centrality_apparent`: a hub with three incoming edges receives
+    `CRITICAL_COLOR`.
+- AND "risk it represents is clear"
+  → `test_critical_color_distinct_from_normal`: asserts `CRITICAL_COLOR ≠ COUPLED_COLOR`
+    and `CRITICAL_COLOR ≠ ALIGNED_COLOR`, ensuring risk levels are distinguishable.
+
+#### Scenario: Spec faithfully implemented but architecturally poor — COVERED
+- THEN "architectural problems are visible even though conformance is perfect"
+  → `test_quality_overlay_independent_of_alignment`: a node with `spec_status = "aligned"`
+    (perfect conformance) but `in_degree = 3` still receives `CRITICAL_COLOR` from
+    `apply_quality_overlay`, proving the quality overlay operates independently of alignment.
+
+---
+
+### Requirement: Simulation Mode — COVERED
+
+> The system MUST allow the human to explore the impact of hypothetical changes before
+> committing to them.
+
+**Implementation (split):** `apply_split_overlay(target_id, graph, anchors, scene_root)`
+finds all services with an outgoing edge to `target_id`, colours them `AFFECTED_COLOR`,
+and adds a scene-root `Label3D` with text "requires new interface".
+
+**Implementation (failure):** `apply_failure_overlay(target_id, graph, anchors, scene_root)`
+BFS-traverses the reverse-dependency graph from `target_id`, colours every transitively
+affected node `AFFECTED_COLOR`, and adds a scene-root `Label3D` with text "AFFECTED".
+The origin node is excluded so the failure source is distinguishable.
+
+#### Scenario: Splitting a service — COVERED
+- THEN "impact on dependent services is visible"
+  → `test_split_impact_on_dependents_visible`: `svc_a` (which has an edge → monolith)
+    receives `AFFECTED_COLOR` when the monolith split is simulated.
+- AND "new dependencies or interfaces that would be required are shown"
+  → `test_split_shows_required_new_interfaces`: the scene root contains a `Label3D`
+    with text "requires new interface".
+
+#### Scenario: Failure injection — COVERED
+- THEN "cascade of effects through the system is visible"
+  → `test_failure_cascade_effects_visible`: in a chain svc_b→svc_a and svc_c→svc_b,
+    failing svc_a colours both svc_b (direct) and svc_c (transitive) as `AFFECTED_COLOR`.
+- AND "components that would be affected are clearly identified"
+  → `test_failure_affected_components_clearly_identified`: the scene root contains a
+    `Label3D` with text "AFFECTED" for the affected component.
+
+---
+
+### Summary
+
+| Requirement | Status |
+|---|---|
+| Conformance Mode | COVERED |
+| — Scenario: Spec-aligned implementation | COVERED |
+| — Scenario: Spec-divergent implementation | COVERED |
+| Evaluation Mode | COVERED |
+| — Scenario: Detecting tight coupling | COVERED |
+| — Scenario: Identifying single point of failure | COVERED |
+| — Scenario: Spec faithfully implemented but architecturally poor | COVERED |
+| Simulation Mode | COVERED |
+| — Scenario: Splitting a service | COVERED |
+| — Scenario: Failure injection | COVERED |
+
+All 3 SHALL requirements and all 7 scenarios are implemented and have corresponding
+behavioral GDScript tests that exercise the exact Given/When/Then conditions with
+known fixture data and runtime assertions.
