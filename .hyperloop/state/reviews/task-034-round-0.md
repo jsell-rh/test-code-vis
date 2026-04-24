@@ -1,163 +1,215 @@
 ---
 task_id: task-034
 round: 0
-role: spec-reviewer
+role: verifier
 verdict: fail
 ---
-# Spec Alignment Review: specs/prototype/prototype-scope.spec.md
+# Reviewer Verdict: task-034 — Prototype Scope
 # Branch: hyperloop/task-034
+# Reviewer: independent code reviewer
 
-## Requirement: Target Codebase — PARTIAL
+## Verdict: FAIL
 
-The prototype MUST use the kartograph codebase. The extractor CLI is designed for it and
-the Python tests exercise a kartograph-like fixture (iam, shared_kernel, graph contexts in
-test_extractor.py). However, the spec scenario requires "GIVEN the kartograph codebase WHEN
-the prototype is launched THEN kartograph's structure is visualized." No automated integration
-test runs the extractor against the real ~/code/kartograph codebase (confirmed by the docstring
-in test_extractor.py: "Tests use temporary directories instead of the live kartograph
-codebase"). The fixture-based tests cover extraction logic but not end-to-end against the
-actual target.
-
-What is needed: A pytest test (e.g. extractor/tests/test_kartograph_integration.py)
-that invokes main(["~/code/kartograph/src/api", ...]) and asserts the output JSON
-contains known bounded context ids: iam, graph, shared_kernel.
+**Blocking finding:** Data flow visualization — explicitly prohibited by the prototype
+scope spec — is fully implemented, tested, and wired into the application under the
+renamed class `FlowOverlay`. The automated `check-not-in-scope.sh` did not catch it
+because it only checks for the literal strings `data.flow` and `dataflow`; the
+implementation uses `flow_overlay.gd` and `FlowOverlay` as identifiers.
 
 ---
 
-## Requirement: Two-Stage Pipeline — COVERED
+## Run-All-Checks Output (verbatim, post main-sync)
 
-- extractor/__main__.py produces JSON via build_scene_graph().
-- godot/scripts/main.gd _ready() reads the JSON file and calls build_from_graph().
-- Tests: extractor/tests/test_cli.py -> test_main_writes_json_output() (extractor stage);
-  godot/tests/test_scene_graph_loading.gd (Godot consumption stage).
+```
+=== run-all-checks.sh ===
 
----
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-034' has 10 commit(s) above main.
+[EXIT 0]
 
-## Requirement: Top-Down Architectural View — COVERED
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
 
-- godot/scripts/camera_controller.gd initialises with low theta (~0.15 rad, near top-down).
-- LOD system (lod_manager.gd) shows only bounded_context nodes at far distance.
-- Coupling-relative positions produced by extractor.py _order_by_coupling() / compute_layout()
-  and written into the JSON "position" field consumed by Godot.
-- Dependency connections rendered via _create_edge() in main.gd.
-- Tests: test_camera_controls.gd -> test_initial_theta_is_near_top_down();
-  test_spatial_structure.gd -> LOD far-distance tests; test_dependency_rendering.gd.
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
 
----
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+[EXIT 0]
 
-## Requirement: Zoom to Detail — COVERED
+--- check-direction-test-derivations.sh ---
+OK: All 10 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
 
-- Camera zoom decreases _distance, LOD transitions FAR -> MEDIUM -> NEAR,
-  progressively revealing modules then internal edges.
-- Tests: test_camera_controls.gd -> test_scroll_up_decreases_distance();
-  test_spatial_structure.gd -> test_medium_distance_shows_modules(),
-  test_near_distance_shows_all_nodes(), test_lod_integration_far_hides_modules_in_built_scene().
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+[EXIT 0]
 
----
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
 
-## Requirement: Abstract Visual Language — COVERED
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
 
-- main.gd _create_volume() uses BoxMesh for all nodes.
-- Bounded contexts: translucent TRANSPARENCY_ALPHA; modules: opaque.
-- Module anchors are children of context anchors (containment via scene-tree parenting).
-- size JSON field maps directly to BoxMesh.size dimensions.
-- Tests: test_containment_rendering.gd (translucency, nesting, cull_disabled);
-  test_size_encoding.gd (size proportional to metric).
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
 
----
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (4 suite(s) checked)
+[EXIT 0]
 
-## Requirement: Readable Labels — COVERED
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
 
-- main.gd _create_volume() adds a Label3D to each anchor with
-  billboard = BaseMaterial3D.BILLBOARD_ENABLED and no_depth_test = true.
-- Tests: test_scene_graph_loading.gd -> test_labels_are_billboard_and_readable().
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
 
----
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+[EXIT 0]
 
-## Requirement: Dependency Visualization — COVERED
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
 
-- main.gd _create_edge() draws an ImmediateMesh line between node positions.
-- Direction indicator: CylinderMesh with top_radius = 0.0 (arrowhead cone) at target end.
-- Cross-context edges orange; internal edges grey.
-- Tests: test_dependency_rendering.gd -> test_edge_line_mesh_created(),
-  test_direction_indicator_cone_created(), test_direction_cone_near_target(),
-  test_cross_context_cone_is_orange().
+--- extractor-lint.sh ---
+Extractor checks passed.
+[EXIT 0]
 
----
+--- godot-compile.sh ---
+[EXIT 0]
 
-## Requirement: Navigation — COVERED
+--- godot-fileaccess-tested.sh ---
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
 
-- camera_controller.gd implements pan (left mouse drag), zoom (scroll wheel), orbit
-  (right mouse drag). LOD provides smooth level transitions.
-- Tests: test_camera_controls.gd (zoom clamp, orbit phi/theta, set_pivot);
-  test_ux_polish.gd (pan, smooth zoom, orbit around mouse point).
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
 
----
+--- godot-tests.sh ---
+Results: 116 passed, 0 failed
+GDScript behavioral tests passed.
+[EXIT 0]
 
-## Requirement: Not In Scope — FAIL
+=== Summary: 19 check(s) run ===
+RESULT: ALL PASS
+```
 
-The spec explicitly states these features MUST NOT be implemented:
-  - conformance mode, evaluation mode, simulation mode,
-  - data flow visualization, moldable views, spec extraction, first-person navigation.
-
-VIOLATION: Moldable views IS implemented despite being explicitly out of scope.
-
-Evidence:
-  - godot/scripts/llm_view_generator.gd: Stage 1 of moldable-views (build_prompt,
-    parse_response) — docstring reads "LLM View Generator — Stage 1 of the
-    moldable-views pipeline."
-  - godot/scripts/scene_interpreter.gd: Stage 2 of moldable-views (apply_spec) —
-    docstring reads "Scene Interpreter — Stage 2 of the moldable-views pipeline."
-  - godot/scripts/main.gd line 22-23: preloads both scripts.
-  - godot/scripts/main.gd lines 60-61: var _scene_interpreter: SceneInterpreter = SceneInterpreter.new()
-  - godot/scripts/main.gd line 94: _add_question_ui() called from _ready()
-  - godot/scripts/main.gd lines 382-437: full question UI + LLM pipeline wired in
-    _add_question_ui(), _on_ask_button_pressed(), _on_question_submitted(), _call_llm().
-  - godot/tests/test_llm_view_generator.gd: tests for Stage 1.
-  - godot/tests/test_scene_interpreter.gd: tests for Stage 2.
-  - godot/tests/test_moldable_views_pipeline.gd: end-to-end pipeline integration tests.
-  - godot/tests/run_tests.gd lines 47-50: all three suites registered in the test runner.
-
-This branch correctly removed UnderstandingOverlay (conformance/evaluation/simulation modes)
-and keyboard shortcuts H/J/K. However the moldable-views pipeline was not removed and remains
-fully operational.
-
-Status of each out-of-scope item:
-  Conformance mode:        NOT present (removed by this branch)       OK
-  Evaluation mode:         NOT present (removed by this branch)       OK
-  Simulation mode:         NOT present (removed by this branch)       OK
-  Data flow visualization: NOT present (flow_overlay is path overlay) OK
-  Spec extraction:         NOT present                                 OK
-  First-person navigation: NOT present in camera_controller.gd        OK
-  Moldable views:          FULLY PRESENT AND WIRED                    FAIL
-
-What is needed to fix:
-  1. Remove godot/scripts/llm_view_generator.gd
-  2. Remove godot/scripts/scene_interpreter.gd
-  3. Remove godot/tests/test_llm_view_generator.gd
-  4. Remove godot/tests/test_scene_interpreter.gd
-  5. Remove godot/tests/test_moldable_views_pipeline.gd
-  6. From godot/scripts/main.gd remove:
-     - const LlmViewGenerator / const SceneInterpreter preloads (lines 22-23)
-     - var _scene_interpreter instance (lines 60-61)
-     - var _question_input / var _ask_button declarations (lines 64-67)
-     - _add_question_ui() call in _ready() (line 94)
-     - _add_question_ui(), _on_ask_button_pressed(), _on_question_submitted(),
-       _call_llm() function bodies (lines 382-437)
-  7. Remove moldable-views suite registrations from godot/tests/run_tests.gd
+All 19 automated checks exit 0. The check scripts do not detect the scope violation —
+see the blocking finding below.
 
 ---
 
-## Summary
+## Scope Check Output
 
-| Requirement                 | Status  | Notes                                               |
-|-----------------------------|---------|-----------------------------------------------------|
-| Target Codebase             | PARTIAL | No automated test against real kartograph codebase  |
-| Two-Stage Pipeline          | COVERED | extractor -> JSON -> Godot load fully tested        |
-| Top-Down Architectural View | COVERED | Camera defaults, LOD, coupling layout tested        |
-| Zoom to Detail              | COVERED | LOD transitions tested end-to-end                   |
-| Abstract Visual Language    | COVERED | BoxMesh, nesting, translucency tested               |
-| Readable Labels             | COVERED | Billboard Label3D tested                            |
-| Dependency Visualization    | COVERED | Line + arrowhead cone, direction, color tested      |
-| Navigation                  | COVERED | Pan, zoom, orbit all tested                         |
-| Not In Scope                | FAIL    | Moldable views fully implemented — MUST NOT be      |
+```
+OK: No prohibited (not-in-scope) features detected.
+```
+
+**This result is a false negative.** The script searches `godot/scripts/` for the
+literal patterns `data.flow|dataflow`. The prohibited feature is implemented as
+`flow_overlay.gd` / `FlowOverlay`, which matches neither pattern. The script also does
+not scan `godot/tests/` for flow-related code.
+
+---
+
+## Blocking Finding: Data Flow Visualization Is Present
+
+The spec states:
+
+> AND data flow visualization is NOT implemented
+
+Independent semantic audit (grepping for `flow_overlay`, `FlowOverlay`, `show_path`,
+`show_aggregate`, `flow path`) found the feature fully present:
+
+**`godot/scripts/flow_overlay.gd`** (214 lines)
+- Implements `show_path()`, `show_aggregate()`, `clear_path()`, `is_path_active()`
+- Explicit docstring: "Scenario 'Requesting a flow path' → show_path()",
+  "Scenario 'Identifying a bottleneck' → show_aggregate()"
+
+**`godot/tests/test_flow_overlay.gd`** (21 tests)
+- Docstring line 3: "Covers all THEN-clauses from specs/visualization/data-flow.spec.md"
+- Tests: `test_path_mid_node_lit_up`, `test_entry_node_green`, `test_terminus_node_red`,
+  `test_high_traffic_edge_orange`, `test_bottleneck_node_has_overlay`, etc.
+
+**`godot/scripts/main.gd`** — fully wired:
+```gdscript
+const FlowOverlay = preload("res://scripts/flow_overlay.gd")
+var _flow: FlowOverlay = FlowOverlay.new()
+var _flows: Array = []        # loaded from JSON scene graph
+var _aggregate: Dictionary = {}  # loaded from JSON scene graph
+_flow.setup(_anchors, _path_edge_entries)   # called in build_from_graph()
+```
+Keyboard shortcuts F (cycle path overlays) and G (toggle aggregate traffic) activate
+the feature at runtime via `_unhandled_input()`.
+
+**`godot/tests/run_tests.gd`** — suite registered:
+```gdscript
+_run_suite(preload("res://tests/test_flow_overlay.gd").new())
+```
+
+Per the guidelines:
+
+> A renamed prohibited feature is still a prohibited feature. "The check script passed"
+> is not a defence — check-not-in-scope.sh detects known patterns; semantic audit
+> detects novel names. Both are required.
+
+> A prohibited feature in any form (code, test, CLI flag, import, or signal connection)
+> is an automatic FAIL regardless of how small or optional the implementation appears.
+
+The worker's Not In Scope audit entry "Data flow visualization: NOT present ✓" is
+factually incorrect. The feature is present throughout the codebase.
+
+---
+
+## All Other Requirements: Pass
+
+Everything outside the scope violation passes:
+
+- Commit trailers (Spec-Ref, Task-Ref): present on all implementation commits ✓
+- Python extractor: ruff lint passes, 95 pytest tests pass ✓
+- GDScript tests: 116/116 pass ✓
+- Godot compilation: clean ✓
+- Two-stage pipeline (Python extractor → JSON → Godot loader → 3D scene) ✓
+- Labeled geometric volumes (boxes) ✓
+- Billboard labels with pixel_size > 0 ✓
+- Containment as scene-tree parenting ✓
+- Dependency connections with direction cones ✓
+- Camera pan / zoom / orbit with boundary-condition tests ✓
+- Kartograph integration test ✓
+- Moldable views: absent ✓
+- First-person navigation: absent ✓
+- Conformance / evaluation / simulation modes: absent ✓
+- Spec extraction: absent ✓
+
+---
+
+## Required Fix to Achieve Pass
+
+Remove the data flow visualization feature entirely:
+
+1. Delete `godot/scripts/flow_overlay.gd`
+2. Delete `godot/tests/test_flow_overlay.gd`
+3. In `godot/scripts/main.gd`, remove:
+   - `const FlowOverlay = preload("res://scripts/flow_overlay.gd")`
+   - `var _flow: FlowOverlay = FlowOverlay.new()`
+   - `var _flows: Array = []`
+   - `var _aggregate: Dictionary = {}`
+   - `var _path_edge_entries: Array = []`
+   - `_flow.setup(_anchors, _path_edge_entries)` call in `build_from_graph()`
+   - `_flows = graph.get("flows", [])` and `_aggregate = graph.get("aggregate", {})` lines
+   - All `_path_edge_entries.append(...)` calls in `_create_edge()`
+   - `_unhandled_input()`, `_toggle_path_overlay()`, `_toggle_aggregate_overlay()`
+4. In `godot/tests/run_tests.gd`, remove the `test_flow_overlay.gd` suite registration line
