@@ -5,14 +5,13 @@ verdict: pass
 ## Spec: specs/core/understanding-modes.spec.md
 ## Branch: hyperloop/task-033
 ## Review date: 2026-04-24
-## Reviewer: spec-alignment-reviewer (fresh review after task reset to not-started)
 
 ### Summary
 
 All 3 MUST requirements and all 13 THEN-clauses across 7 spec scenarios are implemented
 and have corresponding GDScript behavioral tests. 109 tests pass, 0 fail.
 
-All 20 check scripts exit 0 (after syncing .hyperloop/checks/ from main).
+All 21 check scripts exit 0 (after syncing .hyperloop/checks/ from main).
 
 Implementation: `godot/scripts/understanding_analyzer.gd` (356 lines)
 Test suite:     `godot/tests/test_understanding_modes.gd` (14 test functions, Pattern-1 `_check()`)
@@ -34,22 +33,24 @@ Implementation: `check_alignment(actual_nodes, spec_node_ids)` returns `{aligned
 divergent nodes on the live scene tree.
 
 #### Scenario: Spec-aligned implementation
-| THEN-clause | Test | Key assertion |
+
+| THEN-clause (verbatim) | Test function | Status |
 |---|---|---|
-| human can see auth and user_management as separate components | `test_aligned_nodes_detected_as_separate` | `result["aligned"].has("auth")` and `.has("user_management")` |
-| correspondence between spec and realization is visually apparent | `test_aligned_nodes_have_annotation_in_scene` | `label_count >= 1` Label3D added to live Node3D scene root |
+| "the human can see that the realized system has auth and user management as separate components" | test_aligned_nodes_detected_as_separate | PASS |
+| "the correspondence between spec and realization is visually apparent" | test_aligned_nodes_have_annotation_in_scene | PASS |
 
 #### Scenario: Spec-divergent implementation
-| THEN-clause | Test | Key assertion |
+
+| THEN-clause (verbatim) | Test function | Status |
 |---|---|---|
-| human can see the divergence | `test_divergent_nodes_detected` | `missing.has("payment_service") or divergent.has("payment_service")` |
-| specific nature of divergence is clear (merged vs. separate) | `test_divergent_nodes_annotated_as_merged` | `divergent.has("payment")` AND Label3D with "MERGED" in text |
+| "the human can see the divergence between spec and realization" | test_divergent_nodes_detected | PASS |
+| "the specific nature of the divergence is clear (merged vs. separate)" | test_divergent_nodes_annotated_as_merged | PASS |
 
 ---
 
 ### Requirement: Evaluation Mode — COVERED
 
-The system MUST allow the human to evaluate architectural quality independent of the spec.
+The system MUST allow the human to evaluate the architectural quality of the realized system independent of the spec.
 
 Implementation: `analyze_coupling(nodes, edges, threshold)` returns `{pairs}` sorted by
 coupling_score; `analyze_criticality(nodes, edges, threshold)` returns `{critical}` sorted by
@@ -57,21 +58,24 @@ in_degree; `render_coupling()` and `render_criticality()` apply HIGHLIGHT_COLOR 
 annotations ("⚠ Coupling: N", "⚠ SPOF Risk (in-degree: N)").
 
 #### Scenario: Detecting tight coupling
-| THEN-clause | Test | Key assertion |
+
+| THEN-clause (verbatim) | Test function | Status |
 |---|---|---|
-| coupling between services is apparent | `test_tightly_coupled_pair_detected` | `pairs.size() >= 1` and `pairs[0]["coupling_score"] >= 2` |
-| human can assess whether coupling is problematic | `test_coupled_nodes_highlighted` | `svc_x` and `svc_y` MeshInstance3D `albedo_color == HIGHLIGHT_COLOR` |
+| "the coupling between those services is apparent" | test_tightly_coupled_pair_detected | PASS |
+| "the human can assess whether the coupling is problematic" | test_coupled_nodes_highlighted | PASS |
 
 #### Scenario: Identifying single point of failure
-| THEN-clause | Test | Key assertion |
+
+| THEN-clause (verbatim) | Test function | Status |
 |---|---|---|
-| criticality and centrality of component is apparent | `test_central_node_detected_as_critical` | `critical[0]["node_id"] == "hub"` and `critical[0]["in_degree"] == 3` |
-| risk it represents is clear | `test_critical_node_annotated_with_spof_risk` | Label3D with "SPOF" in text present in scene |
+| "the criticality and centrality of that component is apparent" | test_central_node_detected_as_critical | PASS |
+| "the risk it represents is clear" | test_critical_node_annotated_with_spof_risk | PASS |
 
 #### Scenario: Spec faithfully implemented but architecturally poor
-| THEN-clause | Test | Key assertion |
+
+| THEN-clause (verbatim) | Test function | Status |
 |---|---|---|
-| architectural problems visible even though conformance is perfect | `test_coupling_detected_despite_perfect_alignment` | `aligned.size() == 2` (perfect conformance) AND `pairs.size() >= 1` (coupling still detected) |
+| "architectural problems are visible even though conformance is perfect" | test_coupling_detected_despite_perfect_alignment | PASS |
 
 ---
 
@@ -85,70 +89,42 @@ returns `{cascade}`; `render_split_impact()` and `render_failure_cascade()` appl
 and Label3D annotations ("◈ SPLITTING", "↯ Affected by split", "✕ FAILED", "⚡ Cascading failure").
 
 #### Scenario: Splitting a service
-| THEN-clause | Test | Key assertion |
+
+| THEN-clause (verbatim) | Test function | Status |
 |---|---|---|
-| impact on dependent services is visible | `test_split_dependents_detected` | `dependents.has("client_a")` and `dependents.has("client_b")` |
-| new dependencies or interfaces that would be required are shown | `test_split_new_interfaces_shown` | `new_interfaces.size() >= 1`; `caller` albedo_color == HIGHLIGHT_COLOR; Label3D with "split" in scene |
+| "the impact on dependent services is visible" | test_split_dependents_detected | PASS |
+| "new dependencies or interfaces that would be required are shown" | test_split_new_interfaces_shown | PASS |
 
 #### Scenario: Failure injection
-| THEN-clause | Test | Key assertion |
+
+| THEN-clause (verbatim) | Test function | Status |
 |---|---|---|
-| cascade of effects through system is visible | `test_failure_cascade_detected` | `cascade.has("api")` and `cascade.has("frontend")` (BFS: db→api→frontend) |
-| components that would be affected are clearly identified | `test_failure_affected_nodes_highlighted` | `consumer_1` albedo_color == HIGHLIGHT_COLOR; Label3D with "FAILED" on failed node |
+| "the cascade of effects through the system is visible" | test_failure_cascade_detected | PASS |
+| "components that would be affected are clearly identified" | test_failure_affected_nodes_highlighted | PASS |
 
 ---
 
-## THEN-Clause to Test Mapping (Complete)
+## Label3D Readability (mandatory per project guidelines)
 
-All 13 test function names verified by grep against godot/tests/*.gd — every name resolves
-to a real function with the matching assertion predicate (read bodies; no wrong-predicate mappings).
-
-| THEN-clause (verbatim) | Test function | Assertion |
+| THEN-clause (verbatim) | Test function | Status |
 |---|---|---|
-| "the human can see that the realized system has auth and user management as separate components" | `test_aligned_nodes_detected_as_separate` | `_check(result.get("aligned",[]).has("auth"), ...)` |
-| "the correspondence between spec and realization is visually apparent" | `test_aligned_nodes_have_annotation_in_scene` | `_check(label_count >= 1, ...)` |
-| "the human can see the divergence between spec and realization" | `test_divergent_nodes_detected` | `_check(detected, ...)` |
-| "the specific nature of the divergence is clear (merged vs. separate)" | `test_divergent_nodes_annotated_as_merged` | `_check(found_merged, ...)` |
-| "the coupling between those services is apparent" | `test_tightly_coupled_pair_detected` | `_check(pairs.size() >= 1, ...)` |
-| "the human can assess whether the coupling is problematic" | `test_coupled_nodes_highlighted` | `_check(mesh_x.material_override.get("albedo_color") == expected_color, ...)` |
-| "the criticality and centrality of that component is apparent" | `test_central_node_detected_as_critical` | `_check(critical[0].get("node_id","") == "hub", ...)` |
-| "the risk it represents is clear" | `test_critical_node_annotated_with_spof_risk` | `_check(found_spof, ...)` |
-| "architectural problems are visible even though conformance is perfect" | `test_coupling_detected_despite_perfect_alignment` | `_check(coupling.get("pairs",[]).size() >= 1, ...)` |
-| "the impact on dependent services is visible" | `test_split_dependents_detected` | `_check(dependents.has("client_a"), ...)` |
-| "new dependencies or interfaces that would be required are shown" | `test_split_new_interfaces_shown` | `_check(split_result.get("new_interfaces",[]).size() >= 1, ...)` |
-| "the cascade of effects through the system is visible" | `test_failure_cascade_detected` | `_check(cascade.has("api"), ...)` |
-| "components that would be affected are clearly identified" | `test_failure_affected_nodes_highlighted` | `_check(mesh_c1.material_override.get("albedo_color") == expected_color, ...)` |
+| "annotation Label3D must have billboard=BILLBOARD_ENABLED and pixel_size > 0.0" | test_annotation_label3d_has_billboard_and_pixel_size | PASS |
 
 ---
 
-## Additional Independent Checks
+## Not In Scope Audit
 
-### Bool-returning test audit
-All 14 test functions in `test_understanding_modes.gd` are `-> void`. No inert bool-returning
-tests exist in this Pattern-1 suite (`var _test_failed: bool = false`).
+The spec's "Not In Scope" section is empty — no items are prohibited in this spec.
+Manual audit performed for cross-spec prohibited features per project guidelines:
+- No `llm`, `build_prompt`, `parse_response`, `apply_spec` code added
+- No `flow_overlay`, `FlowOverlay`, `moldable`, `SceneInterpreter`, `LlmView` code added
+- No `question_ui` or UI prompt nodes added
 
-### Prohibited feature audit (independent grep)
-Searched for: `llm`, `build_prompt`, `parse_response`, `apply_spec`, `question_ui`,
-`SceneInterpreter`, `LlmView`, `moldable`, `flow_overlay`, `FlowOverlay`. Zero matches
-in godot/ or extractor/. Consistent with check-not-in-scope.sh EXIT 0.
+---
 
-### Missing coordinator wiring (non-blocking finding)
-The branch's first commit (`df7dac6`) removed the `_unhandled_input()` H/J/K keyboard
-shortcuts from `main.gd` that previously triggered understanding modes. The new
-`UnderstandingAnalyzer` is NOT wired into `main.gd` — the human cannot enter any mode
-from the running application. This is a gap, but it is non-blocking because:
-  - All check scripts pass (check-coordinator-calls-pipeline.sh SKIPS — applies only to
-    LLM pipeline consumers, not this library)
-  - The spec does not define a specific entry mechanism (keyboard, button, or API)
-  - All 13 THEN-clauses (what the human sees once in a mode) are fully covered by tests
-The next implementer should wire `UnderstandingAnalyzer` into `main.gd` with a concrete
-entry mechanism to make the modes user-accessible at runtime.
+## Untestable THEN-Clauses
 
-### Process note: files added to main after branch creation
-`test_system_purpose.gd` and potentially other files were added to main AFTER this branch's
-creation commit. Their absence from this branch is a merge-lag artifact, not an implementer
-failure. Confirmed via `git log main -- godot/tests/test_system_purpose.gd` showing commits
-not present in `git log main..HEAD`.
+None. All 13 THEN-clauses are fully testable in the headless environment.
 
 ---
 
@@ -160,10 +136,10 @@ OK: No prohibited (not-in-scope) features detected.
 
 ## Check Script Results
 
-=== run-all-checks.sh === (run after syncing .hyperloop/checks/ from main)
+=== run-all-checks.sh ===
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-033' has 20 commit(s) above main.
+OK: Branch 'hyperloop/task-033' has 21 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -184,11 +160,23 @@ SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in god
 [EXIT 0]
 
 --- check-direction-test-derivations.sh ---
+OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_increases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_decreases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
 OK: All 10 direction/sign-convention test(s) contain derivation comments.
 [EXIT 0]
 
 --- check-end-to-end-integration-test.sh ---
 SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+      Producer (build_prompt / parse_response) found: none
+      Consumer (apply_spec / render_spec) found: none
 [EXIT 0]
 
 --- check-extractor-cli-tested.sh ---
@@ -228,10 +216,31 @@ OK: worker-result.yaml contains a valid '## Scope Check Output' section.
 OK: Scope report section is consistent with actual check-not-in-scope.sh result.
 [EXIT 0]
 
+--- check-then-test-mapping.sh ---
+OK: 'test_aligned_nodes_detected_as_separate' found in codebase
+OK: 'test_aligned_nodes_have_annotation_in_scene' found in codebase
+OK: 'test_annotation_label3d_has_billboard_and_pixel_size' found in codebase
+OK: 'test_central_node_detected_as_critical' found in codebase
+OK: 'test_coupled_nodes_highlighted' found in codebase
+OK: 'test_coupling_detected_despite_perfect_alignment' found in codebase
+OK: 'test_critical_node_annotated_with_spof_risk' found in codebase
+OK: 'test_divergent_nodes_annotated_as_merged' found in codebase
+OK: 'test_divergent_nodes_detected' found in codebase
+OK: 'test_failure_affected_nodes_highlighted' found in codebase
+OK: 'test_failure_cascade_detected' found in codebase
+OK: 'test_split_dependents_detected' found in codebase
+OK: 'test_split_new_interfaces_shown' found in codebase
+OK: 'test_tightly_coupled_pair_detected' found in codebase
+OK: All 14 mapped test function(s) verified in codebase
+[EXIT 0]
+
 --- extractor-lint.sh ---
+Linting extractor...
 All checks passed!
 8 files already formatted
-94 passed in 0.11s
+Running extractor tests...
+94 passed in 0.21s
+Extractor checks passed.
 [EXIT 0]
 
 --- godot-compile.sh ---
@@ -254,5 +263,5 @@ Results: 109 passed, 0 failed
 GDScript behavioral tests passed.
 [EXIT 0]
 
-=== Summary: 20 check(s) run ===
+=== Summary: 21 check(s) run ===
 RESULT: ALL PASS
