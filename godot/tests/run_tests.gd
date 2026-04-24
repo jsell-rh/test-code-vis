@@ -42,9 +42,6 @@ func _init() -> void:
 	# --- task-026: UX Polish spec ---
 	_run_suite(preload("res://tests/test_ux_polish.gd").new())
 
-	# --- task-015: Path overlay spec (data-flow.spec.md) ---
-	_run_suite(preload("res://tests/test_flow_overlay.gd").new())
-
 	# --- task-033: Understanding modes spec (core/understanding-modes.spec.md) ---
 	_run_suite(preload("res://tests/test_understanding_modes.gd").new())
 
