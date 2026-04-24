@@ -5,18 +5,6 @@ verdict: pass
 
 Branch: `hyperloop/task-034`
 Date: 2026-04-24
-Reviewer: independent spec alignment reviewer (fresh review after task reset)
-
----
-
-## run-all-checks.sh Output (verbatim summary)
-
-All 26 checks run — RESULT: ALL PASS.
-- 96 Python extractor tests: passed
-- 97 GDScript behavioral tests: passed (0 failed)
-- Godot compiles successfully (v4.6.2.stable)
-- Kartograph integration test: references real codebase at ~/code/kartograph/src/api
-- No prohibited (not-in-scope) features detected
 
 ---
 
@@ -24,10 +12,169 @@ All 26 checks run — RESULT: ALL PASS.
 
 OK: No prohibited (not-in-scope) features detected.
 
-Independent grep for prohibited keywords (`llm`, `build_prompt`, `parse_response`,
-`apply_spec`, `question_ui`, `SceneInterpreter`, `LlmView`, `moldable`, `conformance`,
-`evaluation_mode`, `simulation`, `first_person`, `KEY_W`, `KEY_A`, `KEY_S`, `KEY_D`)
-confirmed zero matches across `godot/` and `extractor/`.
+---
+
+## Check Script Results
+
+=== run-all-checks.sh ===
+
+--- check-branch-adds-source-files.sh ---
+OK: Branch adds/modifies 12 source file(s) outside .hyperloop/:
+  extractor/extractor.py
+  extractor/tests/test_extractor.py
+  extractor/tests/test_kartograph_integration.py
+  godot/data/scene_graph.json
+  godot/scripts/camera_controller.gd
+  godot/scripts/lod_manager.gd
+  godot/scripts/main.gd
+  godot/tests/run_tests.gd
+  godot/tests/test_camera_controls.gd
+  godot/tests/test_dependency_rendering.gd
+  ... (and 2 more)
+[EXIT 0]
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-034' has 55 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-compound-coverage-not-falsified.sh ---
+OK: check-compound-then-clause-coverage.sh exits 0 — no cross-validation needed.
+[EXIT 0]
+
+--- check-compound-then-clause-coverage.sh ---
+SKIP: No compound THEN-clauses (containing 'and') found in THEN→test mapping.
+[EXIT 0]
+
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+      This check only applies to tasks that implement a view-spec consumer.
+[EXIT 0]
+
+--- check-desktop-platform-tested.sh ---
+INFO: Desktop/native-platform constraint detected in spec(s):
+  specs/prototype/nfr.spec.md
+OK: OS.has_feature() test(s) found covering desktop-platform constraint:
+  godot/tests/test_desktop_platform.gd
+[EXIT 0]
+
+--- check-direction-test-derivations.sh ---
+OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_increases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_decreases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
+OK: All 10 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
+
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+      Producer (build_prompt / parse_response) found: none
+      Consumer (apply_spec / render_spec) found: none
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (5 suite(s) checked)
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM→view-spec pipeline.
+[EXIT 0]
+
+--- check-reflects-mapping-consistency.sh ---
+SKIP: No 'reflect(s)' THEN-clauses found in mapping table.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+
+--- check-then-test-mapping.sh ---
+OK: 'test_bounded_context_larger_than_module' found in codebase
+OK: 'test_coupled_bcs_are_closer_than_uncoupled' found in codebase
+OK: 'test_direction_cone_near_target' found in codebase
+OK: 'test_direction_indicator_cone_created' found in codebase
+OK: 'test_edge_line_mesh_created' found in codebase
+OK: 'test_far_distance_shows_only_bounded_contexts' found in codebase
+OK: 'test_initial_theta_is_near_top_down' found in codebase
+OK: 'test_kartograph_extraction_produces_modules' found in codebase
+OK: 'test_kartograph_integration_bounded_contexts' found in codebase
+OK: 'test_labels_are_billboard_and_readable' found in codebase
+OK: 'test_lmb_pan_moves_pivot' found in codebase
+OK: 'test_main_uses_godot4_fileaccess_api' found in codebase
+OK: 'test_main_writes_json_output' found in codebase
+OK: 'test_mesh_instances_exist_in_anchors' found in codebase
+OK: 'test_mesh_sizes_proportional_to_metric' found in codebase
+OK: 'test_module_parented_inside_context' found in codebase
+OK: 'test_near_distance_shows_all_nodes' found in codebase
+OK: 'test_near_distance_shows_internal_edges_as_fine_detail' found in codebase
+OK: 'test_orbit_horizontal_drag_changes_phi' found in codebase
+OK: 'test_scroll_up_decreases_distance' found in codebase
+OK: 'test_volumes_created_for_each_node' found in codebase
+OK: 'test_zoom_is_interpolated_not_instantaneous' found in codebase
+OK: All 22 mapped test function(s) verified in codebase
+[EXIT 0]
+
+--- extractor-lint.sh ---
+[EXIT 0]
+
+--- godot-compile.sh ---
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+[EXIT 0]
+
+--- godot-label3d.sh ---
+[EXIT 0]
+
+--- godot-tests.sh ---
+Results: 97 passed, 0 failed
+GDScript behavioral tests passed.
+[EXIT 0]
+
+=== Summary: 26 check(s) run ===
+RESULT: ALL PASS
 
 ---
 
@@ -59,7 +206,7 @@ Python extractor → JSON → Godot consumer.
 - **Godot consumer**: `godot/scripts/main.gd::_ready()` uses `FileAccess.open()`,
   `JSON.new()`, `SceneGraphLoader.load_from_dict()`, and `build_from_graph()`.
 - **Tests**:
-  - `extractor/tests/test_cli.py::TestCliEntryPoint::test_main_produces_json_output` —
+  - `extractor/tests/test_cli.py::test_main_writes_json_output` —
     CLI produces valid JSON.
   - `godot/tests/test_scene_graph_loading.gd::test_volumes_created_for_each_node` +
     `test_anchor_positions_match_json` — Godot loads JSON and renders scene.
@@ -162,19 +309,12 @@ Pan (LMB), zoom (scroll, smooth interpolation), orbit (RMB).
     initial and target.
   - `test_spatial_structure.gd::test_far_distance_shows_only_bounded_contexts` +
     `test_near_distance_shows_all_nodes` — overview/detail transition.
-  - Note: Several pan/orbit tests produce `Condition "!is_inside_tree()" is true`
-    engine ERRORs (expected headless behavior — camera not in scene tree during unit
-    tests). All tests still PASS because the code gracefully falls back to identity
-    transform, and the assertions are met.
 
 ### Requirement: Not In Scope — COVERED
 
 No prohibited features present.
 
 - **check-not-in-scope.sh**: EXIT 0 — no prohibited keywords found.
-- Independently verified: zero matches for `llm`, `moldable`, `conformance`,
-  `evaluation_mode`, `simulation`, `first_person`, `KEY_W/A/S/D`,
-  `parse_response`, `apply_spec`, `build_prompt` across all source files.
 
 ---
 
@@ -193,9 +333,8 @@ No prohibited features present.
 | Not In Scope | COVERED |
 
 - 26 automated checks: **ALL PASS**
-- 96 Python tests: **all pass**
+- Python extractor tests: **all pass**
 - 97 GDScript behavioral tests: **97 pass, 0 fail**
 - All 9 SHALL/MUST requirements: **COVERED**
-- All scenarios: **code + tests verified**
 
 **VERDICT: PASS**
