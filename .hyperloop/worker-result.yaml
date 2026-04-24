@@ -1,0 +1,100 @@
+---
+verdict: pass
+---
+
+## Review Summary
+
+Task-032 targets `specs/core/understanding-modes.spec.md`, which defines three modes of
+understanding: Conformance, Evaluation, and Simulation. All three are **explicitly excluded**
+from the prototype scope by `specs/prototype/prototype-scope.spec.md` under "Not In Scope":
+
+> - conformance mode (spec overlay comparison) is NOT implemented
+> - evaluation mode (architectural quality assessment) is NOT implemented
+> - simulation mode (hypothetical change impact) is NOT implemented
+
+The worker correctly determined that no implementation is required. This analysis is
+independently confirmed by reading prototype-scope.spec.md directly.
+
+## Checks run-all-checks.sh (verbatim output — abbreviated)
+
+All 18 checks executed. Results:
+
+| Check | Result |
+|---|---|
+| check-branch-has-commits.sh | PASS — 3 commits above main |
+| check-checks-in-sync.sh | PASS — all check scripts from main present |
+| check-clamp-boundary-tests.sh | PASS — all 4 clamped variables have boundary tests |
+| check-coordinator-calls-pipeline.sh | PASS — consumer and producer called from main.gd |
+| check-direction-test-derivations.sh | PASS — all 10 direction/sign tests have derivation comments |
+| check-end-to-end-integration-test.sh | PASS — test_moldable_views_pipeline.gd exercises both stages |
+| check-extractor-cli-tested.sh | PASS — test calls main() entry point |
+| check-extractor-stdlib-only.sh | PASS — stdlib-only import test exists |
+| check-gdscript-only-test.sh | PASS — DirAccess iteration test found |
+| check-kartograph-integration-test.sh | PASS — integration test references kartograph codebase |
+| check-not-in-scope.sh | PASS — no prohibited features detected |
+| check-pipeline-wiring.sh | PASS — view-spec pipeline wired end-to-end |
+| check-report-scope-section.sh | EXPECTED FAIL — worker-result.yaml absent before review writes it |
+| extractor-lint.sh | PASS — ruff clean + 94 tests pass |
+| godot-compile.sh | PASS — Godot 4.6.2 compilation succeeds |
+| godot-fileaccess-tested.sh | PASS — FileAccess.open() exercised in 2 test files |
+| godot-label3d.sh | PASS — billboard and pixel_size set and tested on all Label3D nodes |
+| godot-tests.sh | PASS — 171 GDScript tests pass, 0 fail |
+
+`check-report-scope-section.sh` failed only because this review file did not exist when
+the master runner executed — this is structurally expected for the reviewer pass and is
+not a blocking finding.
+
+## Direction-Test Derivation Verification
+
+The preparatory commit (3f377ef) added sign-chain derivation comments to 6 direction tests
+that were failing `check-direction-test-derivations.sh`. I independently verified each:
+
+**test_orbit_horizontal_drag_changes_phi**: drag right 50px → delta.x = +50 →
+`_phi -= delta.x * orbit_speed` (line 118, camera_controller.gd) → phi decreases →
+phi ≠ initial_phi. Comment matches implementation ✓
+
+**test_orbit_vertical_drag_changes_theta**: drag up 20px (y: 100→80) → delta.y = -20 →
+`_theta = clamp(_theta - delta.y * orbit_speed, ...)` → theta increases → theta ≠
+initial_theta. Comment matches implementation ✓
+
+All other derivation comments (dependency rendering cone, UX polish zoom/pan) are
+consistent with the underlying camera_controller.gd and main.gd implementations.
+
+## Commit Trailers
+
+Both implementation commits carry required trailers:
+- `Spec-Ref: specs/core/understanding-modes.spec.md@5014c7f3eb6eb64b86a2637ffeb78e914f9e1e9c` ✓
+  (5014c7f resolves to the intake commit that created task-032)
+- `Task-Ref: task-032` ✓
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+## THEN-Clause Disposition
+
+All 13 THEN-clauses from understanding-modes.spec.md are out of prototype scope per
+prototype-scope.spec.md. No implementation THEN-clause goes unaddressed.
+
+| THEN-clause | Disposition |
+|---|---|
+| auth/user management visible as separate components | Out of scope — Conformance Mode |
+| spec-realization correspondence visually apparent | Out of scope — Conformance Mode |
+| divergence between spec and realization visible | Out of scope — Conformance Mode |
+| specific nature of divergence is clear | Out of scope — Conformance Mode |
+| coupling between services is apparent | Out of scope — Evaluation Mode |
+| human can assess whether coupling is problematic | Out of scope — Evaluation Mode |
+| criticality and centrality of component apparent | Out of scope — Evaluation Mode |
+| risk represented is clear | Out of scope — Evaluation Mode |
+| architectural problems visible despite perfect conformance | Out of scope — Evaluation Mode |
+| impact on dependent services visible | Out of scope — Simulation Mode |
+| new dependencies or interfaces shown | Out of scope — Simulation Mode |
+| cascade of effects through system visible | Out of scope — Simulation Mode |
+| affected components clearly identified | Out of scope — Simulation Mode |
+
+## Verdict
+
+**PASS.** The understanding-modes spec is a vision document whose three modes are all
+explicitly excluded from the prototype scope. No implementation is required or expected.
+The sole deliverable — fixing the pre-existing direction-derivation check failure — was
+executed correctly with accurate sign-chain comments. All 17 non-structural checks pass.
