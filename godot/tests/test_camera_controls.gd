@@ -89,7 +89,7 @@ func test_orbit_horizontal_drag_changes_phi() -> bool:
 	motion.position = Vector2(150.0, 100.0)
 	cam._handle_motion(motion)
 
-	# _phi should have changed by -50 * orbit_speed
+	# drag right 50px → delta.x = +50 → _phi -= delta.x * orbit_speed → phi decreases → phi != initial_phi ✓
 	return cam._phi != initial_phi
 
 
@@ -111,6 +111,7 @@ func test_orbit_vertical_drag_changes_theta() -> bool:
 	motion.position = Vector2(100.0, 80.0)
 	cam._handle_motion(motion)
 
+	# drag up 20px (screen Y: 100→80) → delta.y = -20 → _theta -= delta.y * orbit_speed → theta increases → theta != initial_theta ✓
 	return cam._theta != initial_theta
 
 
