@@ -12,7 +12,7 @@
 ##     GIVEN any camera position
 ##     WHEN the user drags in any direction
 ##     THEN the scene moves in the same direction as the drag
-##         (i.e. dragging right shifts pivot right; dragging left shifts pivot left)
+##         (i.e. dragging left reveals content to the right, as in Google Maps)
 ##
 ## Requirement: Zoom Toward Mouse Cursor
 ##   Scenario: Zooming into a specific component
@@ -96,57 +96,100 @@ func test_lmb_pan_moves_pivot() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Non-Inverted Movement
+# Non-Inverted Movement — Map-Grab Model (Google Maps)
 # THEN the scene moves in the same direction as the drag
 # AND the movement direction matches the drag direction (not inverted)
 #
-# In a headless test global_transform is identity → basis.x = (1,0,0).
-# The camera pans the pivot in the camera's local right/forward direction,
-# matching the drag direction (non-inverted).
+# Map-grab (Google Maps) model: the pivot moves OPPOSITE to drag direction so
+# that scene content follows the drag.  In headless mode global_transform is
+# identity → basis.x = (1,0,0), basis.z = (0,0,1).
 #
-# Sign derivation — drag right:
-#   drag right → delta.x = +50 → _pivot += right(1,0,0) * +50 * pan_amount
-#   → pivot.x increases → viewport center moves right → pivot.x > initial_x ✓
+# Implementation: _pivot -= right * delta.x * pan_amount
+#                 _pivot -= forward * delta.y * pan_amount
 # ---------------------------------------------------------------------------
 
-func test_pan_drag_right_increases_pivot_x() -> bool:
+func test_pan_drag_right_decreases_pivot_x() -> bool:
 	var cam = _make_cam()
 	var initial_x: float = cam._pivot.x
 
 	_press_lmb(cam, Vector2(100.0, 100.0))
 	_move_mouse(cam, Vector2(150.0, 100.0))  # drag right → delta.x = +50
 
-	# drag right → delta.x = +50 → pivot.x increases ✓
-	return cam._pivot.x > initial_x
+	# Map-grab sign derivation — drag right:
+	#   drag right → delta.x = +50 → _pivot -= right(1,0,0) * +50 * pan_amount
+	#   → pivot.x decreases → camera looks left → scene shifts right on screen
+	#   → content from the left enters view ✓  (scene moves right = same direction as drag)
+	return cam._pivot.x < initial_x
 
 
-func test_pan_drag_left_decreases_pivot_x() -> bool:
+func test_pan_drag_left_increases_pivot_x() -> bool:
 	var cam = _make_cam()
 	var initial_x: float = cam._pivot.x
 
 	_press_lmb(cam, Vector2(100.0, 100.0))
 	_move_mouse(cam, Vector2(50.0, 100.0))  # drag left → delta.x = -50
 
-	# drag left → delta.x = -50 → pivot.x decreases ✓
-	return cam._pivot.x < initial_x
+	# Map-grab sign derivation — drag left:
+	#   drag left → delta.x = -50 → _pivot -= right(1,0,0) * (-50) * pan_amount
+	#   → pivot.x increases → camera looks right → scene shifts left on screen
+	#   → content from the right enters view ✓  (spec: "dragging left reveals content to the right")
+	return cam._pivot.x > initial_x
 
 
-## Spec: "THEN the scene moves in the same direction as the drag."
-## A drag to the right shifts the pivot (and therefore the viewport center) to the right.
-## A drag to the left shifts the pivot left.
-## This test verifies the directional alignment between drag and pivot movement.
+## Spec: "THEN the scene moves in the same direction as the drag
+##        (i.e. dragging left reveals content to the right, as in Google Maps)"
+##
+## Map-grab model: a right drag reveals content from the left.
 func test_drag_direction_matches_view_movement() -> bool:
-	# Sign derivation:
-	#   drag right → delta.x = +50 → _pivot += right(1,0,0) * +50 * pan_amount
-	#   → pivot.x > 0 (increases from initial 0) → viewport moved right ✓
 	var cam = _make_cam()
 	var initial_x: float = cam._pivot.x  # starts at 0.0
 
 	_press_lmb(cam, Vector2(100.0, 100.0))
 	_move_mouse(cam, Vector2(150.0, 100.0))  # drag right 50 px → delta.x = +50
 
-	# Pivot.x must be strictly greater than initial: right drag → pivot moves right ✓
-	return cam._pivot.x > initial_x
+	# Map-grab sign derivation — drag right:
+	#   drag right → delta.x = +50 → _pivot -= right(1,0,0) * +50 * pan_amount
+	#   → pivot.x decreases below initial_x → camera looks left → scene shifts right on screen
+	#   → content from the left enters view ✓  (scene moves in same direction as drag)
+	return cam._pivot.x < initial_x
+
+
+## Spec: "Dragging up moves the view up."
+## In headless mode global_transform is identity → forward = basis.z = (0,0,1).
+##
+## Map-grab sign derivation — drag down (screen Y increases):
+##   drag down → delta.y = +50 → _pivot -= forward(0,0,1) * +50 * pan_amount
+##   → pivot.z decreases → camera looks toward -Z → scene shifts toward +Z on screen
+##   → content from the -Z side enters view ✓
+func test_pan_drag_down_decreases_pivot_z() -> bool:
+	var cam = _make_cam()
+	var initial_z: float = cam._pivot.z
+
+	_press_lmb(cam, Vector2(100.0, 100.0))
+	_move_mouse(cam, Vector2(100.0, 150.0))  # drag down → delta.y = +50
+
+	# drag down → delta.y = +50 → _pivot -= forward(0,0,1) * +50 * pan_amount
+	# → pivot.z decreases → scene shifts downward on screen, content from above enters view ✓
+	return cam._pivot.z < initial_z
+
+
+## Spec: "Dragging up moves the view up."
+## In headless mode global_transform is identity → forward = basis.z = (0,0,1).
+##
+## Map-grab sign derivation — drag up (screen Y decreases):
+##   drag up → delta.y = -50 → _pivot -= forward(0,0,1) * (-50) * pan_amount
+##   → pivot.z increases → camera looks toward +Z → scene shifts toward -Z on screen
+##   → content from the +Z side enters view ✓
+func test_pan_drag_up_increases_pivot_z() -> bool:
+	var cam = _make_cam()
+	var initial_z: float = cam._pivot.z
+
+	_press_lmb(cam, Vector2(100.0, 100.0))
+	_move_mouse(cam, Vector2(100.0, 50.0))  # drag up → delta.y = -50
+
+	# drag up → delta.y = -50 → _pivot -= forward(0,0,1) * (-50) * pan_amount
+	# → pivot.z increases → scene shifts upward on screen, content from below enters view ✓
+	return cam._pivot.z > initial_z
 
 
 # ---------------------------------------------------------------------------
@@ -376,8 +419,8 @@ func test_theta_clamped_at_maximum() -> bool:
 
 func test_pan_proportional_to_drag_speed() -> bool:
 	# Proportionality: a larger drag distance produces a proportionally larger pivot shift.
-	# drag 10px → delta.x=10 → pivot += right * 10 * pan_amount
-	# drag 50px → delta.x=50 → pivot += right * 50 * pan_amount → move2 > move1 ✓
+	# drag 10px → delta.x=10 → pivot -= right * 10 * pan_amount → |pivot.x| = 10 * pan_amount
+	# drag 50px → delta.x=50 → pivot -= right * 50 * pan_amount → |pivot.x| = 50 * pan_amount → move2 > move1 ✓
 	var cam1 = _make_cam()
 	var cam2 = _make_cam()
 
@@ -391,6 +434,6 @@ func test_pan_proportional_to_drag_speed() -> bool:
 	_move_mouse(cam2, Vector2(150.0, 100.0))
 	var move2: float = cam2._pivot.length()
 
-	# small drag 10px → delta.x = 10 → pivot offset = 10 * pan_amount
-	# large drag 50px → delta.x = 50 → pivot offset = 50 * pan_amount → move2 > move1 ✓
+	# small drag 10px → |pivot offset| = 10 * pan_amount
+	# large drag 50px → |pivot offset| = 50 * pan_amount → move2 > move1 ✓
 	return move2 > move1
