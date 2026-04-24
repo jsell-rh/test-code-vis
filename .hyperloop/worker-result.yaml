@@ -125,3 +125,6 @@ All 5 MUST requirements are implemented with behavioral GDScript tests in
 with a concrete assertion on runtime property values.
 
 **Verdict: PASS**
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
