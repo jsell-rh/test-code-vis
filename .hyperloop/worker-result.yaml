@@ -2,7 +2,7 @@
 verdict: pass
 ---
 
-## Worker: task-023 (NFR spec)
+## Reviewer: task-023 (NFR spec — independent review)
 ## Branch: hyperloop/task-023
 ## Spec: specs/prototype/nfr.spec.md
 ## Date: 2026-04-24
@@ -11,19 +11,28 @@ verdict: pass
 
 ## Scope Check Output
 
+```
 OK: No prohibited (not-in-scope) features detected.
+```
+
+(Verified independently: `bash .hyperloop/checks/check-not-in-scope.sh` exits 0.)
 
 ---
 
-## All-Checks Run
+## Checks Sync
 
-Synced `.hyperloop/checks/` from `main` before running (pulled new check-gdscript-test-bool-return.sh). All 19 checks exit 0:
+Ran `git checkout main -- .hyperloop/checks/` before executing `run-all-checks.sh`.
+All 19 check scripts present after sync; `check-checks-in-sync.sh` confirms.
+
+---
+
+## run-all-checks.sh Output (verbatim, trimmed — Godot leak WARNINGs omitted)
 
 ```
 === run-all-checks.sh ===
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-023' has 30 commit(s) above main.
+OK: Branch 'hyperloop/task-023' has 31 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -44,17 +53,6 @@ SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in god
 [EXIT 0]
 
 --- check-direction-test-derivations.sh ---
-OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
-OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
-OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
-OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
-OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_increases_pivot_x — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_decreases_pivot_x — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
-
 OK: All 10 direction/sign-convention test(s) contain derivation comments.
 [EXIT 0]
 
@@ -102,7 +100,7 @@ Linting extractor...
 All checks passed!
 8 files already formatted
 Running extractor tests...
-98 passed in 0.17s
+98 passed in 0.16s
 Extractor checks passed.
 [EXIT 0]
 
@@ -138,58 +136,74 @@ RESULT: ALL PASS
 
 ### Scenario: Engine version
 
-| THEN clause | Test function | Assessment |
+| THEN clause | Test function | Predicate verified |
 |---|---|---|
-| "opens in Godot 4.6.x" | `test_engine_version.gd::test_project_godot_declares_46_feature` | Reads project.godot via FileAccess.open()+get_as_text(); asserts content.contains("4.6") ✓ |
-| "all scripts use GDScript" | `test_engine_version.gd::test_scripts_dir_contains_only_gdscript` | DirAccess iterates ALL files in res://scripts/, asserts each ends with ".gd" (iteration) ✓ |
-| "API calls valid for Godot 4.6" | `test_engine_version.gd::test_file_access_get_as_text_returns_non_empty_string` | Exercises FileAccess.get_as_text() (Godot 4.x API); confirms return is non-empty ✓ |
+| "opens in Godot 4.6.x" | `test_engine_version.gd::test_project_godot_declares_46_feature` | Reads project.godot via FileAccess.open()+get_as_text(); asserts `content.contains("4.6")`. Also verified by `test_godot_version.gd::test_project_declares_godot_46` (Pattern-2 suite, same predicate). ✓ |
+| "all scripts use GDScript" | `test_engine_version.gd::test_scripts_dir_contains_only_gdscript` | DirAccess iterates ALL files in `res://scripts/`; asserts each ends with `.gd`. Iteration predicate satisfied. ✓ |
+| "API calls valid for Godot 4.6" | `test_engine_version.gd::test_file_access_get_as_text_returns_non_empty_string` | Exercises `FileAccess.get_as_text()` (Godot 4.x API) directly and confirms non-empty return. Also `test_godot_version.gd::test_main_uses_godot4_fileaccess_api` confirms `main.gd` uses the 4.x API and not deprecated `File.new()/read_as_text()`. ✓ |
+
+**Note on `test_godot_version.gd`:** This is a Pattern-2 suite (no `var _test_failed`; tests return `bool`). The runner's Pattern-2 path handles these correctly — `result == true` → PASS, otherwise FAIL. `check-gdscript-test-bool-return.sh` only audits Pattern-1 suites for inert bool-returning tests; Pattern-2 is the correct form here.
 
 ### Scenario: Running the extractor
 
-| THEN clause | Test function | Assessment |
+| THEN clause | Test function | Predicate verified |
 |---|---|---|
-| "runs as a standalone CLI tool" | `extractor/tests/test_cli.py::TestCliEntryPoint::test_main_produces_json_output` | Calls main([str(src), "--output", str(output)]), asserts rc==0 and JSON has nodes/edges/metadata ✓ |
-| "no dependencies beyond stdlib" | `extractor/tests/test_cli.py::TestStdlibOnlyImports::test_extractor_uses_only_stdlib_imports` | AST-walks every .py in extractor/, asserts every import is in sys.stdlib_module_names ✓ |
+| "runs as a standalone CLI tool" | `extractor/tests/test_cli.py::TestCliEntryPoint::test_main_produces_json_output` | Calls `main([str(src), "--output", str(output)])`, asserts `rc == 0` and output has `nodes`/`edges`/`metadata`. ✓ |
+| "no dependencies beyond stdlib (and tree-sitter/ast)" | `extractor/tests/test_cli.py::TestStdlibOnlyImports::test_extractor_uses_only_stdlib_imports` | AST-walks every `.py` in `extractor/`; asserts every import top-level name is in `sys.stdlib_module_names` or the `extractor` package itself. ✓ |
 
 ### Scenario: Decoupled pipeline
 
 | THEN clause | Coverage | Assessment |
 |---|---|---|
-| "does not need access to extractor or source codebase" | All Godot tests use inline Dictionary fixtures; no extractor call sites in godot/ | Architectural: confirmed no extractor code in godot/scripts/ ✓ |
-| "JSON file is self-contained" | Same fixture-based test approach | Confirmed ✓ |
+| "Godot does not need access to extractor or source codebase" | All Godot tests use inline Dictionary fixtures; `godot/` contains no extractor imports or calls | Architectural: confirmed by grepping — no extractor code in `godot/scripts/`. ✓ |
+| "JSON file is self-contained" | Same fixture-based test approach; scene_graph_loader tests parse JSON fixtures without extractor | Confirmed. ✓ |
 
 ### Scenario: Running the prototype (Desktop Platform)
 
 | THEN clause | Coverage | Assessment |
 |---|---|---|
-| "runs natively without browser, container, or VM" | No Dockerfile, no web export preset, no HTML5 in project.godot | PASS-WITH-NOTE: physically untestable in CI; architecturally confirmed ✓ |
+| "runs natively without browser, container, or VM" | No Dockerfile, no web export preset, no HTML5 in project.godot | PASS-WITH-NOTE: physically untestable in headless CI. Architectural evidence: `project.godot` has no `config/features` entry for `"Web"`, no Dockerfile in repo root. ✓ |
 
-### Scenario: Smooth navigation (Performance)
+### Scenario: Smooth navigation (Performance at Kartograph Scale)
 
 | THEN clause | Test function | Assessment |
 |---|---|---|
-| "frame rate > 30fps" | `test_nfr_scale.gd::test_kartograph_scale_build_produces_world_positions` | PASS-WITH-NOTE: FPS untestable headless; scene builds correctly at 60-node kartograph scale ✓ |
-| "no perceptible stutter or pop-in" | `test_spatial_structure.gd::test_lod_integration_far_hides_modules_in_built_scene` | PASS-WITH-NOTE: LOD system verified; "perceptible" requires live render ✓ |
+| "frame rate remains above 30fps" | `test_nfr_scale.gd::test_kartograph_scale_build_produces_world_positions` | PASS-WITH-NOTE: FPS measurement requires live render pipeline, unavailable in headless. Scale correctness verified: 60-node kartograph fixture builds without error and produces all world positions. ✓ |
+| "no perceptible stutter or pop-in" | `test_spatial_structure.gd::test_lod_integration_far_hides_modules_in_built_scene` | PASS-WITH-NOTE: "perceptible" is subjective real-time metric. LOD system present and tested; modules/edges hidden by distance threshold. ✓ |
 
 ### Scenario: Pivoting after prototype (Disposability)
 
-Non-testable SHOULD-level process statements. No lock-in detected. JSON is only interface. ✓
+SHOULD-level process statement. No testable behavioral clause. No lock-in artifacts found. JSON is the sole inter-component interface. ✓
 
 ---
 
-## Untestable THEN-Clauses
+## Untestable THEN-Clauses (Classified per Guidelines)
 
-**THEN "runs natively without browser, container, or VM dependencies"**
-- Why untestable: No render pipeline in headless CI; "native" execution identity cannot be asserted from within the process.
-- Architectural evidence: `project.godot` contains no HTML5/web export preset, no Dockerfile exists, no `config/features` entry for "Web".
+**"runs natively without browser, container, or VM dependencies"**
+- Why untestable: "Native" execution identity cannot be asserted from within the process in headless CI.
+- Architectural evidence: no HTML5 export, no Dockerfile, no VM config.
+- Classification: PASS-WITH-NOTE (untestable, not FAIL).
 
-**THEN "frame rate remains above 30fps"**
-- Why untestable: FPS measurement requires a live render pipeline; headless Godot has no frame timing.
-- Architectural evidence: LOD system (lod_manager.gd) is present and tested, reducing node count at distance; scene builds at 60-node kartograph scale without error.
+**"frame rate remains above 30fps"**
+- Why untestable: FPS measurement requires a live render pipeline; headless Godot provides no frame timing.
+- Architectural evidence: LOD system tested at kartograph scale; scene builds in < 1 second with 60 nodes.
+- Classification: PASS-WITH-NOTE.
 
-**THEN "no perceptible stutter or pop-in"**
-- Why untestable: "Perceptible" is a subjective real-time render quality metric.
-- Architectural evidence: LOD hides modules and edges by distance threshold (tested in test_spatial_structure.gd), preventing pop-in of offscreen geometry.
+**"no perceptible stutter or pop-in"**
+- Why untestable: Subjective real-time render quality metric.
+- Architectural evidence: LOD hides modules/edges at distance thresholds (tested).
+- Classification: PASS-WITH-NOTE.
+
+---
+
+## Commit Trailers
+
+All implementation commits carry:
+```
+Spec-Ref: specs/prototype/nfr.spec.md@e2cac130819f13929ab13e324411ac7a23d66b33
+Task-Ref: task-023
+```
+Verified via `git log main..HEAD --format="%H %s%n%b"`.
 
 ---
 
@@ -198,7 +212,7 @@ Non-testable SHOULD-level process statements. No lock-in detected. JSON is only 
 | # | Requirement | Status |
 |---|---|---|
 | 1 | Godot 4.6 Engine | COVERED |
-| 2 | Python Extractor | COVERED |
+| 2 | Python Extractor (CLI + stdlib-only) | COVERED |
 | 3 | JSON Interface Contract | COVERED |
 | 4 | Desktop Platform | COVERED (PASS-WITH-NOTE: untestable in CI) |
 | 5 | Performance at Kartograph Scale | COVERED (PASS-WITH-NOTE: FPS untestable in CI) |
@@ -207,8 +221,8 @@ Non-testable SHOULD-level process statements. No lock-in detected. JSON is only 
 - 19/19 check scripts exit 0 (synced from main, run fresh)
 - 99 GDScript behavioral tests pass
 - 98 Python extractor tests pass
-- All MUST requirements implemented and covered by tests
 - No scope violations
-- Commit trailers present
+- Commit trailers present on all implementation commits
+- No prohibited features detected (independently verified)
 
 **VERDICT: PASS**
