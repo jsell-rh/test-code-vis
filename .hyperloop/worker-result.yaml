@@ -1,0 +1,405 @@
+---
+verdict: pass
+---
+
+## Task: task-027 — UX Polish (specs/prototype/ux-polish.spec.md)
+
+Implementation of smooth camera interaction: LMB pan, non-inverted movement,
+zoom toward cursor, orbit around mouse point, and smooth camera transitions.
+
+The camera_controller.gd implements all five UX polish requirements. This task
+adds two missing vertical-direction pan tests (drag-up and drag-down) that
+cover the spec requirement "Dragging up moves the view up" — previously only
+horizontal pan (left/right) was exercised.
+
+## Not In Scope Checklist
+
+Per specs/prototype/prototype-scope.spec.md § "Not In Scope":
+- Conformance mode (spec overlay comparison): NOT implemented
+- Evaluation mode (architectural quality assessment): NOT implemented
+- Simulation mode (hypothetical change impact): NOT implemented
+- Data flow visualization: NOT implemented
+- Moldable views (LLM-powered question-driven views): NOT implemented
+- Spec extraction: NOT implemented
+- First-person navigation (WASD / fly-cam): NOT implemented
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+## THEN→Test Mapping
+
+Every THEN-clause from specs/prototype/ux-polish.spec.md mapped to its covering test:
+
+| THEN-clause | Tests | Verdict |
+|---|---|---|
+| THEN the camera pans in the direction of the drag | test_lmb_pan_moves_pivot | PASS |
+| AND the movement direction matches the drag direction (not inverted) | test_pan_drag_right_increases_pivot_x, test_pan_drag_left_decreases_pivot_x | PASS |
+| THEN the scene moves in the same direction as the drag | test_drag_direction_matches_view_movement, test_pan_drag_down_increases_pivot_z, test_pan_drag_up_decreases_pivot_z | PASS |
+| THEN the view zooms toward the point under the cursor | test_zoom_toward_cursor_shifts_pivot_toward_cursor | PASS |
+| AND the component under the cursor stays under the cursor during the zoom | test_component_stays_under_cursor_on_zoom_in, test_zoom_cursor_at_pivot_does_not_shift_pivot | PASS |
+| THEN the view zooms out from the point under the cursor | test_zoom_out_from_cursor_shifts_pivot_away | PASS |
+| THEN the camera orbits around the point under the cursor at orbit start | test_orbit_pivot_set_to_cursor_point_at_start | PASS |
+| AND the component remains at the visual center during the orbit | test_component_remains_at_visual_center_during_orbit, test_orbit_pivot_is_used_during_orbit | PASS |
+| THEN the zoom is animated smoothly (interpolated), not instantaneous | test_zoom_is_interpolated_not_instantaneous | PASS |
+| THEN the pan movement is smooth and proportional to drag speed | test_lmb_pan_moves_pivot, test_pan_proportional_to_drag_speed | PASS |
+
+## Untestable THEN-Clauses
+
+None. All THEN-clauses in the UX polish spec are mechanically testable via
+headless GDScript tests operating on the camera controller's internal state.
+
+## Check Script Results
+
+=== run-all-checks.sh ===
+
+--- check-branch-adds-source-files.sh ---
+OK: Branch adds/modifies 1 source file(s) outside .hyperloop/:
+  godot/tests/test_ux_polish.gd
+[EXIT 0]
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-027' has 1 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-compound-coverage-not-falsified.sh ---
+OK: check-compound-then-clause-coverage.sh exits 0 — no cross-validation needed.
+[EXIT 0]
+
+--- check-compound-then-clause-coverage.sh ---
+OK: 'AND the movement direction matches the drag direction (not inverted)' cites 2 test(s) for compound clause.
+OK: 'AND the component under the cursor stays under the cursor during the zoom' cites 2 test(s) for compound clause.
+OK: 'AND the component remains at the visual center during the orbit' cites 2 test(s) for compound clause.
+OK: 'THEN the pan movement is smooth and proportional to drag speed' cites 2 test(s) for compound clause.
+OK: All 4 compound THEN-clause(s) cite multiple tests.
+[EXIT 0]
+
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+      This check only applies to tasks that implement a view-spec consumer.
+[EXIT 0]
+
+--- check-desktop-platform-tested.sh ---
+INFO: Desktop/native-platform constraint detected in spec(s):
+  specs/prototype/nfr.spec.md
+OK: OS.has_feature() test(s) found covering desktop-platform constraint:
+  godot/tests/test_desktop_platform.gd
+[EXIT 0]
+
+--- check-direction-test-derivations.sh ---
+OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
+OK: godot/tests/test_system_purpose.gd :: test_dependency_direction_is_encoded_in_edges — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_increases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_decreases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_down_increases_pivot_z — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_up_decreases_pivot_z — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
+
+OK: All 13 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
+
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+      Producer (build_prompt / parse_response) found: none
+      Consumer (apply_spec / render_spec) found: none
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (9 suite(s) checked)
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM→view-spec pipeline.
+[EXIT 0]
+
+--- check-reflects-mapping-consistency.sh ---
+SKIP: No 'reflect(s)' THEN-clauses found in mapping table.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+
+--- check-then-test-mapping.sh ---
+OK: 'test_component_remains_at_visual_center_during_orbit' found in codebase
+OK: 'test_component_stays_under_cursor_on_zoom_in' found in codebase
+OK: 'test_drag_direction_matches_view_movement' found in codebase
+OK: 'test_lmb_pan_moves_pivot' found in codebase
+OK: 'test_orbit_pivot_is_used_during_orbit' found in codebase
+OK: 'test_orbit_pivot_set_to_cursor_point_at_start' found in codebase
+OK: 'test_pan_drag_down_increases_pivot_z' found in codebase
+OK: 'test_pan_drag_left_decreases_pivot_x' found in codebase
+OK: 'test_pan_drag_right_increases_pivot_x' found in codebase
+OK: 'test_pan_drag_up_decreases_pivot_z' found in codebase
+OK: 'test_pan_proportional_to_drag_speed' found in codebase
+OK: 'test_zoom_cursor_at_pivot_does_not_shift_pivot' found in codebase
+OK: 'test_zoom_is_interpolated_not_instantaneous' found in codebase
+OK: 'test_zoom_out_from_cursor_shifts_pivot_away' found in codebase
+OK: 'test_zoom_toward_cursor_shifts_pivot_toward_cursor' found in codebase
+OK: All 15 mapped test function(s) verified in codebase
+[EXIT 0]
+
+--- extractor-lint.sh ---
+Linting extractor...
+All checks passed!
+8 files already formatted
+Running extractor tests...
+........................................................................ [ 65%]
+......................................                                   [100%]
+110 passed in 0.16s
+Extractor checks passed.
+[EXIT 0]
+
+--- godot-compile.sh ---
+Compiling Godot project...
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 3 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Found 16 GDScript test file(s) in godot/tests/.
+Running custom headless test runner...
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+
+=== code-vis GDScript Tests ===
+
+[test_scene_graph_loader.gd]
+  PASS: test_nodes_list_is_returned
+  PASS: test_node_count_matches_input
+  PASS: test_node_has_id_field
+  PASS: test_node_has_name_field
+  PASS: test_node_has_type_field
+  PASS: test_node_top_level_has_null_parent
+  PASS: test_node_module_parent_references_bounded_context
+  PASS: test_node_has_metrics_field
+  PASS: test_node_has_position_field
+  PASS: test_node_has_size_field
+  PASS: test_edges_list_is_returned
+  PASS: test_edge_count_matches_input
+  PASS: test_edge_has_source_field
+  PASS: test_edge_has_target_field
+  PASS: test_edge_has_type_field
+  PASS: test_edge_direction_preserved_source_to_target
+  PASS: test_cross_context_edge_type_is_cross_context
+  PASS: test_internal_edge_type_is_internal
+  PASS: test_edge_types_are_distinguishable
+  PASS: test_metadata_is_returned
+  PASS: test_empty_graph_is_handled_gracefully
+  PASS: test_missing_top_level_keys_default_to_empty
+  PASS: test_spec_node_type_is_preserved
+  PASS: test_spec_nodes_have_id_prefixed_with_spec
+
+[test_node_renderer.gd]
+  PASS: test_node_rendered_at_json_position
+  PASS: test_second_node_rendered_at_json_position
+  PASS: test_no_layout_recomputed_in_godot
+  PASS: test_each_json_node_becomes_a_scene_tree_child
+
+[test_scene_graph_loading.gd]
+  PASS: test_volumes_created_for_each_node
+  PASS: test_mesh_instances_exist_in_anchors
+  PASS: test_edge_mesh_instances_created
+  PASS: test_anchor_positions_match_json
+  PASS: test_labels_are_billboard_and_readable
+
+[test_containment_rendering.gd]
+  PASS: test_bounded_context_is_translucent
+  PASS: test_module_is_opaque
+  PASS: test_module_parented_inside_context
+  PASS: test_bounded_context_larger_than_module
+  PASS: test_bounded_context_cull_disabled
+
+[test_dependency_rendering.gd]
+  PASS: test_edge_line_mesh_created
+  PASS: test_direction_indicator_cone_created
+  PASS: test_direction_cone_near_target
+  PASS: test_cross_context_cone_is_orange
+
+[test_size_encoding.gd]
+  PASS: test_large_module_has_bigger_mesh
+  PASS: test_mesh_sizes_proportional_to_metric
+
+[test_camera_controls.gd]
+  PASS: test_initial_theta_is_near_top_down
+  PASS: test_initial_distance_is_positive
+  PASS: test_scroll_up_decreases_distance
+  PASS: test_scroll_down_increases_distance
+  PASS: test_orbit_horizontal_drag_changes_phi
+  PASS: test_orbit_vertical_drag_changes_theta
+  PASS: test_set_pivot_updates_state
+  PASS: test_zoom_clamped_at_minimum
+
+[test_engine_version.gd]
+  PASS: test_project_godot_declares_46_feature
+  PASS: test_project_godot_config_features_line
+  PASS: test_project_does_not_declare_csharp
+  PASS: test_file_access_get_as_text_returns_non_empty_string
+  PASS: test_scripts_dir_contains_only_gdscript
+
+[test_godot_version.gd]
+  PASS: test_project_declares_godot_46
+  PASS: test_main_script_is_gdscript
+  PASS: test_main_uses_godot4_fileaccess_api
+
+[test_spatial_structure.gd]
+  PASS: test_camera_supports_zoom_in
+  PASS: test_camera_supports_zoom_out
+  PASS: test_camera_supports_orbit
+  PASS: test_camera_get_distance_returns_current_distance
+  PASS: test_spatial_layout_creates_node_per_structural_element
+  PASS: test_distinct_contexts_occupy_distinct_regions
+  PASS: test_context_boundary_is_visually_distinct_translucent
+  PASS: test_containment_expressed_as_scene_tree_parenting
+  PASS: test_dependency_expressed_as_visible_connection
+  PASS: test_far_distance_shows_only_bounded_contexts
+  PASS: test_far_distance_hides_all_edges
+  PASS: test_medium_distance_shows_modules
+  PASS: test_medium_distance_shows_cross_context_edges_only
+  PASS: test_near_distance_shows_all_nodes
+  PASS: test_near_distance_shows_internal_edges_as_fine_detail
+  PASS: test_lod_node_entries_populated_after_build
+  PASS: test_lod_edge_entries_populated_after_build
+  PASS: test_lod_integration_far_hides_modules_in_built_scene
+
+[test_ux_polish.gd]
+  PASS: test_lmb_pan_moves_pivot
+  PASS: test_pan_drag_right_increases_pivot_x
+  PASS: test_pan_drag_left_decreases_pivot_x
+  PASS: test_drag_direction_matches_view_movement
+  PASS: test_pan_drag_down_increases_pivot_z
+  PASS: test_pan_drag_up_decreases_pivot_z
+  PASS: test_zoom_toward_cursor_shifts_pivot_toward_cursor
+  PASS: test_component_stays_under_cursor_on_zoom_in
+  PASS: test_zoom_out_from_cursor_shifts_pivot_away
+  PASS: test_zoom_cursor_at_pivot_does_not_shift_pivot
+  PASS: test_zoom_out_increases_target_distance
+  PASS: test_orbit_pivot_set_to_cursor_point_at_start
+  PASS: test_orbit_pivot_is_used_during_orbit
+  PASS: test_component_remains_at_visual_center_during_orbit
+  PASS: test_zoom_is_interpolated_not_instantaneous
+  PASS: test_target_distance_clamped_at_minimum
+  PASS: test_target_distance_clamped_at_maximum
+  PASS: test_theta_clamped_at_minimum
+  PASS: test_theta_clamped_at_maximum
+  PASS: test_pan_proportional_to_drag_speed
+
+[test_system_purpose.gd]
+  PASS: test_bounded_contexts_are_structurally_identifiable
+  PASS: test_node_names_are_labelled_for_identification
+  PASS: test_label_billboard_enabled_for_readability
+  PASS: test_label_pixel_size_positive_for_readability
+  PASS: test_dependencies_are_visible_as_connections
+  PASS: test_cross_context_and_internal_edges_are_distinguishable
+  PASS: test_dependency_direction_is_encoded_in_edges
+  PASS: test_modules_are_contained_within_bounded_contexts
+  PASS: test_spec_rendered_as_intended_design
+  PASS: test_code_rendered_as_realized_design
+  PASS: test_spec_and_code_coexist_for_inspection
+  PASS: test_build_spec_comparison_available
+  PASS: test_architectural_soundness_assessable
+  PASS: test_change_impact_explorable
+
+[test_understanding_overlay.gd]
+  PASS: test_aligned_nodes_displayed_as_separate_components
+  PASS: test_aligned_node_receives_aligned_color
+  PASS: test_divergent_node_receives_divergent_color
+  PASS: test_divergent_node_has_divergence_label
+  PASS: test_divergence_label_has_billboard_and_pixel_size
+  PASS: test_coupling_between_services_apparent
+  PASS: test_critical_component_centrality_apparent
+  PASS: test_critical_color_distinct_from_normal
+  PASS: test_quality_overlay_independent_of_alignment
+  PASS: test_split_impact_on_dependents_visible
+  PASS: test_split_shows_required_new_interfaces
+  PASS: test_split_label_has_billboard_and_pixel_size
+  PASS: test_failure_cascade_effects_visible
+  PASS: test_failure_affected_components_clearly_identified
+  PASS: test_failure_label_has_billboard_and_pixel_size
+
+[test_understanding_modes.gd]
+  PASS: test_aligned_nodes_detected_as_separate
+  PASS: test_aligned_nodes_have_annotation_in_scene
+  PASS: test_divergent_nodes_detected
+  PASS: test_divergent_nodes_annotated_as_merged
+  PASS: test_tightly_coupled_pair_detected
+  PASS: test_coupled_nodes_highlighted
+  PASS: test_central_node_detected_as_critical
+  PASS: test_critical_node_annotated_with_spof_risk
+  PASS: test_coupling_detected_despite_perfect_alignment
+  PASS: test_split_dependents_detected
+  PASS: test_split_new_interfaces_shown
+  PASS: test_failure_cascade_detected
+  PASS: test_failure_affected_nodes_highlighted
+  PASS: test_annotation_label3d_has_billboard_and_pixel_size
+
+[test_nfr_scale.gd]
+  PASS: test_kartograph_scale_anchor_count
+  PASS: test_kartograph_scale_context_anchors_exist
+  PASS: test_kartograph_scale_module_anchors_exist
+  PASS: test_kartograph_scale_build_produces_world_positions
+
+[test_desktop_platform.gd]
+  PASS: test_not_running_in_web_browser
+  PASS: test_not_running_on_android
+  PASS: test_not_running_on_ios
+  PASS: test_project_godot_has_no_web_export_preset
+
+Results: 149 passed, 0 failed
+GDScript behavioral tests passed.
+[EXIT 0]
+
+=== Summary: 26 check(s) run ===
+RESULT: ALL PASS
