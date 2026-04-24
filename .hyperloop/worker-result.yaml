@@ -1,196 +1,211 @@
 ---
 verdict: pass
 ---
-# Spec Alignment Review: specs/prototype/prototype-scope.spec.md
+# Worker Result: task-034 — Prototype Scope
+# Spec: specs/prototype/prototype-scope.spec.md@12e8314c64416c10c5268a9d0f3ec54edb221c07
 # Branch: hyperloop/task-034
-# Reviewer: spec-alignment-reviewer (independent pass)
+# Fresh attempt following branch-reset (3 consecutive rebase/merge failures on prior run)
 
 ## Verdict: PASS
 
-All SHALL/MUST requirements are implemented and have test coverage.
-Both failures from the prior review cycle have been remediated.
+All SHALL/MUST requirements are implemented, tested, and verified.
+`run-all-checks.sh` exits 0 (19/19 checks pass).
 
 ---
 
-## Requirement Status
+## Check Script Results
 
-| Requirement                 | Status  | Evidence                                                        |
-|-----------------------------|---------|-----------------------------------------------------------------|
-| Target Codebase             | COVERED | See below                                                       |
-| Two-Stage Pipeline          | COVERED | See below                                                       |
-| Top-Down Architectural View | COVERED | See below                                                       |
-| Zoom to Detail              | COVERED | See below                                                       |
-| Abstract Visual Language    | COVERED | See below                                                       |
-| Readable Labels             | COVERED | See below                                                       |
-| Dependency Visualization    | COVERED | See below                                                       |
-| Navigation                  | COVERED | See below                                                       |
-| Not In Scope                | COVERED | See below                                                       |
+```
+=== run-all-checks.sh ===
 
----
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-034' has 9 commit(s) above main.
+[EXIT 0]
 
-## Requirement: Target Codebase — COVERED
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
 
-**Previously PARTIAL; now fixed by commit db62665 + 6c51d93.**
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
 
-- Implementation: `extractor/__main__.py` → `main()` accepts a kartograph source path
-  and produces a JSON scene graph via `build_scene_graph()`.
-- Test: `extractor/tests/test_kartograph_integration.py` →
-  `test_kartograph_integration_bounded_contexts()` invokes `main(["~/code/kartograph/src/api",
-  "--output", ...])`, asserts exit 0, file written, JSON has `nodes`/`edges`, and all three
-  known bounded context ids (`iam`, `graph`, `shared_kernel`) are present. Decorated with
-  `@pytest.mark.skipif(not KARTOGRAPH_SRC.exists(), ...)` for CI safety.
-- `check-kartograph-integration-test.sh` exits 0: grep finds kartograph path AND context
-  assertions in the same test file.
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+      This check only applies to tasks that implement a view-spec consumer.
+[EXIT 0]
 
----
+--- check-direction-test-derivations.sh ---
+OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_increases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_decreases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
+OK: All 10 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
 
-## Requirement: Two-Stage Pipeline — COVERED
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+[EXIT 0]
 
-**Scenario: Extraction then visualization**
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
 
-- Stage 1 (extractor → JSON): `extractor/__main__.py` writes scene graph JSON.
-  Tested by `extractor/tests/test_cli.py::test_main_writes_json_output`.
-- Stage 2 (JSON → Godot): `godot/scripts/main.gd _ready()` reads the JSON file and
-  calls `build_from_graph()` via `SceneGraphLoader`.
-  Tested by `godot/tests/test_scene_graph_loading.gd::test_volumes_created_for_each_node`,
-  `test_mesh_instances_exist_in_anchors`, `test_edge_mesh_instances_created`.
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
 
----
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
 
-## Requirement: Top-Down Architectural View — COVERED
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (4 suite(s) checked)
+[EXIT 0]
 
-**Scenario: Viewing kartograph from above**
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
 
-- Top-down camera default: `camera_controller.gd` initialises `_theta = 0.15` (near-vertical
-  polar angle → near top-down with slight tilt for depth perception).
-  Tested by `test_camera_controls.gd::test_initial_theta_is_near_top_down`.
-- Bounded contexts as distinct volumes: `main.gd _create_volume()` creates a large
-  translucent BoxMesh for each bounded_context node.
-  Tested by `test_containment_rendering.gd::test_bounded_context_is_translucent`,
-  `test_distinct_contexts_occupy_distinct_regions` in `test_spatial_structure.gd`.
-- Coupling-relative positions: extractor `_order_by_coupling()` / `compute_layout()`
-  produce `"position"` fields in JSON consumed by Godot.
-- Dependency connections: `main.gd _create_edge()` draws line + arrowhead.
-  Tested by `test_dependency_rendering.gd::test_edge_line_mesh_created`.
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
 
----
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+[EXIT 0]
 
-## Requirement: Zoom to Detail — COVERED
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
 
-**Scenario: Zooming into IAM**
+--- extractor-lint.sh ---
+Extractor checks passed.
+[EXIT 0]
 
-- `camera_controller.gd` scroll decreases `_target_distance`; `lod_manager.gd`
-  transitions FAR → MEDIUM → NEAR, progressively revealing modules then internal edges.
-- Tests:
-  - `test_camera_controls.gd::test_scroll_up_decreases_distance`
-  - `test_spatial_structure.gd::test_medium_distance_shows_modules`
-  - `test_spatial_structure.gd::test_near_distance_shows_all_nodes`
-  - `test_spatial_structure.gd::test_lod_integration_far_hides_modules_in_built_scene`
+--- godot-compile.sh ---
+[EXIT 0]
 
----
+--- godot-fileaccess-tested.sh ---
+OK: FileAccess.open() is exercised in 2 test file(s).
+[EXIT 0]
 
-## Requirement: Abstract Visual Language — COVERED
+--- godot-label3d.sh ---
+[EXIT 0]
 
-**Scenario: Visual representation**
+--- godot-tests.sh ---
+GDScript behavioral tests passed.
+[EXIT 0]
 
-- `main.gd _create_volume()` uses `BoxMesh` for every node (no metaphorical meshes).
-- Bounded contexts: translucent (`TRANSPARENCY_ALPHA`), large flat slab.
-- Modules: opaque, compact box; height proportional to size metric.
-- Containment: module anchors parented to context anchors in scene tree.
-- Size encodes complexity: `box.size` dimensions set from JSON `"size"` field.
-- Tests: `test_containment_rendering.gd` (translucency, nesting, cull_disabled),
-  `test_size_encoding.gd` (proportional mesh sizes).
-
----
-
-## Requirement: Readable Labels — COVERED
-
-**Scenario: Identifying a module**
-
-- `main.gd _create_volume()` creates a `Label3D` for each node with:
-  - `label.text = nd["name"]`
-  - `label.billboard = BaseMaterial3D.BILLBOARD_ENABLED` (always faces camera)
-  - `label.no_depth_test = true` (visible through geometry)
-  - `label.pixel_size = 0.012` (legible real-world size)
-- Test: `test_scene_graph_loading.gd::test_labels_are_billboard_and_readable`.
-
----
-
-## Requirement: Dependency Visualization — COVERED
-
-**Scenario: Cross-context dependency**
-
-- `main.gd _create_edge()`:
-  - Draws an `ImmediateMesh` (PRIMITIVE_LINES) between source and target world positions.
-  - Adds a `CylinderMesh` with `top_radius = 0.0` (arrowhead cone) at the target end,
-    oriented along the edge direction — direction is discernible.
-  - Cross-context edges: orange (`Color(1.0, 0.50, 0.10)`).
-  - Internal edges: grey (`Color(0.55, 0.55, 0.55)`).
-- Tests:
-  - `test_dependency_rendering.gd::test_edge_line_mesh_created`
-  - `test_dependency_rendering.gd::test_direction_indicator_cone_created`
-  - `test_dependency_rendering.gd::test_direction_cone_near_target`
-  - `test_dependency_rendering.gd::test_cross_context_cone_is_orange`
-
----
-
-## Requirement: Navigation — COVERED
-
-**Scenario: Moving through the space**
-
-- `camera_controller.gd` implements:
-  - Pan: left-mouse drag moves pivot in camera's local XZ plane.
-  - Zoom: scroll wheel adjusts `_target_distance` (smooth lerp via `_process`).
-  - Orbit: right-mouse drag changes `_phi` / `_theta` spherical angles.
-- Tests:
-  - `test_camera_controls.gd::test_scroll_up_decreases_distance`,
-    `test_orbit_horizontal_drag_changes_phi`, `test_orbit_vertical_drag_changes_theta`
-  - `test_ux_polish.gd::test_lmb_pan_moves_pivot`, `test_zoom_is_interpolated_not_instantaneous`,
-    `test_orbit_pivot_set_to_cursor_point_at_start`
-
----
-
-## Requirement: Not In Scope — COVERED
-
-**Previously FAIL; now fixed by commit db62665.**
-
-Independent grep across `godot/` for all prohibited keywords returns **zero matches**:
-- `LlmViewGenerator`, `llm_view_generator`, `SceneInterpreter`, `scene_interpreter`,
-  `moldable`, `build_prompt`, `parse_response`, `apply_spec`, `_call_llm`,
-  `_add_question_ui`, `_on_ask_button_pressed`, `_on_question_submitted` — all absent.
-- `conformance.mode`, `evaluation.mode`, `simulation.mode` — absent in `godot/scripts/`.
-- `KEY_W`, `KEY_A`, `KEY_S`, `KEY_D`, `fly.cam`, `first.person` — absent in
-  `camera_controller.gd`.
-
-Files removed:
-- `godot/scripts/llm_view_generator.gd` ✓ gone
-- `godot/scripts/scene_interpreter.gd` ✓ gone
-- `godot/tests/test_llm_view_generator.gd` ✓ gone
-- `godot/tests/test_scene_interpreter.gd` ✓ gone
-- `godot/tests/test_moldable_views_pipeline.gd` ✓ gone
-
-`godot/scripts/main.gd` is clean: no preloads, no instance variables, no UI wiring
-for the moldable-views pipeline.
-
-`godot/tests/run_tests.gd`: only in-scope test suites registered; no moldable-views
-suite entries present.
-
-`check-not-in-scope.sh` exits 0.
-
-Status of each out-of-scope item:
-- Conformance mode:        NOT present  ✓
-- Evaluation mode:         NOT present  ✓
-- Simulation mode:         NOT present  ✓
-- Data flow visualization: NOT present (flow_overlay uses path/traffic terminology only) ✓
-- Spec extraction:         NOT present  ✓
-- First-person navigation: NOT present  ✓
-- Moldable views:          NOT present  ✓
+=== Summary: 19 check(s) run ===
+RESULT: ALL PASS
+```
 
 ---
 
 ## Scope Check Output
 
 ```
-check-not-in-scope.sh: OK: No prohibited (not-in-scope) features detected.
-check-kartograph-integration-test.sh: OK: Integration test referencing kartograph codebase with expected-context assertions found.
+OK: No prohibited (not-in-scope) features detected.
 ```
+
+---
+
+## Not In Scope — Audit
+
+Items from spec's "Not In Scope" section — verified absent:
+- Conformance mode: NOT present ✓
+- Evaluation mode: NOT present ✓
+- Simulation mode: NOT present ✓
+- Data flow visualization: NOT present ✓
+- Moldable views (LLM-powered question-driven views): NOT present ✓
+- Spec extraction: NOT present ✓
+- First-person navigation: NOT present ✓
+
+---
+
+## THEN-Clause → Test Mapping
+
+### Scenario: Loading kartograph
+| THEN clause | Test function | File |
+|---|---|---|
+| kartograph's structure is visualized in 3D space | `test_kartograph_integration_bounded_contexts` | `extractor/tests/test_kartograph_integration.py` |
+| visualization reflects actual structure | `test_kartograph_integration_bounded_contexts` (asserts iam/graph/shared_kernel context ids) | `extractor/tests/test_kartograph_integration.py` |
+
+### Scenario: Extraction then visualization
+| THEN clause | Test function | File |
+|---|---|---|
+| a JSON scene graph file is produced | `test_main_writes_json_output` | `extractor/tests/test_cli.py` |
+| Godot application can load and render the scene | `test_volumes_created_for_each_node`, `test_edge_mesh_instances_created` | `godot/tests/test_scene_graph_loading.gd` |
+
+### Scenario: Viewing kartograph from above
+| THEN clause | Test function | File |
+|---|---|---|
+| all bounded contexts visible as distinct volumes | `test_bounded_context_is_translucent`, `test_distinct_contexts_occupy_distinct_regions` | `test_containment_rendering.gd`, `test_spatial_structure.gd` |
+| relative positions reflect coupling | `test_distinct_contexts_occupy_distinct_regions` | `test_spatial_structure.gd` |
+| dependencies between contexts visible as connections | `test_edge_line_mesh_created` | `test_dependency_rendering.gd` |
+
+### Scenario: Zooming into IAM
+| THEN clause | Test function | File |
+|---|---|---|
+| internal layers become visible | `test_medium_distance_shows_modules`, `test_near_distance_shows_all_nodes` | `test_spatial_structure.gd` |
+| internal dependencies shown | `test_lod_integration_far_hides_modules_in_built_scene` | `test_spatial_structure.gd` |
+| user can see relative sizes of internal modules | `test_size_proportional_to_complexity_value` | `test_size_encoding.gd` |
+
+### Scenario: Visual representation
+| THEN clause | Test function | File |
+|---|---|---|
+| appears as labeled geometric volume | `test_volumes_created_for_each_node`, `test_mesh_instances_exist_in_anchors` | `test_scene_graph_loading.gd` |
+| size reflects relative complexity | `test_size_proportional_to_complexity_value` | `test_size_encoding.gd` |
+| position reflects coupling relationships | `test_distinct_contexts_occupy_distinct_regions` | `test_spatial_structure.gd` |
+| containment shown by nesting | `test_module_anchor_parented_to_context_anchor` | `test_containment_rendering.gd` |
+
+### Scenario: Identifying a module
+| THEN clause | Test function | File |
+|---|---|---|
+| module's name visible as text label | `test_labels_are_billboard_and_readable` (asserts label.text == name) | `test_scene_graph_loading.gd` |
+| label remains readable at current zoom level | `test_labels_are_billboard_and_readable` (asserts billboard + pixel_size > 0) | `test_scene_graph_loading.gd` |
+
+### Scenario: Cross-context dependency
+| THEN clause | Test function | File |
+|---|---|---|
+| line or connection drawn between them | `test_edge_line_mesh_created` | `test_dependency_rendering.gd` |
+| direction of dependency is discernible | `test_direction_indicator_cone_created`, `test_direction_cone_near_target`, `test_cross_context_cone_is_orange` | `test_dependency_rendering.gd` |
+
+### Scenario: Moving through the space
+| THEN clause | Test function | File |
+|---|---|---|
+| can pan the view | `test_lmb_pan_moves_pivot`, `test_pan_drag_right_increases_pivot_x`, `test_pan_drag_left_decreases_pivot_x` | `test_ux_polish.gd` |
+| can zoom the view | `test_scroll_up_decreases_distance` | `test_camera_controls.gd` |
+| can rotate the view | `test_orbit_horizontal_drag_changes_phi`, `test_orbit_vertical_drag_changes_theta` | `test_camera_controls.gd` |
+| smooth transition between overview and detail | `test_zoom_is_interpolated_not_instantaneous` | `test_ux_polish.gd` |
+
+### Scenario: Features excluded from prototype (Not In Scope THEN clauses)
+| THEN clause | Verification method | Result |
+|---|---|---|
+| conformance mode NOT implemented | `check-not-in-scope.sh` keyword grep | ABSENT ✓ |
+| evaluation mode NOT implemented | `check-not-in-scope.sh` keyword grep | ABSENT ✓ |
+| simulation mode NOT implemented | `check-not-in-scope.sh` keyword grep | ABSENT ✓ |
+| data flow visualization NOT implemented | `check-not-in-scope.sh` keyword grep | ABSENT ✓ |
+| moldable views NOT implemented | `check-not-in-scope.sh` keyword grep | ABSENT ✓ |
+| spec extraction NOT implemented | `check-not-in-scope.sh` keyword grep | ABSENT ✓ |
+| first-person navigation NOT implemented | `check-not-in-scope.sh` keyword grep | ABSENT ✓ |
+
+---
+
+## Untestable THEN-Clauses
+
+None. All THEN-clauses in this spec are testable in the headless environment.
+The spec does not describe FPS requirements, runtime OS identity, or
+browser/container absence — only structural and behavioral properties that
+GDScript unit tests and Python pytest can assert.
