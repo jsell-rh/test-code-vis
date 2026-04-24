@@ -1,166 +1,23 @@
 ---
 verdict: pass
 ---
-## Spec Alignment Review — specs/core/system-purpose.spec.md
-### Branch: hyperloop/task-028 (round 4 — post scope-check enforcement)
+## Independent Reviewer Verification — specs/core/system-purpose.spec.md
+### Branch: hyperloop/task-028 (reviewer: independent re-run, 2026-04-24)
 
 ---
 
-### Summary of Changes in This Round
+### Protocol Steps Completed
 
-Round 4 addresses a new failure introduced by an updated `check-not-in-scope.sh`
-on `main`. The script now includes keyword-based detection (sections 1c and 1d)
-that catches moldable-views code regardless of file name. Prior rounds passed
-because the check only matched specific historic filenames.
-
-Actions taken:
-- Deleted `godot/scripts/llm_view_generator.gd`
-- Deleted `godot/scripts/scene_interpreter.gd`
-- Deleted `godot/tests/test_llm_view_generator.gd`
-- Deleted `godot/tests/test_scene_interpreter.gd`
-- Deleted `godot/tests/test_moldable_views_pipeline.gd`
-- Removed all moldable-views wiring from `godot/scripts/main.gd`:
-  `LlmViewGenerator`/`SceneInterpreter` preloads, `_scene_interpreter` /
-  `_question_input` / `_ask_button` variables, `_add_question_ui()`,
-  `_on_ask_button_pressed()`, `_on_question_submitted()`, `_call_llm()`.
-- Removed moldable-views test suite entries from `godot/tests/run_tests.gd`.
-
-Checks that previously required the moldable-views code now SKIP cleanly
-(`check-pipeline-wiring.sh`, `check-coordinator-calls-pipeline.sh`,
-`check-end-to-end-integration-test.sh`) because no producer/consumer exists.
+1. Synced `.hyperloop/checks/` from main before running checks.
+2. Ran `bash .hyperloop/checks/run-all-checks.sh` — all 19 checks EXIT 0.
+3. Verified commit trailers on all implementation commits.
+4. Read `test_system_purpose.gd` and verified test bodies.
+5. Confirmed no inert (bool-returning) test functions in Pattern-1 suite.
+6. Verified THEN→test mapping for every spec THEN-clause.
 
 ---
 
-### Pattern-1 Wiring — Confirmed Correct
-
-`test_system_purpose.gd` declares `var _test_failed: bool = false`, so
-`run_tests.gd._run_one()` detects Pattern-1, resets `_test_failed`, calls each
-`test_*` method, and checks `_test_failed` afterward. All 8 test functions are
-`-> void` and signal failure exclusively through `_check()`. No bool-returning
-test functions remain.
-
----
-
-### Requirement-by-Requirement Status
-
----
-
-#### Requirement 1: Understanding Without Writing Code (SHALL)
-
-**Scenario: Architect evaluates unfamiliar system**
-
-THEN — human can correctly answer architectural questions:
-
-- **R1a (labels)** — `main.gd._create_volume()` sets `label.billboard =
-  BaseMaterial3D.BILLBOARD_ENABLED` and `label.pixel_size = 0.012` on every
-  `Label3D`; `label.text` is set to `nd["name"]`.
-  Test: `test_all_scene_nodes_have_visible_name_labels` asserts
-  `billboard == BILLBOARD_ENABLED`, `pixel_size > 0.0`, and presence of labels
-  whose text matches the node names from the fixture — via `_check()`. **COVERED**
-
-- **R1b (type visual)** — `main.gd._create_volume()` sets
-  `mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA` for `bounded_context`
-  type and leaves modules opaque.
-  Test: `test_bounded_context_nodes_distinguishable_by_type` iterates scene
-  children and `_check`s that at least one `MeshInstance3D` carries
-  `TRANSPARENCY_ALPHA`. **COVERED**
-
-AND — human can identify structural problems:
-
-- **R1c (size encoding)** — `box.size = Vector3(sz, sz * 0.2, sz)` / `Vector3(sz,
-  sz * 0.6, sz)` where `sz = float(nd["size"])` makes size-field directly encode
-  mesh extent.
-  Test: `test_node_size_grows_with_scene_graph_size_value` builds from a fixture
-  with `size: 5.0` vs `size: 1.0`, then `_check`s `big BoxMesh.size.x > small
-  BoxMesh.size.x`. **COVERED**
-
-- **R1d (coupling lines)** — `_create_edge()` builds an `ImmediateMesh` with
-  `PRIMITIVE_LINES` and adds it to the scene root.
-  Test: `test_dependency_edges_expose_coupling_in_scene` asserts an
-  `ImmediateMesh` child exists via `_check()`. **COVERED**
-
-AND — human can predict the impact of proposed changes:
-
-- **R1e (directional arrowhead)** — `_create_edge()` appends a `CylinderMesh`
-  with `top_radius = 0.0` placed at the target end, making direction discernible.
-  Test: `test_cross_context_edge_has_directional_arrowhead` scans children for a
-  `CylinderMesh` with `top_radius == 0.0` and `_check`s it was found. **COVERED**
-
-**Verdict for Requirement 1: PASS — all THEN-clauses COVERED**
-
----
-
-#### Requirement 2: Spec-Driven Context (SHALL)
-
-**Scenario: Spec and codebase loaded together**
-
-- **THEN spec is treated as intended design** — spec-extraction is out of
-  prototype scope (prototype-scope.spec.md §Not In Scope). **N/A**
-
-- **THEN codebase is treated as realized design** — `SceneGraphLoader.load_from_dict()`
-  returns `{nodes, edges, metadata}`; `main.gd._ready()` calls it on the
-  extractor JSON.
-  Test: `test_scene_graph_loader_reads_codebase_json` calls
-  `SceneGraphLoader.load_from_dict(raw)` and `_check`s `has("nodes")`,
-  `has("edges")`, and `nodes.size() == 2`. **COVERED**
-
-- **THEN relationship between them is available** — spec-overlay comparison is
-  out of prototype scope. **N/A**
-
-**Verdict for Requirement 2: PASS — in-scope THEN-clause COVERED**
-
----
-
-#### Requirement 3: Support the Architecture Feedback Loop (SHALL)
-
-**Scenario: Post-build evaluation**
-
-- **THEN human can determine whether build matches spec** — conformance mode is
-  out of prototype scope. **N/A**
-
-- **THEN human can determine whether build is architecturally sound** — `main.gd`
-  produces both size-encoded `BoxMesh` volumes and `ImmediateMesh` coupling edges
-  in the same scene.
-  Test: `test_structural_metrics_available_in_scene` `_check`s `has_size_encoded_box`
-  AND `has_edge_line` are both true from a two-node, one-edge fixture. **COVERED**
-
-- **THEN human can explore impact of potential changes** — `camera_controller.gd`
-  exposes `set_pivot`, `get_distance`, `_handle_button`, `_handle_motion`, and
-  `_zoom_toward_cursor`.
-  Test: `test_navigation_methods_exist_on_camera_controller` calls
-  `cam.has_method(...)` for each and `_check`s all five are present. **COVERED**
-
-**Verdict for Requirement 3: PASS — all in-scope THEN-clauses COVERED**
-
----
-
-### Summary Table
-
-| Requirement / THEN-clause                              | Code | Test           | Status  |
-|--------------------------------------------------------|------|----------------|---------|
-| R1 · architectural questions — labels (billboard, px)  | ✓    | ✓ (_check × 4) | COVERED |
-| R1 · architectural questions — type visual (ALPHA mat) | ✓    | ✓ (_check × 1) | COVERED |
-| R1 · identify structural problems — size encoding      | ✓    | ✓ (_check × 3) | COVERED |
-| R1 · identify structural problems — coupling lines     | ✓    | ✓ (_check × 1) | COVERED |
-| R1 · predict impact — directional arrowhead            | ✓    | ✓ (_check × 1) | COVERED |
-| R2 · spec as intended design                           | N/A  | N/A (OOS)      | N/A     |
-| R2 · codebase as realized design                       | ✓    | ✓ (_check × 3) | COVERED |
-| R2 · relationship available for inspection             | N/A  | N/A (OOS)      | N/A     |
-| R3 · build matches spec                                | N/A  | N/A (OOS)      | N/A     |
-| R3 · architecturally sound (size + coupling visible)   | ✓    | ✓ (_check × 2) | COVERED |
-| R3 · explore impact of changes (camera navigation)     | ✓    | ✓ (_check × 5) | COVERED |
-
-All SHALL requirements are either COVERED or out of prototype scope (N/A).
-No PARTIAL or MISSING items.
-
----
-
-## Scope Check Output
-OK: No prohibited (not-in-scope) features detected.
-
----
-
-## Check Script Results
+### run-all-checks.sh Output (complete, verbatim)
 
 ```
 === run-all-checks.sh ===
@@ -231,9 +88,14 @@ OK: worker-result.yaml contains a valid '## Scope Check Output' section.
 
 --- extractor-lint.sh ---
 All checks passed!
+9 files already formatted
+Running extractor tests...
+102 passed in 0.16s
+Extractor checks passed.
 [EXIT 0]
 
 --- godot-compile.sh ---
+Godot Engine v4.6.2.stable.official.71f334935
 Godot project compiles successfully.
 [EXIT 0]
 
@@ -247,6 +109,58 @@ PASS: All Label3D nodes have billboard and pixel_size set and tested.
 [EXIT 0]
 
 --- godot-tests.sh ---
-Results: 116 passed, 0 failed
+Results: 124 passed, 0 failed
 [EXIT 0]
+
+=== Summary: 19 check(s) run ===
+RESULT: ALL PASS
 ```
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+---
+
+### Commit Trailers
+
+All implementation commits carry both `Spec-Ref` and `Task-Ref` trailers:
+- `Spec-Ref: specs/core/system-purpose.spec.md@5014c7f3eb6eb64b86a2637ffeb78e914f9e1e9c`
+- `Task-Ref: task-028`
+
+Verified on: b86a314, df43bf0, 454e0a9, 37f00db, 8253bfe, 28efa30.
+
+---
+
+### THEN→Test Mapping (independently verified)
+
+| THEN-clause | Test function | Predicate verified |
+|---|---|---|
+| R1 · architectural questions — labels (billboard, pixel_size, text) | `test_all_scene_nodes_have_visible_name_labels` | asserts `billboard == BILLBOARD_ENABLED`, `pixel_size > 0.0`, text == "iam"/"graph" via `_check()` |
+| R1 · architectural questions — type visual (TRANSPARENCY_ALPHA) | `test_bounded_context_nodes_distinguishable_by_type` | asserts `transparency == TRANSPARENCY_ALPHA` on MeshInstance3D via `_check()` |
+| R1 · identify structural problems — size encoding | `test_node_size_grows_with_scene_graph_size_value` | asserts `big_mesh_x > small_mesh_x` on BoxMesh.size.x via `_check()` |
+| R1 · identify structural problems — coupling lines | `test_dependency_edges_expose_coupling_in_scene` | asserts `ImmediateMesh` child exists via `_check()` |
+| R1 · predict impact — directional arrowhead | `test_cross_context_edge_has_directional_arrowhead` | asserts `CylinderMesh.top_radius == 0.0` via `_check()` |
+| R2 · codebase as realized design | `test_scene_graph_loader_reads_codebase_json` | asserts `has("nodes")`, `has("edges")`, `nodes.size() == 2` via `_check()` |
+| R3 · architecturally sound (size + coupling visible) | `test_structural_metrics_available_in_scene` | asserts `has_size_encoded_box` AND `has_edge_line` via `_check()` |
+| R3 · explore impact of changes (camera navigation) | `test_navigation_methods_exist_on_camera_controller` | asserts 5 methods via `cam.has_method()` + `_check()` |
+
+All 8 test functions exist in `godot/tests/test_system_purpose.gd`, confirmed by grep and file read.
+All 8 are `-> void` (no inert bool-returning functions).
+All assertions use `_check()` (Pattern-1 compliant).
+All predicates match THEN-clause predicates exactly.
+
+Out-of-prototype-scope THEN-clauses (per `prototype-scope.spec.md`):
+- R2: "spec is treated as intended design" — N/A
+- R2: "relationship between them is available for inspection" — N/A
+- R3: "human can determine whether the build matches the spec" — N/A
+
+---
+
+### Verdict
+
+PASS. All 19 checks exit 0. 124 GDScript tests pass. All in-scope THEN-clauses are
+COVERED with correct predicate assertions. Commit trailers present. No prohibited
+features. No inert tests. Scope check section present and valid.
