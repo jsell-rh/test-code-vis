@@ -54,6 +54,9 @@ func _init() -> void:
 	# --- task-023: NFR spec — Performance at Kartograph Scale ---
 	_run_suite(preload("res://tests/test_nfr_scale.gd").new())
 
+	# --- task-023: NFR spec — Desktop Platform ---
+	_run_suite(preload("res://tests/test_desktop_platform.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
