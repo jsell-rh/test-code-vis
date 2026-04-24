@@ -1,0 +1,73 @@
+---
+verdict: pass
+---
+All SHALL/MUST requirements from specs/visualization/data-flow.spec.md are implemented
+in godot/scripts/flow_overlay.gd and covered by behavioral GDScript tests in
+godot/tests/test_flow_overlay.gd (registered in run_tests.gd at line 46).
+
+Note: specs/prototype/prototype-scope.spec.md lists "data flow visualization" as out of
+prototype scope. However, the implementation exists on this branch, and the review
+guidelines say "do NOT fail a task for missing features out of prototype scope" — they
+do not prohibit reviewing implemented features. What was implemented is reviewed here.
+
+---
+
+## Requirement: Flow is On-Demand (MUST/SHALL) — COVERED
+
+Implementation (flow_overlay.gd):
+  - `_path_active` initialised to `false` (line 52); overlay is NOT active on construction.
+  - `show_path()` and `show_aggregate()` must be called explicitly to activate the overlay.
+  - main.gd wires activation to an explicit user keypress (lines 342-356), never auto-activating.
+
+Tests:
+  - test_flow_not_active_by_default  → MUST NOT show by default
+  - test_path_mid_node_lit_up        → path lights up through the structure (THEN clause)
+  - test_entry_node_green            → path traceable from entry point
+  - test_terminus_node_red           → path traceable to terminus
+  - test_offpath_nodes_deemphasized  → irrelevant elements are de-emphasised
+  - test_offpath_node_transparency_mode → de-emphasis uses TRANSPARENCY_ALPHA
+
+All THEN-clauses of Scenario "Requesting a flow path" are tested.
+
+---
+
+## Requirement: Flow Shows Paths Through Structure (MUST) — COVERED
+
+Implementation (flow_overlay.gd show_path()):
+  - Off-path nodes are dimmed but NOT removed; `visible` is not touched for anchors (lines 89-108).
+  - 3D positions of anchors are never modified.
+  - Path edges are coloured cyan; non-path edges are hidden so the path is visually distinct.
+  - Structural geometry remains in the scene tree alongside the overlay.
+
+Tests:
+  - test_offpath_nodes_still_in_scene       → structural context remains visible (not replaced)
+  - test_positions_unchanged_when_path_shown → human can follow path spatially
+  - test_path_edges_visible                 → flow rendered as a path through the space
+  - test_path_edges_cyan                    → path edges distinctly highlighted
+
+All THEN-clauses of Scenario "Flow overlaid on structure" are tested.
+
+---
+
+## Requirement: Aggregate Flow Patterns (SHOULD) — COVERED
+
+This is a SHOULD requirement; its absence would be a note, not a failure. It is fully
+implemented and tested.
+
+Implementation (flow_overlay.gd show_aggregate()):
+  - Hot edges coloured orange (traffic >= 500) or yellow (traffic >= 100).
+  - Bottleneck nodes receive a "BottleneckOverlay" MeshInstance3D child with red material.
+  - Structural nodes are NOT hidden or dimmed (aggregate adds prominence, not hiding).
+
+Tests:
+  - test_high_traffic_edge_orange       → high-traffic paths visually prominent
+  - test_medium_traffic_edge_yellow     → medium-traffic paths prominent
+  - test_bottleneck_node_has_overlay    → bottleneck points identifiable (BottleneckOverlay child)
+  - test_bottleneck_overlay_red         → bottleneck overlay visually red
+  - test_aggregate_preserves_edge_visibility → structural edges remain visible
+
+All THEN-clauses of Scenario "Identifying a bottleneck" are tested.
+
+---
+
+All three requirements are fully implemented and tested. Verdict: PASS.
