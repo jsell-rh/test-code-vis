@@ -2,7 +2,7 @@
 verdict: pass
 ---
 
-## Worker: task-023 (NFR spec — fresh independent review)
+## Worker: task-023 (NFR spec — fresh independent review, post branch-reset)
 ## Branch: hyperloop/task-023
 ## Spec: specs/prototype/nfr.spec.md
 ## Date: 2026-04-24
