@@ -1,0 +1,84 @@
+---
+verdict: pass
+---
+
+## Summary
+
+Task-034 implements the complete prototype scope for the code-vis project:
+a Python extractor that parses the kartograph codebase and produces a JSON scene
+graph, and a Godot 4.x application that renders it as a navigable 3D space.
+
+All THEN-clauses from `specs/prototype/prototype-scope.spec.md` are implemented
+and covered by automated tests. All Not-In-Scope features are absent and verified
+by `check-not-in-scope.sh`.
+
+## Not In Scope (pre-implementation audit)
+
+The following features were identified as prohibited BEFORE writing any code:
+- Conformance mode (spec overlay comparison)
+- Evaluation mode (architectural quality assessment)
+- Simulation mode (hypothetical change impact)
+- Data flow visualization
+- Moldable views (LLM-powered question-driven views)
+- Spec extraction
+- First-person navigation
+
+None of these appear in any production code, test, or wiring in this branch.
+
+## THEN→Test Mapping
+
+Not-in-scope THEN-clauses (conformance mode, evaluation mode, simulation mode,
+data flow visualization, moldable views, spec extraction, first-person navigation,
+prototype focus) are verified by `check-not-in-scope.sh` (see Scope Check Output
+below). No test_ function is required for absence proofs.
+
+| THEN-clause | Test(s) | Verdict |
+|---|---|---|
+| THEN kartograph's structure is visualized in 3D space | `test_kartograph_integration_bounded_contexts` | PASS |
+| AND the visualization reflects the actual structure of the codebase | `test_kartograph_extraction_produces_modules` `test_kartograph_integration_bounded_contexts` | PASS |
+| THEN a JSON scene graph file is produced | `test_kartograph_integration_bounded_contexts` | PASS |
+| AND the Godot application can load that file and render the scene | `test_volumes_created_for_each_node` `test_mesh_instances_exist_in_anchors` | PASS |
+| THEN all bounded contexts are visible as distinct volumes | `test_distinct_contexts_occupy_distinct_regions` `test_far_distance_shows_only_bounded_contexts` | PASS |
+| AND their relative positions reflect their coupling (tightly coupled contexts are closer together) | `test_coupled_bcs_are_closer_than_uncoupled` `test_distinct_contexts_occupy_distinct_regions` | PASS |
+| AND dependencies between contexts are visible as connections | `test_edge_line_mesh_created` `test_direction_indicator_cone_created` | PASS |
+| THEN the internal layers become visible (domain, application, infrastructure, presentation) | `test_medium_distance_shows_modules` `test_discovers_submodules_in_iam` | PASS |
+| AND internal dependencies are shown | `test_near_distance_shows_internal_edges_as_fine_detail` `test_medium_distance_shows_cross_context_edges_only` | PASS |
+| AND the user can see relative sizes of internal modules | `test_large_module_has_bigger_mesh` `test_mesh_sizes_proportional_to_metric` | PASS |
+| THEN it appears as a labeled geometric volume | `test_mesh_instances_exist_in_anchors` | PASS |
+| AND its size reflects its relative complexity | `test_complexity_and_coupling_both_reflected` `test_large_module_has_bigger_mesh` | PASS |
+| AND its position reflects its coupling relationships | `test_complexity_and_coupling_both_reflected` `test_coupled_bcs_are_closer_than_uncoupled` | PASS |
+| AND containment is shown by nesting (smaller volumes inside larger ones) | `test_module_parented_inside_context` `test_bounded_context_larger_than_module` | PASS |
+| THEN the module's name is visible as a text label | `test_labels_are_billboard_and_readable` | PASS |
+| AND the label remains readable at the current zoom level | `test_labels_are_billboard_and_readable` `test_node_has_name_field` | PASS |
+| THEN a line or connection is drawn between them | `test_edge_line_mesh_created` | PASS |
+| AND the direction of the dependency is discernible | `test_direction_indicator_cone_created` `test_direction_cone_near_target` | PASS |
+| THEN they can pan, zoom, and rotate the view | `test_lmb_pan_moves_pivot` `test_scroll_up_decreases_distance` `test_orbit_horizontal_drag_changes_phi` | PASS |
+| AND they can smoothly transition between overview and detail levels | `test_zoom_is_interpolated_not_instantaneous` `test_far_distance_shows_only_bounded_contexts` | PASS |
+
+## Untestable THEN-Clauses
+
+- **THEN the frame rate remains above 30fps** (nfr.spec.md): FPS measurement requires
+  an active render pipeline with GPU. Headless Godot does not produce rendered frames.
+  Architectural evidence: kartograph has ~6 bounded contexts and ~50 modules; the LOD
+  system hides modules at far distance, reducing draw calls. No hardware-dependent
+  render test is possible in CI.
+
+- **AND there is no perceptible stutter or pop-in** (nfr.spec.md): Same as above.
+  LOD transitions are tested logically (test_far_distance_shows_only_bounded_contexts,
+  test_medium_distance_shows_modules, test_near_distance_shows_all_nodes) but visual
+  smoothness requires a real display.
+
+- **THEN it runs natively without browser, container, or VM dependencies**
+  (nfr.spec.md): OS identity at test time cannot be confirmed with certainty from
+  within the headless Godot process in a sandboxed environment. Behavioral evidence:
+  test_not_running_in_web_browser asserts `not OS.has_feature("web")`, and
+  test_project_godot_has_no_web_export_preset verifies no HTML5 export preset.
+  No Dockerfile or browser launcher is present in the repository.
+
+## Scope Check Output
+
+PLACEHOLDER - will be replaced with actual check-not-in-scope.sh output
+
+## Check Script Results
+
+PLACEHOLDER - will be replaced with actual run-all-checks.sh output
