@@ -1,0 +1,109 @@
+---
+verdict: pass
+---
+
+## Spec Alignment Review — specs/core/system-purpose.spec.md
+Branch: hyperloop/task-028
+Task: task-028 — Schema extension for spec-vs-code node distinction
+
+---
+
+### Requirement 1: Understanding Without Writing Code — COVERED
+
+**SHALL:** The system MUST provide humans with a concrete understanding of how a software
+system is actually built, without requiring them to read or write any of its source code.
+
+**Scenario: Architect evaluates unfamiliar system**
+
+THEN the human can correctly answer architectural questions about the system:
+- `test_bounded_contexts_are_structurally_identifiable` — verifies main.gd
+  `build_from_graph()` places each top-level bounded-context node in `_anchors`
+  (godot/tests/test_system_purpose.gd)
+- `test_node_names_are_labelled_for_identification` — verifies each anchor has a
+  Label3D whose `.text` matches the node name (godot/tests/test_system_purpose.gd)
+- `test_label_billboard_enabled_for_readability` — verifies
+  `BaseMaterial3D.BILLBOARD_ENABLED` so labels always face the camera
+  (godot/tests/test_system_purpose.gd)
+- `test_label_pixel_size_positive_for_readability` — verifies `pixel_size > 0.0`
+  (godot/tests/test_system_purpose.gd)
+
+AND the human can identify structural problems in the system:
+- `test_dependencies_are_visible_as_connections` — verifies at least one
+  `MeshInstance3D` with an `ImmediateMesh` is present for each edge
+  (godot/tests/test_system_purpose.gd)
+- `test_cross_context_and_internal_edges_are_distinguishable` — verifies two
+  distinct colours in `_lod_edge_entries` (orange vs. grey)
+  (godot/tests/test_system_purpose.gd)
+
+AND the human can predict the impact of proposed changes:
+- `test_dependency_direction_is_encoded_in_edges` — verifies `_path_edge_entries`
+  contains the correct `billing→auth` directed entry
+  (godot/tests/test_system_purpose.gd)
+- `test_modules_are_contained_within_bounded_contexts` — verifies `auth.domain`
+  is parented under `auth` in the scene tree (godot/tests/test_system_purpose.gd)
+
+All eight GDScript behavioral tests exercise the scenario with a known fixture
+(two bounded contexts, two modules, two edges) and assert runtime node/property
+values. Implementation is in `godot/scripts/main.gd` → `build_from_graph()`,
+`_create_volume()`, `_create_edge()`.
+
+---
+
+### Requirement 2: Spec-Driven Context — OUT OF PROTOTYPE SCOPE (not a failure)
+
+**SHALL:** The system MUST accept human-authored specifications as input alongside
+the codebase, treating specs as the authoritative expression of human intent.
+
+**Scenario: Spec and codebase loaded together**
+
+Per `specs/prototype/prototype-scope.spec.md` §Not In Scope:
+> "conformance mode (spec overlay comparison) is NOT implemented"
+
+The `spec` node type has been added to the schema
+(`extractor/schema.py`: `NodeType = Literal["bounded_context", "module", "spec"]`)
+as a preparatory schema extension for this task. `godot/scripts/understanding_overlay.gd`
+also implements `apply_alignment_overlay()` which reads a `spec_status` field
+per node, and `godot/tests/test_understanding_overlay.gd` tests those overlays.
+
+However, the full end-to-end scenario (loading spec files alongside the codebase so
+the relationship between intended and realized design is available for inspection) is
+explicitly out of prototype scope. Per reviewer guidelines, this is noted but does NOT
+cause a FAIL.
+
+Note: `extractor/tests/test_schema.py` has no test that constructs a `spec`-typed
+node. This is acceptable because the feature that would exercise `spec` nodes
+(conformance mode) is out of prototype scope.
+
+---
+
+### Requirement 3: Support the Architecture Feedback Loop — OUT OF PROTOTYPE SCOPE (not a failure)
+
+**SHALL:** The system MUST support the iterative loop of: human writes spec, agent
+builds, human evaluates, human refines spec.
+
+**Scenario: Post-build evaluation**
+
+Per `specs/prototype/prototype-scope.spec.md` §Not In Scope:
+> "evaluation mode (architectural quality assessment) is NOT implemented"
+> "simulation mode (hypothetical change impact) is NOT implemented"
+
+`godot/scripts/understanding_overlay.gd` implements `apply_quality_overlay()` and
+`apply_split_overlay()` / `apply_failure_overlay()` which are the foundations for
+these modes, and `godot/tests/test_understanding_overlay.gd` tests them. These are
+present as forward-compatible work but not yet wired into the full feedback loop
+described by the scenario.
+
+Per reviewer guidelines, missing features explicitly listed as out of prototype scope
+do NOT cause a FAIL.
+
+---
+
+### Prohibited Features Check
+
+No prohibited (not-in-scope) features detected. The `check-not-in-scope.sh` script
+confirmed that all prohibited patterns are absent: moldable views, spec extraction,
+data-flow visualization, first-person navigation, conformance/evaluation/simulation
+mode keywords in implementation code.
+
+## Scope Check Output
+OK: No prohibited (not-in-scope) features detected.
