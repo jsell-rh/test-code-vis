@@ -2,11 +2,48 @@
 verdict: pass
 ---
 
-## task-021 — Moldable Views Implementation
+## Independent Reviewer Verdict — task-021 (Moldable Views)
 
 Branch: hyperloop/task-021
 Spec: specs/interaction/moldable-views.spec.md
-Task-Ref: task-021
+Reviewer: code-reviewer agent, 2026-04-23
+
+---
+
+## Process Steps
+
+1. Synced `.hyperloop/checks/` from `main` before running checks.
+2. Ran `bash .hyperloop/checks/run-all-checks.sh` — **ALL PASS** (15/15 checks, exit 0).
+3. Grepped for every test function name in the worker's THEN→test mapping.
+4. Read actual test bodies to verify assertion predicates match THEN-clause predicates.
+5. Inspected `main.gd` `_ready()` for stubs.
+6. Verified commit trailers.
+
+---
+
+## Check Script Output (verbatim summary)
+
+```
+=== Summary: 15 check(s) run ===
+RESULT: ALL PASS
+```
+
+All individual checks:
+- check-branch-has-commits.sh          EXIT 0
+- check-checks-in-sync.sh              EXIT 0
+- check-clamp-boundary-tests.sh        EXIT 0
+- check-extractor-cli-tested.sh        EXIT 0
+- check-extractor-stdlib-only.sh       EXIT 0
+- check-gdscript-only-test.sh          EXIT 0
+- check-kartograph-integration-test.sh EXIT 0
+- check-not-in-scope.sh                EXIT 0
+- check-pipeline-wiring.sh             EXIT 0
+- check-report-scope-section.sh        EXIT 0
+- extractor-lint.sh                    EXIT 0
+- godot-compile.sh                     EXIT 0
+- godot-fileaccess-tested.sh           EXIT 0
+- godot-label3d.sh                     EXIT 0
+- godot-tests.sh                       EXIT 0 (93 pytest + 10 GDScript test files, all PASS)
 
 ---
 
@@ -16,153 +53,70 @@ OK: No prohibited (not-in-scope) features detected.
 
 ---
 
-## Check Script Results
+## THEN->Test Mapping Verification
 
-=== run-all-checks.sh ===
-
---- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-021' has 67 commit(s) above main.
-[EXIT 0]
-
---- check-checks-in-sync.sh ---
-OK: All check scripts from main are present in this worktree
-[EXIT 0]
-
---- check-clamp-boundary-tests.sh ---
-OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: All 2 clamped variable(s) have boundary-asserting tests
-[EXIT 0]
-
---- check-extractor-cli-tested.sh ---
-OK: A test calls main() from the extractor CLI entry point.
-[EXIT 0]
-
---- check-extractor-stdlib-only.sh ---
-OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
-[EXIT 0]
-
---- check-gdscript-only-test.sh ---
-OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
-[EXIT 0]
-
---- check-kartograph-integration-test.sh ---
-OK: Integration test referencing kartograph codebase with expected-context assertions found.
-[EXIT 0]
-
---- check-not-in-scope.sh ---
-OK: No prohibited (not-in-scope) features detected.
-[EXIT 0]
-
---- check-pipeline-wiring.sh ---
-Stage 1 (view-spec producer) found in: godot/scripts/llm_view_generator.gd
-godot/scripts/main.gd
-godot/scripts/scene_interpreter.gd
-Stage 2 (scene consumer) evidence — pattern '\.visible\s*=' found in: godot/scripts/scene_interpreter.gd
-Stage 2 rendering tests found: godot/tests/test_containment_rendering.gd
-godot/tests/test_dependency_rendering.gd
-godot/tests/test_node_renderer.gd
-godot/tests/test_scene_graph_loading.gd
-godot/tests/test_scene_interpreter.gd
-
-OK: View-spec pipeline appears wired end-to-end (producer + consumer + rendering tests).
-[EXIT 0]
-
---- check-report-scope-section.sh ---
-OK: worker-result.yaml contains a valid '## Scope Check Output' section.
-[EXIT 0]
-
---- extractor-lint.sh ---
-Linting extractor...
-All checks passed!
-7 files already formatted
-Running extractor tests...
-93 passed in 0.14s
-Extractor checks passed.
-[EXIT 0]
-
---- godot-compile.sh ---
-Compiling Godot project...
-Godot project compiles successfully.
-[EXIT 0]
-
---- godot-fileaccess-tested.sh ---
-Found FileAccess.open() in 1 production script file(s).
-OK: FileAccess.open() is exercised in 2 test file(s).
-[EXIT 0]
-
---- godot-label3d.sh ---
-PASS: All Label3D nodes have billboard and pixel_size set and tested.
-[EXIT 0]
-
---- godot-tests.sh ---
-Found 10 GDScript test file(s) in godot/tests/.
-Running custom headless test runner...
-GDScript behavioral tests passed.
-[EXIT 0]
-
-=== Summary: 15 check(s) run ===
-RESULT: ALL PASS
-
----
-
-## THEN-Clause Coverage Map
+All test function names independently grep-confirmed to exist in `godot/tests/`:
 
 ### Requirement: Question-Driven View Generation
 
-#### Scenario: Architectural question
-
-| THEN/AND clause | Implementation | Test |
-|---|---|---|
-| The system generates a view focused on auth-related components | `build_prompt()` in `llm_view_generator.gd` embeds question + all node IDs; LLM uses VALID_OPS to produce a show/highlight spec | `test_build_prompt_contains_node_id_auth_service` (test_llm_view_generator.gd) |
-| Irrelevant components are hidden or de-emphasized | `_apply_hide()` in `scene_interpreter.gd` sets `anchor.visible = false` | `test_hide_op_sets_visible_false` (test_scene_interpreter.gd) |
-| The relevant components are arranged to answer the question | `_apply_arrange()` in `scene_interpreter.gd` sets `anchor.position = Vector3(x, y, z)` | `test_arrange_op_sets_all_three_axes` (test_scene_interpreter.gd) |
-
-#### Scenario: Impact question
-
-| THEN/AND clause | Implementation | Test |
-|---|---|---|
-| The system generates a view showing the user database and all its dependents | `_apply_show()` in `scene_interpreter.gd` sets `anchor.visible = true` | `test_show_op_sets_visible_true` (test_scene_interpreter.gd) |
-| The dependency relationships are spatially clear | `_apply_connect()` draws `ImmediateMesh` line + `CylinderMesh` arrowhead between anchors | `test_connect_op_adds_line_geometry` + `test_connect_op_adds_arrowhead` (test_scene_interpreter.gd) |
-
----
+| THEN/AND clause | Test function | File | Predicate verified |
+|---|---|---|---|
+| Generates view focused on auth-related components | `test_build_prompt_contains_node_id_auth_service` | test_llm_view_generator.gd | `prompt.contains("auth_service")` PASS |
+| Irrelevant components hidden/de-emphasized | `test_hide_op_sets_visible_false` | test_scene_interpreter.gd | Instantiates Node3D, calls `interp.apply()`, asserts `anchor.visible == false` PASS |
+| Relevant components arranged | `test_arrange_op_sets_all_three_axes` | test_scene_interpreter.gd | Instantiates Node3D, asserts `anchor.position.x/y/z` match fixture values PASS |
+| View shows user_db and dependents | `test_show_op_sets_visible_true` | test_scene_interpreter.gd | Instantiates Node3D, asserts `anchor.visible == true` PASS |
+| Dependency relationships spatially clear | `test_connect_op_adds_line_geometry` + `test_connect_op_adds_arrowhead` | test_scene_interpreter.gd | Asserts >=1 MeshInstance3D (line) and >=2 MeshInstance3D (line+cone arrowhead) PASS |
 
 ### Requirement: View Specs as Intermediate Representation
 
-#### Scenario: LLM produces view spec
-
-| THEN/AND clause | Implementation | Test |
-|---|---|---|
-| It emits a structured view specification (not raw 3D geometry) | `parse_response()` returns a plain `Dictionary {"question": ..., "operations": [...]}` — no Node3D, no Mesh, no Vector3 | `test_parse_response_returns_dictionary` (test_llm_view_generator.gd) |
-| The view spec controls which elements are shown, hidden, highlighted, and how they are arranged | `_make_spec()` validates ops from `VALID_OPS`; all 6 ops pass through | `test_parse_response_all_six_ops_pass_through` (test_llm_view_generator.gd) |
-| The 3D renderer interprets the view spec into a spatial scene | `SceneInterpreter.apply(spec, anchors, scene_root)` mutates `.visible`, `.albedo_color`, `.position`, adds Label3D + MeshInstance3D | `test_all_six_ops_mutate_scene_correctly` (test_scene_interpreter.gd) |
-
----
+| THEN/AND clause | Test function | File | Predicate verified |
+|---|---|---|---|
+| Emits structured view spec (not raw geometry) | `test_parse_response_returns_dictionary` | test_llm_view_generator.gd | `result is Dictionary` PASS |
+| View spec controls show/hide/highlight/arrange | `test_parse_response_all_six_ops_pass_through` | test_llm_view_generator.gd | `spec["operations"].size() == 6` PASS |
+| 3D renderer interprets spec into spatial scene | `test_all_six_ops_mutate_scene_correctly` | test_scene_interpreter.gd | Full integration: 6 ops, asserts visible/albedo_color/position/label/geometry PASS |
 
 ### Requirement: Fixed Visual Primitive Set
 
-#### Scenario: LLM uses existing primitives
+| THEN/AND clause | Test function | File | Predicate verified |
+|---|---|---|---|
+| Composes from existing primitives only | `test_parse_response_all_six_ops_pass_through` | test_llm_view_generator.gd | All 6 named ops pass through PASS |
+| No new rendering logic at runtime | `test_parse_response_filters_unknown_ops` + `test_parse_response_with_all_unknown_ops_returns_empty_operations` + `test_unknown_op_is_ignored` | both files | Unknown ops filtered at parse time and silently ignored at render time PASS |
 
-| THEN/AND clause | Implementation | Test |
-|---|---|---|
-| It composes the answer from the existing set of primitives (show, hide, highlight, arrange, annotate, connect) | `VALID_OPS: Array = ["show", "hide", "highlight", "arrange", "annotate", "connect"]` compile-time constant; `_make_spec()` allows exactly these 6 | `test_parse_response_all_six_ops_pass_through` (test_llm_view_generator.gd) |
-| No new rendering logic is generated at runtime | `_make_spec()` drops unknown ops; `SceneInterpreter` match ignores unrecognised strings | `test_parse_response_filters_unknown_ops` + `test_parse_response_with_all_unknown_ops_returns_empty_operations` (test_llm_view_generator.gd) + `test_unknown_op_is_ignored` (test_scene_interpreter.gd) |
+---
+
+## Additional Checks
+
+**main.gd `_ready()` stub check:** `_ready()` is fully implemented — reads JSON via
+`FileAccess.open()`, parses it, calls `build_from_graph()`. No pass-only stub. PASS
+
+**Pipeline wiring:** `apply_view_spec()` in `main.gd` wires Stage 1
+(`LLMViewGenerator.parse_response()`) to Stage 2 (`SceneInterpreter.apply()`). PASS
+
+**Commit trailers:** `Spec-Ref: specs/interaction/moldable-views.spec.md@6bed97ab44f1e1e464b566f807f5168951259b4e`
+and `Task-Ref: task-021` present on implementation commits. PASS
+
+**Arrowhead (direction visual indicator):** `_create_edge()` adds a `CylinderMesh` with
+`top_radius=0` (pointed cone) as arrowhead, placed at target end and oriented along edge
+direction. Satisfies "direction is visually indicated" via an explicit rendering element. PASS
+
+**Label3D readability:** `billboard = BaseMaterial3D.BILLBOARD_ENABLED` and
+`pixel_size = 0.012 > 0.0` set on all Label3D nodes; confirmed by godot-label3d.sh (EXIT 0). PASS
 
 ---
 
 ## Verdict: PASS
 
-All 3 MUST requirements from `specs/interaction/moldable-views.spec.md` are fully covered with
-implementation code and GDScript behavioral tests. All 15 checks pass (run-all-checks.sh exits 0).
+All 3 MUST requirements from `specs/interaction/moldable-views.spec.md` are fully
+implemented and independently verified:
 
-1. **Question-Driven View Generation** — COVERED: `build_prompt()` + `parse_response()` +
-   `SceneInterpreter.apply()` implement the full pipeline. Every THEN/AND clause has a corresponding
-   behavioral test asserting real Node3D property values on scene-tree nodes.
+1. **Question-Driven View Generation** — COVERED. `build_prompt()` + `parse_response()` +
+   `SceneInterpreter.apply()` implement the full pipeline. Every THEN/AND clause has a
+   behavioral test with real Node3D property assertions.
 
-2. **View Specs as Intermediate Representation** — COVERED: `parse_response()` emits a plain
-   Dictionary (not geometry); `SceneInterpreter` consumes it and mutates the live scene.
-   The two-stage separation is wired in `main.gd.apply_view_spec()`.
+2. **View Specs as Intermediate Representation** — COVERED. `parse_response()` returns a
+   plain Dictionary (no geometry). `SceneInterpreter` consumes it and mutates the live
+   scene. Two-stage separation is wired in `main.gd.apply_view_spec()`.
 
-3. **Fixed Visual Primitive Set** — COVERED: `VALID_OPS` const defines the finite set at compile
-   time. Unknown ops are filtered at parse time (in LLMViewGenerator) and at render time (in
-   SceneInterpreter). Tests confirm both enforcement layers.
+3. **Fixed Visual Primitive Set** — COVERED. `VALID_OPS` const defines the 6 primitives.
+   Unknown ops are filtered at parse time and ignored at render time. Both enforcement
+   layers are tested.
