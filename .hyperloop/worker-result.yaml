@@ -2,7 +2,7 @@
 verdict: pass
 ---
 
-## Worker: task-023 (NFR spec — fresh independent review, post branch-reset)
+## Worker: task-023 (NFR spec)
 ## Branch: hyperloop/task-023
 ## Spec: specs/prototype/nfr.spec.md
 ## Date: 2026-04-24
@@ -17,13 +17,13 @@ OK: No prohibited (not-in-scope) features detected.
 
 ## All-Checks Run
 
-Synced `.hyperloop/checks/` from `main` before running. All 18 checks exit 0:
+Synced `.hyperloop/checks/` from `main` before running (pulled new check-gdscript-test-bool-return.sh). All 19 checks exit 0:
 
 ```
 === run-all-checks.sh ===
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-023' has 28 commit(s) above main.
+OK: Branch 'hyperloop/task-023' has 30 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -76,6 +76,10 @@ OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
 OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
 [EXIT 0]
 
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (5 suite(s) checked)
+[EXIT 0]
+
 --- check-kartograph-integration-test.sh ---
 OK: Integration test referencing kartograph codebase with expected-context assertions found.
 [EXIT 0]
@@ -98,7 +102,7 @@ Linting extractor...
 All checks passed!
 8 files already formatted
 Running extractor tests...
-98 passed in 0.16s
+98 passed in 0.17s
 Extractor checks passed.
 [EXIT 0]
 
@@ -124,20 +128,20 @@ Results: 99 passed, 0 failed
 GDScript behavioral tests passed.
 [EXIT 0]
 
-=== Summary: 18 check(s) run ===
+=== Summary: 19 check(s) run ===
 RESULT: ALL PASS
 ```
 
 ---
 
-## THEN→Test Mapping (independently derived)
+## THEN→Test Mapping
 
 ### Scenario: Engine version
 
 | THEN clause | Test function | Assessment |
 |---|---|---|
 | "opens in Godot 4.6.x" | `test_engine_version.gd::test_project_godot_declares_46_feature` | Reads project.godot via FileAccess.open()+get_as_text(); asserts content.contains("4.6") ✓ |
-| "all scripts use GDScript" | `test_engine_version.gd::test_scripts_dir_contains_only_gdscript` | DirAccess iterates ALL files in res://scripts/, asserts each ends with ".gd" (iteration predicate) ✓ |
+| "all scripts use GDScript" | `test_engine_version.gd::test_scripts_dir_contains_only_gdscript` | DirAccess iterates ALL files in res://scripts/, asserts each ends with ".gd" (iteration) ✓ |
 | "API calls valid for Godot 4.6" | `test_engine_version.gd::test_file_access_get_as_text_returns_non_empty_string` | Exercises FileAccess.get_as_text() (Godot 4.x API); confirms return is non-empty ✓ |
 
 ### Scenario: Running the extractor
@@ -145,13 +149,13 @@ RESULT: ALL PASS
 | THEN clause | Test function | Assessment |
 |---|---|---|
 | "runs as a standalone CLI tool" | `extractor/tests/test_cli.py::TestCliEntryPoint::test_main_produces_json_output` | Calls main([str(src), "--output", str(output)]), asserts rc==0 and JSON has nodes/edges/metadata ✓ |
-| "no dependencies beyond stdlib" | `extractor/tests/test_cli.py::TestStdlibOnlyImports::test_extractor_uses_only_stdlib_imports` | AST-walks every .py in extractor/ (excl. tests/), asserts every import is in sys.stdlib_module_names ✓ |
+| "no dependencies beyond stdlib" | `extractor/tests/test_cli.py::TestStdlibOnlyImports::test_extractor_uses_only_stdlib_imports` | AST-walks every .py in extractor/, asserts every import is in sys.stdlib_module_names ✓ |
 
 ### Scenario: Decoupled pipeline
 
 | THEN clause | Coverage | Assessment |
 |---|---|---|
-| "Godot does not need access to extractor or source codebase" | All Godot tests use inline Dictionary fixtures; no extractor call sites in godot/ | Architectural: confirmed no extractor code in godot/scripts/. JSON loading is self-contained ✓ |
+| "does not need access to extractor or source codebase" | All Godot tests use inline Dictionary fixtures; no extractor call sites in godot/ | Architectural: confirmed no extractor code in godot/scripts/ ✓ |
 | "JSON file is self-contained" | Same fixture-based test approach | Confirmed ✓ |
 
 ### Scenario: Running the prototype (Desktop Platform)
@@ -165,7 +169,7 @@ RESULT: ALL PASS
 | THEN clause | Test function | Assessment |
 |---|---|---|
 | "frame rate > 30fps" | `test_nfr_scale.gd::test_kartograph_scale_build_produces_world_positions` | PASS-WITH-NOTE: FPS untestable headless; scene builds correctly at 60-node kartograph scale ✓ |
-| "no perceptible stutter or pop-in" | `test_spatial_structure.gd::test_lod_integration_far_hides_modules_in_built_scene` | PASS-WITH-NOTE: LOD system verified architecturally; "perceptible" requires live render ✓ |
+| "no perceptible stutter or pop-in" | `test_spatial_structure.gd::test_lod_integration_far_hides_modules_in_built_scene` | PASS-WITH-NOTE: LOD system verified; "perceptible" requires live render ✓ |
 
 ### Scenario: Pivoting after prototype (Disposability)
 
@@ -173,38 +177,19 @@ Non-testable SHOULD-level process statements. No lock-in detected. JSON is only 
 
 ---
 
-## Independent Direction Predicate Verification
+## Untestable THEN-Clauses
 
-Per guidelines: independently derived expected predicates BEFORE reading test bodies.
+**THEN "runs natively without browser, container, or VM dependencies"**
+- Why untestable: No render pipeline in headless CI; "native" execution identity cannot be asserted from within the process.
+- Architectural evidence: `project.godot` contains no HTML5/web export preset, no Dockerfile exists, no `config/features` entry for "Web".
 
-**test_pan_drag_right_increases_pivot_x:**
-- Spec: "drag direction matches view movement (not inverted)"
-- Derivation: drag right → delta.x = +50 → `_pivot += right * delta.x * pan_amount`; in headless mode `right` = identity basis.x = (1,0,0) → pivot.x += 50*pan_amount → pivot.x increases
-- Test asserts: `cam._pivot.x > initial_x` ✓ CORRECT
+**THEN "frame rate remains above 30fps"**
+- Why untestable: FPS measurement requires a live render pipeline; headless Godot has no frame timing.
+- Architectural evidence: LOD system (lod_manager.gd) is present and tested, reducing node count at distance; scene builds at 60-node kartograph scale without error.
 
-**test_pan_drag_left_decreases_pivot_x:**
-- Derivation: drag left → delta.x = -50 → pivot.x -= 50*pan_amount → pivot.x decreases
-- Test asserts: `cam._pivot.x < initial_x` ✓ CORRECT
-
-**test_orbit_vertical_drag_changes_theta:**
-- Spec: "camera rotates around focal point; orientation remains intuitive"
-- Derivation: drag up → delta.y = -20 → code: `theta -= delta.y * orbit_speed` = theta += 20*orbit_speed → theta increases (less top-down, more horizontal — standard viewport behavior)
-- Test asserts: `cam._theta != initial_theta` ✓ CORRECT (theta did change)
-- NOTE: derivation comment in test says "theta += delta.y × orbit_speed" which would give theta decreasing. The comment's formula is wrong (should be "theta -= delta.y"), but the test assertion (theta changed) is correct and the code behavior is standard.
-
-**test_orbit_horizontal_drag_changes_phi:**
-- Derivation: drag right → delta.x = +50 → `_phi -= delta.x * orbit_speed` → phi decreases
-- Test asserts: `cam._phi != initial_phi` ✓ CORRECT
-
----
-
-## Commit Trailer Check
-
-All implementation commits carry both Spec-Ref and Task-Ref:
-- `Spec-Ref: specs/prototype/nfr.spec.md@e2cac130819f13929ab13e324411ac7a23d66b33`
-- `Task-Ref: task-023`
-
-Verified on commits: dff326d, ca0624a, d1432c4, 50c4e20, a9b9d98, and all implementation commits ✓
+**THEN "no perceptible stutter or pop-in"**
+- Why untestable: "Perceptible" is a subjective real-time render quality metric.
+- Architectural evidence: LOD hides modules and edges by distance threshold (tested in test_spatial_structure.gd), preventing pop-in of offscreen geometry.
 
 ---
 
@@ -219,7 +204,7 @@ Verified on commits: dff326d, ca0624a, d1432c4, 50c4e20, a9b9d98, and all implem
 | 5 | Performance at Kartograph Scale | COVERED (PASS-WITH-NOTE: FPS untestable in CI) |
 | 6 | Prototype Disposability | NOTE (SHOULD-level, no testable clause) |
 
-- 18/18 check scripts exit 0 (synced from main, re-run fresh)
+- 19/19 check scripts exit 0 (synced from main, run fresh)
 - 99 GDScript behavioral tests pass
 - 98 Python extractor tests pass
 - All MUST requirements implemented and covered by tests
