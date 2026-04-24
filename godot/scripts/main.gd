@@ -18,7 +18,6 @@ extends Node3D
 
 const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
 const LodManager = preload("res://scripts/lod_manager.gd")
-const FlowOverlay = preload("res://scripts/flow_overlay.gd")
 const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
@@ -41,20 +40,9 @@ var _lod_node_entries: Array = []
 ## Entries for LOD: Array of {visual: Node3D, edge_type: String}
 var _lod_edge_entries: Array = []
 
-## Entries for path overlay: Array of {visual: Node3D, source: String, target: String}
+## Entries for edge direction tracking: Array of {visual: Node3D, source: String, target: String}
+## Used to verify dependency direction (which component depends on which).
 var _path_edge_entries: Array = []
-
-## Path overlay controller — manages on-demand path and traffic highlighting.
-var _flow: FlowOverlay = FlowOverlay.new()
-
-## Path definitions loaded from the scene graph (optional field).
-var _flows: Array = []
-
-## Aggregate traffic patterns loaded from the scene graph (optional field).
-var _aggregate: Dictionary = {}
-
-## Index of the currently active path (-1 = none).
-var _active_path_index: int = -1
 
 ## Understanding overlay controller — activates alignment, quality, and impact overlays.
 var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
@@ -115,13 +103,6 @@ func build_from_graph(graph: Dictionary) -> void:
 	# Create edge lines after all volumes exist.
 	for ed: Dictionary in edges:
 		_create_edge(ed)
-
-	# Load optional path and aggregate traffic definitions.
-	_flows = graph.get("flows", [])
-	_aggregate = graph.get("aggregate", {})
-
-	# Wire path overlay with the node anchors and edge visuals.
-	_flow.setup(_anchors, _path_edge_entries)
 
 	# Reposition camera to frame the whole graph.
 	_frame_camera()
@@ -271,7 +252,7 @@ func _create_edge(ed: Dictionary) -> void:
 	add_child(mesh_instance)
 	# Register line with LOD manager.
 	_lod_edge_entries.append({"visual": mesh_instance, "edge_type": ed["type"]})
-	# Register line with path overlay (source/target needed for path highlighting).
+	# Track edge direction (source/target) so dependency direction can be verified.
 	_path_edge_entries.append({"visual": mesh_instance, "source": src, "target": tgt})
 
 	# Arrowhead: a cone (CylinderMesh, top_radius=0 = pointed tip) placed at the
@@ -297,7 +278,7 @@ func _create_edge(ed: Dictionary) -> void:
 	add_child(arrow)
 	# Register arrowhead with LOD manager (same edge_type as the line).
 	_lod_edge_entries.append({"visual": arrow, "edge_type": ed["type"]})
-	# Register arrowhead with path overlay.
+	# Track arrowhead direction for dependency direction verification.
 	_path_edge_entries.append({"visual": arrow, "source": src, "target": tgt})
 
 
@@ -325,12 +306,10 @@ func _frame_camera() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Path overlay input (on-demand activation)
+# Keyboard input handling
 # ---------------------------------------------------------------------------
 
-## Handle keyboard shortcuts for on-demand path overlay and understanding overlays.
-##   F → cycle through path definitions (or clear if one is already shown).
-##   G → toggle aggregate traffic pattern overlay.
+## Handle keyboard shortcuts for understanding overlays.
 ##   H → apply alignment overlay (Conformance Mode — shows spec vs. realization).
 ##   J → apply quality overlay  (Evaluation Mode  — shows coupling and centrality).
 ##   K → apply failure impact overlay (Simulation Mode — shows cascade from first node).
@@ -338,38 +317,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed:
 		return
 	match event.keycode:
-		KEY_F:
-			_toggle_path_overlay()
-		KEY_G:
-			_toggle_aggregate_overlay()
 		KEY_H:
 			_apply_alignment_overlay()
 		KEY_J:
 			_apply_quality_overlay()
 		KEY_K:
 			_apply_failure_impact_overlay()
-
-
-## Cycle to the next path definition, or clear the active overlay.
-func _toggle_path_overlay() -> void:
-	if _flow.is_path_active():
-		_flow.clear_path()
-		_active_path_index = -1
-	elif not _flows.is_empty():
-		_active_path_index = (_active_path_index + 1) % _flows.size()
-		var f: Dictionary = _flows[_active_path_index]
-		_flow.show_path(f.get("path", []), f.get("entry", ""), f.get("terminus", ""))
-
-
-## Show aggregate traffic patterns, or clear if already active.
-func _toggle_aggregate_overlay() -> void:
-	if _flow.is_path_active():
-		_flow.clear_path()
-	else:
-		_flow.show_aggregate(
-			_aggregate.get("hot_edges", []),
-			_aggregate.get("bottlenecks", [])
-		)
 
 
 # ---------------------------------------------------------------------------
