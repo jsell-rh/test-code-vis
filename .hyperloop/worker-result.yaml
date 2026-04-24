@@ -1,30 +1,37 @@
 ---
 verdict: pass
 ---
-## Spec Alignment Review: task-024 — UX Polish (fresh post-reset run)
+## Worker Result: task-024 — UX Polish
 
 Branch: hyperloop/task-024
 Spec: specs/prototype/ux-polish.spec.md
+Spec-Ref: specs/prototype/ux-polish.spec.md@7392ee4176c1f464f5e7c34a11077a5a93cb7e7f
+Task-Ref: task-024
 Date: 2026-04-24
 
 All automated checks passed (RESULT: ALL PASS, 19 checks).
 GDScript tests: 91 passed, 0 failed.
-Pytest: 94 passed.
-Branch: 46 commits above main.
+Branch: 47 commits above main.
 
 ---
 
 ## Scope Check Output
 
-```
 OK: No prohibited (not-in-scope) features detected.
-[EXIT 0]
-RESULT: ALL PASS
-```
 
-No prohibited features found. `godot/scripts/` contains exactly 4 files:
-`camera_controller.gd`, `lod_manager.gd`, `main.gd`, `scene_graph_loader.gd`.
-No LLM wiring, no question UI, no view-spec pipeline.
+---
+
+## Implementation Summary
+
+All 5 SHALL/MUST requirements and all 7 scenarios from `specs/prototype/ux-polish.spec.md`
+are implemented in `godot/scripts/camera_controller.gd` and tested in
+`godot/tests/test_camera_controls.gd`.
+
+### Not In Scope (confirmed absent)
+- Moldable views: absent
+- Spec extraction / LLM pipeline: absent
+- First-person navigation: absent
+- View-spec consumer (apply_spec / render_spec): absent
 
 ---
 
@@ -50,10 +57,10 @@ Tests (`test_camera_controls.gd`):
   `cam._pivot != initial_pivot`. Covers THEN "camera pans in direction of drag."
 - `test_pan_direction_not_inverted()` (line 172): At phi=PI/2 (camera on +Z side,
   basis.x = world +X), drags 50 px LEFT (delta.x = -50).
-  Code: `_target_pivot -= (+X) * (-50) * k` → pivot.x += 50k > 0.
+  Code: `_target_pivot -= (+X) * (-50) * k` -> pivot.x += 50k > 0.
   Asserts `cam._pivot.x > 0.0`. Covers THEN "movement direction not inverted."
 
-Status: **COVERED** — implementation and GDScript behavioral tests both present and passing.
+Status: **COVERED**
 
 ---
 
@@ -66,11 +73,11 @@ Status: **COVERED** — implementation and GDScript behavioral tests both presen
   to the right, as in Google Maps)
 
 Same code and test as above. After leftward drag, pivot.x > 0 means camera moves +X,
-scene content appears to move left — right-side content revealed. Google Maps convention. ✓
+scene content appears to move left — right-side content revealed. Google Maps convention.
 
 Test: `test_pan_direction_not_inverted()` — direction derivation comment confirms logic.
 
-Status: **COVERED**.
+Status: **COVERED**
 
 ---
 
@@ -82,25 +89,25 @@ Implementation:
 - WHEEL_UP (line 120-123): `_zoom_toward_point(_get_ground_point_under_cursor(_last_mouse), -1)`.
 - `_zoom_toward_point()` (lines 170-178): `zoom_ratio = new_dist / old_dist`.
   Zoom-in: ratio < 1. `_target_pivot = world_pt + (_target_pivot - world_pt) * zoom_ratio`
-  → pivot shifts toward cursor.
+  -> pivot shifts toward cursor.
 
 Tests:
 - `test_zoom_in_shifts_pivot_toward_cursor()` (line 203): cursor=(10,0,0), asserts
   `_target_pivot.x > 0.0`. Covers THEN "view zooms toward cursor."
 - `test_zoom_in_cursor_point_invariant()` (line 219): cursor=(20,0,0), asserts
   `0 < _target_pivot.x < 20`. Derivation: new_pivot.x = 20*(1-ratio), 0 < ratio < 1
-  → 0 < new_pivot.x < 20. Covers THEN "component stays under cursor."
+  -> 0 < new_pivot.x < 20. Covers THEN "component stays under cursor."
 
 **Scenario: Zooming out**
 
 Implementation: WHEEL_DOWN (lines 125-128): `_zoom_toward_point(world_pt, 1)`.
-Zoom-out: ratio > 1 → pivot moves away from cursor.
+Zoom-out: ratio > 1 -> pivot moves away from cursor.
 
 Test:
 - `test_zoom_out_shifts_pivot_away_from_cursor()` (line 234): cursor=(10,0,0), asserts
-  `_target_pivot.x < 0.0`. Derivation: new_pivot.x = 10*(1-ratio), ratio > 1 → x < 0. ✓
+  `_target_pivot.x < 0.0`. Derivation: new_pivot.x = 10*(1-ratio), ratio > 1 -> x < 0.
 
-Status: **COVERED**.
+Status: **COVERED**
 
 ---
 
@@ -118,12 +125,11 @@ Tests:
 - `test_orbit_around_cursor_point()` (line 275): Calls `begin_orbit_at_world_point(world_pt)`,
   asserts `cam._pivot == world_pt`. Covers THEN "orbits around cursor point at orbit start."
 - `test_orbit_pivot_is_world_point()` (line 291): Asserts `cam._pivot.is_equal_approx(world_pt)`.
-  Covers THEN "component remains at visual center" (pivot = world_pt → camera always
-  looks at the orbited component).
+  Covers THEN "component remains at visual center."
 - `test_orbit_uses_right_mouse_button()` (line 255): RMB press + drag asserts
   `_phi != initial_phi`. Confirms right mouse button triggers orbit.
 
-Status: **COVERED**.
+Status: **COVERED**
 
 ---
 
@@ -138,8 +144,7 @@ Implementation:
 
 Tests:
 - `test_smooth_zoom_target_differs_from_distance_after_scroll()` (line 310): After WHEEL_UP,
-  asserts `_target_distance < _distance` — target changed but current has not snapped.
-  Covers THEN "not instantaneous."
+  asserts `_target_distance < _distance`. Covers THEN "not instantaneous."
 - `test_smooth_zoom_process_interpolates_distance()` (line 325): After `_process(0.1)` with
   current=40 and target=20, asserts `20 < _distance < 40`. Confirms interpolation active.
 
@@ -152,7 +157,7 @@ Test:
 - `test_pan_proportional_to_drag_speed()` (line 338): 10 px vs 50 px drag, asserts
   `cam_fast._pivot.length() > cam_slow._pivot.length()`. Covers THEN "proportional."
 
-Status: **COVERED**.
+Status: **COVERED**
 
 ---
 
@@ -191,5 +196,5 @@ Direction derivations independently confirmed before reading test assertions.
 
 All 5 SHALL/MUST requirements and all 7 scenarios: COVERED.
 All 19 automated checks pass (RESULT: ALL PASS).
-91 GDScript tests pass, 0 fail. 94 pytest tests pass.
+91 GDScript tests pass, 0 fail.
 No prohibited out-of-scope features present.
