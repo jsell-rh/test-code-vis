@@ -1,193 +1,88 @@
 ---
 verdict: pass
 ---
-# Task-034 Fix: Remove Moldable Views + Add Kartograph Integration Test
+# Reviewer Verdict: task-034 — PASS
 
-## Changes Made
+## Summary
 
-### Fix 1 — Remove moldable-views (was FAIL)
+All 19 automated checks exit 0. Both blocking failures identified in the previous
+review cycle have been remediated:
 
-Deleted all prohibited files and wiring:
+1. **Not In Scope (Moldable Views) — FIXED.** Commit `db62665` deleted
+   `llm_view_generator.gd`, `scene_interpreter.gd`, their three test suites, and
+   stripped all wiring from `main.gd` (preloads, `_scene_interpreter` instance,
+   `_question_input`/`_ask_button` vars, `_add_question_ui()` call-site, and the four
+   pipeline functions). `run_tests.gd` had the three suite registrations removed.
+   Independent grep for `LlmViewGenerator`, `SceneInterpreter`, `build_prompt`,
+   `apply_spec`, `moldable`, `_call_llm`, `_add_question_ui` across `godot/` returns
+   no matches.
 
-- `godot/scripts/llm_view_generator.gd` — removed
-- `godot/scripts/scene_interpreter.gd` — removed
-- `godot/tests/test_llm_view_generator.gd` — removed
-- `godot/tests/test_scene_interpreter.gd` — removed
-- `godot/tests/test_moldable_views_pipeline.gd` — removed
-- `godot/scripts/main.gd` — removed `const LlmViewGenerator`, `const SceneInterpreter`
-  preloads; removed `var _scene_interpreter`, `var _question_input`, `var _ask_button`;
-  removed `_add_question_ui()` call from `_ready()` and deleted all four moldable-views
-  functions (`_add_question_ui`, `_on_ask_button_pressed`, `_on_question_submitted`,
-  `_call_llm`).
-- `godot/tests/run_tests.gd` — removed the three moldable-views suite registrations
-  (`test_llm_view_generator.gd`, `test_scene_interpreter.gd`,
-  `test_moldable_views_pipeline.gd`).
+2. **Target Codebase Integration Test (was PARTIAL) — FIXED.** Commit `6c51d93`
+   added `extractor/tests/test_kartograph_integration.py` with
+   `test_kartograph_integration_bounded_contexts`. It invokes `main()` against
+   `~/code/kartograph/src/api`, asserts exit 0, file written, JSON has `nodes` and
+   `edges`, and all three known bounded contexts (`iam`, `graph`, `shared_kernel`) are
+   present. Skipped when path absent (CI-safe). `check-kartograph-integration-test.sh`
+   exits 0.
 
-### Fix 2 — Kartograph integration test (was PARTIAL)
+## Check Script Output (run-all-checks.sh — verbatim)
 
-Added `extractor/tests/test_kartograph_integration.py` with
-`test_kartograph_integration_bounded_contexts`, which:
-- Invokes `main([str(KARTOGRAPH_SRC), "--output", str(out)])` against
-  `~/code/kartograph/src/api`
-- Asserts exit code 0, output file created, output JSON has `nodes` and `edges` keys
-- Asserts bounded context ids `iam`, `graph`, and `shared_kernel` all appear
-- Skipped automatically when the path does not exist (CI without local clone)
+All 19 checks: EXIT 0
 
-## THEN-Clause → Test Mapping
-
-| THEN-clause (verbatim) | Test function | Location |
-|---|---|---|
-| kartograph's structure is visualized in 3D space | test_kartograph_integration_bounded_contexts | extractor/tests/test_kartograph_integration.py |
-| a JSON scene graph file is produced | test_main_writes_json_output | extractor/tests/test_cli.py |
-| the Godot application can load that file and render the scene | test_scene_graph_is_loaded_from_file | godot/tests/test_scene_graph_loading.gd |
-| all bounded contexts are visible as distinct volumes | test_far_distance_shows_only_bounded_contexts | godot/tests/test_spatial_structure.gd |
-| their relative positions reflect their coupling | test_distinct_contexts_occupy_distinct_regions | godot/tests/test_spatial_structure.gd |
-| dependencies between contexts are visible as connections | test_edge_line_mesh_created | godot/tests/test_dependency_rendering.gd |
-| the internal layers become visible | test_medium_distance_shows_modules | godot/tests/test_spatial_structure.gd |
-| internal dependencies are shown | test_near_distance_shows_all_nodes | godot/tests/test_spatial_structure.gd |
-| the user can see relative sizes of internal modules | test_mesh_sizes_proportional_to_metric | godot/tests/test_size_encoding.gd |
-| it appears as a labeled geometric volume | test_volumes_created_for_each_node | godot/tests/test_scene_graph_loading.gd |
-| its size reflects its relative complexity | test_mesh_sizes_proportional_to_metric | godot/tests/test_size_encoding.gd |
-| containment is shown by nesting | test_module_parented_inside_context | godot/tests/test_containment_rendering.gd |
-| the module's name is visible as a text label | test_labels_are_billboard_and_readable | godot/tests/test_scene_graph_loading.gd |
-| the label remains readable at the current zoom level | test_labels_are_billboard_and_readable | godot/tests/test_scene_graph_loading.gd |
-| a line or connection is drawn between them | test_edge_line_mesh_created | godot/tests/test_dependency_rendering.gd |
-| the direction of the dependency is discernible | test_direction_indicator_cone_created | godot/tests/test_dependency_rendering.gd |
-| they can pan, zoom, and rotate the view | test_scroll_up_decreases_distance / test_pan_drag_right_increases_pivot_x / test_orbit_horizontal_drag_changes_phi | godot/tests/test_camera_controls.gd + test_ux_polish.gd |
-| they can smoothly transition between overview and detail levels | test_lod_integration_far_hides_modules_in_built_scene | godot/tests/test_spatial_structure.gd |
-| conformance mode is NOT implemented | check-not-in-scope.sh | .hyperloop/checks/ |
-| evaluation mode is NOT implemented | check-not-in-scope.sh | .hyperloop/checks/ |
-| simulation mode is NOT implemented | check-not-in-scope.sh | .hyperloop/checks/ |
-| data flow visualization is NOT implemented | check-not-in-scope.sh | .hyperloop/checks/ |
-| moldable views is NOT implemented | check-not-in-scope.sh | .hyperloop/checks/ |
-| spec extraction is NOT implemented | check-not-in-scope.sh | .hyperloop/checks/ |
-| first-person navigation is NOT implemented | check-not-in-scope.sh | .hyperloop/checks/ |
-
-## Untestable THEN-Clauses
-
-None. All THEN-clauses are testable in headless/CI mode.
-
-## Scope Check Output
-
-OK: No prohibited (not-in-scope) features detected.
-
-## Check Script Results
-
-=== run-all-checks.sh ===
-
---- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-034' has 6 commit(s) above main.
-[EXIT 0]
-
---- check-checks-in-sync.sh ---
-OK: All check scripts from main are present in this worktree
-[EXIT 0]
-
---- check-clamp-boundary-tests.sh ---
-OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
-OK: All 4 clamped variable(s) have boundary-asserting tests
-[EXIT 0]
-
---- check-coordinator-calls-pipeline.sh ---
-SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
-      This check only applies to tasks that implement a view-spec consumer.
-[EXIT 0]
-
---- check-direction-test-derivations.sh ---
-OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
-OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
-OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
-OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
-OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_increases_pivot_x — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_decreases_pivot_x — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
-
-OK: All 10 direction/sign-convention test(s) contain derivation comments.
-[EXIT 0]
-
---- check-end-to-end-integration-test.sh ---
-SKIP: Both a pipeline producer and consumer must exist for this check to apply.
-      Producer (build_prompt / parse_response) found: none
-      Consumer (apply_spec / render_spec) found: none
-[EXIT 0]
-
---- check-extractor-cli-tested.sh ---
-OK: A test calls main() from the extractor CLI entry point.
-[EXIT 0]
-
---- check-extractor-stdlib-only.sh ---
-OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
-[EXIT 0]
-
---- check-gdscript-only-test.sh ---
-OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
-[EXIT 0]
-
---- check-gdscript-test-bool-return.sh ---
-OK: No inert bool-returning test functions found in Pattern-1 suites (4 suite(s) checked)
-[EXIT 0]
-
---- check-kartograph-integration-test.sh ---
-OK: Integration test referencing kartograph codebase with expected-context assertions found.
-[EXIT 0]
-
---- check-not-in-scope.sh ---
-OK: No prohibited (not-in-scope) features detected.
-[EXIT 0]
-
---- check-pipeline-wiring.sh ---
-SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
-      This check only applies to tasks that implement the LLM→view-spec pipeline.
-[EXIT 0]
-
---- check-report-scope-section.sh ---
-OK: worker-result.yaml contains a valid '## Scope Check Output' section.
-[EXIT 0]
-
---- extractor-lint.sh ---
-Linting extractor...
-All checks passed!
-9 files already formatted
-Running extractor tests...
-..............................................................................
-.......................
-95 passed in 0.42s
-Extractor checks passed.
-[EXIT 0]
-
---- godot-compile.sh ---
-Compiling Godot project...
-Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
-
-Godot project compiles successfully.
-[EXIT 0]
-
---- godot-fileaccess-tested.sh ---
-Found FileAccess.open() in 1 production script file(s).
-OK: FileAccess.open() is exercised in 2 test file(s).
-[EXIT 0]
-
---- godot-label3d.sh ---
-PASS: All Label3D nodes have billboard and pixel_size set and tested.
-[EXIT 0]
-
---- godot-tests.sh ---
-Found 12 GDScript test file(s) in godot/tests/.
-Running custom headless test runner...
-Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
-
-=== code-vis GDScript Tests ===
-
-Results: 116 passed, 0 failed
-
-GDScript behavioral tests passed.
-[EXIT 0]
-
-=== Summary: 19 check(s) run ===
+```
+check-branch-has-commits.sh      OK: Branch has 7 commit(s) above main.
+check-checks-in-sync.sh          OK: All check scripts from main present.
+check-clamp-boundary-tests.sh    OK: All 4 clamped variables have boundary tests.
+check-coordinator-calls-pipeline SKIP (no consumer method; N/A for this task).
+check-direction-test-derivations OK: All 10 direction tests have derivation comments.
+check-end-to-end-integration-test SKIP (no producer/consumer; N/A).
+check-extractor-cli-tested.sh    OK: main() called in test.
+check-extractor-stdlib-only.sh   OK: stdlib-only import test present.
+check-gdscript-only-test.sh      OK: DirAccess iteration test present.
+check-gdscript-test-bool-return  OK: No inert bool-returning tests in 4 suites.
+check-kartograph-integration-test OK: Integration test with context assertions found.
+check-not-in-scope.sh            OK: No prohibited features detected.
+check-pipeline-wiring.sh         SKIP (no LLM pipeline; N/A).
+check-report-scope-section.sh    OK: worker-result.yaml has valid Scope Check Output.
+extractor-lint.sh                OK: ruff clean, 95 tests pass.
+godot-compile.sh                 OK: Godot 4.6.2 compiles.
+godot-fileaccess-tested.sh       OK: FileAccess tested in 2 test files.
+godot-label3d.sh                 PASS: All Label3D billboard+pixel_size tested.
+godot-tests.sh                   OK: 116 passed, 0 failed.
 RESULT: ALL PASS
+```
+
+## Scope Audit (independent — not just check-not-in-scope.sh)
+
+Grepped `godot/` for: `llm`, `LlmView`, `SceneInterpreter`, `apply_spec`,
+`build_prompt`, `parse_response`, `moldable`, `question_ui`, `_call_llm`,
+`_add_question_ui` — **zero matches**.
+
+Grepped for conformance/evaluation/simulation modes, data-flow keywords, first-person
+navigation — **zero matches** in `godot/scripts/`.
+
+`flow_overlay.gd` is pre-existing (added on `main` before this branch) and uses
+path/traffic terminology, not "data flow" — not a scope violation introduced here.
+
+## Commit Trailers
+
+All implementation commits carry both required trailers:
+- `Spec-Ref: specs/prototype/prototype-scope.spec.md@12e8314c64416c10c5268a9d0f3ec54edb221c07`
+- `Task-Ref: task-034`
+
+Orchestrator-only commits (`orchestrator: clean worker verdict`,
+`chore(task-034): spec alignment review — verdict fail`) carry no trailers — acceptable.
+
+## Requirement Status
+
+| Requirement                 | Status          | Notes                                                     |
+|-----------------------------|-----------------|-----------------------------------------------------------|
+| Target Codebase             | COVERED         | Integration test added; skips gracefully when path absent |
+| Two-Stage Pipeline          | COVERED         | extractor → JSON → Godot load; both stages tested         |
+| Top-Down Architectural View | COVERED         | Camera defaults, LOD, coupling layout tested              |
+| Zoom to Detail              | COVERED         | LOD transitions tested end-to-end                         |
+| Abstract Visual Language    | COVERED         | BoxMesh, nesting, translucency tested                     |
+| Readable Labels             | COVERED         | Billboard Label3D tested                                  |
+| Dependency Visualization    | COVERED         | Line + arrowhead cone, direction, color tested            |
+| Navigation                  | COVERED         | Pan, zoom, orbit all tested                               |
+| Not In Scope                | COVERED         | All prohibited features absent; check exits 0             |
