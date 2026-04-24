@@ -131,8 +131,17 @@ func _handle_motion(event: InputEventMouseMotion) -> void:
 		_update_transform()
 
 	elif _panning:
-		# Move the pivot in the camera's local XZ plane.
-		# Non-inverted: right = camera-right (basis.x, no negation).
+		# Move the pivot in the camera's local XZ plane using the map-grab model.
+		#
+		# Map-grab (Google Maps) sign derivation — drag right (delta.x > 0):
+		#   drag right → delta.x = +50 → _pivot -= right(1,0,0) * +50 * pan_amount
+		#   → pivot.x decreases → camera looks left → scene shifts right on screen
+		#   → content from the left enters view ✓  (matches "scene moves right" = drag direction)
+		#
+		# Drag left (delta.x < 0):
+		#   drag left → delta.x = -50 → _pivot -= right(1,0,0) * (-50) * pan_amount
+		#   → pivot.x increases → camera looks right → scene shifts left on screen
+		#   → content from the right enters view ✓  (spec: "dragging left reveals content to the right")
 		var right: Vector3 = global_transform.basis.x
 		var forward: Vector3 = Vector3(
 			global_transform.basis.z.x,
@@ -140,8 +149,8 @@ func _handle_motion(event: InputEventMouseMotion) -> void:
 			global_transform.basis.z.z
 		).normalized()
 		var pan_amount: float = pan_speed * (_distance * 0.05 + 1.0)
-		_pivot += right * delta.x * pan_amount
-		_pivot += forward * delta.y * pan_amount
+		_pivot -= right * delta.x * pan_amount
+		_pivot -= forward * delta.y * pan_amount
 		_update_transform()
 
 
