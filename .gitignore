@@ -6,3 +6,4 @@ __pycache__/
 .venv/
 worktrees/
 .agent-memory/
+.hyperloop/state/
