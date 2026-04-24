@@ -1,57 +1,35 @@
 ---
 verdict: pass
 ---
-## Summary
+## Reviewer Verification — task-028 (system-purpose spec THEN-clause tests)
 
-Converted all 7 inert bool-returning test functions in `godot/tests/test_system_purpose.gd`
-to use `_check()` under Pattern 1 (the `_test_failed` runner pattern).
+### Context
 
-The file declares `var _test_failed: bool = false`, which the runner detects as Pattern 1.
-Under Pattern 1, the runner ignores each test method's return value and only checks
-whether `_test_failed` became `true` via `_check()`. The 7 affected functions were
-returning bool without calling `_check()`, so they always reported PASS regardless of
-outcome (inert tests).
+A prior review round correctly identified that 7 of 8 test functions in
+`godot/tests/test_system_purpose.gd` were inert under Pattern-1: each returned
+`bool` without calling `_check()`, so the runner (which ignores return values and
+reads only `_test_failed`) always reported PASS regardless of assertion outcome.
 
-### Tests fixed (all converted from `-> bool` to `-> void` + `_check()`):
+This review verifies that the fix commit (`37f00db`) genuinely resolves that defect.
 
-1. `test_bounded_context_nodes_distinguishable_by_type`
-2. `test_node_size_grows_with_scene_graph_size_value`
-3. `test_dependency_edges_expose_coupling_in_scene`
-4. `test_cross_context_edge_has_directional_arrowhead`
-5. `test_scene_graph_loader_reads_codebase_json`
-6. `test_structural_metrics_available_in_scene`
-7. `test_navigation_methods_exist_on_camera_controller`
+---
 
-### THEN-clause → test mapping
+### Scope Check Output
 
-| THEN-clause | Test function | Status |
-|---|---|---|
-| Human can correctly answer architectural questions (labels) | `test_all_scene_nodes_have_visible_name_labels` | COVERED |
-| Human can correctly answer architectural questions (type visual) | `test_bounded_context_nodes_distinguishable_by_type` | COVERED |
-| Human can identify structural problems (size) | `test_node_size_grows_with_scene_graph_size_value` | COVERED |
-| Human can identify structural problems (coupling) | `test_dependency_edges_expose_coupling_in_scene` | COVERED |
-| Human can predict impact of proposed changes (arrowhead) | `test_cross_context_edge_has_directional_arrowhead` | COVERED |
-| Codebase treated as realized design | `test_scene_graph_loader_reads_codebase_json` | COVERED |
-| Human can determine build is architecturally sound | `test_structural_metrics_available_in_scene` | COVERED |
-| Human can explore impact of potential changes | `test_navigation_methods_exist_on_camera_controller` | COVERED |
-| Spec treated as intended design | N/A (out of prototype scope) | N/A |
-| Relationship between spec and code available | N/A (out of prototype scope) | N/A |
-| Human can determine whether build matches spec | N/A (out of prototype scope) | N/A |
-
-### Test results
-
-All 8 tests in `test_system_purpose.gd` now PASS. 179 total tests pass, 0 fail.
-
-## Scope Check Output
-
+```
 OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+```
 
-## Check Script Results
+---
 
+### run-all-checks.sh Output (verbatim, post-sync from main)
+
+```
 === run-all-checks.sh ===
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-028' has 8 commit(s) above main.
+OK: Branch 'hyperloop/task-028' has 10 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -71,30 +49,14 @@ Pipeline consumer defined in: godot/scripts/scene_interpreter.gd
 Pipeline producer defined in: godot/scripts/llm_view_generator.gd
 Consumer caller(s) found: godot/scripts/main.gd
 Producer caller(s) found: godot/scripts/main.gd
-
 OK: Pipeline consumer (and producer if applicable) are called from coordinator scripts.
 [EXIT 0]
 
 --- check-direction-test-derivations.sh ---
-OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
-OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
-OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
-OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
-OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_increases_pivot_x — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_decreases_pivot_x — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
-OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
-OK: godot/tests/test_system_purpose.gd :: test_cross_context_edge_has_directional_arrowhead — derivation comment found.
-
 OK: All 11 direction/sign-convention test(s) contain derivation comments.
 [EXIT 0]
 
 --- check-end-to-end-integration-test.sh ---
-Producer class found: godot/scripts/llm_view_generator.gd
-Consumer class found: godot/scripts/scene_interpreter.gd
-
 OK: Integration test found that exercises both pipeline stages: godot/tests/test_moldable_views_pipeline.gd
 [EXIT 0]
 
@@ -123,32 +85,16 @@ OK: No prohibited (not-in-scope) features detected.
 [EXIT 0]
 
 --- check-pipeline-wiring.sh ---
-Stage 1 (view-spec producer) found in: godot/scripts/llm_view_generator.gd
-godot/scripts/main.gd
-godot/scripts/scene_interpreter.gd
-Stage 2 (scene consumer) evidence — pattern '\.visible\s*=' found in: godot/scripts/flow_overlay.gd
-godot/scripts/lod_manager.gd
-godot/scripts/scene_interpreter.gd
-Stage 2 rendering tests found: godot/tests/test_containment_rendering.gd
-godot/tests/test_dependency_rendering.gd
-godot/tests/test_flow_overlay.gd
-godot/tests/test_moldable_views_pipeline.gd
-godot/tests/test_node_renderer.gd
-godot/tests/test_scene_graph_loading.gd
-godot/tests/test_scene_interpreter.gd
-godot/tests/test_spatial_structure.gd
-
 OK: View-spec pipeline appears wired end-to-end (producer + consumer + rendering tests).
 [EXIT 0]
 
 --- check-report-scope-section.sh ---
-(will be re-run after worker-result.yaml is created)
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
 
 --- extractor-lint.sh ---
-Linting extractor...
 All checks passed!
 9 files already formatted
-Running extractor tests...
 102 passed in 0.16s
 Extractor checks passed.
 [EXIT 0]
@@ -158,20 +104,74 @@ Godot project compiles successfully.
 [EXIT 0]
 
 --- godot-fileaccess-tested.sh ---
-OK
+OK: FileAccess.open() is exercised in 2 test file(s).
 [EXIT 0]
 
 --- godot-label3d.sh ---
-OK
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
 [EXIT 0]
 
 --- godot-tests.sh ---
 Results: 179 passed, 0 failed
 [EXIT 0]
 
-## Untestable THEN-Clauses
+=== Summary: 19 check(s) run ===
+RESULT: ALL PASS
+```
 
-None — all testable THEN-clauses have direct test coverage. The three N/A clauses
-(spec-as-intended-design, relationship-available-for-inspection, build-matches-spec)
-are excluded from prototype scope per prototype-scope.spec.md and documented as such
-in the test file's header comment.
+---
+
+### Fix Verification
+
+**Commit `37f00db`** — "fix(task-028): convert 7 inert bool-return tests to _check() in Pattern-1 suite"
+
+Read the diff directly. All 7 previously inert functions were converted:
+
+| Function | Before | After | Correct? |
+|---|---|---|---|
+| `test_bounded_context_nodes_distinguishable_by_type` | `-> bool`, `return found_transparent_bc` | `-> void`, `_check(found_transparent_bc, …)` | ✓ |
+| `test_node_size_grows_with_scene_graph_size_value` | `-> bool`, `return big_mesh_x > small_mesh_x` | `-> void`, `_check(big_mesh_x > small_mesh_x, …)` + early return guards converted | ✓ |
+| `test_dependency_edges_expose_coupling_in_scene` | `-> bool`, `return found_line` | `-> void`, `_check(found_line, …)` | ✓ |
+| `test_cross_context_edge_has_directional_arrowhead` | `-> bool`, `return true/false` in loop | `-> void`, accumulator flag + `_check(found_arrowhead, …)` | ✓ |
+| `test_scene_graph_loader_reads_codebase_json` | `-> bool`, compound `return` | `-> void`, three separate `_check()` calls | ✓ |
+| `test_structural_metrics_available_in_scene` | `-> bool`, `return has_size_encoded_box and has_edge_line` | `-> void`, two `_check()` calls | ✓ |
+| `test_navigation_methods_exist_on_camera_controller` | `-> bool`, compound `return` | `-> void`, five `_check()` calls | ✓ |
+
+Confirmed: no `-> bool` signatures remain in any `func test_` in `test_system_purpose.gd`. The file has 21 `_check()` calls across all 8 test functions.
+
+---
+
+### THEN-clause → Test Mapping (independently verified)
+
+Each assertion predicate was read from the test body and compared against the THEN-clause.
+
+| THEN-clause | Test function | Predicate match | Status |
+|---|---|---|---|
+| Human can correctly answer architectural questions (labels + billboard) | `test_all_scene_nodes_have_visible_name_labels` | Asserts `billboard == BILLBOARD_ENABLED`, `pixel_size > 0.0`, label text matches node names | COVERED |
+| Human can correctly answer architectural questions (type visual) | `test_bounded_context_nodes_distinguishable_by_type` | Asserts `TRANSPARENCY_ALPHA` on BC MeshInstance3D material | COVERED |
+| Human can identify structural problems (size encoding) | `test_node_size_grows_with_scene_graph_size_value` | Asserts `big BoxMesh.size.x > small BoxMesh.size.x` from fixture with size 5.0 vs 1.0 | COVERED |
+| Human can identify structural problems (coupling) | `test_dependency_edges_expose_coupling_in_scene` | Asserts ImmediateMesh present for coupling line | COVERED |
+| Human can predict impact of proposed changes (direction) | `test_cross_context_edge_has_directional_arrowhead` | Asserts CylinderMesh with `top_radius == 0.0` present | COVERED |
+| Codebase treated as realized design | `test_scene_graph_loader_reads_codebase_json` | Asserts `nodes` key, `edges` key, node count == 2 | COVERED |
+| Human can determine build is architecturally sound | `test_structural_metrics_available_in_scene` | Asserts BoxMesh (size-encoded) AND ImmediateMesh (coupling edge) present | COVERED |
+| Human can explore impact of potential changes | `test_navigation_methods_exist_on_camera_controller` | Asserts five methods on CameraController: set_pivot, get_distance, _handle_button, _handle_motion, _zoom_toward_cursor | COVERED |
+| Spec treated as intended design | N/A — out of prototype scope | — | N/A |
+| Relationship between spec and code available | N/A — out of prototype scope | — | N/A |
+| Human can determine whether build matches spec | N/A — out of prototype scope | — | N/A |
+
+---
+
+### Commit Trailers
+
+All task implementation commits carry `Spec-Ref` and `Task-Ref` trailers. Verified
+via `git log main..HEAD` inspection. Orchestrator infrastructure commits (`orchestrator:`)
+are exempt from this requirement.
+
+---
+
+### Verdict: PASS
+
+All 19 checks exit 0. The 7 previously inert tests are now functional under Pattern-1.
+All 8 in-scope THEN-clauses have direct `_check()` assertions whose predicates
+match the THEN-clause observable outcomes. 179 tests pass, 0 fail. Commit trailers
+present on all task commits. No prohibited features detected.
