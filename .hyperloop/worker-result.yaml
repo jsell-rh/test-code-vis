@@ -130,3 +130,9 @@ on real Godot scene-tree nodes (not compilation-only checks).
 The fixed-primitive-set contract is enforced at both the parse layer (VALID_OPS filter)
 and the render layer (match fall-through).
 No new rendering logic can enter the system at runtime.
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
