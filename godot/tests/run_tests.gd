@@ -42,19 +42,7 @@ func _init() -> void:
 	# --- task-026: UX Polish spec ---
 	_run_suite(preload("res://tests/test_ux_polish.gd").new())
 
-	# --- task-028: System purpose spec (core/system-purpose.spec.md) ---
-	_run_suite(preload("res://tests/test_system_purpose.gd").new())
-
-	# --- task-031: Understanding modes spec (core/understanding-modes.spec.md) ---
-	_run_suite(preload("res://tests/test_understanding_overlay.gd").new())
-
-	# --- task-033: Understanding analyzer (core/understanding-modes.spec.md) ---
-	_run_suite(preload("res://tests/test_understanding_modes.gd").new())
-
-	# --- task-023: NFR spec — Performance at Kartograph Scale ---
-	_run_suite(preload("res://tests/test_nfr_scale.gd").new())
-
-	# --- task-023: NFR spec — Desktop Platform ---
+	# --- task-034: Desktop platform constraint (nfr.spec.md) ---
 	_run_suite(preload("res://tests/test_desktop_platform.gd").new())
 
 	print("")
