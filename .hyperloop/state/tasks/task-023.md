@@ -3,7 +3,7 @@ id: task-023
 title: 'Godot: performance validation at kartograph scale (≥30fps navigation)'
 spec_ref: specs/prototype/nfr.spec.md@e2cac130819f13929ab13e324411ac7a23d66b33
 status: in-progress
-phase: spec-reviewer
+phase: mark-pr-ready
 deps:
 - task-007
 - task-008
