@@ -26,7 +26,7 @@ OK: Branch adds/modifies 8 source file(s) outside .hyperloop/:
 [EXIT 0]
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-034' has 47 commit(s) above main.
+OK: Branch 'hyperloop/task-034' has 48 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -239,7 +239,7 @@ OK: No prohibited (not-in-scope) features detected.
 | AND the direction of the dependency is discernible | `test_direction_indicator_cone_created` `test_direction_cone_near_target` | CylinderMesh(top_radius=0) exists; its position is within 2 units of target (20,0,0) — explicit arrowhead rendering | PASS |
 | THEN they can pan, zoom, and rotate the view | `test_lmb_pan_moves_pivot` `test_scroll_up_decreases_distance` `test_orbit_horizontal_drag_changes_phi` | All three navigation modes exercised with real input events | PASS |
 | AND they can smoothly transition between overview and detail levels | `test_zoom_is_interpolated_not_instantaneous` `test_lod_integration_far_hides_modules_in_built_scene` | After scroll-wheel, _distance unchanged; after _process(0.016), partial interpolation confirmed | PASS |
-| THEN 7 prohibited features absent | N/A | check-not-in-scope.sh exits 0; understanding_overlay.gd, understanding_analyzer.gd, test_understanding_modes.gd, test_system_purpose.gd deleted; no LLM/moldable/data-flow/first-person/spec-extraction code found | PASS |
+| THEN 7 prohibited features absent | N/A | check-not-in-scope.sh exits 0; prohibited scripts (understanding_overlay, understanding_analyzer) and their associated test suites were deleted; no LLM/moldable/data-flow/first-person/spec-extraction code found | PASS |
 
 ---
 
