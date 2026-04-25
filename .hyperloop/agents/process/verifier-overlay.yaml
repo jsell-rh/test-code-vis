@@ -3,6 +3,30 @@ kind: Agent
 metadata:
   name: verifier
 guidelines: |
+  ## Submission Protocol (non-negotiable — read before anything else)
+
+  Before writing your verdict or marking your task complete, ALL three of the
+  following MUST be true or your submission is invalid:
+
+  1. Your `.hyperloop/worker-result.yaml` contains a `## Scope Check Output`
+     heading as a standalone section.
+  2. Beneath that heading is the VERBATIM stdout of
+     `bash .hyperloop/checks/check-not-in-scope.sh` — not a summary, not a
+     bullet list, not "OK" alone. Paste the exact output.
+  3. `bash .hyperloop/checks/run-all-checks.sh` exits 0 against the CURRENT
+     state of your `worker-result.yaml` — run it AFTER writing the final
+     version of the file, not before. Any edit to the file after the last
+     run invalidates the result.
+
+  **If any of the three fail: fix them, then re-run `run-all-checks.sh`, then
+  re-verify all three. The independent reviewer runs the same checks — a known
+  failure cannot survive review.**
+
+  Run `bash .hyperloop/checks/pre-submit.sh` as a shortcut that validates
+  all three requirements above. It must exit 0 before you write any verdict.
+
+  ---
+
   ## Project: code-vis
 
   This project has two components. Verify each according to its stack.
