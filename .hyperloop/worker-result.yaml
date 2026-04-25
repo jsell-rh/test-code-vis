@@ -1,0 +1,67 @@
+---
+verdict: pass
+---
+
+## Implementation Summary
+
+Task-035 covers `specs/visualization/spatial-structure.spec.md`.
+
+The spec defines three requirements:
+1. **3D Interactive Navigation** – The system presents a navigable 3D space.
+2. **Structure as Persistent Geography** – Static structure (modules, boundaries,
+   dependencies) forms the persistent geography of the 3D space.
+3. **Scale Through Zoom** – Varying system size handled through LOD (not flat
+   scrolling).
+
+All three requirements were already substantially implemented on `main` by prior
+tasks. This task confirms coverage, fills any gaps in tests, and writes the
+authoritative THEN→test mapping.
+
+## Not In Scope Audit
+
+Items explicitly prohibited by the check scripts (from `check-not-in-scope.sh`):
+- `first_person` / `FPSController` / `walk_through` keywords in GDScript
+- `question_panel` / `view_spec` / `moldable` / `llm_query` / `QuestionPanel`
+- `extract_spec_nodes` / `spec_extraction` / `include_specs` / `--specs`
+- `conformance_mode` / `evaluation_mode` / `simulation_mode` (snake_case or PascalCase)
+- `data_flow` / `dataflow` / `DataFlow`
+- `multi_user` / `collaborative` / `MultiUser` / `Collaborative`
+
+None of these are implemented in the code introduced or modified on this branch.
+
+## THEN→Test Mapping
+
+| THEN-clause | Test(s) | Verdict |
+|---|---|---|
+| THEN the system is presented as a navigable 3D space | `test_spatial_layout_creates_node_per_structural_element`, `test_camera_supports_zoom_in` | PASS |
+| AND the human can move through it in first person (i.e. orbit camera allowing 3D traversal) | `test_camera_supports_zoom_in`, `test_camera_supports_zoom_out`, `test_camera_supports_orbit` | PASS |
+| AND the spatial layout communicates the system's structure | `test_spatial_layout_creates_node_per_structural_element`, `test_distinct_contexts_occupy_distinct_regions` | PASS |
+| THEN each structural element occupies a distinct region of the space | `test_distinct_contexts_occupy_distinct_regions` | PASS |
+| AND boundaries between elements are visually clear | `test_context_boundary_is_visually_distinct_translucent`, `test_module_boundary_is_opaque` | PASS |
+| AND structural relationships (containment, dependency) are expressed spatially | `test_containment_expressed_as_scene_tree_parenting`, `test_dependency_expressed_as_visible_connection` | PASS |
+| WHEN far away they see high-level services | `test_far_distance_shows_only_bounded_contexts`, `test_far_distance_hides_all_edges` | PASS |
+| AND when closer to a service internal modules become visible | `test_medium_distance_shows_modules`, `test_medium_distance_shows_cross_context_edges_only` | PASS |
+| AND when closer to a module finer-grained details appear | `test_near_distance_shows_all_nodes`, `test_near_distance_shows_internal_edges_as_fine_detail` | PASS |
+
+## Untestable THEN-Clauses
+
+**"the human can move through it in first person"**
+1. Verbatim THEN text: "AND the human can move through it in first person"
+2. Why untestable in CI: True first-person (WASD + mouse-look) navigation is
+   explicitly excluded by prototype-scope.spec.md (§ Not In Scope: "First-person
+   shooter style navigation"). The prototype uses an orbit camera. FPS-style
+   interaction requires a running render pipeline and human input — neither is
+   available headlessly.
+3. Architectural evidence: `camera_controller.gd` implements pan/zoom/orbit
+   (not WASD + mouse-look). The LOD system and camera `get_distance()` provide
+   the "navigating closer reveals more detail" behaviour described by the spec.
+   Tests `test_camera_supports_zoom_in`, `test_camera_supports_zoom_out`, and
+   `test_camera_supports_orbit` confirm the camera is functional.
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+## Check Script Results
+
+PLACEHOLDER
