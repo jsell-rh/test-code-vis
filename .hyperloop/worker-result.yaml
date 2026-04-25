@@ -3,11 +3,12 @@ verdict: pass
 ---
 Task-034: prototype-scope.spec.md implementation — PASS.
 
-Independent review confirms all 27 automated checks pass (synced from main before
-running), 100 GDScript tests pass, and 97 Python tests pass. Every THEN-clause is
-implemented with a behavioral test whose assertion predicate matches the spec clause.
-No prohibited features detected. Commit trailers (Spec-Ref, Task-Ref) present on
-all implementation commits.
+Independent reviewer verification (fresh session, checks synced from main before running):
+- All 27 automated checks pass (run-all-checks.sh exits 0).
+- 100 GDScript tests pass, 97 Python tests pass.
+- All THEN-clauses mapped to named tests; predicates verified by reading test bodies.
+- No prohibited features present.
+- Commit trailers (Spec-Ref, Task-Ref) present on all implementation commits.
 
 ## Scope Check Output
 
@@ -66,20 +67,28 @@ colour difference alone.
 
 **Coupling test quality**: test_coupled_bcs_are_closer_than_uncoupled VARIES the coupling
 fixture (auth--shared_kernel coupled; auth--billing uncoupled) and asserts the relative
-distance ordering. Algorithm-quality confirmed.
+distance ordering. Algorithm-quality confirmed by reading test body (lines 435-462,
+test_extractor.py). test_complexity_and_coupling_both_reflected also verified: varies LOC
+(100 vs 1) and coupling (big_ctx→ctx_c edge), asserts size ordering AND positional proximity.
 
-**Complexity+coupling combined test**: test_complexity_and_coupling_both_reflected uses a
-4-BC fixture with differing LOC counts and coupling edges. Asserts BOTH big_ctx.size >
-small_ctx.size AND dist(big_ctx, ctx_c) < dist(big_ctx, ctx_d). Both predicates are
-algorithm-quality (vary inputs, assert relative outputs).
+**Pan direction sign chain**: Reviewer independently derived: drag right → delta.x = +50 →
+_pivot += basis.x * +50 * pan_amount (camera_controller.gd line 143) → in headless tests
+basis.x = (1,0,0) → pivot.x increases. Test asserts pivot.x > initial_x. Correct non-inverted
+mapping. check-pan-grab-model-comments.sh exits 0, user-visible-outcome language confirmed in
+derivation comments.
 
-**Pan direction sign chain**: Camera-pan model. Derivation comment traces drag right ->
-delta.x +50 -> pivot.x increases -> scene shifts right -> right-side content enters view.
-User-visible-outcome language present. Internally consistent. check-pan-grab-model-comments.sh
-exits 0.
+**Bool-returning tests in test_ux_polish.gd**: test_ux_polish.gd does NOT declare
+`var _test_failed` — it is a Pattern-2 suite. run_tests.gd detects pattern by checking
+`get_script_property_list()` for `_test_failed`. Pattern-2 tests return true/false directly.
+check-gdscript-test-bool-return.sh exits 0 (only checks Pattern-1 suites for inert bools).
+All test_ux_polish.gd functions are live — false returns would correctly cause FAIL output.
 
-**Process note**: check-checks-in-sync.sh confirmed all check scripts present before and
-after reviewer sync from main. No missing check scripts.
+**Commit count note**: worker-result.yaml stored "19 commits" at time of previous write;
+fresh check-branch-has-commits.sh reports 20 (one chore commit was added after). Cosmetic
+self-referential artifact; not a functional failure. Check exits 0.
+
+**Process**: .hyperloop/checks/ synced from main via `git checkout main -- .hyperloop/checks/`
+before running run-all-checks.sh. check-checks-in-sync.sh confirms all scripts present.
 
 ## Check Script Results (verbatim, run-all-checks.sh after syncing from main)
 
@@ -98,7 +107,7 @@ OK: Branch adds/modifies 8 source file(s) outside .hyperloop/:
 [EXIT 0]
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-034' has 19 commit(s) above main.
+OK: Branch 'hyperloop/task-034' has 20 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -233,7 +242,7 @@ Linting extractor...
 All checks passed!
 9 files already formatted
 Running extractor tests...
-97 passed in 0.68s
+97 passed in 0.66s
 Extractor checks passed.
 [EXIT 0]
 
