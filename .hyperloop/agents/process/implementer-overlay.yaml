@@ -5,6 +5,13 @@ metadata:
 guidelines: |
   ## Project: code-vis
 
+  **Checkpoint commit (first action, no exceptions):** Before reading any spec, exploring
+  any code, or writing anything, confirm you are on the task branch and create an empty
+  checkpoint commit: `git commit --allow-empty -m "chore: begin <task-id>"`. This is the
+  only way to signal the agent is running; if the session crashes without it, the
+  orchestrator sees "agent future missing or failed" and the entire cycle is lost. Do this
+  before everything else.
+
   This project has two components with different languages and tooling. Understand which
   component your task targets before writing code.
 
