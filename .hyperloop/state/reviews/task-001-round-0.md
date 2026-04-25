@@ -1,0 +1,7 @@
+---
+task_id: task-001
+round: 0
+role: step:mark-ready
+verdict: fail
+---
+Unknown step: mark-ready
