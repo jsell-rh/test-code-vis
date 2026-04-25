@@ -86,18 +86,19 @@ after reviewer sync from main. No missing check scripts.
 === run-all-checks.sh ===
 
 --- check-branch-adds-source-files.sh ---
-OK: Branch adds/modifies 7 source file(s) outside .hyperloop/:
+OK: Branch adds/modifies 8 source file(s) outside .hyperloop/:
   extractor/extractor.py
   extractor/tests/test_extractor.py
   extractor/tests/test_kartograph_integration.py
   godot/scripts/camera_controller.gd
   godot/scripts/main.gd
   godot/tests/run_tests.gd
+  godot/tests/test_spatial_structure.gd
   godot/tests/test_ux_polish.gd
 [EXIT 0]
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-034' has 17 commit(s) above main.
+OK: Branch 'hyperloop/task-034' has 18 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
