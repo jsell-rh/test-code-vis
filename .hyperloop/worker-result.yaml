@@ -98,7 +98,7 @@ OK: Branch adds/modifies 8 source file(s) outside .hyperloop/:
 [EXIT 0]
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-034' has 18 commit(s) above main.
+OK: Branch 'hyperloop/task-034' has 19 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
