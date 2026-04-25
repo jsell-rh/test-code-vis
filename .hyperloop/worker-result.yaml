@@ -1,0 +1,124 @@
+---
+verdict: pass
+---
+
+## Spec Alignment Review: specs/visualization/spatial-structure.spec.md
+**Branch:** hyperloop/task-035
+
+All three SHALL/MUST requirements are implemented and tested. Details follow.
+
+---
+
+### Requirement: 3D Interactive Navigation
+**Status: COVERED**
+
+The system MUST present the software system as a 3D space that the human navigates in
+first person.
+
+**Implementation:**
+- `godot/scripts/main.gd` → `build_from_graph()` + `_create_volume()` constructs a Godot
+  Node3D scene-tree where every node in the JSON graph becomes a 3D anchor at a specified
+  world position — a navigable 3D space.
+- `godot/scripts/camera_controller.gd` provides orbit-camera navigation (pan, zoom, rotate)
+  via `_handle_button()` and `_handle_motion()`.
+
+**Note on "first person":** `prototype-scope.spec.md` (§ Not In Scope) explicitly excludes
+first-person navigation from the prototype. The test file itself documents this at line 28:
+"'first person' navigation is NOT implemented in the prototype." Per the Guidelines the
+absence of an out-of-prototype-scope feature is not a failure.
+
+**Tests (all in `godot/tests/test_spatial_structure.gd`, registered in `run_tests.gd` line 40):**
+- `test_camera_supports_zoom_in` — verifies distance decreases on scroll-up (Given/When/Then
+  for "can move through it").
+- `test_camera_supports_zoom_out` — distance increases on scroll-down.
+- `test_camera_supports_orbit` — phi changes on horizontal drag.
+- `test_camera_get_distance_returns_current_distance` — `get_distance()` returns set value
+  (feeds LOD system).
+- `test_spatial_layout_creates_node_per_structural_element` — `build_from_graph()` produces
+  a Node3D anchor for every JSON node (THEN "spatial layout communicates structure").
+
+---
+
+### Requirement: Structure as Persistent Geography
+**Status: COVERED**
+
+The system MUST represent the static structure (modules, boundaries, dependencies) as the
+persistent geography of the 3D space.
+
+**Scenario: Structural elements have spatial presence**
+
+**Implementation:**
+- `main.gd → _create_volume()`:
+  - Anchors are placed at `Vector3(p["x"], p["y"], p["z"])` from JSON — each element occupies
+    a distinct region.
+  - `bounded_context` nodes receive a translucent blue slab (alpha 0.18, TRANSPARENCY_ALPHA).
+  - `module` nodes receive an opaque green box (alpha 1.0).
+  - Visual contrast between translucent context and opaque module makes boundaries clear.
+  - Child modules are added as children of their parent context anchor via
+    `_create_volume(nd, parent_anchor)` — containment is expressed spatially.
+- `main.gd → _create_edge()`:
+  - Produces an ImmediateMesh line plus a CylinderMesh arrowhead for each edge — dependencies
+    are expressed as visible 3D connections.
+
+**Tests:**
+- `test_distinct_contexts_occupy_distinct_regions` — two bounded contexts at different JSON
+  positions → different `anchor.position` values after build.
+- `test_context_boundary_is_visually_distinct_translucent` — context StandardMaterial3D has
+  `albedo_color.a < 1.0` and `TRANSPARENCY_ALPHA` mode.
+- `test_module_boundary_is_opaque` — module StandardMaterial3D has `albedo_color.a >= 1.0`.
+- `test_containment_expressed_as_scene_tree_parenting` — module anchor's `get_parent()` equals
+  the context anchor.
+- `test_dependency_expressed_as_visible_connection` — at least one ImmediateMesh child of
+  main node exists after build.
+
+---
+
+### Requirement: Scale Through Zoom
+**Status: COVERED**
+
+The system MUST handle systems of varying size through level-of-detail, not scrolling or
+panning across a flat surface.
+
+**Scenario: Navigating from system level to module level**
+
+**Implementation:**
+- `godot/scripts/lod_manager.gd` defines FAR_THRESHOLD = 80.0 and NEAR_THRESHOLD = 20.0 and
+  exposes `update_lod(node_entries, edge_entries, camera_distance)`:
+  - FAR (> 80): only `bounded_context` (and `spec`) anchors visible; all edges hidden.
+  - MEDIUM (20–80): `bounded_context` + `module` visible; only `cross_context` edges visible.
+  - NEAR (≤ 20): everything visible — finest detail including `internal` edges.
+- `main.gd → _process()` calls `_update_lod()` every frame, querying
+  `camera_controller.get_distance()` to drive LOD.
+- `main.gd → _create_volume()` populates `_lod_node_entries`; `_create_edge()` populates
+  `_lod_edge_entries` (2 visuals per edge = line + arrowhead).
+
+**Tests:**
+- `test_far_distance_shows_only_bounded_contexts` — at FAR+10: context visible, module hidden.
+- `test_far_distance_hides_all_edges` — at FAR+10: both cross_context and internal edges hidden.
+- `test_medium_distance_shows_modules` — at midpoint: both context and module visible.
+- `test_medium_distance_shows_cross_context_edges_only` — at midpoint: cross_context visible,
+  internal hidden.
+- `test_near_distance_shows_all_nodes` — at NEAR−5: both context and module visible.
+- `test_near_distance_shows_internal_edges_as_fine_detail` — at NEAR−5: internal edges visible
+  (satisfies "finer-grained details appear").
+- `test_lod_node_entries_populated_after_build` — 4 entries for 4-node fixture, both types
+  present.
+- `test_lod_edge_entries_populated_after_build` — 4 entries (2 edges × 2 visuals), both
+  edge types present.
+- `test_lod_integration_far_hides_modules_in_built_scene` — end-to-end: build graph, apply
+  FAR LOD, assert module hidden and context visible.
+
+---
+
+## Summary
+
+| Requirement                        | Status  |
+|------------------------------------|---------|
+| 3D Interactive Navigation          | COVERED |
+| Structure as Persistent Geography  | COVERED |
+| Scale Through Zoom                 | COVERED |
+
+All SHALL/MUST requirements have both code implementation and GDScript behavioral tests
+exercising the exact Given/When/Then conditions. The test suite is registered in
+`run_tests.gd` (line 40). First-person navigation is explicitly out of prototype scope and
+is not penalised.
