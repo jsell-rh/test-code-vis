@@ -3,53 +3,85 @@ verdict: pass
 ---
 Task-034: prototype-scope.spec.md implementation — PASS.
 
-All 27 automated checks pass. 100 GDScript tests pass. 97 Python tests pass.
-Every THEN-clause is implemented and covered by a behavioral test with correct
-assertion predicates. No prohibited features detected.
+Independent review confirms all 27 automated checks pass (synced from main before
+running), 100 GDScript tests pass, and 97 Python tests pass. Every THEN-clause is
+implemented with a behavioral test whose assertion predicate matches the spec clause.
+No prohibited features detected. Commit trailers (Spec-Ref, Task-Ref) present on
+all implementation commits.
 
 ## Scope Check Output
 
 OK: No prohibited (not-in-scope) features detected.
 
-Manual audit confirms:
-- Conformance / evaluation / simulation mode code deleted (commit 9ddabb8).
-- Spec extraction (discover_spec_nodes) deleted from extractor.py.
-- Moldable views / LLM / first-person / data-flow keywords: absent.
+Independent grep audit confirmed:
+- Conformance / evaluation / simulation mode: absent.
+- Data-flow visualization keywords: absent.
+- Moldable views / LLM / build_prompt / parse_response / apply_spec / SceneInterpreter: absent.
+- First-person navigation / WASD / fly-cam: absent.
 - check-not-in-scope.sh exits 0 consistent with manual audit.
 
-## THEN→Test Mapping
+## THEN→Test Mapping (Reviewer-Constructed)
 
 | THEN-clause | Test function(s) | Verdict |
 |---|---|---|
-| kartograph's structure visualized in 3D | `test_volumes_created_for_each_node` | PASS — MeshInstance3D children verified on Node3D anchors ✓ |
-| visualization reflects actual structure | `test_kartograph_integration_bounded_contexts` | PASS — CLI run against real kartograph; asserts iam/graph/shared_kernel ✓ |
-| JSON scene graph file is produced | `test_main_writes_json_output` | PASS — CLI writes valid JSON with nodes/edges/metadata ✓ |
-| Godot app loads and renders scene | `test_volumes_created_for_each_node` + `test_anchor_positions_match_json` | PASS — compound; Node3D.position.x/y/z asserted (not dict-key) ✓ |
-| all bounded contexts visible as distinct volumes | `test_volumes_created_for_each_node` | PASS — _anchors populated for all fixture nodes ✓ |
-| relative positions reflect coupling (tightly coupled closer) | `test_coupled_bcs_are_closer_than_uncoupled` | PASS — algorithm-quality: varies coupling fixture, dist(auth,sk) < dist(auth,billing) ✓ |
-| AND position reflects coupling relationships | `test_coupled_bcs_are_closer_than_uncoupled` + `test_complexity_and_coupling_both_reflected` | PASS — consistent mapping; both tests vary coupling and assert positional proximity ✓ |
-| dependencies between contexts visible as connections | `test_edge_line_mesh_created` | PASS — ImmediateMesh found in main node children ✓ |
-| internal layers become visible | `test_near_distance_shows_all_nodes` | PASS — mod_anchor.visible == true at NEAR distance ✓ |
-| internal dependencies shown | `test_near_distance_shows_internal_edges_as_fine_detail` | PASS — internal edges visible at NEAR ✓ |
-| relative sizes of internal modules visible | `test_mesh_sizes_proportional_to_metric` | PASS — algorithm-quality: varies size input 3 vs 9, asserts ratio == 3.0 ✓ |
-| appears as labeled geometric volume | `test_labels_are_billboard_and_readable` | PASS — billboard + pixel_size + no_depth_test asserted on real Label3D ✓ |
-| size reflects relative complexity | `test_mesh_sizes_proportional_to_metric` | PASS — algorithm-quality: varies size input, asserts proportional mesh ✓ |
-| containment shown by nesting | `test_module_parented_inside_context` | PASS — mod_anchor.get_parent() == ctx_anchor on real Node3D hierarchy ✓ |
-| module name visible as text label | `test_labels_are_billboard_and_readable` | PASS — Label3D.text set in anchor; billboard+pixel_size verified ✓ |
-| label remains readable at current zoom level | `test_labels_are_billboard_and_readable` | PASS — BILLBOARD_ENABLED + pixel_size > 0 + no_depth_test ✓ |
-| line or connection drawn between contexts | `test_edge_line_mesh_created` | PASS — ImmediateMesh created for each edge ✓ |
-| direction of dependency discernible | `test_direction_indicator_cone_created` | PASS — CylinderMesh top_radius==0 (cone arrowhead); not merely line colour ✓ |
-| pan, zoom, and rotate the view | `test_lmb_pan_moves_pivot` + `test_scroll_up_decreases_distance` + `test_orbit_horizontal_drag_changes_phi` | PASS — compound; 3 distinct tests, each asserts a different navigation axis ✓ |
-| smoothly transition between overview and detail | `test_zoom_is_interpolated_not_instantaneous` + `test_far_distance_shows_only_bounded_contexts` | PASS — compound; smooth zoom + LOD distance level verified ✓ |
-| conformance mode NOT implemented | `check-not-in-scope.sh` | PASS — no conformance code in worktree ✓ |
-| evaluation mode NOT implemented | `check-not-in-scope.sh` | PASS — no evaluation mode code ✓ |
-| simulation mode NOT implemented | `check-not-in-scope.sh` | PASS — no simulation mode code ✓ |
-| data flow visualization NOT implemented | `check-not-in-scope.sh` | PASS ✓ |
-| moldable views NOT implemented | `check-not-in-scope.sh` | PASS ✓ |
-| spec extraction NOT implemented | `check-not-in-scope.sh` | PASS — discover_spec_nodes deleted ✓ |
-| first-person navigation NOT implemented | `check-not-in-scope.sh` | PASS — no WASD/fly-cam code ✓ |
+| kartograph's structure visualized in 3D | `test_volumes_created_for_each_node` | PASS — MeshInstance3D children verified on real Node3D anchors |
+| visualization reflects actual structure | `test_kartograph_integration_bounded_contexts` | PASS — CLI run against real kartograph; asserts iam/graph/shared_kernel contexts |
+| JSON scene graph file is produced | `test_main_writes_json_output` | PASS — CLI writes valid JSON with nodes/edges/metadata |
+| Godot app loads and renders scene | `test_volumes_created_for_each_node` + `test_anchor_positions_match_json` | PASS — compound; Node3D.position.x/y/z asserted via is_equal_approx (not dict.has()) |
+| all bounded contexts visible as distinct volumes | `test_volumes_created_for_each_node` | PASS — _anchors populated for all fixture nodes |
+| relative positions reflect coupling | `test_coupled_bcs_are_closer_than_uncoupled` | PASS — algorithm-quality: varies coupling fixture; dist(auth,sk) < dist(auth,billing) |
+| AND position reflects coupling relationships | `test_coupled_bcs_are_closer_than_uncoupled` + `test_complexity_and_coupling_both_reflected` | PASS — both tests vary coupling input and assert positional proximity |
+| dependencies between contexts visible as connections | `test_edge_line_mesh_created` | PASS — ImmediateMesh found in main node children |
+| internal layers become visible (zoom into IAM) | `test_near_distance_shows_all_nodes` | PASS — mod_anchor.visible == true at NEAR distance |
+| internal dependencies shown | `test_near_distance_shows_internal_edges_as_fine_detail` | PASS — internal edges visible at NEAR distance |
+| relative sizes of internal modules visible | `test_mesh_sizes_proportional_to_metric` | PASS — algorithm-quality: varies size input 3 vs 9, asserts ratio == 3.0 |
+| appears as labeled geometric volume | `test_labels_are_billboard_and_readable` | PASS — billboard + pixel_size + no_depth_test asserted on real Label3D node |
+| size reflects relative complexity | `test_mesh_sizes_proportional_to_metric` | PASS — algorithm-quality: varies complexity input, asserts proportional mesh size |
+| containment shown by nesting | `test_module_parented_inside_context` | PASS — mod_anchor.get_parent() == ctx_anchor on real Node3D hierarchy (not dict.has()) |
+| module name visible as text label | `test_labels_are_billboard_and_readable` | PASS — Label3D.text set in anchor; billboard+pixel_size verified |
+| label remains readable at current zoom level | `test_labels_are_billboard_and_readable` | PASS — BILLBOARD_ENABLED + pixel_size > 0 + no_depth_test |
+| line or connection drawn between contexts | `test_edge_line_mesh_created` | PASS — ImmediateMesh created per edge |
+| direction of dependency discernible | `test_direction_indicator_cone_created` | PASS — CylinderMesh top_radius==0 (cone arrowhead); explicit geometry, not colour alone |
+| pan, zoom, and rotate the view | `test_lmb_pan_moves_pivot` + `test_scroll_up_decreases_distance` + `test_orbit_horizontal_drag_changes_phi` | PASS — compound; 3 distinct tests, each covers one navigation axis |
+| smoothly transition between overview and detail | `test_zoom_is_interpolated_not_instantaneous` + `test_far_distance_shows_only_bounded_contexts` | PASS — smooth zoom + LOD distance levels verified |
+| conformance mode NOT implemented | `check-not-in-scope.sh` | PASS — no conformance code |
+| evaluation mode NOT implemented | `check-not-in-scope.sh` | PASS — no evaluation mode code |
+| simulation mode NOT implemented | `check-not-in-scope.sh` | PASS |
+| data flow visualization NOT implemented | `check-not-in-scope.sh` | PASS |
+| moldable views NOT implemented | `check-not-in-scope.sh` | PASS |
+| spec extraction NOT implemented | `check-not-in-scope.sh` | PASS — discover_spec_nodes deleted |
+| first-person navigation NOT implemented | `check-not-in-scope.sh` | PASS — no WASD/fly-cam code |
 
-## Check Script Results
+## Independent Verification Notes
+
+**main.gd _ready()**: Not a stub. Contains FileAccess.open() + get_as_text() + JSON.parse()
++ build_from_graph() call. Real rendering pipeline wired from entry point.
+
+**Containment test predicate**: mod_anchor.get_parent() == ctx_anchor — real Node3D
+parent-child hierarchy, not dict.has(). Satisfies spec "containment is shown by nesting."
+
+**Direction indicator**: CylinderMesh with top_radius==0.0 (arrowhead cone) is an explicit
+rendering element. Satisfies "direction is visually indicated" — not a plain line or
+colour difference alone.
+
+**Coupling test quality**: test_coupled_bcs_are_closer_than_uncoupled VARIES the coupling
+fixture (auth--shared_kernel coupled; auth--billing uncoupled) and asserts the relative
+distance ordering. Algorithm-quality confirmed.
+
+**Complexity+coupling combined test**: test_complexity_and_coupling_both_reflected uses a
+4-BC fixture with differing LOC counts and coupling edges. Asserts BOTH big_ctx.size >
+small_ctx.size AND dist(big_ctx, ctx_c) < dist(big_ctx, ctx_d). Both predicates are
+algorithm-quality (vary inputs, assert relative outputs).
+
+**Pan direction sign chain**: Camera-pan model. Derivation comment traces drag right ->
+delta.x +50 -> pivot.x increases -> scene shifts right -> right-side content enters view.
+User-visible-outcome language present. Internally consistent. check-pan-grab-model-comments.sh
+exits 0.
+
+**Process note**: check-checks-in-sync.sh confirmed all check scripts present before and
+after reviewer sync from main. No missing check scripts.
+
+## Check Script Results (verbatim, run-all-checks.sh after syncing from main)
 
 === run-all-checks.sh ===
 
@@ -65,7 +97,7 @@ OK: Branch adds/modifies 7 source file(s) outside .hyperloop/:
 [EXIT 0]
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-034' has 16 commit(s) above main.
+OK: Branch 'hyperloop/task-034' has 17 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -158,7 +190,7 @@ OK: All 3 pan/drag direction test(s) contain user-visible-outcome derivation lan
 
 --- check-pipeline-wiring.sh ---
 SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
-      This check only applies to tasks that implement the LLM→view-spec pipeline.
+      This check only applies to tasks that implement the LLM->view-spec pipeline.
 [EXIT 0]
 
 --- check-reflects-mapping-consistency.sh ---
@@ -222,15 +254,9 @@ PASS: All Label3D nodes have billboard and pixel_size set and tested.
 --- godot-tests.sh ---
 Found 12 GDScript test file(s) in godot/tests/.
 Running custom headless test runner...
-Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
 Results: 100 passed, 0 failed
 GDScript behavioral tests passed.
 [EXIT 0]
 
 === Summary: 27 check(s) run ===
 RESULT: ALL PASS
-
-## Untestable THEN-Clauses
-
-None. All THEN-clauses were verifiable in the headless test environment.
-(Platform constraints covered by test_desktop_platform.gd using OS.has_feature().)
