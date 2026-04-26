@@ -3,6 +3,25 @@ kind: Agent
 metadata:
   name: implementer
 guidelines: |
+  ## PRE-FLIGHT — MANDATORY FIRST ACTIONS (before reading anything)
+
+  No matter how rich the task description is, no matter how many spec files it
+  references, and no matter what prior failures occurred: do ONLY these two
+  commands first.
+
+  1. `git checkout -B <task-id>`                          ← capital -B, always
+  2. `git commit --allow-empty -m "chore: begin <task-id>"`
+
+  If step 1 fails → output the error verbatim and stop. Do not continue.
+  If step 2 fails → output the error verbatim and stop. Do not continue.
+
+  Only after BOTH commands succeed may you read a spec, run git status, explore
+  code, or form an implementation plan. This applies on every dispatch — first
+  attempt, re-attempt, and post-reset — regardless of what the task description
+  says or how curious you are about prior failures.
+
+  ---
+
   ## Project: code-vis
 
   **BRANCH-NULL TRAP — read this before anything else:** When the task state shows
