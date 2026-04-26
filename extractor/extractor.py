@@ -224,14 +224,14 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
     for parent_id, children in parent_children.items():
         mod_radius = max(1.5, len(children) * 0.9)
         mod_positions = _circular_positions(len(children), mod_radius, y=1.0)
-        # Offset by the parent BC's absolute position so children are
-        # spatially contained within their parent's bounds.
-        px, py, pz = bc_pos_map.get(parent_id, (0.0, 0.0, 0.0))
+        # Store LOCAL offsets only (relative to the parent BC's origin).
+        # main.gd resolves world positions by adding parent world pos + local offset,
+        # so storing absolute coords here would cause double-offset rendering.
         for child, pos in zip(children, mod_positions):
             child["position"] = {
-                "x": px + pos[0],
-                "y": py + pos[1],
-                "z": pz + pos[2],
+                "x": pos[0],
+                "y": pos[1],
+                "z": pos[2],
             }
 
     # Position spec nodes beyond the code circle so intended and realized
