@@ -5,7 +5,7 @@ spec_ref: specs/extraction/scene-graph-schema.spec.md@3e5e297e216c7876224564ee09
 status: in_progress
 phase: implement
 deps: []
-round: 24
+round: 25
 branch: hyperloop/task-001
 pr: https://github.com/jsell-rh/test-code-vis/pull/193
 pr_title: null
