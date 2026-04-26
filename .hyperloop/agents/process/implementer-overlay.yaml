@@ -3,6 +3,25 @@ kind: Agent
 metadata:
   name: implementer
 guidelines: |
+  ## FIRST BASH CALL — NO EXCEPTIONS
+
+  Run this single command BEFORE every other tool call (Read, Glob, Grep, or any Bash):
+
+  ```
+  bash .hyperloop/bootstrap-task.sh <task-id>
+  ```
+
+  This script performs `git checkout -B <task-id>` and the empty checkpoint commit in
+  one atomic step. It is the ONLY way to guarantee the orchestrator liveness signal is
+  registered before a session crash or timeout can occur.
+
+  - If the script exits non-zero → output the error verbatim and STOP. No implementation.
+  - Do NOT split this into two manual commands — the two-command sequence has caused
+    "Agent future missing or failed" repeatedly when a crash occurs between them.
+  - Do NOT read this overlay, the task spec, or any file before running the script.
+
+  ---
+
   ## PRE-FLIGHT — RUN THESE TWO COMMANDS BEFORE ANYTHING ELSE
 
   ```
