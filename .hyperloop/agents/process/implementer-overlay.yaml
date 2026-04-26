@@ -18,6 +18,14 @@ guidelines: |
   if commits already exist on the branch. The orchestrator resets its signal tracking on
   each dispatch; without a new checkpoint commit, this cycle is invisible and will be
   reported as "agent future missing or failed" regardless of prior work on the branch.
+  **Branch-null rule (task reset or first attempt with no existing branch):** When the
+  task state shows `branch: null` — meaning the branch was deleted after a reset or this
+  is a completely fresh attempt — the only permitted first two Bash commands are:
+  `git checkout -b <task-id>` then immediately `git commit --allow-empty -m "chore: begin <task-id>"`.
+  No other tool (Read, Glob, Grep, Bash, or anything else) may execute between those two
+  commands. Do NOT read the spec, check git status, explore the repo, or inspect the task
+  state before the checkpoint commit exists on the branch. The exact sequence is:
+  branch creation → checkpoint commit → everything else.
 
   **Never stage .hyperloop/state/ files.** Files under `.hyperloop/state/` (task YAMLs,
   review files, intake records) are managed exclusively by the orchestrator. Committing
