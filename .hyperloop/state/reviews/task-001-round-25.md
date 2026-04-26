@@ -1,0 +1,336 @@
+---
+task_id: task-001
+round: 25
+role: verifier
+verdict: fail
+---
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+## Check Script Results
+
+=== run-all-checks.sh ===
+
+--- check-branch-adds-source-files.sh ---
+OK: Branch adds/modifies 3 source file(s) outside .hyperloop/:
+  extractor/extractor.py
+  extractor/layout.py
+  extractor/tests/test_layout.py
+[EXIT 0]
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-001' has 22 commit(s) above main.
+[EXIT 0]
+
+--- check-checkpoint-commit-is-empty.sh ---
+OK: Checkpoint commit 'chore: begin task-001' is empty (no file changes) — correct use of --allow-empty
+[EXIT 0]
+
+--- check-checkpoint-commit-is-first.sh ---
+OK: First (oldest) commit on branch is the checkpoint commit — 'chore: begin task-001'
+[EXIT 0]
+
+--- check-checkpoint-commit.sh ---
+OK: Checkpoint commit found — 'chore: begin task-001'
+[EXIT 0]
+
+--- check-checkpoint-task-matches-branch.sh ---
+OK: Checkpoint task-id 'task-001' matches branch 'hyperloop/task-001'
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-combined-rewrite-guide.sh ---
+OK: No combined rewrite condition detected on branch 'hyperloop/task-001'.
+[EXIT 0]
+
+--- check-compound-coverage-not-falsified.sh ---
+OK: check-compound-then-clause-coverage.sh exits 0 — no cross-validation needed.
+[EXIT 0]
+
+--- check-compound-then-clause-coverage.sh ---
+SKIP: No compound THEN-clauses (containing 'and') found in THEN->test mapping.
+[EXIT 0]
+
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+[EXIT 0]
+
+--- check-desktop-platform-tested.sh ---
+OK: OS.has_feature() test(s) found covering desktop-platform constraint.
+[EXIT 0]
+
+--- check-direction-test-derivations.sh ---
+OK: All 13 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
+
+--- check-docstring-arrow-placement.sh ---
+OK: No docstring-only arrow placements detected in 13 direction test(s).
+[EXIT 0]
+
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (9 suite(s) checked)
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-new-modules-wired.sh ---
+OK: 'extractor/extractor.py' is imported by production code (1 import(s) found).
+FAIL: New module 'extractor/layout.py' is not imported by any production source file.
+  'layout' was added on this branch but no non-test Python file imports it.
+  Tests for 'layout' pass but provide no assurance about the actual
+  runtime code path — the consuming file's old internal function remains active.
+
+  Fix: either
+    (a) Import it from the consuming file (e.g. 'from extractor.layout import <fn>')
+        and remove or delegate the old internal definition, OR
+    (b) Fix the logic directly in the consuming file and delete extractor/layout.py.
+[EXIT 1 — FAIL]
+
+--- check-no-duplicate-toplevel-functions.sh ---
+DUPLICATE: 'compute_layout' defined in 2 files:
+  extractor/extractor.py
+  extractor/layout.py
+
+FAIL: Duplicate top-level function name(s) found across extractor/ source files.
+  Each function should be defined in exactly one non-test source file.
+  A duplicate means the consuming file still calls the original (possibly broken)
+  definition while the new file's tests pass — giving false confidence.
+
+  Fix:
+    (a) Fix the function in-place in the ORIGINAL file and delete the new file, OR
+    (b) Remove the definition from the original file and import from the new one.
+
+  Run check-new-modules-wired.sh after fix (b) to confirm the import is wired.
+[EXIT 1 — FAIL]
+
+--- check-no-state-files-committed.sh ---
+OK: No .hyperloop/state/ files committed on branch 'hyperloop/task-001'.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-not-on-main.sh ---
+OK: Current branch is 'hyperloop/task-001' (not main)
+[EXIT 0]
+
+--- check-pan-grab-model-comments.sh ---
+OK: All 5 pan/drag direction test(s) contain user-visible-outcome derivation language.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+[EXIT 0]
+
+--- check-racf-prior-cycle.sh ---
+Orchestrator cleanup obscured prior FAIL report — recovered from f65c724.
+To inspect: git show f65c724:.hyperloop/worker-result.yaml
+
+Checks that failed in that cycle — must now pass:
+
+  check-new-modules-wired.sh                              FAIL (still failing — RACF)
+  check-relative-position-tests.sh                        FAIL (still failing — RACF)
+
+FAIL: One or more prior-cycle failures recovered from f65c724 still fail.
+      This is a Re-Attempt Compliance Failure (RACF) obscured by orchestrator cleanup.
+[EXIT 1 — FAIL]
+
+--- check-racf-remediation.sh ---
+SKIP: Prior committed report contains no FAIL checks — no RACF to verify.
+[EXIT 0]
+
+--- check-reflects-mapping-consistency.sh ---
+SKIP: No 'reflect(s)' THEN-clauses found in mapping table.
+[EXIT 0]
+
+--- check-relative-position-tests.sh ---
+FAIL: Extractor source accumulates parent world coordinates into child position.
+  Found absolute-coordinate accumulation pattern (form A: px/py/pz + pos[],
+  or form B: parent_pos[N] + ...) in a non-test Python file.
+  The spec requires child positions to be relative (local offset only).
+  Godot's main.gd adds the parent's world position at render time —
+  storing absolute coordinates here causes double-offset rendering.
+  This check scans ALL Python files in extractor/ — the bug is caught
+  regardless of which file or variable names are used.
+
+  Offending lines:
+extractor/extractor.py:232:                "x": px + pos[0],
+extractor/extractor.py:233:                "y": py + pos[1],
+extractor/extractor.py:234:                "z": pz + pos[2],
+extractor/layout.py:92:                parent_pos[0] + math.cos(angle) * offset_r,
+extractor/layout.py:93:                parent_pos[1] + math.sin(angle) * offset_r,
+
+  Fix: store only the local offset in every file:
+    child["position"] = {"x": pos[0], "y": pos[1], "z": pos[2]}
+FAIL: Only proximity-based child position tests found — no direct relative-offset assertion.
+[EXIT 1 — FAIL]
+
+--- check-report-scope-section.sh ---
+OK: Scope check section present and contains check output.
+[EXIT 0]
+
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+
+--- check-then-test-mapping.sh ---
+SKIP: No test function references found in .hyperloop/worker-result.yaml THEN->test mapping.
+[EXIT 0]
+
+--- extractor-lint.sh ---
+All checks passed! 123 passed in 0.19s
+[EXIT 0]
+
+--- godot-compile.sh ---
+PASS: Godot compile check passed.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+[EXIT 0]
+
+--- godot-label3d.sh ---
+[EXIT 0]
+
+--- godot-tests.sh ---
+Results: 58 passed, 0 failed
+PASS: All GDScript tests passed.
+[EXIT 0]
+
+--- pre-submit.sh ---
+(run after finalizing this report — see pre-submit verification below)
+
+=== Summary: 41 check(s) run ===
+Blocking FAILs: check-new-modules-wired.sh, check-no-duplicate-toplevel-functions.sh,
+                check-racf-prior-cycle.sh, check-relative-position-tests.sh
+
+## Commit Trailers
+
+Implementation commit `3fb5db74`:
+  Spec-Ref: specs/extraction/scene-graph-schema.spec.md@3e5e297e216c7876224564ee099a38334e3dbd55
+  Task-Ref: task-001
+PASS — both trailers present.
+
+## THEN→Test Mapping
+
+| THEN-clause | Mapped test | File | Predicate correct? |
+|---|---|---|---|
+| `nodes`, `edges`, `metadata` at top level; no extra fields | test_scene_graph_has_no_extra_top_level_fields | extractor/tests/test_schema.py | YES |
+| Bounded context: unique id, name, type, position xyz, size, parent=null | test_bounded_context_node_* | extractor/tests/test_schema.py | YES |
+| Module: unique id, parent field set, type="module" | test_module_node_* | extractor/tests/test_schema.py | YES |
+| Module: position coordinates relative to its parent | test_child_nodes_are_near_parent_position | extractor/tests/test_extractor.py | NO — WRONG PREDICATE |
+| Edge: source, target, type="cross_context" | test_cross_context_edge_* | extractor/tests/test_extractor.py | YES |
+| Edge: source, target, type="internal" | test_internal_edge_* | extractor/tests/test_extractor.py | YES |
+| Metadata: source_path and timestamp present | test_metadata_has_source_path, test_metadata_has_timestamp | extractor/tests/test_extractor.py | YES |
+| Each node position has x, y, z | test_all_positions_have_xyz | extractor/tests/test_layout.py | NO — DEAD CODE |
+| Tightly coupled nodes have smaller distances | test_coupled_bcs_are_closer_than_uncoupled | extractor/tests/test_extractor.py | YES |
+| Child nodes within spatial bounds of parent | test_child_nodes_are_near_parent_position | extractor/tests/test_extractor.py | NO — WRONG PREDICATE |
+| Godot renders positions verbatim, no recomputation | test_node_rendered_at_json_position, test_no_layout_recomputed_in_godot | godot/tests/test_node_renderer.gd | YES |
+
+## Findings
+
+### F1 — RACF + BLOCKING: check-relative-position-tests.sh (5th consecutive FAIL)
+
+**Root cause (unchanged since review cycle 1):** `extractor/extractor.py::compute_layout()` lines 232–234 store absolute world coordinates for child (module) nodes:
+
+```python
+px, py, pz = bc_pos_map.get(parent_id, (0.0, 0.0, 0.0))
+for child, pos in zip(children, mod_positions):
+    child["position"] = {
+        "x": px + pos[0],   # ABSOLUTE: parent_world + local_offset
+        "y": py + pos[1],
+        "z": pz + pos[2],
+    }
+```
+
+The schema contract (`schema.py` line 48): `"""Pre-computed 3D position. Coordinates are relative to the parent node."""` Godot's `main.gd::_resolve_world_pos()` adds the parent world position to the stored value, causing double-offset rendering: `rendered = parent_world + stored = parent_world + (parent_world + local_offset) = 2×parent_world + local_offset`.
+
+**New bug in layout.py — same propagated bug:** The newly added `extractor/layout.py` ALSO stores absolute child positions (lines 92–93):
+```python
+pos[child["id"]] = [
+    parent_pos[0] + math.cos(angle) * offset_r,
+    parent_pos[1] + math.sin(angle) * offset_r,
+]
+```
+
+**Test gap (unchanged):** `test_extractor.py::TestLayout::test_child_nodes_are_near_parent_position` is a vacuous proximity test — it passes for both absolute and relative storage. `test_layout.py::TestChildNodesWithinParentBounds` has the same wrong predicate AND tests dead code.
+
+**Prescribed fix (same as prior cycles):**
+1. In `extractor/extractor.py::compute_layout()`, store only the local offset: `child["position"] = {"x": pos[0], "y": pos[1], "z": pos[2]}`
+2. Apply the same fix to `extractor/layout.py` lines 92–93 if the module is to be kept.
+3. Add a discriminating test: place the parent BC at a non-zero world position (e.g., x=10.0), run `compute_layout`, assert `child["position"]["x"] == approx(local_offset_x)` — NOT proximity.
+
+---
+
+### F2 — RACF + BLOCKING: check-new-modules-wired.sh (3rd consecutive FAIL)
+
+`extractor/layout.py` was added by commit `3fb5db74` but is not imported by any production source file. `extractor/extractor.py` retains its own internal `compute_layout()` which still has the bug. The tests in `test_layout.py` pass because they test the dead-code module — they provide zero assurance about the actual runtime code path.
+
+Confirmed:
+```
+$ grep -rn "from extractor.layout\|import layout" extractor/ --include="*.py" | grep -v test_
+(no output)
+```
+
+**Prescribed fix:** Either (a) wire `extractor.layout.compute_layout` into `extractor.extractor.build_scene_graph()` and delete the old internal `compute_layout`, OR (b) fix the bug directly in `extractor.py`'s `compute_layout()` and delete `extractor/layout.py`. Option (b) is simpler and is the prescribed fix from prior cycles.
+
+---
+
+### F3 — NEW + BLOCKING: check-no-duplicate-toplevel-functions.sh
+
+`compute_layout` is defined as a top-level function in BOTH `extractor/extractor.py` AND `extractor/layout.py`. The consuming code in `build_scene_graph()` calls the one from `extractor.py` (the buggy version). The one in `layout.py` is never called. This is a direct consequence of F2 — resolved by the same fix (option b: fix extractor.py in-place and delete layout.py).
+
+---
+
+### F4 — RACF process note
+
+`check-racf-remediation.sh` emitted SKIP because the orchestrator's cleanup commit (`d4c0ea51`) deleted the prior worker-result.yaml content, preventing direct detection. `check-racf-prior-cycle.sh` recovered the prior FAIL report from commit `f65c724` and confirmed both F1 and F2 were prescribed in that cycle. The implementer created `extractor/layout.py` as a new module instead of fixing `extractor.py` in-place — this introduced F3 and propagated F1's bug to the new module without resolving either RACF check.
+
+`check-racf-remediation.sh` SKIP caused by orchestrator cleanup commit is a process-mechanism limitation, not implementer clearance.
+
+---
+
+## Summary
+
+| Requirement | Scenario | Status |
+|---|---|---|
+| Schema Structure | Top-level structure | COVERED |
+| Node Schema | Bounded context node | COVERED |
+| Node Schema | Module node — position relative to parent | FAIL |
+| Edge Schema | Cross-context dependency edge | COVERED |
+| Edge Schema | Internal dependency edge | COVERED |
+| Metadata | Extraction metadata | COVERED |
+| Pre-Computed Layout | Each node has x/y/z positions | COVERED (production) |
+| Pre-Computed Layout | Tightly coupled nodes closer | COVERED (production extractor.py) |
+| Pre-Computed Layout | Child nodes within parent spatial bounds | FAIL (wrong coordinate frame + wrong predicate test) |
+| Pre-Computed Layout | Godot renders verbatim, no recomputation | COVERED |
+
+**Verdict: FAIL**
+
+Three blocking check failures, all stemming from the same root cause: `compute_layout()` in `extractor.py` stores absolute world coordinates for child nodes instead of parent-relative offsets, violating the schema contract. This is the 5th consecutive FAIL on this defect. The re-attempt introduced a new dead-code module (`layout.py`) that reproduces the same bug and adds two new check failures (F2: not wired; F3: duplicate function name). The prescribed fix has been stated identically in four prior review cycles and has not been applied.
