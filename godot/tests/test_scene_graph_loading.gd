@@ -100,6 +100,36 @@ func test_anchor_positions_match_json() -> bool:
 	return ctx_ok and mod_ok
 
 
+## THEN it reads the JSON file —
+## FileAccess.open() on the fixture data file must succeed and return non-empty text.
+## This verifies the Godot project can read the JSON scene graph produced by the extractor.
+func test_file_access_reads_fixture_json() -> bool:
+	var file := FileAccess.open("res://data/scene_graph.json", FileAccess.READ)
+	if file == null:
+		return false
+	var text: String = file.get_as_text()
+	file.close()
+	return text.length() > 0
+
+
+## AND positions elements according to the layout data in the JSON —
+## (spec-named alias for test_anchor_positions_match_json)
+## Anchor positions must match the "position" field in the JSON exactly.
+func test_volumes_positioned_from_json() -> bool:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_fixture())
+
+	var ctx_anchor: Node3D = main_node._anchors.get("ctx1")
+	var mod_anchor: Node3D = main_node._anchors.get("mod1")
+	if ctx_anchor == null or mod_anchor == null:
+		return false
+
+	var ctx_ok := ctx_anchor.position.is_equal_approx(Vector3(0.0, 0.0, 0.0))
+	# mod1's position in JSON is {x:2, y:0, z:2} relative to its parent ctx1.
+	var mod_ok := mod_anchor.position.is_equal_approx(Vector3(2.0, 0.0, 2.0))
+	return ctx_ok and mod_ok
+
+
 ## AND labels scale to remain readable —
 ## Each anchor's Label3D must use BILLBOARD_ENABLED so it always faces the camera,
 ## have a positive pixel_size, and no_depth_test=true so labels are visible

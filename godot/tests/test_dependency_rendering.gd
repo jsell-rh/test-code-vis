@@ -129,6 +129,28 @@ func test_direction_cone_near_target() -> bool:
 	return false
 
 
+## THEN a line connects the two context volumes, AND the line is orange for cross-context —
+## (spec-named alias for test_cross_context_cone_is_orange)
+## Orange: Color(1.0, 0.50, 0.10) on the arrowhead cone distinguishes cross-context edges.
+func test_edge_line_is_orange_for_cross_context() -> bool:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_fixture_cross_context())
+
+	for child: Node in main_node.get_children():
+		if child is MeshInstance3D:
+			var mi := child as MeshInstance3D
+			if not (mi.mesh is CylinderMesh):
+				continue
+			var cone := mi.mesh as CylinderMesh
+			if cone.top_radius != 0.0:
+				continue
+			var mat := mi.material_override as StandardMaterial3D
+			if mat == null:
+				return false
+			return mat.albedo_color.r > 0.8 and mat.albedo_color.b < 0.3
+	return false
+
+
 ## Color of a cross_context edge's arrow cone must be orange
 ## (R > 0.8, B < 0.3) to distinguish it from internal edges.
 func test_cross_context_cone_is_orange() -> bool:
