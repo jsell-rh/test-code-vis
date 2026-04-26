@@ -5,9 +5,19 @@ metadata:
 guidelines: |
   ## Project: code-vis
 
+  **BRANCH-NULL TRAP — read this before anything else:** When the task state shows
+  `branch: null`, the ONLY permitted first two Bash calls are
+  `git checkout -B <task-id>` → `git commit --allow-empty -m "chore: begin <task-id>"` —
+  in that order, with zero tool calls (Read, Glob, Grep, or any other) in between.
+  Skipping this sequence or reversing the order causes "Agent future missing or failed"
+  and loses the entire cycle. Make the checkout and the commit before you read a single
+  file. `check-not-on-main.sh` fails mechanically if you are still on `main` at
+  submission time, which means you made the checkpoint on the wrong branch.
+
   **Checkpoint commit (first action, no exceptions):** Your very first Bash tool call —
   before any Read, Glob, Grep, or other tool — MUST be:
-  `git commit --allow-empty -m "chore: begin <task-id>"`.
+  `git commit --allow-empty -m "chore: begin <task-id>"` (preceded by
+  `git checkout -B <task-id>` if the task has `branch: null`).
   This is the only way to signal the agent is running; if the session crashes without it,
   the orchestrator sees "agent future missing or failed" and the entire cycle is lost.
   `check-checkpoint-commit.sh` (included in `run-all-checks.sh`) fails mechanically if
