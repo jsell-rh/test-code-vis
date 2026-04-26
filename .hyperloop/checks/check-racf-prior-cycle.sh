@@ -4,7 +4,7 @@
 # when check-racf-remediation.sh emits SKIP because the orchestrator cleanup
 # commit deleted worker-result.yaml content.
 #
-# Observed pattern (task-007, cycles 1–4):
+# Observed pattern (task-007, cycles 1–6):
 #   The orchestrator's cleanup commit (e.g. "orchestrator: clean worker verdict")
 #   deletes all content from .hyperloop/worker-result.yaml.  check-racf-remediation.sh
 #   reads the most-recently committed version of that file, finds no [EXIT N — FAIL]
@@ -13,12 +13,17 @@
 #   fail again in the next cycle.
 #
 # Algorithm:
-#   1. Walk ALL git history (all branches) for .hyperloop/worker-result.yaml.
+#   1. Walk THIS BRANCH'S commits (main..HEAD) for .hyperloop/worker-result.yaml.
 #   2. Stop at the first commit whose content contains [EXIT N — FAIL] lines.
 #   3. If that commit is already the one check-racf-remediation.sh would have
 #      processed, skip (no double work).
-#   4. Extract failing check names and re-run each against the current codebase.
-#   5. Exit 1 if any still fail.
+#   4. FALLBACK (post-reset branches): When main..HEAD has no FAIL reports, also
+#      walk main's own git history for the file.  After a branch reset the task
+#      branch starts fresh from main, so prior-cycle failures committed to main
+#      (e.g. by the verifier via the orchestrator) are not in main..HEAD but ARE
+#      in main's history.  This fallback surfaces those failures.
+#   5. Extract failing check names and re-run each against the current codebase.
+#   6. Exit 1 if any still fail.
 #
 # Exit 0 = SKIP (nothing to recover) or all recovered failures now pass.
 # Exit 1 = Prior-cycle failures still unresolved (RACF).
@@ -55,19 +60,9 @@ if [[ -n "$RACF_SHA" ]]; then
   fi
 fi
 
-# ── Walk THIS BRANCH's history to find the most recent report with FAIL lines ─
-# IMPORTANT: use "main..HEAD" (not "--all") to restrict the walk to commits that
-# belong to the current branch.  Using "--all" crosses branch boundaries and can
-# surface a FAIL report from a completely different task branch, producing a
-# false-negative: the wrong task's checks all pass, the script returns OK, and
-# the actual prior-cycle failures on this branch are never surfaced.
-PRIOR_SHA=""
-PRIOR_FAILS=""
-while IFS= read -r sha; do
-  [[ -z "$sha" ]] && continue
-  content=$(git show "${sha}:${RESULT_FILE}" 2>/dev/null || true)
-  [[ -z "$content" ]] && continue
-  fails=$(echo "$content" \
+# ── Helper: parse FAIL check names from a worker-result file content ─────────
+parse_fails() {
+  echo "$1" \
     | awk '
       /^--- check-[a-z0-9_-]+\.sh ---/ {
         name = $0
@@ -78,7 +73,20 @@ while IFS= read -r sha; do
       /\[EXIT [0-9]+ / && /FAIL\]/ {
         if (current != "") print current
       }
-    ' | sort -u)
+    ' | sort -u
+}
+
+# ── Pass 1: Walk THIS BRANCH's history (main..HEAD) ───────────────────────────
+# Restricting to main..HEAD prevents cross-branch contamination from other tasks.
+PRIOR_SHA=""
+PRIOR_FAILS=""
+FROM_MAIN=0
+
+while IFS= read -r sha; do
+  [[ -z "$sha" ]] && continue
+  content=$(git show "${sha}:${RESULT_FILE}" 2>/dev/null || true)
+  [[ -z "$content" ]] && continue
+  fails=$(parse_fails "$content")
   if [[ -n "$fails" ]]; then
     PRIOR_SHA="$sha"
     PRIOR_FAILS="$fails"
@@ -86,14 +94,56 @@ while IFS= read -r sha; do
   fi
 done < <(git log main..HEAD --format="%H" -- "$RESULT_FILE" 2>/dev/null)
 
+# ── Pass 2: Fallback — walk main's history (post-reset branches) ─────────────
+# After a branch reset the task branch is recreated from main.  The prior-cycle
+# verifier's FAIL report was committed to main (by the orchestrator after review),
+# so it lives in main's history but NOT in main..HEAD for the new branch.
+# This pass finds that report so the implementer must still fix those failures.
+#
+# Note: this looks at main's history for ALL tasks.  We search up to 10 commits
+# back.  If a FAIL report from a *different* task is found, its checks are still
+# re-run against the current codebase — a check that is irrelevant to this task
+# will EXIT 0 or SKIP harmlessly; a check that is relevant will correctly FAIL.
 if [[ -z "$PRIOR_SHA" ]]; then
-  echo "SKIP: No prior committed report with FAIL lines found anywhere in git history."
+  while IFS= read -r sha; do
+    [[ -z "$sha" ]] && continue
+    # Skip commits already in main..HEAD (already checked above).
+    if git merge-base --is-ancestor "$sha" main 2>/dev/null && \
+       ! git merge-base --is-ancestor "$sha" HEAD 2>/dev/null; then
+      : # commit is on main but not on branch — eligible for fallback
+    else
+      # Commit is on branch or not reachable from main — skip
+      continue
+    fi
+    content=$(git show "${sha}:${RESULT_FILE}" 2>/dev/null || true)
+    [[ -z "$content" ]] && continue
+    fails=$(parse_fails "$content")
+    if [[ -n "$fails" ]]; then
+      PRIOR_SHA="$sha"
+      PRIOR_FAILS="$fails"
+      FROM_MAIN=1
+      break
+    fi
+  done < <(git log main --format="%H" -- "$RESULT_FILE" 2>/dev/null | head -10)
+fi
+
+if [[ -z "$PRIOR_SHA" ]]; then
+  echo "SKIP: No prior committed report with FAIL lines found in branch or main history."
   exit 0
 fi
 
 PRIOR_SHA_SHORT="${PRIOR_SHA:0:7}"
-echo "Orchestrator cleanup obscured prior FAIL report — recovered from ${PRIOR_SHA_SHORT}."
-echo "To inspect: git show ${PRIOR_SHA_SHORT}:.hyperloop/worker-result.yaml"
+
+if [[ $FROM_MAIN -eq 1 ]]; then
+  echo "POST-RESET RACF RECOVERY: Prior FAIL report found in main's history (not on branch)."
+  echo "This branch was likely reset after a prior failed cycle.  The prior-cycle failures"
+  echo "are still active requirements — apply every prescribed fix before adding new code."
+  echo "To inspect: git show ${PRIOR_SHA_SHORT}:.hyperloop/worker-result.yaml"
+else
+  echo "Orchestrator cleanup obscured prior FAIL report — recovered from ${PRIOR_SHA_SHORT}."
+  echo "To inspect: git show ${PRIOR_SHA_SHORT}:.hyperloop/worker-result.yaml"
+fi
+
 echo ""
 echo "Checks that failed in that cycle — must now pass:"
 echo ""
@@ -118,11 +168,17 @@ echo ""
 
 if [[ $FAIL -gt 0 ]]; then
   echo "FAIL: One or more prior-cycle failures recovered from ${PRIOR_SHA_SHORT} still fail."
-  echo "      This is a Re-Attempt Compliance Failure (RACF) obscured by orchestrator cleanup."
-  echo ""
-  echo "      The orchestrator's cleanup commit deleted worker-result.yaml content, causing"
-  echo "      check-racf-remediation.sh to emit SKIP.  This check filled the gap by walking"
-  echo "      full git history to find the actual prior-cycle FAIL report."
+  if [[ $FROM_MAIN -eq 1 ]]; then
+    echo "      These failures are from main's history — the branch was reset after a prior"
+    echo "      failed cycle, so check-racf-remediation.sh and the branch-history pass above"
+    echo "      both emitted SKIP.  The failures are real RACF requirements regardless."
+  else
+    echo "      This is a Re-Attempt Compliance Failure (RACF) obscured by orchestrator cleanup."
+    echo ""
+    echo "      The orchestrator's cleanup commit deleted worker-result.yaml content, causing"
+    echo "      check-racf-remediation.sh to emit SKIP.  This check filled the gap by walking"
+    echo "      full git history to find the actual prior-cycle FAIL report."
+  fi
   echo ""
   echo "      Protocol:"
   echo "        1. Read the prior findings: git show ${PRIOR_SHA_SHORT}:.hyperloop/worker-result.yaml"
