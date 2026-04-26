@@ -36,6 +36,17 @@ guidelines: |
   explicitly lists features that are NOT in scope. Do NOT fail a task for missing features
   that are out of prototype scope.
 
+  ## Coordinate Frame Contracts
+
+  When a spec says a position field is "relative to parent" (or "local offset"), proximity
+  tests are NOT sufficient coverage — they are the canonical wrong-predicate trap for
+  this requirement class. Before marking a relative-coordinate scenario COVERED:
+
+  1. **Reject proximity tests as sole coverage.** A test named `test_child_nodes_are_near_parent_position` (or similar) that only asserts `abs(child_pos - parent_pos) < threshold` passes for *both* relative and absolute storage whenever the offset is small. It does NOT cover the contract.
+  2. **Verify the test places the parent at a non-zero position.** If the parent fixture is at (0,0,0), absolute and relative values are numerically identical — the test cannot distinguish them. Any test whose parent fixture is at the origin is vacuous for a relative-coordinate contract.
+  3. **Verify the test asserts the stored value equals the local offset directly** — not that it is close to the parent. The assertion must read like `assert child["position"]["x"] == local_offset_x`, not like `assert abs(child_x - parent_x) < threshold`.
+  4. **Check the consumer's interpretation against the producer's storage.** If Godot adds the parent's world position to the JSON value at render time, verify (by reading the Python code) that Python stores only the local offset. A mismatch here is a cross-component bug that no single-side test can catch — explicitly flag the contract boundary in findings.
+
   ## Verdict Rules
 
   - FAIL if any SHALL/MUST requirement lacks implementation OR test coverage.
