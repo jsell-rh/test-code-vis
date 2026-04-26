@@ -26,6 +26,11 @@ guidelines: |
   commands. Do NOT read the spec, check git status, explore the repo, or inspect the task
   state before the checkpoint commit exists on the branch. The exact sequence is:
   branch creation → checkpoint commit → everything else.
+  **Post-reset branch is gone:** After a branch reset the orchestrator deletes the old
+  branch entirely — `git checkout task-NNN` will error with "branch not found". Do NOT
+  attempt to check out the old branch name; always use `git checkout -b <task-id>` (the
+  `-b` flag creates a fresh branch). Trying to switch to a non-existent branch and failing
+  is the most common reason an agent never reaches the checkpoint commit after a reset.
 
   **Never stage .hyperloop/state/ files.** Files under `.hyperloop/state/` (task YAMLs,
   review files, intake records) are managed exclusively by the orchestrator. Committing
