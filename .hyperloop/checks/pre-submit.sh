@@ -18,7 +18,7 @@ FAIL=0
 run_check() {
   local label="$1"
   local script="$2"
-  printf "--- %-45s " "${label} ---"
+  printf -- "--- %-45s " "${label} ---"
   if output=$(bash "$script" 2>&1); then
     echo "[EXIT 0  OK]"
     PASS=$((PASS + 1))
