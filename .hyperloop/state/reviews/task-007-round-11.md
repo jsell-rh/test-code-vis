@@ -1,0 +1,289 @@
+---
+task_id: task-007
+round: 11
+role: verifier
+verdict: fail
+---
+## Summary
+
+Reviewed branch `hyperloop/task-007` against spec `specs/prototype/godot-application.spec.md`.
+
+The implementation is substantive: `main.gd` loads a JSON scene graph and renders 3D volumes
+with containment, dependency edges with arrowhead cones, size encoding, camera framing, and
+LOD management. Tests cover 71 passing scenarios across 8 test suites. Commit trailers are
+present. However, three check scripts exit non-zero and all three are blocking per the
+submission protocol.
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+## Check Script Results
+
+=== run-all-checks.sh ===
+
+--- check-branch-adds-source-files.sh ---
+OK: Branch adds/modifies 12 source file(s) outside .hyperloop/:
+[EXIT 0]
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-007' has 4 commit(s) above main.
+[EXIT 0]
+--- check-checkpoint-commit.sh ---
+OK: Checkpoint commit found — 'chore: begin task-007'
+[EXIT 0]
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: All 2 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+--- check-compound-coverage-not-falsified.sh ---
+OK: check-compound-then-clause-coverage.sh exits 0 — no cross-validation needed.
+[EXIT 0]
+--- check-compound-then-clause-coverage.sh ---
+SKIP: No compound THEN-clauses (containing 'and') found in THEN→test mapping.
+[EXIT 0]
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+[EXIT 0]
+--- check-desktop-platform-tested.sh ---
+INFO: Desktop/native-platform constraint detected in spec(s):
+OK: OS.has_feature() test(s) found covering desktop-platform constraint:
+[EXIT 0]
+--- check-direction-test-derivations.sh ---
+OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
+FAIL: godot/tests/test_camera_controls.gd :: test_zoom_toward_point_moves_pivot_toward_target — direction/sign-convention test is missing a
+      sign-chain derivation comment (must contain '→' or '->' showing
+      how the spec's behavioral reference maps to the expected predicate).
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
+OK: godot/tests/test_system_purpose.gd :: test_dependency_direction_is_encoded_in_edges — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_decreases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_increases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_down_decreases_pivot_z — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_up_increases_pivot_z — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
+FAIL: 1 direction test(s) lack a sign-chain derivation comment.
+[EXIT 1 — FAIL]
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+[EXIT 0]
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (8 suite(s) checked)
+[EXIT 0]
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+--- check-no-state-files-committed.sh ---
+FAIL: Branch commits include .hyperloop/state/ files managed by the orchestrator.
+      State files committed on this branch:
+  .hyperloop/state/intake-2026-04-25.md
+[EXIT 1 — FAIL]
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+--- check-not-on-main.sh ---
+OK: Current branch is 'hyperloop/task-007' (not main)
+[EXIT 0]
+--- check-pan-grab-model-comments.sh ---
+OK: All 5 pan/drag direction test(s) contain user-visible-outcome derivation language.
+[EXIT 0]
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+[EXIT 0]
+--- check-reflects-mapping-consistency.sh ---
+SKIP: No 'reflect(s)' THEN-clauses found in mapping table.
+[EXIT 0]
+--- check-relative-position-tests.sh ---
+FAIL: Extractor source accumulates parent world coordinates into child position.
+  Found pattern: px/py/pz (parent world pos) added to child['position'].
+  The spec requires child positions to be relative (local offset only).
+  Godot's main.gd adds the parent's world position at render time —
+  storing absolute coordinates here causes double-offset rendering.
+  Offending lines:
+extractor/extractor.py:228:                "x": px + pos[0],
+extractor/extractor.py:229:                "y": py + pos[1],
+extractor/extractor.py:230:                "z": pz + pos[2],
+FAIL: Only proximity-based child position tests found — no direct relative-offset assertion.
+[EXIT 1 — FAIL]
+--- check-report-scope-section.sh ---
+[EXIT 0]
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+--- check-then-test-mapping.sh ---
+OK: All 38 mapped test function(s) verified in codebase
+[EXIT 0]
+--- extractor-lint.sh ---
+[EXIT 0]
+--- godot-compile.sh ---
+[EXIT 0]
+--- godot-fileaccess-tested.sh ---
+OK: FileAccess.open() is exercised in 4 test file(s).
+[EXIT 0]
+--- godot-label3d.sh ---
+[EXIT 0]
+--- godot-tests.sh ---
+Results: 71 passed, 0 failed
+GDScript behavioral tests passed.
+[EXIT 0]
+--- pre-submit.sh ---
+OK: All pre-submit checks passed. You may now write your verdict.
+[EXIT 0]
+=== Summary: 32 check(s) run ===
+RESULT: FAIL — one or more checks exited non-zero
+
+## THEN→Test Mapping
+
+| THEN-clause | Test function(s) | File | Verdict |
+|---|---|---|---|
+| THEN it reads the JSON file | `test_file_access_reads_fixture_json` | test_scene_graph_loading.gd | PASS |
+| AND generates 3D volumes for each node | `test_volumes_created_for_each_node`, `test_mesh_instances_exist_in_anchors` | test_scene_graph_loading.gd | PASS |
+| AND generates connections for each edge | `test_edge_mesh_instances_created`, `test_edge_line_mesh_created` | test_scene_graph_loading.gd, test_dependency_rendering.gd | PASS |
+| AND positions elements according to the layout data in the JSON | `test_anchor_positions_match_json`, `test_volumes_positioned_from_json` | test_scene_graph_loading.gd | PASS |
+| THEN the bounded context appears as a larger translucent volume | `test_bounded_context_is_translucent` | test_containment_rendering.gd | PASS |
+| AND its child modules appear as smaller opaque volumes inside it | `test_module_is_opaque`, `test_module_parented_inside_context` | test_containment_rendering.gd | PASS |
+| AND the boundary of the parent is visually distinct from the children | `test_bounded_context_cull_disabled`, `test_bounded_context_larger_than_module` | test_containment_rendering.gd | PASS |
+| THEN a line connects the two context volumes | `test_edge_line_mesh_created` | test_dependency_rendering.gd | PASS |
+| AND the line's direction is visually indicated | `test_direction_indicator_cone_created`, `test_direction_cone_near_target` | test_dependency_rendering.gd | PASS |
+| THEN the module with more code appears as a larger volume | `test_large_module_has_bigger_mesh` | test_size_encoding.gd | PASS |
+| AND the relative sizes are proportional to the metric | `test_mesh_sizes_proportional_to_metric` | test_size_encoding.gd | PASS |
+| THEN the camera defaults to a top-down view showing the entire system | `test_initial_theta_is_near_top_down`, `test_initial_camera_is_above_pivot` | test_camera_controls.gd | PASS |
+| THEN the camera moves closer | `test_scroll_up_decreases_distance`, `test_zoom_toward_point_moves_pivot_toward_target` | test_camera_controls.gd | PASS — but see F1 |
+| AND internal structure becomes visible as the camera approaches | `test_zoom_is_smooth_not_instantaneous`, `test_near_distance_shows_all_nodes` (prior-task LOD suite) | test_camera_controls.gd, spatial_structure suite | PASS-WITH-NOTE: LOD visibility correctly tested by prior-task LOD suite; headless rendering of actual visibility is untestable |
+| AND labels scale to remain readable | `test_labels_are_billboard_and_readable` | test_scene_graph_loading.gd | PASS (asserts BILLBOARD_ENABLED, pixel_size > 0, no_depth_test=true) |
+| THEN the camera rotates around the current focal point | `test_orbit_changes_theta_and_phi`, `test_orbit_pivot_set_to_cursor_world_point` | test_camera_controls.gd | PASS |
+| AND orientation remains intuitive (up stays up) | `test_theta_clamped_at_minimum_to_prevent_flip`, `test_theta_clamped_at_maximum_to_prevent_flip` | test_camera_controls.gd | PASS |
+| THEN it uses Godot 4.6.x | `test_project_godot_version`, `test_project_uses_godot_4_6` | test_engine_version.gd | PASS |
+| AND all scripts use GDScript | `test_all_scripts_are_gdscript`, `test_scripts_dir_contains_only_gdscript` | test_engine_version.gd | PASS |
+| AND all API calls are valid for the Godot 4.6 API | `test_file_access_get_as_text_is_usable` | test_engine_version.gd | PASS |
+
+## Findings
+
+### F1 — BLOCKING: Missing in-body derivation comment in `test_zoom_toward_point_moves_pivot_toward_target`
+
+**Check:** `check-direction-test-derivations.sh` [EXIT 1]
+**File:** `godot/tests/test_camera_controls.gd`
+
+The `test_zoom_toward_point_moves_pivot_toward_target` function has a sign-chain derivation
+comment in its `##` docstring (lines 178–180), but the check script extracts only the function
+body (lines after the `func` declaration). The body contains no `→` or `->` arrow sequences.
+
+The check correctly fails: derivation comments must be inside the function body so the check can
+mechanically verify them.
+
+**Predicate direction audit (independent):** The test calls `set_pivot(target=Vector3(10,0,10),
+new_distance=20.0)` and asserts `_pivot == target and _distance == new_distance`. The initial
+`_distance` is 40.0, so 20 < 40 — the camera IS moving closer. The direction predicate is
+correct; only the comment placement is wrong.
+
+**Fix:** Move the derivation comment inside the function body:
+```gdscript
+func test_zoom_toward_point_moves_pivot_toward_target() -> bool:
+    # Sign-chain: set_pivot(target, 20) → _pivot = target, _distance = 20
+    # → 20 < 40 (initial) → camera moves closer to target → zoom toward target ✓
+    var cam = CameraScript.new()
+    ...
+```
+
+---
+
+### F2 — BLOCKING: State file committed on branch
+
+**Check:** `check-no-state-files-committed.sh` [EXIT 1]
+**Commit:** `032589eb feat(tests): add spec-named test aliases and expand coverage for task-007`
+
+Commit 032589eb (confirmed via `git log main..HEAD --oneline -- .hyperloop/state/intake-2026-04-25.md`)
+added `.hyperloop/state/intake-2026-04-25.md` — a file managed exclusively by the orchestrator
+on trunk. This is a process violation independent of the file's content.
+
+**Fix:** Remove the state file from branch history. Cherry-pick only non-state commits onto a
+clean branch, or use `git filter-branch` / `git rebase -i` to drop the state-file addition from
+commit 032589eb before resubmitting.
+
+---
+
+### F3 — BLOCKING: Extractor stores absolute child coordinates (pre-existing, but blocking)
+
+**Check:** `check-relative-position-tests.sh` [EXIT 1]
+**File:** `extractor/extractor.py` lines 228–230
+
+The extractor accumulates parent world coordinates into each child node's `position` field:
+```python
+"x": px + pos[0],
+"y": py + pos[1],
+"z": pz + pos[2],
+```
+This pre-existed on `main` before this branch. However, commit `d51848a1` on this branch
+modified `extractor/extractor.py` (removing spec-node code) without fixing the bug. The check
+exits non-zero and is blocking per submission rules.
+
+The check requires a test that: (1) places a parent at a non-zero world position, (2) asserts
+that the child's `position` field equals the local offset (not the absolute coordinate). No such
+test exists — only proximity-based tests are present.
+
+**Note on provenance:** Running `git log main..HEAD --oneline -- extractor/extractor.py`
+shows commit d51848a1 (task-007) touched this file. The absolute-coordinate pattern was already
+on main (`git show main:extractor/extractor.py` shows identical lines 232–234). The task-007
+branch introduced no new coordinate-accumulation code, but it also did not fix it. The FAIL is
+blocking regardless of whether the bug was pre-existing.
+
+**Fix options:**
+  A) Store only the local offset in the extractor and verify `main.gd::_resolve_world_pos()`
+     handles world-position accumulation at render time (the implementation already does this),
+     **or**
+  B) Add a targeted pytest: parent at x=10, child offset x=2 → assert `child['position']['x'] == 2.0`
+     (not 12.0).
+
+---
+
+### PASS: Implementation is substantive (not a stub)
+
+`main.gd::_ready()` opens the JSON file via `FileAccess.open()`, parses it, calls
+`build_from_graph()`. `build_from_graph()` creates Node3D anchors, BoxMesh volumes, Label3D
+with BILLBOARD_ENABLED and pixel_size=0.012, ImmediateMesh edge lines, CylinderMesh arrowhead
+cones, and calls `_frame_camera()`. Not a stub.
+
+### PASS: Containment rendering
+
+Translucent bounded context (TRANSPARENCY_ALPHA, alpha=0.18), opaque modules (alpha=1.0),
+child parented inside context anchor, CULL_DISABLED on context material for interior visibility.
+All five test assertions confirmed by reading test bodies.
+
+### PASS: Dependency direction visually indicated
+
+A `CylinderMesh` with `top_radius=0` (cone) is placed at the target end, oriented along the
+edge direction via `Basis(Quaternion(Vector3.UP, dir))`. This is an explicit rendering element
+satisfying "direction is visually indicated" — not a plain line alone.
+
+### PASS: Size encoding (algorithm-quality)
+
+`test_size_encoding.gd::test_mesh_sizes_proportional_to_metric` uses a fixture with large_size=9
+and small_size=3 (ratio=3.0) and asserts `large_mesh.size.x / small_mesh.size.x ≈ 3.0`. The
+fixture varies the input property (size) and checks the relative output (mesh ratio). This is
+an algorithm-quality test, not a rendering-fidelity test.
+
+### PASS: Commit trailers
+
+Both `Spec-Ref` and `Task-Ref` trailers present on all implementation commits.
+
+### PASS: Test pattern correctness
+
+`test_camera_controls.gd` extends `RefCounted` (Pattern 2: returns bool). The run_tests.gd
+runner correctly handles Pattern-2 tests by evaluating the return value. The
+`check-gdscript-test-bool-return.sh` check confirms no inert Pattern-1 bool-returning tests exist.
