@@ -60,8 +60,17 @@ if [ -f "$RESULT_FILE" ]; then
     FAIL=$((FAIL + 1))
   elif grep -qF "RESULT: ALL PASS" "$RESULT_FILE"; then
     echo "OK: worker-result.yaml confirms run-all-checks.sh exited 0."
+  else
+    echo ""
+    echo "FAIL: worker-result.yaml contains no run-all-checks.sh result line."
+    echo "      Neither 'RESULT: ALL PASS' nor 'RESULT: FAIL' was found."
+    echo "      You must run 'bash .hyperloop/checks/run-all-checks.sh' and paste"
+    echo "      its COMPLETE output (including the 'RESULT:' summary line) into"
+    echo "      the '## Check Script Results' section of worker-result.yaml before"
+    echo "      running pre-submit.sh."
+    echo "      A report without a run-all-checks.sh result cannot be accepted."
+    FAIL=$((FAIL + 1))
   fi
-  # If neither pattern is found (placeholder state), skip silently.
 fi
 
 echo ""
