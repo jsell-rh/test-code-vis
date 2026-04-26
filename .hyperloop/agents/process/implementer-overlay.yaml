@@ -21,16 +21,21 @@ guidelines: |
   **Branch-null rule (task reset or first attempt with no existing branch):** When the
   task state shows `branch: null` — meaning the branch was deleted after a reset or this
   is a completely fresh attempt — the only permitted first two Bash commands are:
-  `git checkout -b <task-id>` then immediately `git commit --allow-empty -m "chore: begin <task-id>"`.
+  `git checkout -B <task-id>` then immediately `git commit --allow-empty -m "chore: begin <task-id>"`.
+  Use the capital `-B` flag (not lowercase `-b`) — it force-resets the local branch ref
+  even if a stale local branch with that name still exists from a prior reset cycle.
+  Using lowercase `-b` will ERROR with "branch already exists" if the local ref was not
+  cleaned up after the remote was deleted, which prevents the checkpoint commit from ever
+  being made and causes "agent future missing or failed" in the next orchestrator cycle.
   No other tool (Read, Glob, Grep, Bash, or anything else) may execute between those two
   commands. Do NOT read the spec, check git status, explore the repo, or inspect the task
   state before the checkpoint commit exists on the branch. The exact sequence is:
-  branch creation → checkpoint commit → everything else.
-  **Post-reset branch is gone:** After a branch reset the orchestrator deletes the old
-  branch entirely — `git checkout task-NNN` will error with "branch not found". Do NOT
-  attempt to check out the old branch name; always use `git checkout -b <task-id>` (the
-  `-b` flag creates a fresh branch). Trying to switch to a non-existent branch and failing
-  is the most common reason an agent never reaches the checkpoint commit after a reset.
+  `git checkout -B <task-id>` → `git commit --allow-empty -m "chore: begin <task-id>"` → everything else.
+  **Post-reset branch is gone remotely, but may linger locally:** After a branch reset the
+  orchestrator deletes the remote branch — but the LOCAL branch ref often still exists.
+  `git checkout task-NNN` (no flag) will switch to that stale local branch rather than error.
+  Always use `git checkout -B <task-id>` to force-reset to the current HEAD of main,
+  ensuring a clean branch regardless of prior local state.
 
   **Never stage .hyperloop/state/ files.** Files under `.hyperloop/state/` (task YAMLs,
   review files, intake records) are managed exclusively by the orchestrator. Committing
