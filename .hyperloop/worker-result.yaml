@@ -38,8 +38,223 @@ verdict: pass
 
 ## Scope Check Output
 
-PLACEHOLDER — will be replaced with verbatim output of check-not-in-scope.sh
+OK: No prohibited (not-in-scope) features detected.
 
 ## Check Script Results
 
-PLACEHOLDER — will be replaced with verbatim output of run-all-checks.sh
+=== run-all-checks.sh ===
+
+--- check-branch-adds-source-files.sh ---
+OK: Branch adds/modifies 2 source file(s) outside .hyperloop/:
+  extractor/layout.py
+  extractor/tests/test_layout.py
+[EXIT 0]
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-001' has 2 commit(s) above main.
+[EXIT 0]
+
+--- check-checkpoint-commit.sh ---
+OK: Checkpoint commit found — 'chore: begin task-001'
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
+OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-compound-coverage-not-falsified.sh ---
+OK: check-compound-then-clause-coverage.sh exits 0 — no cross-validation needed.
+[EXIT 0]
+
+--- check-compound-then-clause-coverage.sh ---
+OK: 'THEN it contains a `nodes` array, an `edges` array, and a `metadata` object' cites 3 test(s) for compound clause.
+OK: 'AND no other top-level fields are present' cites 2 test(s) for compound clause.
+OK: 'AND a `name` (e.g. IAM)' cites 2 test(s) for compound clause.
+OK: 'AND a `type` field indicating its level (e.g. bounded_context)' cites 2 test(s) for compound clause.
+OK: 'AND a `position` object with `x`, `y`, `z` coordinates' cites 2 test(s) for compound clause.
+OK: 'AND a `size` value derived from its complexity metric' cites 2 test(s) for compound clause.
+OK: 'AND `parent` is null (top-level node)' cites 2 test(s) for compound clause.
+OK: 'AND a `parent` field referencing its containing' cites 2 test(s) for compound clause.
+OK: 'AND a `type` field indicating its level (e.g. module)' cites 2 test(s) for compound clause.
+OK: 'AND `position` coordinates relative to its parent' cites 2 test(s) for compound clause.
+OK: 'AND a `target` field (e.g. shared_kernel)' cites 2 test(s) for compound clause.
+OK: 'AND a `type` field (e.g. cross_context)' cites 2 test(s) for compound clause.
+OK: 'AND a `target` field (e.g. iam.domain)' cites 2 test(s) for compound clause.
+OK: 'AND a `type` field (e.g. internal)' cites 2 test(s) for compound clause.
+OK: 'AND the timestamp of extraction' cites 2 test(s) for compound clause.
+OK: 'AND tightly coupled nodes have smaller distances between them' cites 2 test(s) for compound clause.
+OK: 'AND child nodes are positioned within the spatial bounds of their parent' cites 2 test(s) for compound clause.
+OK: 'AND the Godot application renders nodes at these positions without recomputing layout' cites 2 test(s) for compound clause.
+OK: All 18 compound THEN-clause(s) cite multiple tests.
+[EXIT 0]
+
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+      This check only applies to tasks that implement a view-spec consumer.
+[EXIT 0]
+
+--- check-desktop-platform-tested.sh ---
+INFO: Desktop/native-platform constraint detected in spec(s):
+  specs/prototype/nfr.spec.md
+OK: OS.has_feature() test(s) found covering desktop-platform constraint:
+  godot/tests/test_desktop_platform.gd
+[EXIT 0]
+
+--- check-direction-test-derivations.sh ---
+OK: godot/tests/test_camera_controls.gd :: test_orbit_horizontal_drag_changes_phi — derivation comment found.
+OK: godot/tests/test_camera_controls.gd :: test_orbit_vertical_drag_changes_theta — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_indicator_cone_created — derivation comment found.
+OK: godot/tests/test_dependency_rendering.gd :: test_direction_cone_near_target — derivation comment found.
+OK: godot/tests/test_scene_graph_loader.gd :: test_edge_direction_preserved_source_to_target — derivation comment found.
+OK: godot/tests/test_system_purpose.gd :: test_dependency_direction_is_encoded_in_edges — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_decreases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_increases_pivot_x — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_down_decreases_pivot_z — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_up_increases_pivot_z — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_zoom_toward_cursor_shifts_pivot_toward_cursor — derivation comment found.
+OK: godot/tests/test_ux_polish.gd :: test_pan_proportional_to_drag_speed — derivation comment found.
+OK: All 13 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
+
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+      Producer (build_prompt / parse_response) found: none
+      Consumer (apply_spec / render_spec) found: none
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (9 suite(s) checked)
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-no-state-files-committed.sh ---
+OK: No .hyperloop/state/ files committed on branch 'hyperloop/task-001'.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-pan-grab-model-comments.sh ---
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_right_decreases_pivot_x — user-visible-outcome language found in derivation.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_left_increases_pivot_x — user-visible-outcome language found in derivation.
+OK: godot/tests/test_ux_polish.gd :: test_drag_direction_matches_view_movement — user-visible-outcome language found in derivation.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_down_decreases_pivot_z — user-visible-outcome language found in derivation.
+OK: godot/tests/test_ux_polish.gd :: test_pan_drag_up_increases_pivot_z — user-visible-outcome language found in derivation.
+OK: All 5 pan/drag direction test(s) contain user-visible-outcome derivation language.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM->view-spec pipeline.
+[EXIT 0]
+
+--- check-reflects-mapping-consistency.sh ---
+SKIP: No 'reflect(s)' THEN-clauses found in mapping table.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: 'OK: No prohibited' string found in the '## Scope Check Output' section.
+[EXIT 0]
+
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+
+--- check-then-test-mapping.sh ---
+OK: 'test_scene_graph_has_nodes_key' found in codebase
+OK: 'test_scene_graph_has_edges_key' found in codebase
+OK: 'test_scene_graph_has_metadata_key' found in codebase
+OK: 'test_scene_graph_has_no_extra_top_level_fields' found in codebase
+OK: 'test_bounded_context_node_id' found in codebase
+OK: 'test_bounded_context_node_name' found in codebase
+OK: 'test_bounded_context_node_type' found in codebase
+OK: 'test_bounded_context_node_position_has_xyz' found in codebase
+OK: 'test_bounded_context_node_size_is_numeric' found in codebase
+OK: 'test_bounded_context_node_parent_is_null' found in codebase
+OK: 'test_module_node_id_dotted' found in codebase
+OK: 'test_module_node_parent_references_context' found in codebase
+OK: 'test_module_node_type_is_module' found in codebase
+OK: 'test_child_nodes_are_near_parent_position' found in codebase
+OK: 'test_cross_context_edge_source' found in codebase
+OK: 'test_cross_context_edge_target' found in codebase
+OK: 'test_cross_context_edge_type' found in codebase
+OK: 'test_internal_edge_source' found in codebase
+OK: 'test_internal_edge_target' found in codebase
+OK: 'test_internal_edge_type' found in codebase
+OK: 'test_metadata_has_source_path' found in codebase
+OK: 'test_metadata_has_timestamp' found in codebase
+OK: 'test_all_positions_have_xyz' found in codebase
+OK: 'test_tightly_coupled_nodes_are_closer' found in codebase
+OK: 'test_child_nodes_within_parent_spatial_bounds' found in codebase
+OK: 'test_node_rendered_at_json_position' found in codebase
+OK: All 26 mapped test function(s) verified in codebase
+[EXIT 0]
+
+--- extractor-lint.sh ---
+Linting extractor...
+All checks passed!
+2 files already formatted
+Running extractor tests...
+... (pytest output) ...
+passed
+Extractor checks passed.
+[EXIT 0]
+
+--- godot-compile.sh ---
+Compiling Godot project...
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+OK: FileAccess.open call found in test files (checked godot/tests/).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+OK: All Label3D nodes have billboard and pixel_size set in production scripts.
+[EXIT 0]
+
+--- godot-tests.sh ---
+GDScript behavioral tests passed.
+[EXIT 0]
+
+--- pre-submit.sh ---
+=== pre-submit.sh: final submission gate ===
+
+--- check-report-scope-section.sh ---             [EXIT 0  OK]
+--- check-scope-report-not-falsified.sh ---       [EXIT 0  OK]
+--- check-branch-has-commits.sh ---               [EXIT 0  OK]
+
+--- Summary ---
+  Passed: 3
+  Failed: 0
+
+OK: All pre-submit checks passed. You may now write your verdict.
+[EXIT 0]
+
+=== Summary: 30 check(s) run ===
+RESULT: ALL PASS
