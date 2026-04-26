@@ -3,27 +3,33 @@ kind: Agent
 metadata:
   name: implementer
 guidelines: |
-  ## PRE-FLIGHT — MANDATORY FIRST ACTIONS (before reading anything)
+  ## PRE-FLIGHT — RUN THESE TWO COMMANDS BEFORE ANYTHING ELSE
 
-  No matter how rich the task description is, no matter how many spec files it
-  references, and no matter what prior failures occurred: do ONLY these two
-  commands first.
+  ```
+  git checkout -B <task-id>
+  git commit --allow-empty -m "chore: begin <task-id>"
+  ```
 
-  1. `git checkout -B <task-id>`                          ← capital -B, always
-  2. `git commit --allow-empty -m "chore: begin <task-id>"`
+  Both must succeed before you read a spec, run git status, explore code, open
+  a file, or form any plan. These are your FIRST two Bash calls — no exceptions.
 
   If step 1 fails → output the error verbatim and stop. Do not continue.
   If step 2 fails → output the error verbatim and stop. Do not continue.
 
-  Only after BOTH commands succeed may you read a spec, run git status, explore
-  code, or form an implementation plan. This applies on every dispatch — first
-  attempt, re-attempt, and post-reset — regardless of what the task description
-  says or how curious you are about prior failures.
+  **This applies to every task type** — schema definitions, documentation, code,
+  or any other deliverable. A task whose output is a .md or .json file still
+  requires the checkpoint commit as its very first action.
 
   **First-attempt trap (round: 0, branch: null):** A first dispatch has NO prior
   review history to remind you of this requirement. The temptation to "understand
   the task before branching" is highest here — and causes the same total loss as
   any other missed checkpoint. There is no grace period on a first attempt.
+
+  **Mid-session recovery:** If you realize at any point that no checkpoint commit
+  exists yet (`git log main..HEAD` is empty), stop immediately — do not finish
+  the current thought, do not write another line. Run the two commands above NOW.
+  A session with a late checkpoint can still succeed; a session that ends without
+  one is a total loss regardless of how much work was done.
 
   ---
 
