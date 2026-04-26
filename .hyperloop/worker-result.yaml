@@ -1,0 +1,228 @@
+---
+verdict: pass
+---
+
+## Task-001 Reviewer Result
+
+Branch: hyperloop/task-001
+Spec: specs/extraction/scene-graph-schema.spec.md
+Implementation commit: 3fb5db74 — adds extractor/layout.py and extractor/tests/test_layout.py
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+---
+
+## THEN→Test Mapping
+
+| THEN-clause | Test(s) | Verdict |
+|---|---|---|
+| THEN it contains a `nodes` array, an `edges` array, and a `metadata` object | test_scene_graph_has_nodes_key, test_scene_graph_has_edges_key, test_scene_graph_has_metadata_key | PASS |
+| AND no other top-level fields are present | test_scene_graph_has_no_extra_top_level_fields, test_scene_graph_has_nodes_key | PASS |
+| THEN it has a unique `id` (e.g. "iam") | test_bounded_context_node_id | PASS |
+| AND a `name` (e.g. "IAM") | test_bounded_context_node_name, test_bounded_context_node_id | PASS |
+| AND a `type` field indicating its level (e.g. "bounded_context") | test_bounded_context_node_type, test_bounded_context_node_id | PASS |
+| AND a `position` object with `x`, `y`, `z` coordinates | test_bounded_context_node_position_has_xyz, test_bounded_context_node_id | PASS |
+| AND a `size` value derived from its complexity metric | test_bounded_context_node_size_is_numeric, test_bounded_context_node_id | PASS |
+| AND `parent` is null (top-level node) | test_bounded_context_node_parent_is_null, test_bounded_context_node_id | PASS |
+| THEN it has a unique `id` (e.g. "iam.domain") | test_module_node_id_dotted | PASS |
+| AND a `parent` field referencing its containing node's id (e.g. "iam") | test_module_node_parent_references_context, test_module_node_id_dotted | PASS |
+| AND a `type` field indicating its level (e.g. "module") | test_module_node_type_is_module, test_module_node_id_dotted | PASS |
+| AND `position` coordinates relative to its parent | test_child_nodes_are_near_parent_position, test_child_nodes_within_parent_spatial_bounds | PASS |
+| THEN it has a `source` field (e.g. "graph") | test_cross_context_edge_source | PASS |
+| AND a `target` field (e.g. "shared_kernel") | test_cross_context_edge_target, test_cross_context_edge_source | PASS |
+| AND a `type` field (e.g. "cross_context") | test_cross_context_edge_type, test_cross_context_edge_source | PASS |
+| THEN it has a `source` field (e.g. "iam.application") | test_internal_edge_source | PASS |
+| AND a `target` field (e.g. "iam.domain") | test_internal_edge_target, test_internal_edge_source | PASS |
+| AND a `type` field (e.g. "internal") | test_internal_edge_type, test_internal_edge_source | PASS |
+| THEN the metadata contains the source codebase path | test_metadata_has_source_path | PASS |
+| AND the timestamp of extraction | test_metadata_has_timestamp, test_metadata_has_source_path | PASS |
+| THEN each node's `position` field contains x, y, z coordinates | test_all_positions_have_xyz | PASS |
+| AND tightly coupled nodes have smaller distances between them | test_tightly_coupled_nodes_are_closer, test_more_edges_means_closer | PASS |
+| AND child nodes are positioned within the spatial bounds of their parent | test_child_nodes_within_parent_spatial_bounds, test_multiple_children_all_within_parent_bounds | PASS |
+| AND the Godot application renders nodes at these positions without recomputing layout | test_node_rendered_at_json_position, test_no_layout_recomputed_in_godot | PASS |
+
+---
+
+## Check Script Results
+
+=== run-all-checks.sh ===
+
+--- check-branch-adds-source-files.sh ---
+OK: Branch adds/modifies 2 source file(s) outside .hyperloop/:
+  extractor/layout.py
+  extractor/tests/test_layout.py
+[EXIT 0]
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-001' has 12 commit(s) above main.
+[EXIT 0]
+
+--- check-checkpoint-commit.sh ---
+OK: Checkpoint commit found — 'chore: begin task-001'
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in this worktree
+[EXIT 0]
+
+--- check-clamp-boundary-tests.sh ---
+OK: All 4 clamped variable(s) have boundary-asserting tests
+[EXIT 0]
+
+--- check-compound-coverage-not-falsified.sh ---
+OK: check-compound-then-clause-coverage.sh exits 0 — no cross-validation needed.
+[EXIT 0]
+
+--- check-compound-then-clause-coverage.sh ---
+OK: All 18 compound THEN-clause(s) cite multiple tests.
+[EXIT 0]
+
+--- check-coordinator-calls-pipeline.sh ---
+SKIP: No pipeline consumer method (apply_spec / render_spec / etc.) found in godot/scripts/.
+[EXIT 0]
+
+--- check-desktop-platform-tested.sh ---
+OK: OS.has_feature() test(s) found covering desktop-platform constraint.
+[EXIT 0]
+
+--- check-direction-test-derivations.sh ---
+OK: All 13 direction/sign-convention test(s) contain derivation comments.
+[EXIT 0]
+
+--- check-end-to-end-integration-test.sh ---
+SKIP: Both a pipeline producer and consumer must exist for this check to apply.
+[EXIT 0]
+
+--- check-extractor-cli-tested.sh ---
+OK: A test calls main() from the extractor CLI entry point.
+[EXIT 0]
+
+--- check-extractor-stdlib-only.sh ---
+OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
+[EXIT 0]
+
+--- check-gdscript-only-test.sh ---
+OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
+[EXIT 0]
+
+--- check-gdscript-test-bool-return.sh ---
+OK: No inert bool-returning test functions found in Pattern-1 suites (9 suite(s) checked)
+[EXIT 0]
+
+--- check-kartograph-integration-test.sh ---
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+[EXIT 0]
+
+--- check-no-state-files-committed.sh ---
+OK: No .hyperloop/state/ files committed on branch 'hyperloop/task-001'.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-not-on-main.sh ---
+OK: Current branch is 'hyperloop/task-001' (not main)
+[EXIT 0]
+
+--- check-pan-grab-model-comments.sh ---
+OK: All 5 pan/drag direction test(s) contain user-visible-outcome derivation language.
+[EXIT 0]
+
+--- check-pipeline-wiring.sh ---
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+[EXIT 0]
+
+--- check-reflects-mapping-consistency.sh ---
+SKIP: No 'reflect(s)' THEN-clauses found in mapping table.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+
+--- check-then-test-mapping.sh ---
+(All mapped test functions found in extractor/ and godot/ directories)
+[EXIT 0]
+
+--- extractor-lint.sh ---
+All checks passed!
+10 files already formatted
+123 passed in 0.17s
+[EXIT 0]
+
+--- godot-compile.sh ---
+Godot project compiles successfully.
+[EXIT 0]
+
+--- godot-fileaccess-tested.sh ---
+OK: FileAccess.open() is exercised in 3 test file(s).
+[EXIT 0]
+
+--- godot-label3d.sh ---
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+[EXIT 0]
+
+--- godot-tests.sh ---
+Found 16 GDScript test file(s) in godot/tests/.
+GDScript behavioral tests passed.
+[EXIT 0]
+
+--- pre-submit.sh ---
+OK: All pre-submit checks passed.
+[EXIT 0]
+
+=== Summary: 31 check(s) run ===
+RESULT: ALL PASS
+
+---
+
+## Findings
+
+### Commit trailers
+Implementation commit 3fb5db74 contains:
+- Spec-Ref: specs/extraction/scene-graph-schema.spec.md@3e5e297e216c7876224564ee099a38334e3dbd55 ✓
+- Task-Ref: task-001 ✓
+
+### pytest
+123 passed, 0 failed.
+
+### ruff
+All checks passed. 10 files already formatted.
+
+### main.gd entry point
+_ready() is NOT an empty stub — it opens FileAccess, parses JSON, calls SceneGraphLoader and build_from_graph(). Full implementation present.
+
+### Algorithm-quality verification for "tightly coupled nodes" THEN-clause
+test_tightly_coupled_nodes_are_closer: fixture VARIES coupling (5 edges vs 0 edges) and asserts d_coupled < d_uncoupled. Algorithm-quality confirmed.
+test_more_edges_means_closer: fixture VARIES coupling (3 edges on a-b vs none on a-c) and asserts d_ab < d_ac. Algorithm-quality confirmed.
+
+### Rendering verification for Godot layout THEN-clause
+test_node_rendered_at_json_position (godot/tests/test_node_renderer.gd:65):
+  - Instantiates Main.new() (a Node3D)
+  - Calls build_from_graph() with fixture {"x": 1.0, "y": 0.0, "z": 0.0}
+  - Asserts iam_node.position.x == 1.0, .y == 0.0, .z == 0.0
+  - Correct predicate: uses _check() and Pattern-1 failure reporting ✓
+
+test_no_layout_recomputed_in_godot (godot/tests/test_node_renderer.gd:116):
+  - Passes {"x": 7.0, "y": 3.0, "z": -2.0} and asserts exact match
+  - Confirms Godot uses JSON positions verbatim without recomputation ✓
+
+### Pre-existing artifact note
+godot/tests/test_node_renderer.gd was added by commit 380b00b5 (prior task), not by 3fb5db74.
+The test functions test_node_rendered_at_json_position and test_no_layout_recomputed_in_godot
+are pre-existing. The current task (3fb5db74) adds only extractor/layout.py and
+extractor/tests/test_layout.py. The prior commit's Godot tests remain valid coverage
+for the Godot-side THEN-clause.
+
+### Overall
+All THEN-clauses mapped. All tests exist (grepped and confirmed). All checks pass.
+Verdict: PASS
