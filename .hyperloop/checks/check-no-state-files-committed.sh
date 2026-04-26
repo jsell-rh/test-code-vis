@@ -33,9 +33,15 @@ if [ "$COMMIT_COUNT" -eq 0 ]; then
     exit 0
 fi
 
-# Find any .hyperloop/state/ files committed on this branch.
-STATE_FILES=$(git diff --name-only main..HEAD 2>/dev/null \
-    | grep '^\.hyperloop/state/' || true)
+# Find any .hyperloop/state/ files actually committed on this branch.
+# We use git log (not git diff) so that state files updated on main AFTER
+# this branch last rebased do not produce false positives.  git diff
+# main..HEAD compares the two tips, so a file changed on main post-rebase
+# appears in the diff even though the implementer never staged it.
+# git log main..HEAD enumerates only commits that exist on this branch but
+# not on main, and lists only files those commits actually touched.
+STATE_FILES=$(git log main..HEAD --name-only --pretty="" 2>/dev/null \
+    | grep '^\.hyperloop/state/' | sort -u || true)
 
 if [ -n "$STATE_FILES" ]; then
     echo "FAIL: Branch commits include .hyperloop/state/ files managed by the orchestrator."
@@ -43,8 +49,11 @@ if [ -n "$STATE_FILES" ]; then
     echo "      These files conflict with the orchestrator's own state on main and"
     echo "      will cause permanent rebase failures, forcing a branch reset."
     echo ""
-    echo "      State files found on this branch:"
+    echo "      State files committed on this branch:"
     echo "$STATE_FILES" | sed 's/^/  /'
+    echo ""
+    echo "      To confirm: run 'git log main..HEAD --oneline -- <file>' for each"
+    echo "      listed file and verify a commit on this branch introduced it."
     echo ""
     echo "      Remove them from the branch history:"
     echo "        git filter-branch --index-filter \\"
