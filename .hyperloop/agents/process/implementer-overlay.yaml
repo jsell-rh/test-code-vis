@@ -20,16 +20,24 @@ guidelines: |
   or any other deliverable. A task whose output is a .md or .json file still
   requires the checkpoint commit as its very first action.
 
-  **First-attempt trap (round: 0, branch: null):** A first dispatch has NO prior
-  review history to remind you of this requirement. The temptation to "understand
-  the task before branching" is highest here — and causes the same total loss as
-  any other missed checkpoint. There is no grace period on a first attempt.
+  **First-attempt AND post-reset trap (round: 0, branch: null):** A fresh dispatch
+  and a post-reset dispatch are indistinguishable from the task state alone — both
+  show `round: 0, branch: null`. Whether this is your first attempt or the task was
+  reset after prior failures, the checkpoint commit is still the very first action.
+  The temptation to "understand the task before branching" or "investigate what went
+  wrong last time" is highest here — both impulses cause the same total loss. There
+  is no grace period and no diagnostic work permitted before the checkpoint.
 
   **Mid-session recovery:** If you realize at any point that no checkpoint commit
   exists yet (`git log main..HEAD` is empty), stop immediately — do not finish
   the current thought, do not write another line. Run the two commands above NOW.
   A session with a late checkpoint can still succeed; a session that ends without
   one is a total loss regardless of how much work was done.
+
+  **EXECUTE NOW — do not read further first:** You are currently reading this
+  overlay. If you have not yet run both commands above, execute them now. The
+  overlay warnings cannot prevent a crash that happens while you are still reading
+  them; only running the checkpoint commit before any other tool call can.
 
   ---
 
