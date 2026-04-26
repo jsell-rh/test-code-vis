@@ -55,7 +55,12 @@ if [[ -n "$RACF_SHA" ]]; then
   fi
 fi
 
-# ── Walk ALL git history to find the most recent report with FAIL lines ──────
+# ── Walk THIS BRANCH's history to find the most recent report with FAIL lines ─
+# IMPORTANT: use "main..HEAD" (not "--all") to restrict the walk to commits that
+# belong to the current branch.  Using "--all" crosses branch boundaries and can
+# surface a FAIL report from a completely different task branch, producing a
+# false-negative: the wrong task's checks all pass, the script returns OK, and
+# the actual prior-cycle failures on this branch are never surfaced.
 PRIOR_SHA=""
 PRIOR_FAILS=""
 while IFS= read -r sha; do
@@ -79,7 +84,7 @@ while IFS= read -r sha; do
     PRIOR_FAILS="$fails"
     break
   fi
-done < <(git log --all --format="%H" -- "$RESULT_FILE" 2>/dev/null)
+done < <(git log main..HEAD --format="%H" -- "$RESULT_FILE" 2>/dev/null)
 
 if [[ -z "$PRIOR_SHA" ]]; then
   echo "SKIP: No prior committed report with FAIL lines found anywhere in git history."
