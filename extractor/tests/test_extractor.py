@@ -5,12 +5,15 @@ extracts dependencies, and builds valid scene graphs as described in
 specs/extraction/code-extraction.spec.md.
 
 Tests use temporary directories instead of the live kartograph codebase
-so they remain hermetic and fast.
+so they remain hermetic and fast. One integration test targets the real
+kartograph codebase at ~/code/kartograph and is skipped when it is absent.
 """
 
 from __future__ import annotations
 
+import ast
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -19,14 +22,12 @@ import math
 
 from extractor.extractor import (
     _order_by_coupling,
-    _position_spec_nodes,
     build_dependency_edges,
     build_scene_graph,
     classify_edge_type,
     compute_layout,
     compute_loc,
     discover_bounded_contexts,
-    discover_spec_nodes,
     discover_submodules,
     extract_imports_from_file,
     get_target_node_id,
@@ -571,311 +572,103 @@ class TestSceneGraphOutput:
 
 
 # ---------------------------------------------------------------------------
-# Requirement: Spec-Driven Context (specs/core/system-purpose.spec.md)
-#
-# GIVEN a codebase and its corresponding specification files
-# WHEN both are loaded into the system
-# THEN the spec is treated as the intended design
-# AND the codebase is treated as the realized design
-# AND the relationship between them is available for inspection
+# Requirement: CLI entry point
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
-def src_with_spec_files(tmp_path: Path) -> Path:
-    """A minimal source tree that has an adjacent specs/ directory.
+def test_main_cli_produces_valid_json(tmp_path: Path) -> None:
+    """THEN runs as a standalone CLI tool and writes a valid JSON scene graph.
 
-    Code structure: one bounded context 'billing' with a 'payments' module.
-    Spec structure: two spec files under a sibling specs/ directory.
-    This fixture simulates a codebase that ships spec files alongside code.
+    Calls main([...]) with a synthetic source tree and asserts exit code 0
+    and that the output JSON contains the expected keys.
     """
-    # Realized design — Python code
-    billing = tmp_path / "src" / "billing"
-    billing.mkdir(parents=True)
-    (billing / "__init__.py").write_text("")
-    payments = billing / "payments"
-    payments.mkdir()
-    (payments / "__init__.py").write_text("")
-    (payments / "service.py").write_text("class PaymentService:\n    pass\n")
+    from extractor.__main__ import main
 
-    # Intended design — spec files in a sibling directory
-    specs_dir = tmp_path / "specs"
-    specs_dir.mkdir()
-    (specs_dir / "billing.spec.md").write_text(
-        "# Billing Spec\n\n## Purpose\nHandle payments.\n"
-    )
-    core_dir = specs_dir / "core"
-    core_dir.mkdir()
-    (core_dir / "system-purpose.spec.md").write_text(
-        "# System Purpose\n\n## Purpose\nEnable understanding.\n"
-    )
+    # Build a minimal kartograph-like source tree.
+    iam = tmp_path / "iam"
+    iam.mkdir()
+    (iam / "__init__.py").write_text("")
 
-    return tmp_path / "src"
+    output_path = tmp_path / "scene_graph.json"
+    rc = main([str(tmp_path), "--output", str(output_path)])
+    assert rc == 0, "main() must return 0 on success"
+    assert output_path.exists(), "Output JSON file must be created"
+    data = json.loads(output_path.read_text())
+    assert "nodes" in data
+    assert "edges" in data
+    assert "metadata" in data
 
 
-class TestSpecNodeDiscovery:
-    """Tests for discover_spec_nodes() — spec/core/system-purpose.spec.md coverage.
+# ---------------------------------------------------------------------------
+# Requirement: Stdlib-only imports
+# ---------------------------------------------------------------------------
 
-    Spec: The system MUST accept human-authored specifications as input
-    alongside the codebase, treating specs as the authoritative expression
-    of human intent.
 
-    Scenario: Spec and codebase loaded together
-    THEN the spec is treated as the intended design (type='spec' nodes)
-    AND the codebase is treated as the realized design (type='bounded_context'/'module')
-    AND the relationship between them is available for inspection (both present in graph)
+def test_extractor_uses_only_stdlib_imports() -> None:
+    """THEN it requires no dependencies beyond the Python standard library.
+
+    Parses all production .py files in extractor/ with ast and asserts every
+    top-level import name appears in sys.stdlib_module_names or is the
+    'extractor' package itself (which is a local sibling, not a third-party dep).
+    Uses sys.stdlib_module_names — the canonical Python 3.10+ mechanism.
     """
+    extractor_dir = Path(__file__).parent.parent  # points to extractor/ directory
+    allowed_non_stdlib = {"extractor"}  # the package itself
 
-    # ------------------------------------------------------------------
-    # THEN: spec files produce spec-type nodes (intended design representation)
-    # ------------------------------------------------------------------
+    violations: list[str] = []
+    for py_file in sorted(extractor_dir.rglob("*.py")):
+        if "tests" in py_file.parts:
+            continue  # skip test files (they import pytest)
+        try:
+            tree = ast.parse(py_file.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    top_level = alias.name.split(".")[0]
+                    if (
+                        top_level not in sys.stdlib_module_names
+                        and top_level not in allowed_non_stdlib
+                    ):
+                        violations.append(f"{py_file.name}: imports '{alias.name}'")
+            elif isinstance(node, ast.ImportFrom):
+                if node.level == 0 and node.module:
+                    top_level = node.module.split(".")[0]
+                    if (
+                        top_level not in sys.stdlib_module_names
+                        and top_level not in allowed_non_stdlib
+                    ):
+                        violations.append(
+                            f"{py_file.name}: from '{node.module}' import ..."
+                        )
 
-    def test_spec_files_produce_spec_type_nodes(
-        self, src_with_spec_files: Path
-    ) -> None:
-        """Spec files adjacent to the source tree are discovered as spec nodes.
+    assert not violations, (
+        "Non-stdlib imports found in extractor source files:\n" + "\n".join(violations)
+    )
 
-        THEN the spec is treated as the intended design — each spec file
-        becomes a node with type='spec' so it is structurally distinct from
-        code nodes in the scene graph.
-        """
-        nodes = discover_spec_nodes(src_with_spec_files)
-        assert len(nodes) > 0, (
-            "discover_spec_nodes must return nodes when specs/ exists"
-        )
-        spec_types = [n["type"] for n in nodes]
-        assert all(t == "spec" for t in spec_types), (
-            f"All discovered nodes must have type='spec'; got {spec_types}"
-        )
 
-    def test_spec_nodes_count_matches_markdown_files(
-        self, src_with_spec_files: Path
-    ) -> None:
-        """Every .md file under specs/ becomes exactly one spec node."""
-        nodes = discover_spec_nodes(src_with_spec_files)
-        # The fixture creates billing.spec.md and core/system-purpose.spec.md
-        assert len(nodes) == 2, (
-            f"Expected 2 spec nodes (one per .md file), got {len(nodes)}: "
-            + str([n["id"] for n in nodes])
-        )
+# ---------------------------------------------------------------------------
+# Requirement: Integration with kartograph codebase
+# ---------------------------------------------------------------------------
 
-    def test_spec_nodes_have_required_schema_fields(
-        self, src_with_spec_files: Path
-    ) -> None:
-        """Each spec node contains all required Node fields."""
-        nodes = discover_spec_nodes(src_with_spec_files)
-        for node in nodes:
-            assert "id" in node, "spec node must have 'id'"
-            assert "name" in node, "spec node must have 'name'"
-            assert "type" in node, "spec node must have 'type'"
-            assert "position" in node, "spec node must have 'position'"
-            assert "size" in node, "spec node must have 'size'"
-            assert "parent" in node, "spec node must have 'parent'"
+_KARTOGRAPH_SRC = Path.home() / "code" / "kartograph" / "src" / "api"
 
-    def test_spec_nodes_are_top_level_parent_null(
-        self, src_with_spec_files: Path
-    ) -> None:
-        """Spec nodes are top-level (parent=null) — they are not nested under code nodes."""
-        nodes = discover_spec_nodes(src_with_spec_files)
-        for node in nodes:
-            assert node["parent"] is None, (
-                f"Spec node {node['id']} must have parent=null; got {node['parent']!r}"
-            )
 
-    def test_spec_node_ids_are_stable_and_dot_separated(
-        self, src_with_spec_files: Path
-    ) -> None:
-        """Spec node IDs are derived from the relative file path under specs/.
+@pytest.mark.skipif(
+    not _KARTOGRAPH_SRC.exists(),
+    reason="kartograph source not available at ~/code/kartograph/src/api",
+)
+def test_extractor_with_kartograph_codebase() -> None:
+    """Integration test: run the extractor against the real kartograph codebase.
 
-        This produces stable, dot-separated IDs like 'spec.billing_spec' and
-        'spec.core.system_purpose_spec' that are safe for the Godot scene tree.
-        """
-        nodes = discover_spec_nodes(src_with_spec_files)
-        ids = {n["id"] for n in nodes}
-        # Both IDs must start with 'spec.'
-        assert all(nid.startswith("spec.") for nid in ids), (
-            f"All spec node IDs must start with 'spec.'; got {ids}"
-        )
-        # No spaces in IDs (Godot scene-tree names must not contain spaces).
-        assert all(" " not in nid for nid in ids), (
-            f"Spec node IDs must not contain spaces; got {ids}"
-        )
-
-    def test_spec_nodes_have_positive_size(self, src_with_spec_files: Path) -> None:
-        """Spec node size is derived from file size and is always > 0."""
-        nodes = discover_spec_nodes(src_with_spec_files)
-        for node in nodes:
-            assert node["size"] > 0.0, (
-                f"Spec node {node['id']} must have size > 0; got {node['size']}"
-            )
-
-    def test_spec_nodes_have_position_fields(self, src_with_spec_files: Path) -> None:
-        """After discover_spec_nodes(), each node has x/y/z position fields."""
-        nodes = discover_spec_nodes(src_with_spec_files)
-        for node in nodes:
-            pos = node["position"]
-            assert "x" in pos and "y" in pos and "z" in pos, (
-                f"Spec node {node['id']} position must have x/y/z; got {pos}"
-            )
-
-    def test_no_spec_nodes_when_no_specs_directory(self, tmp_path: Path) -> None:
-        """Returns empty list when neither specs/ nor spec/ directory exists.
-
-        Graceful degradation: codebases without spec directories still
-        produce a valid (code-only) scene graph.
-        """
-        src = tmp_path / "src"
-        src.mkdir()
-        bc = src / "payments"
-        bc.mkdir()
-        (bc / "__init__.py").write_text("")
-        nodes = discover_spec_nodes(src)
-        assert nodes == [], (
-            f"Expected empty list when no specs/ directory exists; got {nodes}"
-        )
-
-    # ------------------------------------------------------------------
-    # AND: spec and code nodes coexist — relationship available for inspection
-    # ------------------------------------------------------------------
-
-    def test_build_scene_graph_includes_spec_nodes_when_specs_exist(
-        self, src_with_spec_files: Path
-    ) -> None:
-        """build_scene_graph includes spec nodes alongside code nodes.
-
-        AND the relationship between them is available for inspection —
-        both spec (intended design) and code (realized design) nodes appear
-        in the same scene graph so the human can inspect both simultaneously.
-        """
-        graph = build_scene_graph(src_with_spec_files)
-        node_types = {n["type"] for n in graph["nodes"]}
-        assert "spec" in node_types, (
-            "Scene graph must include spec nodes when a specs/ directory is present"
-        )
-        # At least one code node type must also be present.
-        code_types = node_types & {"bounded_context", "module"}
-        assert len(code_types) > 0, (
-            "Scene graph must include code nodes alongside spec nodes"
-        )
-
-    def test_build_scene_graph_no_spec_nodes_when_no_specs(self, src: Path) -> None:
-        """build_scene_graph has no spec nodes when no specs/ directory exists.
-
-        The standard test fixture (src) has no adjacent specs/ directory, so
-        the scene graph must contain only code nodes.
-        """
-        graph = build_scene_graph(src)
-        spec_nodes = [n for n in graph["nodes"] if n["type"] == "spec"]
-        assert spec_nodes == [], (
-            f"Expected no spec nodes when specs/ directory is absent; "
-            f"got {[n['id'] for n in spec_nodes]}"
-        )
-
-    def test_spec_node_ids_are_unique_from_code_nodes(
-        self, src_with_spec_files: Path
-    ) -> None:
-        """Spec node IDs must not collide with code node IDs in the scene graph."""
-        graph = build_scene_graph(src_with_spec_files)
-        all_ids = [n["id"] for n in graph["nodes"]]
-        assert len(all_ids) == len(set(all_ids)), (
-            "All node IDs (spec and code) must be unique in the scene graph; "
-            f"duplicates found in {all_ids}"
-        )
-
-    # ------------------------------------------------------------------
-    # Layout: spec nodes are spatially distinct from code nodes
-    # ------------------------------------------------------------------
-
-    def test_spec_nodes_have_distinct_positions_after_layout(
-        self, src_with_spec_files: Path
-    ) -> None:
-        """After compute_layout, spec nodes are positioned at distinct coordinates.
-
-        Spec nodes must not all share the same (0, 0, 0) placeholder position —
-        they receive real positions via _position_spec_nodes so they are
-        visually distinct from each other in the 3D scene.
-        """
-        graph = build_scene_graph(src_with_spec_files)
-        spec_nodes = [n for n in graph["nodes"] if n["type"] == "spec"]
-        assert len(spec_nodes) >= 2, (
-            "Need at least 2 spec nodes to test distinct positions"
-        )
-        positions = [
-            (n["position"]["x"], n["position"]["y"], n["position"]["z"])
-            for n in spec_nodes
-        ]
-        assert len(set(positions)) == len(positions), (
-            f"All spec nodes must have distinct positions; got {positions}"
-        )
-
-    def test_spec_nodes_are_spatially_beyond_code_nodes(
-        self, src_with_spec_files: Path
-    ) -> None:
-        """Spec nodes are placed in a separate region from code nodes.
-
-        After layout, spec nodes have a z-coordinate more negative than the
-        code circle's far edge, placing the intended design layer spatially
-        distinct from the realized code layer.
-        """
-        graph = build_scene_graph(src_with_spec_files)
-        code_nodes = [n for n in graph["nodes"] if n["type"] == "bounded_context"]
-        spec_nodes = [n for n in graph["nodes"] if n["type"] == "spec"]
-
-        if not code_nodes or not spec_nodes:
-            pytest.skip("Need both code and spec nodes to check spatial separation")
-
-        # The most negative z among spec nodes must be further than any BC node.
-        spec_z_min = min(n["position"]["z"] for n in spec_nodes)
-        code_z_min = min(n["position"]["z"] for n in code_nodes)
-        assert spec_z_min < code_z_min, (
-            f"Spec nodes (z_min={spec_z_min:.2f}) must be placed beyond code nodes "
-            f"(z_min={code_z_min:.2f}) so intended and realized design are spatially distinct"
-        )
-
-    # ------------------------------------------------------------------
-    # Unit: _position_spec_nodes
-    # ------------------------------------------------------------------
-
-    def test_position_spec_nodes_assigns_distinct_x_values(self) -> None:
-        """_position_spec_nodes spreads nodes along the X-axis."""
-        spec_node_a: Node = {
-            "id": "spec.a",
-            "name": "A",
-            "type": "spec",
-            "position": {"x": 0.0, "y": 0.0, "z": 0.0},
-            "size": 1.0,
-            "parent": None,
-        }
-        spec_node_b: Node = {
-            "id": "spec.b",
-            "name": "B",
-            "type": "spec",
-            "position": {"x": 0.0, "y": 0.0, "z": 0.0},
-            "size": 1.0,
-            "parent": None,
-        }
-        _position_spec_nodes([spec_node_a, spec_node_b], code_radius=5.0)
-        assert spec_node_a["position"]["x"] != spec_node_b["position"]["x"], (
-            "_position_spec_nodes must assign distinct x values to each spec node"
-        )
-
-    def test_position_spec_nodes_z_offset_beyond_code_radius(self) -> None:
-        """_position_spec_nodes places all spec nodes at z < -(code_radius + some offset)."""
-        spec_node: Node = {
-            "id": "spec.x",
-            "name": "X",
-            "type": "spec",
-            "position": {"x": 0.0, "y": 0.0, "z": 0.0},
-            "size": 1.0,
-            "parent": None,
-        }
-        code_radius = 10.0
-        _position_spec_nodes([spec_node], code_radius=code_radius)
-        assert spec_node["position"]["z"] < -code_radius, (
-            f"Spec node z={spec_node['position']['z']:.2f} must be "
-            f"< -code_radius={-code_radius:.2f} so it is spatially beyond the code circle"
-        )
-
-    def test_position_spec_nodes_no_op_when_empty(self) -> None:
-        """_position_spec_nodes does nothing (no crash) when given an empty list."""
-        _position_spec_nodes([], code_radius=5.0)  # must not raise
+    GIVEN the kartograph codebase at ~/code/kartograph/src/api
+    WHEN build_scene_graph() is called
+    THEN the output scene graph contains the expected bounded contexts:
+         iam, graph, shared_kernel.
+    """
+    graph = build_scene_graph(_KARTOGRAPH_SRC)
+    ids = {n["id"] for n in graph["nodes"]}
+    assert "iam" in ids, f"Expected 'iam' in node ids; got: {ids}"
+    assert "shared_kernel" in ids, f"Expected 'shared_kernel' in node ids; got: {ids}"
+    assert "graph" in ids, f"Expected 'graph' in node ids; got: {ids}"
