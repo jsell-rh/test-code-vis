@@ -5,13 +5,22 @@
 # position computation.
 #
 # The spec requires module node `position` fields to be relative to the
-# parent node (local offset only). The known failure mode is:
+# parent node (local offset only). The known failure modes are:
 #
-#   child["position"] = {"x": px + pos[0], "y": py + pos[1], "z": pz + pos[2]}
+#   Form A (extracted variables):
+#     child["position"] = {"x": px + pos[0], "y": py + pos[1], "z": pz + pos[2]}
 #
-# where px/py/pz are the parent's world coordinates. This stores an absolute
-# world position instead of a local offset, causing Godot to double-offset the
-# child (since main.gd adds the parent's world position again at render time).
+#   Form B (array indexing on a parent_pos tuple/list):
+#     child["position"] = {"x": parent_pos[0] + math.cos(angle) * r, ...}
+#
+# Both forms store an absolute world position instead of a local offset, causing
+# Godot to double-offset the child (since main.gd adds the parent's world
+# position again at render time).
+#
+# Form B is the typical failure mode when a new module is created as a fix but
+# the absolute-coordinate pattern is reproduced under different variable names.
+# This check scans ALL Python files in the extractor package, including newly
+# created modules, so the bug is caught regardless of file or variable name.
 #
 # Additionally, verifies that at least one test explicitly checks the relative
 # (local offset) value rather than only checking proximity to the parent.
@@ -37,27 +46,39 @@ if grep -rn \
     -e 'py + pos\[' \
     -e 'pz + pos\[' \
     -e 'parent_x + \|parent_y + \|parent_z + ' \
+    -e 'parent_pos\[0\] +' \
+    -e 'parent_pos\[1\] +' \
+    -e 'parent_pos\[2\] +' \
+    -e 'parent_pos\["x"\] +\|parent_pos\["y"\] +\|parent_pos\["z"\] +' \
     "$EXTRACTOR_DIR" \
     --include="*.py" \
     2>/dev/null | grep -v "test_" | grep -q .; then
 
     echo "FAIL: Extractor source accumulates parent world coordinates into child position."
-    echo "  Found pattern: px/py/pz (parent world pos) added to child['position']."
+    echo "  Found absolute-coordinate accumulation pattern (form A: px/py/pz + pos[],"
+    echo "  or form B: parent_pos[N] + ...) in a non-test Python file."
     echo "  The spec requires child positions to be relative (local offset only)."
     echo "  Godot's main.gd adds the parent's world position at render time —"
     echo "  storing absolute coordinates here causes double-offset rendering."
+    echo "  This check scans ALL Python files in extractor/ — the bug is caught"
+    echo "  regardless of which file or variable names are used."
     echo ""
     echo "  Offending lines:"
     grep -rn \
         -e 'px + pos\[' \
         -e 'py + pos\[' \
         -e 'pz + pos\[' \
+        -e 'parent_pos\[0\] +' \
+        -e 'parent_pos\[1\] +' \
+        -e 'parent_pos\[2\] +' \
         "$EXTRACTOR_DIR" \
         --include="*.py" \
         2>/dev/null | grep -v "test_" || true
     echo ""
-    echo "  Fix: store only the local offset:"
+    echo "  Fix: store only the local offset in every file:"
     echo "    child[\"position\"] = {\"x\": pos[0], \"y\": pos[1], \"z\": pos[2]}"
+    echo "  If a new module was created as the fix, verify it does not reproduce"
+    echo "  the pattern under different variable names (e.g., parent_pos[0] + ...)."
     FAIL=1
 else
     echo "OK: No absolute parent-coordinate accumulation detected in extractor source."
