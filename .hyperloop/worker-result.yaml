@@ -1,0 +1,187 @@
+---
+verdict: fail
+---
+## Spec Alignment Review — specs/extraction/scene-graph-schema.spec.md
+
+Branch: hyperloop/task-001
+
+---
+
+### Requirement: Schema Structure — COVERED
+
+**Scenario: Top-level structure**
+
+- Code: `extractor/schema.py::SceneGraph` is a TypedDict with exactly three keys —
+  `nodes`, `edges`, `metadata`. The docstring explicitly states "The JSON file MUST
+  contain exactly these three top-level fields."
+- Code: `extractor/extractor.py::build_scene_graph()` returns a dict with exactly
+  those three fields.
+- Tests: `extractor/tests/test_schema.py::TestSchemaStructure` covers all THEN
+  clauses, including `test_scene_graph_has_no_extra_top_level_fields` which asserts
+  `set(graph.keys()) == {"nodes", "edges", "metadata"}`.
+- Godot: `godot/tests/test_scene_graph_loader.gd` confirms the loader forwards
+  exactly these three keys via `test_nodes_list_is_returned`,
+  `test_edges_list_is_returned`, `test_metadata_is_returned`.
+
+---
+
+### Requirement: Node Schema — PARTIAL (one scenario)
+
+**Scenario: Bounded context node — COVERED**
+
+- Code: `schema.py::Node` declares all required fields (id, name, type, position,
+  size, parent). `extractor.py::discover_bounded_contexts()` produces nodes with
+  `type="bounded_context"`, `parent=None`, `size=size_from_loc(loc)` (complexity
+  derived), and x/y/z position.
+- Tests: `test_schema.py::TestNodeSchema` (8 tests: id, name, type,
+  position/xyz, size numeric, parent null). `test_extractor.py::TestModuleDiscovery`
+  also verifies type, parent=None, and that metrics/loc drives size.
+- Godot: `test_scene_graph_loader.gd` verifies id, name, type, parent=null,
+  position xyz, size, and metrics fields.
+
+**Scenario: Module node inside a bounded context — PARTIAL**
+
+- Code: `schema.py::Node` supports `type="module"` and a non-null `parent`.
+  `extractor.py::discover_submodules()` produces dotted IDs (`"iam.domain"`),
+  correct parent references, and `type="module"`. These structural fields are
+  correct.
+- **MISSING — relative positions**: The spec says "AND `position` coordinates
+  relative to its parent." The schema docstring also says "Coordinates are relative
+  to the parent node." However, `extractor.py::compute_layout()` stores **absolute**
+  world-space coordinates for module nodes:
+
+      px, py, pz = bc_pos_map.get(parent_id, (0.0, 0.0, 0.0))
+      child["position"] = {"x": px + pos[0], "y": py + pos[1], "z": pz + pos[2]}
+
+  Godot's `main.gd::_resolve_world_pos()` treats JSON position as **relative**
+  (adds parent world position on top: `return _world_positions[parent_id] + local`),
+  and `_create_volume()` sets `anchor.position` to the raw JSON value inside the
+  parent's Godot scene-tree node (also relative). With absolute JSON positions the
+  module would be double-offset and visually placed outside its parent's bounds.
+- **MISSING — test**: No test in `test_extractor.py`, `test_schema.py`,
+  `test_layout.py`, or the Godot suite verifies that module positions are
+  stored as offsets relative to the parent rather than as absolute coordinates.
+  `test_child_nodes_are_near_parent_position` checks absolute-to-absolute distance
+  (which is always small because the extractor adds a small offset to the parent's
+  absolute position) — it does not distinguish relative from absolute storage.
+
+**What is needed to fix:**
+1. `extractor.py::compute_layout()` must store only the local offset for module
+   nodes: `child["position"] = {"x": pos[0], "y": pos[1], "z": pos[2]}` (no
+   `px/py/pz` addition).
+2. Add a Python test that verifies a module node's stored position is NOT the
+   same as its absolute world position — e.g. assert that `child["position"]["x"]`
+   does not equal `parent["position"]["x"] + child_local_x` but rather equals
+   `child_local_x` alone.
+
+---
+
+### Requirement: Edge Schema — COVERED
+
+**Scenario: Cross-context dependency edge — COVERED**
+
+- Code: `schema.py::Edge` has `source`, `target`, `type`.
+  `extractor.py::build_dependency_edges()` emits `type="cross_context"` when
+  source and target belong to different bounded contexts.
+- Tests: `test_schema.py::TestEdgeSchema::test_cross_context_edge_*` (source,
+  target, type). `test_extractor.py::TestDependencyExtraction::
+  test_cross_context_edge_created` / `test_cross_context_edge_type` use the
+  fixture `iam.domain → shared_kernel.auth` import to confirm edge production.
+- Godot: `test_scene_graph_loader.gd::test_cross_context_edge_type_is_cross_context`
+  and `test_edge_direction_preserved_source_to_target` exercise this scenario
+  with known fixture data.
+
+**Scenario: Internal dependency edge — COVERED**
+
+- Code: `extractor.py::classify_edge_type()` returns `"internal"` when source
+  and target share the same top-level context.
+  `build_dependency_edges()` emits module-level internal edges
+  (`iam.application → iam.domain`).
+- Tests: `test_schema.py::TestEdgeSchema::test_internal_edge_*`.
+  `test_extractor.py::test_internal_edge_created` / `test_internal_edge_type`
+  confirm the fixture produces `("iam.application", "iam.domain", "internal")`.
+- Godot: `test_scene_graph_loader.gd::test_internal_edge_type_is_internal` and
+  `test_edge_types_are_distinguishable` confirm the loader preserves both types.
+
+---
+
+### Requirement: Metadata — COVERED
+
+**Scenario: Extraction metadata — COVERED**
+
+- Code: `schema.py::Metadata` declares `source_path: str` and `timestamp: str`.
+  `extractor.py::build_scene_graph()` sets `source_path=str(src_path)` and
+  `timestamp=datetime.now(timezone.utc).isoformat()`.
+- Tests: `test_schema.py::TestMetadataSchema` (4 tests).
+  `test_extractor.py::TestSceneGraphOutput::test_metadata_has_source_path` asserts
+  `str(src)` is contained in `source_path`; `test_metadata_has_timestamp` asserts
+  ISO-8601 format (`"T" in ts`).
+- Godot: `test_scene_graph_loader.gd::test_metadata_is_returned` verifies
+  source_path and timestamp survive the loader.
+
+---
+
+### Requirement: Pre-Computed Layout — PARTIAL
+
+**Scenario: Layout in JSON**
+
+- "each node's `position` field contains x, y, z coordinates" → **COVERED**
+  All nodes receive positions from `compute_layout()`. Both Python tests
+  (`TestLayout::test_all_nodes_have_positions_after_layout`) and Godot tests
+  (`test_scene_graph_loading.gd::test_anchor_positions_match_json`) confirm this.
+
+- "tightly coupled nodes have smaller distances between them" → **COVERED**
+  `test_extractor.py::TestLayout::test_coupled_bcs_are_closer_than_uncoupled`
+  uses the `src_coupling` fixture with 4 BCs and asserts
+  `dist(auth, shared_kernel) < dist(auth, billing)`.
+  `test_layout.py::TestTightlyCoupledNodesAreCloser` exercises the standalone
+  `layout.py::compute_layout()` with multiple edge counts and verifies the
+  spring-force attraction produces shorter distances for coupled pairs.
+
+- "child nodes are positioned within the spatial bounds of their parent" → **PARTIAL**
+  `test_extractor.py::TestLayout::test_child_nodes_are_near_parent_position`
+  verifies that, using the extractor's absolute coordinates, the stored child
+  position is numerically close to the stored parent position (within `bc_radius`).
+  However this test does not catch the absolute-vs-relative bug described above:
+  at Godot render time the children would appear double-offset from their parent,
+  placing them outside the parent's visual bounds. No integration test covers
+  the full extractor → Godot pipeline for child placement.
+
+- "Godot application renders nodes at these positions without recomputing layout"
+  → **COVERED** (for hand-crafted fixtures). `test_scene_graph_loading.gd::
+  test_anchor_positions_match_json` confirms positions flow directly from JSON
+  to `anchor.position` without any layout recomputation in GDScript.
+
+---
+
+## Summary
+
+| Requirement              | Scenario                              | Status  |
+|--------------------------|---------------------------------------|---------|
+| Schema Structure         | Top-level structure                   | COVERED |
+| Node Schema              | Bounded context node                  | COVERED |
+| Node Schema              | Module node (relative position)       | PARTIAL |
+| Edge Schema              | Cross-context dependency edge         | COVERED |
+| Edge Schema              | Internal dependency edge              | COVERED |
+| Metadata                 | Extraction metadata                   | COVERED |
+| Pre-Computed Layout      | Layout in JSON (xyz present)          | COVERED |
+| Pre-Computed Layout      | Tightly coupled nodes closer          | COVERED |
+| Pre-Computed Layout      | Child nodes within parent bounds      | PARTIAL |
+| Pre-Computed Layout      | Godot renders without recomputing     | COVERED |
+
+**Overall verdict: FAIL**
+
+Two SHALL conditions are unmet:
+
+1. **Module node positions must be relative to parent** (spec: "AND `position`
+   coordinates relative to its parent"). The extractor stores absolute world
+   coordinates; Godot's renderer treats them as relative. No test exercises the
+   contract boundary.
+
+2. **Child spatial containment end-to-end** follows directly from (1): the Python
+   test for child-within-parent-bounds passes on absolute coordinates but would
+   fail if the Godot double-offset were accounted for.
+
+Fix required: store local offsets (not absolute world coordinates) for module
+nodes in `extractor.py::compute_layout()`, and add a test that verifies the
+stored position is the relative offset rather than the absolute world position.
