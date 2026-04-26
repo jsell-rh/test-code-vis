@@ -36,6 +36,34 @@ run_check "check-report-scope-section.sh" ".hyperloop/checks/check-report-scope-
 run_check "check-scope-report-not-falsified.sh" ".hyperloop/checks/check-scope-report-not-falsified.sh"
 run_check "check-branch-has-commits.sh" ".hyperloop/checks/check-branch-has-commits.sh"
 
+# ── Gate: worker-result.yaml must not contain a run-all-checks FAIL result ──
+#
+# When an implementer pastes run-all-checks.sh output that says
+# "RESULT: FAIL — one or more checks exited non-zero" into their
+# worker-result.yaml and then submits, this check catches it.
+#
+# During fix cycles: if worker-result.yaml has placeholder text (no RESULT:
+# line), this check is skipped — placeholder state is OK while work is in
+# progress. Clear your results section between fix rounds to avoid a false
+# block from stale FAIL content.
+
+RESULT_FILE=".hyperloop/worker-result.yaml"
+if [ -f "$RESULT_FILE" ]; then
+  if grep -qF "RESULT: FAIL — one or more checks exited non-zero" "$RESULT_FILE"; then
+    echo ""
+    echo "FAIL: worker-result.yaml contains a failing run-all-checks.sh result."
+    echo "      Your pasted check output shows 'RESULT: FAIL'. You may NOT submit"
+    echo "      while run-all-checks.sh exits non-zero."
+    echo "      Fix every failing check, clear the '## Check Script Results' section"
+    echo "      of worker-result.yaml, re-run run-all-checks.sh, paste the passing"
+    echo "      output, then re-run this script."
+    FAIL=$((FAIL + 1))
+  elif grep -qF "RESULT: ALL PASS" "$RESULT_FILE"; then
+    echo "OK: worker-result.yaml confirms run-all-checks.sh exited 0."
+  fi
+  # If neither pattern is found (placeholder state), skip silently.
+fi
+
 echo ""
 echo "--- Summary ---"
 echo "  Passed: $PASS"
