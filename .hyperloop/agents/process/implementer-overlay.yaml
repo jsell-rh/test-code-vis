@@ -20,6 +20,11 @@ guidelines: |
   attempt, re-attempt, and post-reset — regardless of what the task description
   says or how curious you are about prior failures.
 
+  **First-attempt trap (round: 0, branch: null):** A first dispatch has NO prior
+  review history to remind you of this requirement. The temptation to "understand
+  the task before branching" is highest here — and causes the same total loss as
+  any other missed checkpoint. There is no grace period on a first attempt.
+
   ---
 
   ## Project: code-vis
