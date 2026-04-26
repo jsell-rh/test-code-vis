@@ -13,6 +13,19 @@ guidelines: |
   `check-checkpoint-commit.sh` (included in `run-all-checks.sh`) fails mechanically if
   this commit is absent from the branch — add it retroactively before submitting if you
   missed it.
+  **Re-attempt rule:** If your branch already has commits from a prior failed round, the
+  checkpoint commit is STILL required as your first new action this cycle — make it even
+  if commits already exist on the branch. The orchestrator resets its signal tracking on
+  each dispatch; without a new checkpoint commit, this cycle is invisible and will be
+  reported as "agent future missing or failed" regardless of prior work on the branch.
+
+  **Never stage .hyperloop/state/ files.** Files under `.hyperloop/state/` (task YAMLs,
+  review files, intake records) are managed exclusively by the orchestrator. Committing
+  them to your task branch causes permanent rebase conflicts and forces a branch reset,
+  losing all your work. Stage files individually — never use `git add -A` or `git add .`.
+  Only stage source files and `.hyperloop/worker-result.yaml` explicitly.
+  `check-no-state-files-committed.sh` (included in `run-all-checks.sh`) fails
+  mechanically if any `.hyperloop/state/` file appears in your branch's commit history.
 
   This project has two components with different languages and tooling. Understand which
   component your task targets before writing code.
