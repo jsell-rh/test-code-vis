@@ -65,10 +65,42 @@ guidelines: |
   - Reversing the order requires starting over; check-combined-rewrite-guide.sh emits the exact commands
   - Do NOT run run-all-checks.sh until both individual checks exit 0
 
+  ## SHADOW-REPLACEMENT IS FORBIDDEN
+
+  When you create a new Python file to fix or replace a function defined in an
+  existing module, you MUST choose exactly one resolution path before submitting:
+
+  Option A — Fix in-place: apply the fix directly to the original file and delete
+    the new file entirely. `check-no-duplicate-toplevel-functions.sh` must exit 0.
+
+  Option B — Import and delegate: import the new file's function in the consuming
+    file and remove the original definition from that file.
+    Both `check-new-modules-wired.sh` AND `check-no-duplicate-toplevel-functions.sh`
+    must exit 0.
+
+  Leaving both definitions active means the consuming file calls the original
+  (potentially broken) function while tests on the new file give false confidence.
+  `check-new-modules-wired.sh` and `check-no-duplicate-toplevel-functions.sh` detect
+  this — BOTH must exit 0 before you write worker-result.yaml.
+
+  ## PYTEST IS A HARD GATE
+
+  Run `pytest extractor/tests/ -v --tb=short` before submitting.
+  `check-pytest-passes.sh` (included in `run-all-checks.sh`) will fail your
+  submission if any test fails.  A FAILED test is a blocking error — fix the
+  implementation or fix the test's coordinate-frame assumption before re-submitting.
+  Do NOT paste run-all-checks.sh output that contains a pytest FAIL — that submission
+  is invalid.
+
   ## RE-ATTEMPT PROTOCOL
 
   When dispatched to a branch with prior implementation commits:
   1. Run `bash .hyperloop/checks/check-racf-remediation.sh` immediately
   2. If it fails, apply every prescribed fix before new code
   3. If it skips, run `bash .hyperloop/checks/check-racf-prior-cycle.sh`
-  4. Do NOT write new tests until all prior-cycle failures are resolved
+  4. If that also skips, inspect recent history manually:
+     `git log --oneline -10` and `git show <sha>:.hyperloop/worker-result.yaml`
+  5. Do NOT write new tests until all prior-cycle failures are resolved
+  6. After applying prescribed fixes, COMMIT them before writing worker-result.yaml.
+     A re-attempt with no new commits is invalid — the verifier will detect it.
+     Verify with: `git log --oneline main..HEAD` (must show new commit(s))
