@@ -68,47 +68,11 @@ fi
 # "Evaluation Mode", "Simulation Mode" in addition to snake_case and lowercase forms.
 # Previously this check used case-sensitive patterns and missed pre-existing scripts
 # (understanding_analyzer.gd, understanding_overlay.gd) that used title-cased labels.
-#
-# Scope: only flag files INTRODUCED by the current branch (i.e., present in
-# git diff main..HEAD --name-only). Pre-existing files on main are attributed to
-# their originating task — flagging them here creates an unresolvable deadlock
-# because the current implementer cannot be required to clean up prior work.
-# Pre-existing violations are reported as NOTEs (informational) but do NOT set FAIL.
-_MODE_PATTERN="conformance.mode\|evaluation.mode\|simulation.mode"
-_ALL_MATCHES=$(grep -rli "$_MODE_PATTERN" godot/scripts/ extractor/ 2>/dev/null || true)
-if [ -n "$_ALL_MATCHES" ]; then
-  # Determine which files were introduced by this branch.
-  _BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
-  if [[ "$_BRANCH" != "main" && "$_BRANCH" != "HEAD" ]]; then
-    _BRANCH_FILES=$(git diff main..HEAD --name-only 2>/dev/null || true)
-  else
-    # On main itself every file is "branch-introduced" (no filtering).
-    _BRANCH_FILES="$_ALL_MATCHES"
-  fi
-  _BRANCH_VIOLATIONS=""
-  _PREEXISTING_VIOLATIONS=""
-  for _f in $_ALL_MATCHES; do
-    if echo "$_BRANCH_FILES" | grep -qF "$_f"; then
-      _BRANCH_VIOLATIONS="$_BRANCH_VIOLATIONS $_f"
-    else
-      _PREEXISTING_VIOLATIONS="$_PREEXISTING_VIOLATIONS $_f"
-    fi
-  done
-  if [ -n "$_BRANCH_VIOLATIONS" ]; then
-    echo "FAIL: Prohibited mode (conformance/evaluation/simulation) detected"
-    echo "  Matched files (introduced by this branch):"
-    for _f in $_BRANCH_VIOLATIONS; do echo "  $_f"; done
-    FAIL=1
-  fi
-  if [ -n "$_PREEXISTING_VIOLATIONS" ]; then
-    echo "NOTE: Pre-existing prohibited-mode patterns detected in files that originate from main"
-    echo "  (NOT introduced by this branch — attributed to their originating task, not to you):"
-    for _f in $_PREEXISTING_VIOLATIONS; do
-      _origin=$(git log --oneline -1 -- "$_f" 2>/dev/null || echo "unknown")
-      echo "  $_f  (origin: $_origin)"
-    done
-    echo "  These are informational only and do NOT count as a FAIL for this branch."
-  fi
+if grep -rqi "conformance.mode\|evaluation.mode\|simulation.mode" godot/scripts/ extractor/ 2>/dev/null; then
+  echo "FAIL: Prohibited mode (conformance/evaluation/simulation) detected"
+  echo "  Matched files:"
+  grep -rli "conformance.mode\|evaluation.mode\|simulation.mode" godot/scripts/ extractor/ 2>/dev/null || true
+  FAIL=1
 fi
 
 # Data flow visualization: check broad semantic synonyms across scripts AND tests.
