@@ -1,0 +1,73 @@
+---
+verdict: pass
+---
+## Summary
+
+All requirements from `specs/prototype/godot-application.spec.md` are implemented and verified:
+
+- **JSON Scene Graph Loading**: `main.gd::_ready()` reads the JSON file via `FileAccess.open()` + `get_as_text()`, parses it, and calls `build_from_graph()`.
+- **Containment Rendering**: Bounded contexts render as large translucent boxes (alpha < 1.0, TRANSPARENCY_ALPHA, CULL_DISABLED); modules render as smaller opaque boxes parented inside their context anchors.
+- **Dependency Rendering**: `_create_edge()` creates an `ImmediateMesh` line plus a `CylinderMesh` arrowhead cone at the target end, colored orange for cross-context and grey for internal edges.
+- **Size Encoding**: `sz = float(nd["size"])` is applied directly to `BoxMesh.size`; the ratio of mesh widths equals the ratio of input sizes.
+- **Camera Controls**: `camera_controller.gd` provides orbit (middle-mouse drag), zoom (scroll wheel), and pan (right-mouse drag) with top-down default (`_theta = 0.15 rad`).
+- **Godot 4.6**: `project.godot` declares `config/features=PackedStringArray("4.6")`; all scripts use GDScript; all API calls use Godot 4.x `FileAccess.open()` + `get_as_text()`.
+
+## Check Script Results
+
+```
+=== check-gdscript-only-test.sh ===
+SKIP: No 'all scripts use GDScript' constraint found in spec
+Exit: 0
+
+=== check-kartograph-integration-test.sh ===
+OK: Integration test referencing kartograph codebase with expected-context assertions found.
+Exit: 0
+
+=== check-not-in-scope.sh ===
+OK: No prohibited (not-in-scope) features detected.
+Exit: 0
+
+=== check-pipeline-wiring.sh ===
+SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
+      This check only applies to tasks that implement the LLM→view-spec pipeline.
+Exit: 0
+
+=== check-report-scope-section.sh ===
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+Exit: 0
+
+=== extractor-lint.sh ===
+Linting extractor...
+All checks passed!
+7 files already formatted
+Running extractor tests...
+90 passed in 0.10s
+Extractor checks passed.
+Exit: 0
+
+=== godot-compile.sh ===
+Compiling Godot project...
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Godot project compiles successfully.
+Exit: 0
+
+=== godot-fileaccess-tested.sh ===
+Found FileAccess.open() in 1 production script file(s).
+OK: FileAccess.open() is exercised in 2 test file(s).
+Exit: 0
+
+=== godot-label3d.sh ===
+PASS: All Label3D nodes have billboard and pixel_size set and tested.
+Exit: 0
+
+=== godot-tests.sh ===
+Found 10 GDScript test file(s) in godot/tests/.
+Running custom headless test runner...
+Results: 76 passed, 0 failed
+GDScript behavioral tests passed.
+Exit: 0
+```
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
