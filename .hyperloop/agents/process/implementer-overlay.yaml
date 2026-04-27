@@ -24,7 +24,8 @@ guidelines: |
   ### Python Extractor (`extractor/`)
   - Parses kartograph codebase, outputs JSON scene graph
   - Python 3.12+, standard library + tree-sitter only
-  - Type hints throughout. Run `ruff check` and `ruff format --check` before committing
+  - Type hints throughout
+  - Run `ruff format extractor/` (auto-fix) then `ruff format --check extractor/` (verify) before committing — applies to ALL files including test files; running only `ruff check` is insufficient
   - Write pytest tests for extraction logic
 
   ### Godot Application (`godot/`)
