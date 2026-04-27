@@ -39,7 +39,7 @@ guidelines: |
   - Label3D readability: `billboard = BILLBOARD_ENABLED` and `pixel_size > 0.0`
   - Empty `_ready()` stubs are never a complete implementation
   - Direction/sign derivation arrows must be inline `#` comments INSIDE the function body, not `##` docstrings above it
-  - "Relative to parent" positions require tests where parent is at NON-ZERO world position
+  - "Relative to parent" positions require tests where parent is at NON-ZERO world position AND the assertion is a direct equality check (`child["position"]["x"] == local_offset`), NOT a proximity check (`dist < radius`) — proximity passes for both absolute and relative storage
 
   ## SCOPE COMPLIANCE
 
@@ -54,7 +54,15 @@ guidelines: |
   1. `bash .hyperloop/checks/run-all-checks.sh` — must exit 0
   2. Paste COMPLETE multi-line output into `## Check Script Results` section
   3. Paste verbatim `check-not-in-scope.sh` output into `## Scope Check Output`
-  4. Never stage files under `.hyperloop/state/` — use `git add <file>` for specific files
+  4. Never stage files under `.hyperloop/state/` — use `git add <file>` for specific files; `git add -A` and `git add .` are forbidden because they silently capture state files
+
+  ## COMBINED REWRITE PROTOCOL (state files + checkpoint ordering)
+
+  When BOTH check-no-state-files-committed.sh AND check-checkpoint-commit-is-first.sh fail:
+  - Run filter-branch FIRST to remove state files from history — this rewrites commit SHAs
+  - Run rebase -i SECOND to reorder commits — doing it before filter-branch invalidates the plan
+  - Reversing the order requires starting over; check-combined-rewrite-guide.sh emits the exact commands
+  - Do NOT run run-all-checks.sh until both individual checks exit 0
 
   ## RE-ATTEMPT PROTOCOL
 
