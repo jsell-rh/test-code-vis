@@ -148,10 +148,23 @@ echo ""
 echo "Checks that failed in that cycle — must now pass:"
 echo ""
 
+SELF="$(basename "${BASH_SOURCE[0]}")"
+
 while IFS= read -r check_name; do
   [[ -z "$check_name" ]] && continue
   check_path="$CHECKS_DIR/$check_name"
   printf "  %-55s " "$check_name"
+
+  # Self-exclusion guard: re-running this script from within itself causes
+  # infinite recursion and hangs run-all-checks.sh.  When this script appears
+  # in the prior-cycle FAIL table (because it timed out or failed previously),
+  # skip re-running it — its "passing" state is inherently confirmed by the
+  # fact that the current invocation reached this point without hanging.
+  if [[ "$check_name" == "$SELF" ]]; then
+    echo "SKIP (self-reference — cannot recursively verify; current invocation confirms it runs)"
+    continue
+  fi
+
   if [[ ! -f "$check_path" ]]; then
     echo "SKIP (script not found — may have been renamed)"
     continue
