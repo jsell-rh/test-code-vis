@@ -64,8 +64,14 @@ if grep -rq "TestSpecExtraction\|test_spec_extraction\|src_with_specs" extractor
 fi
 
 # ── 3. Other prohibited modes (belt-and-suspenders) ──────────────────────────
-if grep -rq "conformance.mode\|evaluation.mode\|simulation.mode" godot/scripts/ extractor/ 2>/dev/null; then
+# Use -i (case-insensitive) to catch title-cased usage such as "Conformance Mode",
+# "Evaluation Mode", "Simulation Mode" in addition to snake_case and lowercase forms.
+# Previously this check used case-sensitive patterns and missed pre-existing scripts
+# (understanding_analyzer.gd, understanding_overlay.gd) that used title-cased labels.
+if grep -rqi "conformance.mode\|evaluation.mode\|simulation.mode" godot/scripts/ extractor/ 2>/dev/null; then
   echo "FAIL: Prohibited mode (conformance/evaluation/simulation) detected"
+  echo "  Matched files:"
+  grep -rli "conformance.mode\|evaluation.mode\|simulation.mode" godot/scripts/ extractor/ 2>/dev/null || true
   FAIL=1
 fi
 
