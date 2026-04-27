@@ -42,9 +42,21 @@ if ! grep -q "^## Scope Check Output" "$REPORT"; then
   exit 1
 fi
 
-if ! grep -q "OK: No prohibited" "$REPORT"; then
-  echo "FAIL: The '## Scope Check Output' section in $REPORT does not contain"
-  echo "      the expected text 'OK: No prohibited'."
+# Accept either:
+#   "OK: No prohibited"  — scope check passed (clean branch)
+#   "FAIL: Prohibited"   — scope check failed, implementer truthfully pasted verbatim output
+#
+# Requiring ONLY the "OK" phrase creates a deadlock when a pre-existing artifact on main
+# triggers check-not-in-scope.sh: the implementer cannot write the clean phrase (it would
+# be falsification) and cannot omit it (this check would fail).  Accepting the FAIL phrase
+# breaks the deadlock — truthful failure reporting is valid, and
+# check-scope-report-not-falsified.sh will catch any attempt to write the clean phrase while
+# the scope check actually fails.
+if ! grep -q "OK: No prohibited" "$REPORT" && ! grep -q "FAIL: Prohibited" "$REPORT"; then
+  echo "FAIL: The '## Scope Check Output' section does not contain the scope check output."
+  echo "      Expected either:"
+  echo "        - the clean phrase (scope check passed), or"
+  echo "        - the failure phrase 'FAIL: Prohibited' (scope check failed — paste verbatim)"
   echo "      Paste the verbatim stdout of check-not-in-scope.sh unchanged."
   exit 1
 fi
@@ -52,6 +64,6 @@ fi
 if [ "$RECOVERED" -eq 1 ]; then
   echo "OK: worker-result.yaml (recovered from git history) contains a valid '## Scope Check Output' section."
 else
-  echo "OK: worker-result.yaml contains a valid '## Scope Check Output' section."
+  echo "OK: worker-result.yaml contains a valid '## Scope Check Output' section (scope check ran and output was pasted verbatim)."
 fi
 exit 0

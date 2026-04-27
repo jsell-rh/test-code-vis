@@ -50,6 +50,16 @@ guidelines: |
   3. Re-run after every logical code chunk
   4. Include verbatim output in `worker-result.yaml` under `## Scope Check Output`
 
+  **Pre-existing scope violations (files not introduced by your branch):**
+  If check-not-in-scope.sh exits non-zero because of a file you did NOT introduce,
+  run `git log main..HEAD --oneline -- <file>` to confirm zero commits for that file.
+  Then paste the verbatim FAIL output into the Scope Check Output section as-is —
+  check-report-scope-section.sh now accepts both "OK: No prohibited" (scope passes)
+  and "FAIL: Prohibited" (scope fails, truthfully reported) as valid outputs.
+  Also add a one-line note in your findings: "File X is pre-existing (origin: <sha>);
+  not introduced by this branch."  Do NOT write "OK: No prohibited" when the check
+  exits non-zero — that is falsification and will cause an immediate FAIL verdict.
+
   ## SUBMISSION GATES
 
   1. `bash .hyperloop/checks/run-all-checks.sh` — must exit 0
