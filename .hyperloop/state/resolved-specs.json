@@ -1,0 +1,28 @@
+{
+  "resolved": [
+    {
+      "spec": "specs/core/system-purpose.spec.md",
+      "reason": "vision-only, no prototype spec references its requirements for implementation",
+      "resolved_at": "2026-04-25",
+      "reopen_condition": "new MUST/SHOULD/Scenario clause added to file"
+    },
+    {
+      "spec": "specs/core/understanding-modes.spec.md",
+      "reason": "all three modes (Conformance, Evaluation, Simulation) explicitly excluded from prototype by prototype-scope.spec.md",
+      "resolved_at": "2026-04-25",
+      "reopen_condition": "new MUST/SHOULD/Scenario clause added to file, or prototype-scope.spec.md un-excludes a mode"
+    },
+    {
+      "spec": "specs/index.spec.md",
+      "reason": "table of contents with zero MUST/SHOULD/Scenario clauses; not an implementation spec",
+      "resolved_at": "2026-04-25",
+      "reopen_condition": "MUST/SHOULD/Scenario clauses added to the file itself"
+    },
+    {
+      "spec": "specs/prototype/nfr.spec.md",
+      "reason": "project guidelines: NFRs are cross-cutting constraints embedded as acceptance criteria on existing tasks, not standalone work items",
+      "resolved_at": "2026-04-25",
+      "reopen_condition": "new NFR that cannot be expressed as acceptance criteria on an existing task"
+    }
+  ]
+}
