@@ -56,7 +56,10 @@ fi
 
 # ── Does the prior report contain FAIL lines? ─────────────────────────────────
 PRIOR_CONTENT=$(git show "${PRIOR_REPORT_SHA}:${RESULT_FILE}" 2>/dev/null || true)
-PRIOR_FAIL_COUNT=$(echo "$PRIOR_CONTENT" | grep -c '\[EXIT [1-9]' 2>/dev/null || echo "0")
+# grep -c exits 1 when count is 0 but still prints "0" to stdout.
+# Using "|| echo 0" would produce "0\n0" (two lines), breaking the [[ -eq 0 ]] test.
+# "|| true" swallows the non-zero exit without adding extra output.
+PRIOR_FAIL_COUNT=$(echo "$PRIOR_CONTENT" | grep -c '\[EXIT [1-9]' 2>/dev/null || true)
 
 if [[ "$PRIOR_FAIL_COUNT" -eq 0 ]]; then
     echo "SKIP: Prior committed report contains no FAIL checks — no zero-commit re-attempt possible."
