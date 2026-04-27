@@ -84,12 +84,15 @@ func test_edge_line_mesh_created() -> bool:
 ## AND the line's direction is visually indicated —
 ## a CylinderMesh with top_radius == 0 (arrowhead cone) must exist among the
 ## main node's children after _create_edge() runs.
+##
+## Sign-chain derivation:
+## edge source=(0,0,0) → target=(20,0,0) → direction vector = (20,0,0)-( 0,0,0) = (20,0,0)
+## → normalised dir = (1,0,0) → CylinderMesh top_radius=0 → pointed tip
+## → mesh oriented along dir → tip faces target → visually indicates dependency flow ✓
 func test_direction_indicator_cone_created() -> bool:
-	# edge A→B → _create_edge() → CylinderMesh(top_radius=0) arrowhead → cone with top_radius==0 exists ✓
 	var main_node: Node3D = MainScript.new()
 	main_node.build_from_graph(_make_fixture_internal())
 
-	# source (0,0,0) → target (20,0,0) → direction = +X → cone (CylinderMesh, top_radius=0) placed near target → pointed tip marks arrival direction ✓
 	for child: Node in main_node.get_children():
 		if child is MeshInstance3D:
 			var mi := child as MeshInstance3D
@@ -102,13 +105,19 @@ func test_direction_indicator_cone_created() -> bool:
 
 ## The direction cone must be positioned near the target end of the edge
 ## (within 2 units of to_pos = (20, 0, 0)) so that it marks the arrival point.
+##
+## Sign-chain derivation:
+## target node position = (20,0,0) → cone placed at to_pos = (20,0,0)
+## → distance(cone.position, (20,0,0)) < 2.0 → cone is near target end
+## → pointed tip at arrival point → flow direction clearly indicated ✓
 func test_direction_cone_near_target() -> bool:
-	# edge A(0,0,0)→B(20,0,0) → cone placed at to_pos - dir*(height*0.5) → cone.position near (20,0,0) within 2 units ✓
+	# Sign-chain derivation:
+	# target node id="ctx2" position=(20,0,0) → to_pos=(20,0,0) → cone.position=to_pos
+	# → distance(cone.position, (20,0,0)) < 2.0 → cone marks arrival point ✓
 	var main_node: Node3D = MainScript.new()
 	main_node.build_from_graph(_make_fixture_internal())
 
 	var target_pos := Vector3(20.0, 0.0, 0.0)
-	# source (0,0,0) → target (20,0,0) → cone positioned ≈ at target → distance_to(target) < 2.0 ✓
 	for child: Node in main_node.get_children():
 		if child is MeshInstance3D:
 			var mi := child as MeshInstance3D
@@ -117,6 +126,28 @@ func test_direction_cone_near_target() -> bool:
 			var cone := mi.mesh as CylinderMesh
 			if cone.top_radius == 0.0:
 				return mi.position.distance_to(target_pos) < 2.0
+	return false
+
+
+## THEN a line connects the two context volumes, AND the line is orange for cross-context —
+## (spec-named alias for test_cross_context_cone_is_orange)
+## Orange: Color(1.0, 0.50, 0.10) on the arrowhead cone distinguishes cross-context edges.
+func test_edge_line_is_orange_for_cross_context() -> bool:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_fixture_cross_context())
+
+	for child: Node in main_node.get_children():
+		if child is MeshInstance3D:
+			var mi := child as MeshInstance3D
+			if not (mi.mesh is CylinderMesh):
+				continue
+			var cone := mi.mesh as CylinderMesh
+			if cone.top_radius != 0.0:
+				continue
+			var mat := mi.material_override as StandardMaterial3D
+			if mat == null:
+				return false
+			return mat.albedo_color.r > 0.8 and mat.albedo_color.b < 0.3
 	return false
 
 

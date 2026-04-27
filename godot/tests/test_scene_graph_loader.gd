@@ -288,4 +288,3 @@ func test_spec_nodes_have_id_prefixed_with_spec() -> void:
 	var result = SceneGraphLoader.load_from_dict(data)
 	var node: Dictionary = result["nodes"][0]
 	_check(node["id"].begins_with("spec."), "Spec node id should begin with 'spec.'")
-
