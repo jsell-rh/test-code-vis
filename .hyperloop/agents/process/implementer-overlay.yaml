@@ -105,6 +105,9 @@ guidelines: |
   ## RE-ATTEMPT PROTOCOL
 
   When dispatched to a branch with prior implementation commits:
+  0. Sync check scripts FIRST: `git checkout main -- .hyperloop/checks/`
+     New checks are added to main after branches are created. Running stale
+     scripts produces false passes — sync ensures you run the full current set.
   1. Run `bash .hyperloop/checks/check-racf-remediation.sh` immediately
   2. If it fails, apply every prescribed fix before new code
   3. If it skips, run `bash .hyperloop/checks/check-racf-prior-cycle.sh`
@@ -114,3 +117,16 @@ guidelines: |
   6. After applying prescribed fixes, COMMIT them before writing worker-result.yaml.
      A re-attempt with no new commits is invalid — the verifier will detect it.
      Verify with: `git log --oneline main..HEAD` (must show new commit(s))
+
+  ## SPATIAL LAYOUT RADIUS BOUNDS
+
+  Every child-orbit radius computed with `max(lower, n * factor)` MUST be wrapped
+  in a `min(…, parent_size * fraction)` cap. An unbounded radius places children
+  outside the parent's scene boundary and fails check-pytest-passes.sh.
+
+  Correct form:
+    bc_radius  = min(max(5.0, len(bc_nodes)  * 2.5), scene_radius * 0.8)
+    mod_radius = min(max(1.5, len(children)  * 0.9), bc_radius    * 0.4)
+
+  Run `bash .hyperloop/checks/check-layout-radius-bound.sh` before submitting.
+  A FAIL from this check is blocking and will fail the full test suite.
