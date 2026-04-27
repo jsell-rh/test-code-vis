@@ -1,0 +1,285 @@
+---
+task_id: task-007
+round: 21
+role: spec-reviewer
+verdict: fail
+---
+## Spec Alignment Review — specs/prototype/godot-application.spec.md
+**Branch:** hyperloop/task-007  **Round:** current  **Role:** spec-alignment-reviewer
+
+---
+
+## Requirement Status Summary
+
+| Requirement | Status | Notes |
+|---|---|---|
+| JSON Scene Graph Loading | COVERED | Code + tests present |
+| Containment Rendering | COVERED | Code + tests present |
+| Dependency Rendering | COVERED | Code + tests present |
+| Size Encoding | COVERED | Code + tests present |
+| Camera Controls | PARTIAL | Zooming scenario has derivation in docstring only, not function body |
+| Godot 4.6 | COVERED | Code + tests present |
+
+---
+
+## Detailed Findings
+
+### Requirement: JSON Scene Graph Loading (SHALL)
+
+**Implementation:** `godot/scripts/main.gd` → `_ready()` reads JSON via
+`FileAccess.open()` + `get_as_text()` (Godot 4.x API). `SceneGraphLoader.load_from_dict()`
+parses the structure. `build_from_graph()` creates volumes and edges.
+
+**Scenario: Loading kartograph's scene graph**
+
+| THEN clause | test functions | Status |
+|---|---|---|
+| THEN it reads the JSON file | `test_file_access_reads_fixture_json` | PASS |
+| AND generates 3D volumes for each node | `test_volumes_created_for_each_node`, `test_mesh_instances_exist_in_anchors` | PASS |
+| AND generates connections for each edge | `test_edge_mesh_instances_created`, `test_edge_line_mesh_created` | PASS |
+| AND positions elements according to the layout data in the JSON | `test_anchor_positions_match_json`, `test_volumes_positioned_from_json` | PASS |
+
+All tests are in `godot/tests/test_scene_graph_loading.gd`, use known fixture data
+(ctx1 at origin, mod1 at local offset {x:2,y:0,z:2}), and assert scene-tree nodes,
+mesh existence, and position values.
+
+**Status: COVERED**
+
+---
+
+### Requirement: Containment Rendering (SHALL)
+
+**Implementation:** `godot/scripts/main.gd` → `_create_volume()` assigns
+`TRANSPARENCY_ALPHA` + `alpha=0.18` to bounded_context volumes and `alpha=1.0` to
+module volumes. Child nodes are reparented to their parent anchor.
+
+**Scenario: Modules inside a bounded context**
+
+| THEN clause | test functions | Status |
+|---|---|---|
+| THEN the bounded context appears as a larger translucent volume | `test_bounded_context_is_translucent`, `test_bounded_context_larger_than_module` | PASS |
+| AND its child modules appear as smaller opaque volumes inside it | `test_module_is_opaque`, `test_module_parented_inside_context` | PASS |
+| AND the boundary of the parent is visually distinct from the children | `test_bounded_context_cull_disabled`, `test_bounded_context_is_translucent` | PASS |
+
+All tests in `godot/tests/test_containment_rendering.gd`, fixture: ctx1 (size=10),
+mod1 (size=3, parent=ctx1). Assertions read material properties and scene tree
+parent/child relationships directly.
+
+**Status: COVERED**
+
+---
+
+### Requirement: Dependency Rendering (SHALL)
+
+**Implementation:** `godot/scripts/main.gd` → `_create_edge()` creates an `ImmediateMesh`
+(PRIMITIVE_LINES) for the line and a `CylinderMesh` (top_radius=0) arrowhead placed at
+the target end, oriented along the edge direction. Orange for cross_context, grey for
+internal.
+
+**Scenario: Rendering a cross-context dependency**
+
+| THEN clause | test functions | Status |
+|---|---|---|
+| THEN a line connects the two context volumes | `test_edge_line_mesh_created` | PASS |
+| AND the line's direction is visually indicated | `test_direction_indicator_cone_created`, `test_direction_cone_near_target` | PASS |
+
+Tests in `godot/tests/test_dependency_rendering.gd`. Fixture: ctx1 at (0,0,0), ctx2 at
+(20,0,0). Sign-chain derivation comments confirm direction logic. Color test
+`test_edge_line_is_orange_for_cross_context` and `test_cross_context_cone_is_orange`
+verify visual distinction.
+
+**Status: COVERED**
+
+---
+
+### Requirement: Size Encoding (SHALL)
+
+**Implementation:** `godot/scripts/main.gd` → `_create_volume()` sets `box.size =
+Vector3(sz, sz * 0.6, sz)` where `sz = float(nd["size"])`. The `size` field is computed
+by the extractor as `size_from_loc(loc)` (logarithmic scale from lines-of-code).
+
+**Scenario: Large module vs small module**
+
+| THEN clause | test functions | Status |
+|---|---|---|
+| THEN the module with more code appears as a larger volume | `test_large_module_has_bigger_mesh`, `test_module_size_is_positive` | PASS |
+| AND the relative sizes are proportional to the metric | `test_mesh_sizes_proportional_to_metric`, `test_large_module_has_bigger_mesh` | PASS |
+
+Tests in `godot/tests/test_size_encoding.gd`. Fixture: small_mod (size=3), large_mod
+(size=9). Asserts `large_mesh.size.x > small_mesh.size.x` and exact ratio 9/3 = 3.0.
+
+**Status: COVERED**
+
+---
+
+### Requirement: Camera Controls (SHALL)
+
+**Implementation:** `godot/scripts/camera_controller.gd` — spherical coordinate system
+(theta/phi/distance around pivot). Middle-mouse drag orbits, wheel zooms,
+right-mouse pans. `set_pivot()` reframes to graph bounds from `main.gd::_frame_camera()`.
+
+**Scenario: Top-down overview**
+
+| THEN clause | test functions | Status |
+|---|---|---|
+| THEN the camera defaults to a top-down view showing the entire system | `test_initial_theta_is_near_top_down`, `test_initial_camera_is_above_pivot` | PASS |
+
+**Scenario: Zooming in**
+
+| THEN clause | test functions | Status |
+|---|---|---|
+| THEN the camera moves closer | `test_scroll_up_decreases_distance`, `test_zoom_is_smooth_not_instantaneous` | PASS |
+| AND internal structure becomes visible as the camera approaches | `test_zoom_is_smooth_not_instantaneous`, `test_scroll_up_decreases_distance` | PASS |
+| AND labels scale to remain readable | `test_labels_are_billboard_and_readable`, `test_initial_theta_is_near_top_down` | PASS |
+| THEN the camera moves closer (zoom toward target) | `test_zoom_toward_point_moves_pivot_toward_target` | PARTIAL — see below |
+
+**Scenario: Orbiting**
+
+| THEN clause | test functions | Status |
+|---|---|---|
+| THEN the camera rotates around the current focal point | `test_orbit_changes_theta_and_phi`, `test_orbit_pivot_set_to_cursor_world_point` | PASS |
+| AND orientation remains intuitive (up stays up) | `test_theta_clamped_at_minimum_to_prevent_flip`, `test_theta_clamped_at_maximum_to_prevent_flip`, `test_zoom_clamped_at_minimum` | PASS |
+
+**PARTIAL issue for Camera Controls:**
+`test_zoom_toward_point_moves_pivot_toward_target` in `godot/tests/test_camera_controls.gd`
+has its sign-chain derivation arrow (→) in the `##` docstring ABOVE the `func` declaration,
+not inside the function body as a `#` comment. `check-direction-test-derivations.sh` scans
+only lines after the `func` declaration and therefore does not find the arrow.
+
+Required fix: add a `#` inline comment with `→` inside the function body, e.g.:
+```
+func test_zoom_toward_point_moves_pivot_toward_target() -> bool:
+    # call set_pivot(target, dist) → _pivot = target → camera frames the target ✓
+    var cam = CameraScript.new()
+    ...
+```
+The `##` docstring may remain; the inline body comment is required by the check.
+
+**Status: PARTIAL** (all tests exist and cover the scenario; one test lacks the required
+sign-chain derivation inside the function body)
+
+---
+
+### Requirement: Godot 4.6 (SHALL)
+
+**Implementation:** `godot/project.godot` declares
+`config/features=PackedStringArray("4.6")`. All scripts in `godot/scripts/` use `.gd`
+extension. `main.gd` uses `FileAccess.open()` + `get_as_text()` (Godot 4.x API), NOT
+the deprecated Godot 3 `File.new()` or `read_as_text()`.
+
+**Scenario: Engine version**
+
+| THEN clause | test functions | Status |
+|---|---|---|
+| THEN it uses Godot 4.6.x | `test_project_godot_version`, `test_project_uses_godot_4_6`, `test_project_declares_godot_46` | PASS |
+| AND all scripts use GDScript | `test_all_scripts_are_gdscript`, `test_scripts_dir_contains_only_gdscript`, `test_main_script_is_gdscript` | PASS |
+| AND all API calls are valid for the Godot 4.6 API | `test_file_access_get_as_text_is_usable`, `test_main_uses_godot4_fileaccess_api` | PASS |
+
+Tests in `godot/tests/test_engine_version.gd` and `godot/tests/test_godot_version.gd`.
+`test_main_uses_godot4_fileaccess_api` reads `main.gd` source and asserts presence of
+`FileAccess.open(` and `get_as_text()` and absence of `File.new()` and `read_as_text()`.
+
+**Status: COVERED**
+
+---
+
+## Blocking Automated Check Failures
+
+The following automated checks fail and are blocking merge. These are not spec compliance
+gaps at the requirement level but are mandatory quality/process gates:
+
+### 1. check-no-state-files-committed.sh — FAIL
+Commit `87273e15` on this branch introduced `.hyperloop/state/intake-2026-04-25.md`.
+State files are managed by the orchestrator on `main`; committing them on the task branch
+causes permanent rebase conflicts.
+
+**Fix (must run before any rebase):**
+```
+git filter-branch --index-filter \
+  'git rm --cached --ignore-unmatch .hyperloop/state/*' \
+  -- main..HEAD
+```
+
+### 2. check-checkpoint-commit-is-first.sh — FAIL
+The checkpoint commit `chore: begin task-007` is not the oldest commit on the branch.
+The implementation commit `feat(godot): implement task-007 Godot Application spec`
+precedes it.
+
+**Fix (after filter-branch above):**
+```
+git rebase -i main
+# move 'chore: begin task-007' to the TOP of the list
+```
+
+### 3. check-relative-position-tests.sh — FAIL
+Python extractor tests (`extractor/tests/test_extractor.py`) contain only a
+proximity-based child position test (`test_child_nodes_are_near_parent_position`) that
+checks `dist < bc_radius`. This is insufficient because it passes for both absolute and
+relative coordinate storage whenever the child offset is small.
+
+No test directly asserts `child["position"]["x"] == local_offset_x` with the parent at
+a non-zero world position.
+
+**Fix:** Add a test in `extractor/tests/test_extractor.py` that:
+1. Places the parent bounded context at a non-zero world position (e.g., x=10.0)
+2. Asserts `child["position"]["x"] == local_offset_x` directly (equality, not proximity)
+3. Confirms the stored value is the local offset, not the world position
+
+Note: The Godot-side test `test_anchor_positions_match_json` (in
+`test_scene_graph_loading.gd`) does correctly use direct equality (`is_equal_approx`)
+to verify that mod_anchor.position == Vector3(2.0, 0.0, 2.0). However, the check
+requires this contract to be verified on the Python extractor side too.
+
+### 4. check-direction-test-derivations.sh + check-docstring-arrow-placement.sh — FAIL
+`test_zoom_toward_point_moves_pivot_toward_target` in `godot/tests/test_camera_controls.gd`
+has its `→` sign-chain arrow in the `##` docstring above the function, not inside the
+function body. Both checks detect this and fail.
+
+**Fix:** Add a `#` inline comment with `→` inside the function body (line 181 area):
+```gdscript
+func test_zoom_toward_point_moves_pivot_toward_target() -> bool:
+	# call set_pivot(target, dist) → _pivot = target → distance changes to dist
+	# → camera frames the target → zoom toward target ✓
+	var cam = CameraScript.new()
+	...
+```
+
+### 5. check-racf-prior-cycle.sh — FAIL
+Prior-cycle failures (checks 1–4 above) were already failing in the previous review
+cycle and remain unresolved. This is a Re-Attempt Compliance Failure.
+
+---
+
+## Implementation Quality Assessment
+
+The Godot application implementation is architecturally sound:
+- `main.gd` correctly uses world-position accumulation for rendering while storing
+  relative positions from JSON (coordinate frame contract is correct)
+- `camera_controller.gd` implements proper spherical coordinates with theta/phi clamping
+- `scene_graph_loader.gd` correctly passes through all required fields
+- Test suite is comprehensive with 16 GDScript test files covering all spec scenarios
+
+All spec requirements have code implementations and corresponding behavioral tests that
+use known fixture data and assert runtime property values. The failures are in
+process compliance and test quality checks, not spec coverage gaps at the requirement level.
+
+---
+
+## Scope Check Output
+
+OK: No prohibited (not-in-scope) features detected.
+
+---
+
+## Required Fixes for Next Round
+
+1. **Git hygiene (mandatory sequence):**
+   - Run `git filter-branch` to remove state files from branch history
+   - Then reorder commits with `git rebase -i main` so checkpoint is first
+
+2. **Python extractor test:** Add a direct-equality relative-position test with
+   parent at non-zero world position in `extractor/tests/test_extractor.py`
+
+3. **GDScript test body:** Add `# → ...` sign-chain comment inside
+   `test_zoom_toward_point_moves_pivot_toward_target` function body in
+   `godot/tests/test_camera_controls.gd`
