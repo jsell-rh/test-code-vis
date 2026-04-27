@@ -79,7 +79,7 @@ IMPL_COMMITS=$(git log main..HEAD \
         [[ "$ts" -le "$PRIOR_REPORT_TIME" ]] && continue
         # Skip commits that only touch .hyperloop/ files (report/process commits)
         CHANGED=$(git show --name-only --format="" "$sha" 2>/dev/null | grep -v '^$' || true)
-        NON_HYPERLOOP=$(echo "$CHANGED" | grep -v '^\.hyperloop/' | grep -c '.' 2>/dev/null || echo "0")
+        NON_HYPERLOOP=$(echo "$CHANGED" | grep -v '^\.hyperloop/' | grep -c '.' 2>/dev/null || true)
         if [[ "$NON_HYPERLOOP" -gt 0 ]]; then
             echo "$sha"
         fi
