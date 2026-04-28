@@ -407,8 +407,10 @@ class TestLayout:
     def test_child_nodes_are_near_parent_position(self, src: Path) -> None:
         """Spec: child nodes are positioned within the spatial bounds of their parent.
 
-        After compute_layout, every module node's position must be physically
-        close to its parent BC — specifically, closer than the full scene radius.
+        Child positions are LOCAL offsets (relative to their parent BC), not
+        absolute world coordinates. The magnitude of the local offset must be
+        less than the overall scene radius (which bounds how large any offset
+        can reasonably be).
         """
         nodes: list[Node] = discover_bounded_contexts(src)
         for bc in list(nodes):
@@ -416,24 +418,74 @@ class TestLayout:
 
         compute_layout(nodes)
 
-        node_pos = {
-            n["id"]: (n["position"]["x"], n["position"]["y"], n["position"]["z"])
-            for n in nodes
-        }
         bc_count = sum(1 for n in nodes if n["type"] == "bounded_context")
-        bc_radius = max(5.0, bc_count * 2.5)
+        # Mirror extractor.py formula (with min cap) for the bound assertion.
+        bc_radius = min(max(5.0, bc_count * 2.5), 50.0)
 
         for n in nodes:
             if n["parent"] is None:
                 continue
-            px, py, pz = node_pos[n["parent"]]
-            cx, cy, cz = node_pos[n["id"]]
-            dist = math.sqrt((cx - px) ** 2 + (cy - py) ** 2 + (cz - pz) ** 2)
-            assert dist < bc_radius, (
-                f"Child {n['id']} is at distance {dist:.2f} from parent "
-                f"{n['parent']}, exceeding scene radius {bc_radius:.2f}. "
-                "Child must be positioned within parent's spatial bounds."
+            cx = n["position"]["x"]
+            cy = n["position"]["y"]
+            cz = n["position"]["z"]
+            # Child position is a LOCAL offset from its parent; the magnitude of
+            # that offset must be within the scene radius bound.
+            local_offset_mag = math.sqrt(cx**2 + cy**2 + cz**2)
+            assert local_offset_mag < bc_radius, (
+                f"Child {n['id']} local offset magnitude {local_offset_mag:.2f} "
+                f"exceeds scene radius {bc_radius:.2f}. "
+                "Child local offset must be bounded within the scene scale."
             )
+
+    def test_child_position_is_local_offset_not_absolute(self) -> None:
+        """Spec: child positions are LOCAL offsets, not absolute world coordinates.
+
+        With 1 BC + 1 module, compute_layout places the BC at a non-zero world
+        position (bc_radius along x-axis).  The module's stored position must
+        equal the pure local offset — NOT parent_x + local_offset.
+
+        Layout derivation for this fixture (single BC, single module):
+          bc_radius = min(max(5.0, 1 * 2.5), 50.0) = 5.0
+          BC world position x = cos(0) * 5.0 = 5.0   ← non-zero
+          mod_radius = min(max(1.5, 1 * 0.9), 5.0 * 0.4) = 1.5
+          local_offset_x = cos(0) * 1.5 = 1.5
+        """
+        parent_bc: Node = {
+            "id": "solo_bc",
+            "name": "Solo Bc",
+            "type": "bounded_context",
+            "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "size": 3.0,
+            "parent": None,
+            "metrics": {"loc": 100},
+        }
+        child_mod: Node = {
+            "id": "solo_bc.mod",
+            "name": "Mod",
+            "type": "module",
+            "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "size": 1.0,
+            "parent": "solo_bc",
+            "metrics": {"loc": 50},
+        }
+        nodes = [parent_bc, child_mod]
+        compute_layout(nodes)
+
+        parent_x = parent_bc["position"]["x"]
+        # bc_radius=5.0, angle=0 → parent lands at x=5.0 (non-zero world position)
+        assert parent_x != 0.0, "Parent BC must be placed at a non-zero world x"
+
+        # mod_radius = min(max(1.5, 0.9), 2.0) = 1.5; first child angle=0 → cos(0)*1.5
+        expected_local_x = math.cos(0) * min(max(1.5, 1 * 0.9), 5.0 * 0.4)  # = 1.5
+        # Direct equality: stored position equals the local offset
+        assert child_mod["position"]["x"] == expected_local_x, (
+            f"Child x={child_mod['position']['x']!r} must equal local offset "
+            f"{expected_local_x!r}, not absolute {parent_x + expected_local_x!r}"
+        )
+        # Confirm it is NOT the absolute world position (parent_x + local_offset)
+        assert child_mod["position"]["x"] != parent_x + expected_local_x, (
+            "Child x must be the local offset, not the absolute world position"
+        )
 
     def test_coupled_bcs_are_closer_than_uncoupled(self, src_coupling: Path) -> None:
         """Spec: tightly coupled nodes have smaller distances between them.
