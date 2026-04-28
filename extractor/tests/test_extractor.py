@@ -407,8 +407,10 @@ class TestLayout:
     def test_child_nodes_are_near_parent_position(self, src: Path) -> None:
         """Spec: child nodes are positioned within the spatial bounds of their parent.
 
-        After compute_layout, every module node's position must be physically
-        close to its parent BC — specifically, closer than the full scene radius.
+        After compute_layout, every module node's position is stored as a LOCAL
+        offset relative to the parent BC.  The magnitude of that local offset
+        must be smaller than the parent BC orbit radius so the child is rendered
+        inside the parent volume.
         """
         nodes: list[Node] = discover_bounded_contexts(src)
         for bc in list(nodes):
@@ -421,19 +423,82 @@ class TestLayout:
             for n in nodes
         }
         bc_count = sum(1 for n in nodes if n["type"] == "bounded_context")
-        bc_radius = max(5.0, bc_count * 2.5)
+        scene_radius = 7.5
+        bc_radius = min(max(5.0, bc_count * 2.5), scene_radius * 0.8)
 
         for n in nodes:
             if n["parent"] is None:
                 continue
-            px, py, pz = node_pos[n["parent"]]
             cx, cy, cz = node_pos[n["id"]]
-            dist = math.sqrt((cx - px) ** 2 + (cy - py) ** 2 + (cz - pz) ** 2)
-            assert dist < bc_radius, (
-                f"Child {n['id']} is at distance {dist:.2f} from parent "
+            # Child positions are stored as LOCAL offsets from the parent.
+            # The actual child-to-parent distance is the magnitude of that offset.
+            local_magnitude = math.sqrt(cx**2 + cy**2 + cz**2)
+            assert local_magnitude < bc_radius, (
+                f"Child {n['id']} is at distance {local_magnitude:.2f} from parent "
                 f"{n['parent']}, exceeding scene radius {bc_radius:.2f}. "
                 "Child must be positioned within parent's spatial bounds."
             )
+
+    def test_child_position_is_local_offset(self, src: Path) -> None:
+        """Spec: child positions are stored as LOCAL offsets, not world coordinates.
+
+        When the parent BC is at a non-zero world position the child's stored
+        x coordinate must be smaller in magnitude than the parent's x coordinate.
+        If the child were stored in world coordinates, child_x ≈ parent_x + tiny
+        offset — magnitude would be close to parent_x.  A true local offset is
+        much smaller.
+        """
+        nodes = build_scene_graph(src)["nodes"]
+        # Find a BC that is not sitting on the origin (x > 1.0)
+        bcs = [
+            n
+            for n in nodes
+            if n["type"] == "bounded_context" and abs(n["position"]["x"]) > 1.0
+        ]
+        assert bcs, "Need a BC at non-zero world x position for this test"
+        bc = bcs[0]
+        children = [n for n in nodes if n["parent"] == bc["id"]]
+        assert children, f"BC {bc['id']} has no child modules"
+        child = children[0]
+        assert abs(child["position"]["x"]) < abs(bc["position"]["x"]), (
+            f"child_x={child['position']['x']:.2f} looks like a world coordinate "
+            f"(parent_x={bc['position']['x']:.2f}); expected a local offset "
+            f"with smaller magnitude than the parent position."
+        )
+
+    def test_child_position_x_equals_local_offset_exactly(self, tmp_path: Path) -> None:
+        """Child x-position equals the local orbit offset, not a world coordinate.
+
+        With one bounded context and one module the layout is deterministic:
+          bc_radius  = min(max(5.0, 1*2.5), 7.5*0.8) = 5.0  → parent at x=5.0
+          mod_radius = min(max(1.5, 1*0.9), 5.0*0.4) = 1.5  → child  at x=1.5
+
+        If child stored world coordinates its x would be 5.0 + 1.5 = 6.5.
+        As a local offset it must equal 1.5 exactly.
+        """
+        bc_dir = tmp_path / "mycontext"
+        bc_dir.mkdir()
+        (bc_dir / "__init__.py").write_text("")
+        mod_dir = bc_dir / "domain"
+        mod_dir.mkdir()
+        (mod_dir / "__init__.py").write_text("")
+
+        nodes: list[Node] = discover_bounded_contexts(tmp_path)
+        for bc_node in list(nodes):
+            nodes.extend(discover_submodules(tmp_path, bc_node["id"]))
+
+        compute_layout(nodes)
+
+        child = next(n for n in nodes if n["type"] == "module")
+        parent = next(n for n in nodes if n["id"] == child["parent"])
+
+        # Local offset: child["position"]["x"] == 1.5 (mod_radius at angle 0)
+        # World coord:  child["position"]["x"] == 6.5 (parent_x + mod_radius)
+        assert child["position"]["x"] == pytest.approx(1.5), (
+            f"Expected local offset x≈1.5; got {child['position']['x']:.4f}. "
+            f"Parent world x={parent['position']['x']:.4f}. "
+            "Child position must be a local offset, not a world coordinate."
+        )
 
     def test_coupled_bcs_are_closer_than_uncoupled(self, src_coupling: Path) -> None:
         """Spec: tightly coupled nodes have smaller distances between them.
