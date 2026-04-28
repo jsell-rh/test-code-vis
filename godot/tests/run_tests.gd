@@ -33,6 +33,9 @@ func _init() -> void:
 	_run_suite(preload("res://tests/test_camera_controls.gd").new())
 	_run_suite(preload("res://tests/test_engine_version.gd").new())
 
+	# --- task-016: UX Polish spec ---
+	_run_suite(preload("res://tests/test_ux_polish.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
