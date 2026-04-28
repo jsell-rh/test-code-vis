@@ -81,23 +81,25 @@ guidelines: |
   - When the spec contains internally contradictory direction language, record the
     contradiction verbatim in findings.
 
-  ## Spec-Drift Detection (run before scoring any requirement)
+  ## Spec-Drift Detection (MANDATORY — run before scoring any requirement)
 
-  The committed spec file (at the Spec-Ref commit hash) is the authoritative
+  The committed spec file (at the Spec-Ref commit hash) is the SOLE authoritative
   requirement list the implementer worked against — NOT your assignment text.
 
   Before you score any requirement as MISSING or FAIL:
-  1. Run `git show <spec-ref-hash>:<spec-file-path>` to read the spec as the
-     implementer saw it (use the Spec-Ref trailer from an implementation commit).
-  2. Cross-check every MUST/SHALL in your assignment against that file.
-  3. Any requirement that appears in your assignment but is ABSENT from the
-     committed spec file is SPEC-DRIFT — label it `SPEC-DRIFT` in your findings
-     table, NOT `MISSING`. SPEC-DRIFT items are NOT FAIL drivers against the
-     implementer; they represent requirements the orchestrator must add to the
-     spec file before re-assigning.
-  4. Issue a FAIL only for requirements that are present in the committed spec
+  1. Run `bash .hyperloop/checks/check-spec-ref-staleness.sh` and include its output
+     verbatim in your report. This shows you exactly what changed between the spec the
+     implementer saw and the spec at HEAD.
+  2. Run `git show <spec-ref-hash>:<spec-file-path>` to read the spec the implementer
+     worked against (use the Spec-Ref trailer from an implementation commit).
+  3. Cross-check every MUST/SHALL in your assignment against that committed file.
+  4. Any requirement that appears in your assignment but is ABSENT from the committed
+     spec file is SPEC-DRIFT — label it `SPEC-DRIFT` in your findings table, NOT
+     `MISSING`. SPEC-DRIFT items are NOT FAIL drivers against the implementer; they
+     represent requirements the orchestrator must add to the spec file before re-assigning.
+  5. Issue a FAIL only for requirements that are present in the committed spec
      file AND lack implementation or test coverage.
-  5. If SPEC-DRIFT items exist, include an explicit "Spec-Drift Summary" section
+  6. If SPEC-DRIFT items exist, include an explicit "Spec-Drift Summary" section
      in your report recommending the orchestrator update the spec file first.
 
   ## Verdict Rules
@@ -107,3 +109,21 @@ guidelines: |
   - In findings, list every requirement with: COVERED, PARTIAL, MISSING, or SPEC-DRIFT.
   - For PARTIAL/MISSING, explain exactly what's needed so the implementer can fix it.
   - For SPEC-DRIFT, explain that the spec file must be updated before the implementer can act.
+
+  ## SPEC-DRIFT VERDICT RULE — NON-NEGOTIABLE
+
+  SPEC-DRIFT items MUST NOT drive a FAIL verdict. This applies even when your
+  assignment text lists them as MUST or SHALL. The assignment text is not the
+  authority — the committed spec at Spec-Ref is.
+
+  WRONG: Issuing FAIL because your assignment has 7 requirements and 2 are
+    SPEC-DRIFT. "Mechanically required by the assignment spec" is NOT a valid
+    justification for FAIL when items are absent from the committed spec.
+
+  RIGHT: If all failing requirements are SPEC-DRIFT (absent from committed spec),
+    the verdict MUST be PASS (with a Spec-Drift Summary for the orchestrator).
+
+  Worked example: Assignment has 7 requirements; committed spec (at Spec-Ref) has
+  5; implementer correctly satisfies all 5; 2 requirements exist only in the
+  assignment text → verdict: PASS. The Spec-Drift Summary tells the orchestrator
+  to update the spec file and re-assign for the 2 missing requirements.
