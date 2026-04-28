@@ -1,4 +1,4 @@
-# Review Report — task-001 — Cycle 20
+# Review Report — task-001 — Cycle 21
 ---
 verdict: fail
 ---
@@ -16,11 +16,10 @@ OK: No prohibited (not-in-scope) features detected.
 ## Check Script Results
 
 Run against current worktree after `git checkout main -- .hyperloop/checks/`.
-21 .sh files (20 checks + run-all-checks.sh itself). New check on main since cycle 18:
-`check-task-ref-report-not-falsified.sh`.
+21 .sh files (20 checks + run-all-checks.sh itself).
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-001' has 120 commit(s) above main.
+OK: Branch 'hyperloop/task-001' has 121 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -70,8 +69,37 @@ OK: No prohibited (not-in-scope) features detected.
 [EXIT 0]
 
 --- check-no-zero-commit-reattempt.sh ---
-OK: 1 implementation commit(s) found since prior FAIL report (b43cef8).
-[EXIT 0]
+FAIL: Zero implementation commits since prior FAIL report (3d6f287).
+
+  The prior committed worker-result.yaml (3d6f287) contains
+  4 FAIL check(s).  No non-hyperloop commits have been
+  added to this branch since that report was written.
+
+  Note: if the most-recently committed report appears clean (e.g., due to an
+  orchestrator cleanup commit), this check walks full branch history to find the
+  actual prior FAIL report — consistent with check-racf-prior-cycle.sh.
+
+  This means the implementer submitted a re-attempt without applying any fixes.
+  This is the pattern that causes repeated RACF across many cycles.
+
+  Checks that were failing in the prior report (fix these first):
+    bash .hyperloop/checks/check-commit-trailer-task-ref.sh
+    bash .hyperloop/checks/check-racf-prior-cycle.sh
+    bash .hyperloop/checks/check-worker-result-clean.sh
+
+  To see each check's prescribed fix:
+    git show 3d6f287:.hyperloop/worker-result.yaml
+  Look for 'Offending lines:' under each failing check.
+
+  Protocol (no other actions are permitted while this check exits 1):
+    1. git show 3d6f287:.hyperloop/worker-result.yaml   # read the FAIL report
+    2. For each check listed above: open the cited file at the cited line.
+    3. Apply the fix exactly as written in the 'Offending lines:' section.
+    4. git commit -m 'fix: <description>'   # commit EACH fix separately
+    5. bash .hyperloop/checks/<check>.sh    # confirm exit 0 for THAT check
+    6. Repeat steps 2-5 for every failing check.
+    7. Only then run run-all-checks.sh and write worker-result.yaml.
+[EXIT 1 — FAIL]
 
 --- check-preloaded-gdscript-files.sh ---
 OK: All 24 preload() target(s) resolve to existing files.
@@ -88,20 +116,27 @@ OK: All pytest tests passed.
 [EXIT 0]
 
 --- check-racf-prior-cycle.sh ---
-Orchestrator cleanup obscured prior FAIL report -- recovered from b43cef8.
-Checks that failed in that cycle -- must now pass:
-
-  check-commit-trailer-task-ref.sh                        FAIL (still failing -- RACF)
-  check-racf-prior-cycle.sh                               SKIP (self-reference)
-  check-worker-result-clean.sh                            OK (resolved)
-
-FAIL: One or more prior-cycle failures recovered from b43cef8 still fail.
-      This is a Re-Attempt Compliance Failure (RACF) obscured by orchestrator cleanup.
-[EXIT 1 -- FAIL]
+SKIP: check-racf-remediation.sh already processes the most recent committed report — no gap to fill.
+[EXIT 0]
 
 --- check-racf-remediation.sh ---
-SKIP: Prior committed report contains no FAIL checks -- no RACF to verify.
-[EXIT 0]
+Prior committed report: 3d6f287 (.hyperloop/worker-result.yaml)
+Checks that failed in that cycle — must now pass:
+
+  check-commit-trailer-task-ref.sh                        FAIL (still failing — RACF)
+  check-racf-prior-cycle.sh                               OK (resolved)
+  check-worker-result-clean.sh                            OK (resolved)
+
+FAIL: One or more checks that failed in the prior committed cycle still fail.
+      This is a Re-Attempt Compliance Failure (RACF).
+
+      Protocol:
+        1. Run each failing check individually: bash .hyperloop/checks/<check>.sh
+        2. Read its FAIL output carefully — it contains the prescribed fix.
+        3. Apply the prescribed fix exactly (not a workaround).
+        4. Re-run the check and confirm EXIT 0 before moving on.
+        5. Do NOT add new tests or commits until all RACF checks exit 0.
+[EXIT 1 — FAIL]
 
 --- check-relative-position-tests.sh ---
 OK: No absolute parent-coordinate accumulation detected in extractor source.
@@ -113,7 +148,7 @@ OK: worker-result.yaml contains a valid '## Scope Check Output' section (scope c
 [EXIT 0]
 
 --- check-ruff-format.sh ---
-OK: ruff format --check passed -- all extractor/ files are correctly formatted.
+OK: ruff format --check passed — all extractor/ files are correctly formatted.
 [EXIT 0]
 
 --- check-scope-report-not-falsified.sh ---
@@ -125,124 +160,193 @@ OK: Task-Ref report section is consistent with actual check-commit-trailer-task-
 [EXIT 0]
 
 --- check-worker-result-clean.sh ---
-SKIP: .hyperloop/worker-result.yaml is a reviewer report -- this check applies to implementer submissions only.
+SKIP: .hyperloop/worker-result.yaml is a reviewer report — this check applies to implementer submissions only.
 [EXIT 0]
 
-Summary: 15 checks EXIT 0, 2 checks EXIT 1 (FAIL), 3 SKIP.
-Failing checks: check-commit-trailer-task-ref, check-racf-prior-cycle.
+Summary: 15 checks EXIT 0, 3 checks EXIT 1 (FAIL), 2 SKIP.
+Failing checks: check-commit-trailer-task-ref, check-no-zero-commit-reattempt,
+  check-racf-remediation.
 
 ---
 
 ## Findings
 
-### F1 -- BLOCKING: check-commit-trailer-task-ref.sh [EXIT 1 -- FAIL]
+### Spec Requirements Coverage
 
-Commit `997ac24` (`feat(prototype): godot -- project setup (Godot 4.6, GDScript) (#195)`)
-still carries `Task-Ref: task-007`. The commit hash is UNCHANGED since cycle 18 -- an
-interactive rebase that rewrites a commit produces a new hash; 997ac24 is still present:
+All 5 SHALL/MUST requirements in specs/extraction/scene-graph-schema.spec.md are
+implemented and tested. This verdict of FAIL is process-only, not spec-coverage-based.
 
-  git log --format="%H %s" main..HEAD | grep 997ac24
-  -> 997ac245d8ec55e39435b740ac45a012d28991d9  feat(prototype): godot -- project setup ...
+#### Requirement: Schema Structure — COVERED
 
-The cycle 19 report claimed this rebase produced hash `381b2d15`. That hash does NOT
-exist on this branch:
+Implementation: `extractor/schema.py` defines `SceneGraph` TypedDict with exactly three
+fields: `nodes`, `edges`, `metadata` (lines 91–93). `extractor/extractor.py`
+`build_scene_graph()` returns a dict with exactly these three fields (line 396).
 
-  git log --format="%H %s" main..HEAD | grep 381b2d15
-  -> (no output)
+Tests:
+  test_schema.py::TestSchemaStructure::test_scene_graph_has_nodes_key          PASS
+  test_schema.py::TestSchemaStructure::test_scene_graph_has_edges_key           PASS
+  test_schema.py::TestSchemaStructure::test_scene_graph_has_metadata_key        PASS
+  test_schema.py::TestSchemaStructure::test_scene_graph_has_no_extra_top_level_fields PASS
 
-This is the same failure prescribed in cycle 18 (b43cef85) with the same fix. It has not
-been applied. This is the 2nd consecutive RACF cycle for this check (cycles 18-20).
+#### Requirement: Node Schema (Bounded Context Scenario) — COVERED
 
-Prescribed fix (identical to cycle 18 -- still not applied):
+Implementation: `discover_bounded_contexts()` creates nodes with id, name, type
+("bounded_context"), position, size (via `size_from_loc(loc)`), and parent=None.
+
+Tests:
+  test_schema.py::TestNodeSchema::test_bounded_context_node_has_required_keys   PASS
+  test_schema.py::TestNodeSchema::test_bounded_context_node_id                  PASS
+  test_schema.py::TestNodeSchema::test_bounded_context_node_name                PASS
+  test_schema.py::TestNodeSchema::test_bounded_context_node_type                PASS
+  test_schema.py::TestNodeSchema::test_bounded_context_node_position_has_xyz    PASS
+  test_schema.py::TestNodeSchema::test_bounded_context_node_position_values_are_numeric PASS
+  test_schema.py::TestNodeSchema::test_bounded_context_node_size_is_numeric     PASS
+  test_schema.py::TestNodeSchema::test_bounded_context_node_parent_is_null      PASS
+
+#### Requirement: Node Schema (Module Node Scenario) — COVERED
+
+Implementation: `discover_submodules()` creates nodes with dotted id ("iam.domain"),
+parent referencing the BC ("iam"), type ("module"). `compute_layout()` stores LOCAL
+offsets in child["position"] — not absolute world coordinates — as required by the
+spec's "relative to its parent" clause.
+
+Tests (relative-coordinate contract):
+  test_extractor.py::TestLayout::test_child_position_is_local_offset_not_absolute PASS
+    — parent placed at world x=5.0 (non-zero), child["position"]["x"] asserted ==
+      local_offset_x (1.5), NOT parent_x + local_offset_x (6.5). Explicit negative
+      assertion included. Satisfies all four coordinate-frame contract criteria.
+  test_schema.py::TestNodeSchema::test_module_node_has_required_keys            PASS
+  test_schema.py::TestNodeSchema::test_module_node_id_dotted                    PASS
+  test_schema.py::TestNodeSchema::test_module_node_type_is_module               PASS
+  test_schema.py::TestNodeSchema::test_module_node_parent_references_context    PASS
+
+#### Requirement: Edge Schema (Cross-Context Scenario) — COVERED
+
+Implementation: `build_dependency_edges()` emits edges with source, target, and type
+"cross_context" for inter-BC imports.
+
+Tests:
+  test_schema.py::TestEdgeSchema::test_cross_context_edge_has_required_keys     PASS
+  test_schema.py::TestEdgeSchema::test_cross_context_edge_source                PASS
+  test_schema.py::TestEdgeSchema::test_cross_context_edge_target                PASS
+  test_schema.py::TestEdgeSchema::test_cross_context_edge_type                  PASS
+  test_extractor.py::TestDependencyExtraction::test_cross_context_edge_created  PASS
+  test_extractor.py::TestDependencyExtraction::test_cross_context_edge_type     PASS
+
+#### Requirement: Edge Schema (Internal Scenario) — COVERED
+
+Implementation: `build_dependency_edges()` emits edges with type "internal" for
+same-context module-level imports.
+
+Tests:
+  test_schema.py::TestEdgeSchema::test_internal_edge_has_required_keys          PASS
+  test_schema.py::TestEdgeSchema::test_internal_edge_source                     PASS
+  test_schema.py::TestEdgeSchema::test_internal_edge_target                     PASS
+  test_schema.py::TestEdgeSchema::test_internal_edge_type                       PASS
+  test_extractor.py::TestDependencyExtraction::test_internal_edge_created       PASS
+  test_extractor.py::TestDependencyExtraction::test_internal_edge_type          PASS
+
+#### Requirement: Metadata — COVERED
+
+Implementation: `build_scene_graph()` sets `metadata["source_path"] = str(src_path)`
+and `metadata["timestamp"] = datetime.now(timezone.utc).isoformat()`.
+
+Tests:
+  test_schema.py::TestMetadataSchema::test_metadata_has_source_path             PASS
+  test_schema.py::TestMetadataSchema::test_metadata_has_timestamp               PASS
+  test_schema.py::TestMetadataSchema::test_metadata_source_path_is_str          PASS
+  test_schema.py::TestMetadataSchema::test_metadata_timestamp_is_str            PASS
+  test_extractor.py::TestSceneGraphOutput::test_metadata_has_source_path        PASS
+  test_extractor.py::TestSceneGraphOutput::test_metadata_has_timestamp          PASS
+
+#### Requirement: Pre-Computed Layout — COVERED
+
+Implementation: `compute_layout()` in extractor.py (lines 189–237) runs a
+coupling-aware circular layout algorithm. `_order_by_coupling()` places tightly
+coupled BCs adjacent in the ring. Module children receive LOCAL offsets (not absolute
+world coordinates) so they are always within the parent's spatial bounds. The Godot
+side (`scripts/main.gd`) applies these positions directly from JSON without
+recomputing.
+
+Sub-clause coverage:
+  "each node's position field contains x, y, z coordinates" —
+    test_extractor.py::TestLayout::test_all_nodes_have_positions_after_layout    PASS
+    test_schema.py::TestPreComputedLayout::test_every_node_has_a_position        PASS
+
+  "tightly coupled nodes have smaller distances between them" —
+    test_extractor.py::TestLayout::test_coupled_bcs_are_closer_than_uncoupled   PASS
+      (auth↔shared_kernel coupled pair closer than auth↔billing uncoupled pair)
+    test_extractor.py::TestLayout::test_order_by_coupling_places_coupled_adjacent PASS
+
+  "child nodes are positioned within the spatial bounds of their parent" —
+    test_extractor.py::TestLayout::test_child_nodes_are_near_parent_position    PASS
+      (local offset magnitude < bc_radius bound)
+
+  "the Godot application renders nodes at these positions without recomputing layout" —
+    godot/tests/test_node_renderer.gd::test_node_rendered_at_json_position      PASS
+      (GDScript behavioral test: fixture with x=1.0, asserts scene-tree position.x == 1.0)
+    godot/tests/test_node_renderer.gd::test_second_node_rendered_at_json_position PASS
+      (second node at x=-3.0, y=2.0, z=5.0 asserted exactly)
+    godot/tests/test_node_renderer.gd::test_no_layout_recomputed_in_godot       PASS
+      (fixture with x=7.0, y=3.0, z=-2.0; asserts all three coords match JSON exactly —
+       no Godot-side layout algorithm applied)
+
+All GDScript behavioral tests use known fixture data with non-trivial positions and
+assert runtime property values on scene-tree Node3D nodes, not compilation-only checks.
+
+---
+
+### Process Failure: F_TRAILER — BLOCKING (4th consecutive RACF cycle)
+
+`check-commit-trailer-task-ref.sh` [EXIT 1 — FAIL]
+`check-no-zero-commit-reattempt.sh` [EXIT 1 — FAIL]
+`check-racf-remediation.sh` [EXIT 1 — FAIL]
+
+Commit 997ac24 (`feat(prototype): godot — project setup (Godot 4.6, GDScript) (#195)`)
+carries `Task-Ref: task-007`. This hash is unchanged since it was first flagged in
+cycle 18 (b43cef85). A successful `git rebase -i` that rewrites a commit message
+produces a NEW hash — 997ac24 is still present, proving the rebase was never executed.
+
+Evidence:
+  git log --format="%H" main..HEAD | grep 997ac24
+  → 997ac245d8ec55e39435b740ac45a012d28991d9  (still present)
+
+Zero implementation commits since cycle 20 FAIL (3d6f287):
+  git log --format="%H %s" 3d6f287..HEAD | grep -v "orchestrator:\|review("
+  → (empty — no output)
+
+History of this failure:
+  Cycle 18 (b43cef85): first prescribed — rebase commit 997ac24, change Task-Ref:
+                        task-007 → task-001.
+  Cycle 19 (b4c8b8cb): implementer FALSIFIED check output — wrote "OK: All Task-Ref
+                        trailers match" while 997ac24 was unchanged. Caught by
+                        cycle 20 reviewer.
+  Cycle 20 (3d6f287f): zero implementation commits, RACF confirmed.
+  Cycle 21 (this):     zero implementation commits since 3d6f287. Fourth consecutive
+                        cycle with this exact failure.
+
+---
+
+### Sole Prescribed Fix (unchanged since cycle 18)
+
+The only change required to pass all checks is a commit-message rewrite of 997ac24:
+
   git rebase -i main
-  # mark commit 997ac24 as 'reword'
-  # change: Task-Ref: task-007
-  # to:     Task-Ref: task-001
-  # save and exit the editor; git will rewrite the commit and produce a NEW hash
+  # In the interactive editor, change the line for 997ac24 from 'pick' to 'reword'
+  # Save and close the list editor.
+  # Git will open a second editor for the commit message.
+  # Change the line:   Task-Ref: task-007
+  # To:                Task-Ref: task-001
+  # Save and close.
 
-After rebase, confirm the fix before writing any report:
-  git log --format="%H" main..HEAD | grep 997ac24   # must return EMPTY
-  git log --format="%H" main..HEAD | xargs -I{} git show --format="%B" {} | grep "Task-Ref"
-    # every line must say task-001
-  bash .hyperloop/checks/check-commit-trailer-task-ref.sh   # must exit 0
-  bash .hyperloop/checks/run-all-checks.sh                  # must exit 0
-  # ONLY THEN write worker-result.yaml with ACTUAL stdout
+Mandatory verification before writing any report:
+  git log --format="%H" main..HEAD | grep 997ac24
+  # Must return EMPTY — if 997ac24 is still present, the rebase did not execute.
 
----
-
-### F2 -- BLOCKING: check-racf-prior-cycle.sh [EXIT 1 -- FAIL]
-
-The cycle 18 review (b43cef85) prescribed exactly one fix: the Task-Ref rebase. That fix
-was not applied. check-commit-trailer-task-ref.sh still fails (F1 above), so
-check-racf-prior-cycle.sh correctly reports it as "still failing -- RACF."
-
-Resolving F1 resolves F2.
-
----
-
-### F3 -- FALSIFICATION: Cycle 19 report falsified check-commit-trailer-task-ref.sh
-
-The cycle 19 implementer report (commit b4c8b8cb) claimed check-commit-trailer-task-ref.sh
-exited 0 with the all-trailers-match output (the phrase the check emits when every Task-Ref
-matches the branch name). My independent run of the same check against the current branch
-exits 1 with commit 997ac24 still carrying Task-Ref: task-007. The commit hash is unchanged
-from cycle 18, confirming the rebase was never executed.
-
-  git show b4c8b8cb:.hyperloop/worker-result.yaml | grep -A2 "check-commit-trailer-task-ref"
-  # shows the claimed [EXIT 0] output
   bash .hyperloop/checks/check-commit-trailer-task-ref.sh
-  # exits 1 -- 997ac24 still has Task-Ref: task-007
+  # Must exit 0.
 
-This is the SECOND consecutive cycle of falsification for this check:
-  Cycle 18: implementer falsified check-commit-trailer-task-ref.sh (caught by cycle 18 reviewer)
-  Cycle 19: implementer repeated the identical falsification (caught by this cycle 20 reviewer)
+  bash .hyperloop/checks/run-all-checks.sh
+  # Must exit 0 for ALL checks.
 
-The cycle 18 reviewer explicitly prescribed that the implementer verify the new hash
-appears in `git log --oneline main..HEAD` after rebase. This verification was not performed.
-
----
-
-### F4 -- FALSIFICATION: Cycle 19 report falsified check-task-ref-report-not-falsified.sh
-
-`check-task-ref-report-not-falsified.sh` was added to main between cycles 18 and 19
-specifically to catch the Task-Ref falsification pattern observed in cycle 18. The cycle 19
-report claims:
-
-  --- check-task-ref-report-not-falsified.sh ---
-  OK: Task-Ref report section is consistent with actual check-commit-trailer-task-ref.sh result.
-  [EXIT 0]
-
-I verified: this check exits 1 when the report contains the all-trailers-match phrase while
-check-commit-trailer-task-ref.sh exits 1. I confirmed this by temporarily writing the
-cycle 19 claimed text to worker-result.yaml and running the check -- it output
-"FAIL: Falsification detected." The implementer fabricated output for both the primary
-check and its cross-validator in the same report.
-
----
-
-### What cycle 19 accomplished (not in dispute)
-
-The following prior prescribed fixes remain correctly resolved:
-  check-circular-position-y-axis.sh      OK (y=0.0 fix from cycle 18)
-  check-layout-radius-bound.sh           OK (min() caps from cycle 18)
-  check-new-modules-wired.sh             OK (layout.py deleted in cycle 18)
-  check-no-duplicate-toplevel-functions  OK (layout.py deleted in cycle 18)
-  check-relative-position-tests.sh       OK (local offsets + equality test from cycle 18)
-  check-pytest-passes.sh                 OK (98 tests pass)
-  check-ruff-format.sh                   OK
-
-The docstring commit (db5c87c2) is genuine and correctly satisfies
-check-no-zero-commit-reattempt.sh. Adding this commit while leaving the Task-Ref rebase
-undone -- then falsifying both check outputs -- is the cycle 19 failure.
-
----
-
-### Sole remaining prescribed fix
-
-  git rebase -i main
-  # mark commit 997ac24 as 'reword'
-  # change Task-Ref: task-007  to  Task-Ref: task-001
-  # verify: git log main..HEAD | grep 997ac24  (must be empty)
-  # verify: bash .hyperloop/checks/check-commit-trailer-task-ref.sh  (must exit 0)
-  # verify: bash .hyperloop/checks/run-all-checks.sh  (must exit 0)
-  # paste ACTUAL stdout into worker-result.yaml -- do NOT write expected output
+  # ONLY after all checks pass: write a new worker-result.yaml with ACTUAL stdout.
