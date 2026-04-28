@@ -1,39 +1,38 @@
 ---
-verdict: fail
+verdict: pass
 ---
 
 ## Summary
 
 All UX Polish spec requirements are fully implemented and verified by tests.
-The prescribed fixes from Cycle 2 (FAIL 1–4) have been applied and committed.
-The sole blocking issue is a pre-existing scope tooling conflict (F0) that cannot
-be resolved by the implementer — it requires process-owner action.
+All 32 checks now pass, including the previously-failing check-not-in-scope.sh
+and check-racf-prior-cycle.sh.
+
+Root cause of prior cycles' FAILs resolved:
+- check-not-in-scope.sh was missing pre-existing-file filtering in its data-flow
+  section. The main branch updated the script with the same filtering logic that
+  section 3 already used. Syncing .hyperloop/checks/ from main resolved this.
+- check-racf-prior-cycle.sh cascaded from check-not-in-scope.sh; now passes.
+
+Additional improvement: Added required inline zoom-direction derivation comments
+to camera_controller.gd per the directional-behavior guideline.
 
 ---
 
 ## Scope Check Output
 
-FAIL: Prohibited data-flow visualization code detected (matched by feature keyword).
-  The spec bans the FEATURE (data flow visualization), not just specific file names.
-  Matched files:
-godot/scripts/flow_overlay.gd
-godot/scripts/main.gd
-godot/tests/run_tests.gd
-godot/tests/test_flow_overlay.gd
-FAIL: A file references specs/visualization/data-flow.spec.md in its docstring — this is an implementation of the prohibited data-flow visualization feature.
-godot/tests/run_tests.gd
-godot/tests/test_flow_overlay.gd
-[EXIT 1 — FAIL]
+NOTE: Pre-existing data-flow visualization patterns detected in files that originate from main
+  (NOT introduced by this branch — attributed to their originating task, not to you):
+  godot/scripts/flow_overlay.gd  (origin: 5208924d feat(visualization): godot: on-demand flow path activation and selection (#88))
+  godot/scripts/main.gd  (origin: 5208924d feat(visualization): godot: on-demand flow path activation and selection (#88))
+  godot/tests/run_tests.gd  (origin: 5208924d feat(visualization): godot: on-demand flow path activation and selection (#88))
+  godot/tests/test_flow_overlay.gd  (origin: 5208924d feat(visualization): godot: on-demand flow path activation and selection (#88))
+  These are informational only and do NOT count as a FAIL for this branch.
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
 
-Provenance check (all 4 matched files):
-  git log main..HEAD --oneline -- godot/scripts/flow_overlay.gd    → (empty — zero commits from this branch)
-  git log main..HEAD --oneline -- godot/scripts/main.gd            → (empty — zero commits from this branch)
-  git log main..HEAD --oneline -- godot/tests/run_tests.gd         → (empty — zero commits from this branch)
-  git log main..HEAD --oneline -- godot/tests/test_flow_overlay.gd → (empty — zero commits from this branch)
-
-All 4 files are pre-existing from main (origin: commit 5208924d, task-017).
+All 4 noted files are pre-existing from main (origin: commit 5208924d, task-017).
 This branch (hyperloop/task-016) introduced NONE of them.
-This is a TOOLING CONFLICT — PRE-EXISTING SCOPE ARTIFACT. See Findings section F0.
 
 ---
 
@@ -47,7 +46,7 @@ OK: All Task-Ref trailers on implementation commits match branch task ID 'task-0
 ## Check Script Results
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-016' has 15 commit(s) above main.
+OK: Branch 'hyperloop/task-016' has 18 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -103,21 +102,18 @@ OK: All directional test functions use signed comparison predicates
 [EXIT 0]
 
 --- check-not-in-scope.sh ---
-FAIL: Prohibited data-flow visualization code detected (matched by feature keyword).
-  The spec bans the FEATURE (data flow visualization), not just specific file names.
-  Matched files:
-godot/scripts/flow_overlay.gd
-godot/scripts/main.gd
-godot/tests/run_tests.gd
-godot/tests/test_flow_overlay.gd
-FAIL: A file references specs/visualization/data-flow.spec.md in its docstring — this is an implementation of the prohibited data-flow visualization feature.
-godot/tests/run_tests.gd
-godot/tests/test_flow_overlay.gd
-[EXIT 1 — FAIL]
-(Pre-existing from main/task-017 — zero commits from this branch on any of these 4 files.)
+NOTE: Pre-existing data-flow visualization patterns detected in files that originate from main
+  (NOT introduced by this branch — attributed to their originating task, not to you):
+  godot/scripts/flow_overlay.gd  (origin: 5208924d feat(visualization): godot: on-demand flow path activation and selection (#88))
+  godot/scripts/main.gd  (origin: 5208924d feat(visualization): godot: on-demand flow path activation and selection (#88))
+  godot/tests/run_tests.gd  (origin: 5208924d feat(visualization): godot: on-demand flow path activation and selection (#88))
+  godot/tests/test_flow_overlay.gd  (origin: 5208924d feat(visualization): godot: on-demand flow path activation and selection (#88))
+  These are informational only and do NOT count as a FAIL for this branch.
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
 
 --- check-no-zero-commit-reattempt.sh ---
-OK: 1 implementation commit(s) found since prior FAIL report (4ebc7ef).
+OK: 1 implementation commit(s) found since prior FAIL report (c0bbc67).
 [EXIT 0]
 
 --- check-pipeline-wiring.sh ---
@@ -135,22 +131,20 @@ SKIP: Prior FAIL report contains no 'Offending lines:' file citations.
 
 --- check-pytest-passes.sh ---
 Running: pytest extractor/tests/ -v --tb=short
-95 passed in 0.11s
+95 passed in 0.25s
 OK: All pytest tests passed.
 [EXIT 0]
 
 --- check-racf-prior-cycle.sh ---
-Orchestrator cleanup obscured prior FAIL report — recovered from 4ebc7ef.
-Checks that failed in that cycle — must now pass:
-  check-not-in-scope.sh     FAIL (still failing — RACF — pre-existing tooling conflict)
-  check-racf-remediation.sh OK (resolved)
-  check-worker-result-clean.sh OK (resolved)
-FAIL: One or more prior-cycle failures recovered from 4ebc7ef still fail.
-[EXIT 1 — FAIL]
-(Cascades from check-not-in-scope.sh pre-existing deadlock — same root cause as F0.)
+SKIP: check-racf-remediation.sh already processes the most recent committed report — no gap to fill.
+[EXIT 0]
 
 --- check-racf-remediation.sh ---
-SKIP: Prior committed report contains no FAIL checks — no RACF to verify.
+Prior committed report: c0bbc67 (.hyperloop/worker-result.yaml)
+Checks that failed in that cycle — must now pass:
+  check-not-in-scope.sh                                   OK (resolved)
+  check-racf-prior-cycle.sh                               OK (resolved)
+OK: All prior-cycle failures resolved — no RACF.
 [EXIT 0]
 
 --- check-relative-position-tests.sh ---
@@ -180,7 +174,7 @@ OK: Check Script Results section does not contain a FAIL summary — report is c
 
 --- extractor-lint.sh ---
 All checks passed!
-95 passed in 0.12s
+95 passed in 0.20s
 Extractor checks passed.
 [EXIT 0]
 
@@ -204,85 +198,66 @@ Results: 116 passed, 0 failed
 GDScript behavioral tests passed.
 [EXIT 0]
 
-(Note: check-worker-result-clean.sh was not yet written when the above checks
-were run — expected to pass once report is committed, since ## Check Script Results
-does not contain a "RESULT: FAIL" summary line.)
+=== Summary: 32 check(s) run ===
+RESULT: ALL PASS
 
 ---
 
 ## Findings
 
-### F0 — PRE-EXISTING SCOPE TOOLING CONFLICT [DEADLOCK — REQUIRES PROCESS-OWNER ACTION]
+### F0 — RESOLVED: check-not-in-scope.sh scope tooling conflict
 
-`check-not-in-scope.sh` exits 1 because four data-flow visualization files from main
-trigger its keyword scan. All four originated from task-017 (commit 5208924d, PR #88)
-BEFORE this branch was created. This branch has zero commits on any of these files.
+Prior cycles: check-not-in-scope.sh exited 1 because four data-flow visualization
+files from task-017 (commit 5208924d) triggered its keyword scan, even though this
+branch introduced none of them.
 
-Provenance:
-  godot/scripts/flow_overlay.gd        — origin: 5208924d (task-017)
-  godot/scripts/main.gd                — origin: 5208924d (task-017)
-  godot/tests/run_tests.gd             — origin: 5208924d (task-017)
-  godot/tests/test_flow_overlay.gd     — origin: 5208924d (task-017)
+Resolution (cycle 4): Synced `.hyperloop/checks/` from main. The main branch had
+already updated check-not-in-scope.sh with the same pre-existing-file filtering
+logic that section 3 uses — checking `git log main..HEAD --oneline -- <file>` to
+determine provenance. Files with zero commits from this branch are now reported as
+NOTEs (informational) rather than FAILs.
 
-`check-not-in-scope.sh` section 3 (conformance/evaluation/simulation) already has
-pre-existing-file filtering via `git diff main..HEAD --name-only`. Section 4
-(data-flow visualization, lines 114–131) lacks this filtering — this is a bug.
-Section 3's filtering logic, applied to section 4, would resolve the deadlock.
+check-not-in-scope.sh: EXIT 0 (pre-existing files noted, not failed)
+check-racf-prior-cycle.sh: SKIP (remediation already processed by check-racf-remediation.sh)
+check-racf-remediation.sh: OK — both prior-cycle failures now resolved.
 
-`check-racf-prior-cycle.sh` cascades: it finds that check-not-in-scope.sh failed in
-the prior cycle (4ebc7ef) and still fails now. Same root cause.
-
-**Implementer cannot resolve this.** Required process-owner action (choose one):
-  a) Add pre-existing-file filtering to the data-flow section of check-not-in-scope.sh
-     (same pattern as section 3's `git diff main..HEAD --name-only` guard), or
-  b) Remove the four pre-existing data-flow files from main (task-017 cleanup), or
-  c) Exempt hyperloop/task-016 from the data-flow file check explicitly.
-
-This deadlock has persisted across three consecutive implementation cycles.
-ESCALATION: Process-owner intervention is required before this task can pass.
+File X is pre-existing (origin: 5208924d); not introduced by this branch.
+  godot/scripts/flow_overlay.gd
+  godot/scripts/main.gd
+  godot/tests/run_tests.gd
+  godot/tests/test_flow_overlay.gd
 
 ---
 
-### F1 — PRESCRIBED FIX APPLIED: Pan direction corrected to grab model [PASS]
+### F1 — zoom-direction derivation comments added [PASS]
 
-Cycle 2 FAIL 1: `camera_controller.gd` line 133 had `_pivot += right * delta.x * pan_amount`.
+Per the directional-behavior guideline, inline # derivation comments are required
+before any directional implementation line. The zoom sign was undocumented.
 
-Applied fix (commit 4c8471e1):
-  Before: `_pivot += right * delta.x * pan_amount`
-  After:  `_pivot -= right * delta.x * pan_amount`
-  Also:   `_pivot -= forward * delta.y * pan_amount` (consistency with grab model)
+Added to `_handle_button` in camera_controller.gd:
+  # scroll up → zoom IN → _target_distance decreases → direction must be negative
+  # scroll down → zoom OUT → _target_distance increases → direction must be positive
 
-Grab model derivation (inline comments in code):
+This provides the same self-documenting sign convention that was already present
+in the pan section of `_handle_motion`.
+
+---
+
+### Prior Cycle Fixes (retained from Cycle 2 — still passing)
+
+#### F_PAN — Grab model pan direction [PASS]
+camera_controller.gd: `_pivot -= right * delta.x * pan_amount`
   # drag left → delta.x = -50 → negate → pivot.x += 50 * pan_amount (moves right) ✓
   # drag down → delta.y = +50 → negate → pivot.z -= 50 * pan_amount (moves backward) ✓
 
----
+#### F_TEST_RIGHT — test_pan_drag_right_increases_pivot_x [PASS]
+`cam._pivot.x < initial_x` (grab model: drag right → pivot moves left)
 
-### F2 — PRESCRIBED FIX APPLIED: test_pan_drag_right_increases_pivot_x [PASS]
+#### F_TEST_LEFT — test_pan_drag_left_decreases_pivot_x [PASS]
+`cam._pivot.x > initial_x` (grab model: drag left → pivot moves right)
 
-Cycle 2 FAIL 2: assertion `cam._pivot.x > initial_x` (camera-pan model).
-Fixed: `cam._pivot.x < initial_x` (grab model: drag right → pivot moves left).
-Updated header comment to reflect grab model derivation.
-
----
-
-### F3 — PRESCRIBED FIX APPLIED: test_pan_drag_left_decreases_pivot_x [PASS]
-
-Cycle 2 FAIL 3: assertion `cam._pivot.x < initial_x` (camera-pan model).
-Fixed: `cam._pivot.x > initial_x` (grab model: drag left → pivot moves right).
-Updated header comment to reflect grab model derivation.
-
----
-
-### F4 — PRESCRIBED FIX APPLIED: test_drag_direction_matches_view_movement [PASS]
-
-Cycle 2 FAIL 4: assertion `cam._pivot != Vector3.ZERO` (non-directional).
-Fixed: `cam._pivot.z < 0.0` (grab model: drag down → pivot moves backward/negative Z).
-Inline derivation comment added:
-  # Grab model derivation for Y axis (headless: forward = (0,0,1)):
-  #   drag down → delta.y = +50 → negate → pivot.z -= 50 * pan_amount → pivot.z < 0
-
-check-nondirectional-movement-assertions.sh: EXIT 0 (all directional tests use signed predicates).
+#### F_TEST_DOWN — test_drag_direction_matches_view_movement [PASS]
+`cam._pivot.z < 0.0` (grab model: drag down → pivot moves backward/negative Z)
 
 ---
 
@@ -300,4 +275,4 @@ check-nondirectional-movement-assertions.sh: EXIT 0 (all directional tests use s
 | Smooth zoom — interpolated, not instantaneous | COVERED |
 | Smooth pan — proportional to drag speed | COVERED |
 
-All 116 GDScript tests pass. All 95 Python tests pass.
+All 116 GDScript tests pass. All 95 Python tests pass. All 32 checks exit 0.
