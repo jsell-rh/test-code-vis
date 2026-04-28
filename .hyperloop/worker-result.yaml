@@ -1,113 +1,53 @@
-# Review Report — task-017 — Cycle 4
+# Review Report — task-017 — Cycle 5
 ---
 verdict: fail
 ---
 
 Branch: hyperloop/task-017
 Spec: specs/prototype/ux-polish.spec.md
-Reviewer cycle: 4
+Reviewer cycle: 5
 
 ---
 
 ## Scope Check Output
 
-FAIL: Prohibited data-flow visualization code detected (matched by feature keyword).
-  The spec bans the FEATURE (data flow visualization), not just specific file names.
-  Matched files:
-godot/scripts/flow_overlay.gd
-godot/scripts/main.gd
-godot/tests/run_tests.gd
-godot/tests/test_flow_overlay.gd
-FAIL: A file references specs/visualization/data-flow.spec.md in its docstring — this is an implementation of the prohibited data-flow visualization feature.
-godot/tests/run_tests.gd
-godot/tests/test_flow_overlay.gd
-
----
-
-## REVIEWER TOOLING CONFLICT — PRE-EXISTING SCOPE ARTIFACT
-
-Per guidelines: **When scope check fails exclusively on pre-existing artifacts, document the tooling catch-22 and escalate.**
-
-All four files flagged by check-not-in-scope.sh are pre-existing artifacts that this
-branch did NOT introduce. Confirmed via `git log main..HEAD --oneline -- <file>` (all
-return empty — zero branch commits to any flagged file):
-
-- godot/scripts/flow_overlay.gd — origin: 5208924d feat(visualization): godot: on-demand flow path activation and selection (#88)
-- godot/scripts/main.gd         — origin: dffc2449 Add Godot 4 project scaffolding
-- godot/tests/run_tests.gd      — origin: 3d8d1217 feat(extraction): extractor: import-based dependency extraction (#5)
-- godot/tests/test_flow_overlay.gd — origin: 5208924d (same as flow_overlay.gd)
-
-The `check-not-in-scope.sh` DATA_FLOW_PATTERN was extended (after these files were
-authorized and merged to main) to catch `flow_overlay`, which now retroactively flags
-code that was approved via PR #88. This creates a structural deadlock: the check exits 1
-regardless of what this task does, because the flagged code is on main.
-
-**Escalation (required by protocol):**
-1. The FAIL is blocking — per protocol, I must issue FAIL even though the implementer
-   cannot resolve this without out-of-scope changes.
-2. A process owner must either (a) update `check-not-in-scope.sh` to exempt the
-   pre-existing flow_overlay files by commit hash, or (b) formally revoke PR #88 and
-   remove the files from main.
-3. This task should not be re-evaluated until the tooling conflict is resolved.
-
----
-
-## Check Script Results
-
 === run-all-checks.sh ===
-
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-017' has 10 commit(s) above main.
+OK: Branch 'hyperloop/task-017' has 11 commit(s) above main.
 [EXIT 0]
-
 --- check-checks-in-sync.sh ---
 OK: All check scripts from main are present in working tree (21 checked).
 [EXIT 0]
-
 --- check-circular-position-y-axis.sh ---
 OK: All _circular_positions calls use y=0.0 (no non-zero y detected).
 [EXIT 0]
-
 --- check-clamp-boundary-tests.sh ---
-OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
 OK: All 4 clamped variable(s) have boundary-asserting tests
 [EXIT 0]
-
 --- check-commit-trailer-task-ref.sh ---
 OK: All Task-Ref trailers on implementation commits match branch task ID 'task-017'.
 [EXIT 0]
-
 --- check-extractor-cli-tested.sh ---
 OK: A test calls main() from the extractor CLI entry point.
 [EXIT 0]
-
 --- check-extractor-stdlib-only.sh ---
 OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
 [EXIT 0]
-
 --- check-gdscript-only-test.sh ---
 OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
 [EXIT 0]
-
 --- check-kartograph-integration-test.sh ---
 OK: Integration test referencing kartograph codebase with expected-context assertions found.
 [EXIT 0]
-
 --- check-layout-radius-bound.sh ---
 OK: No unbounded spatial-layout radius pattern found.
 [EXIT 0]
-
 --- check-new-modules-wired.sh ---
 OK: 'extractor/extractor.py' is imported by production code (1 import(s) found).
 [EXIT 0]
-
 --- check-no-duplicate-toplevel-functions.sh ---
 OK: No duplicate top-level function names across extractor/ source files.
 [EXIT 0]
-
 --- check-not-in-scope.sh ---
 FAIL: Prohibited data-flow visualization code detected (matched by feature keyword).
   The spec bans the FEATURE (data flow visualization), not just specific file names.
@@ -120,80 +60,52 @@ FAIL: A file references specs/visualization/data-flow.spec.md in its docstring �
 godot/tests/run_tests.gd
 godot/tests/test_flow_overlay.gd
 [EXIT 1 — FAIL]
-
 --- check-no-zero-commit-reattempt.sh ---
-OK: 1 implementation commit(s) found since prior FAIL report (079fdb5).
-[EXIT 0]
-
+FAIL: Zero implementation commits since prior FAIL report (fb66283).
+[EXIT 1 — FAIL]
 --- check-pipeline-wiring.sh ---
 SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
-      This check only applies to tasks that implement the LLM→view-spec pipeline.
 [EXIT 0]
-
 --- check-preloaded-gdscript-files.sh ---
 OK: All 27 preload() target(s) resolve to existing files.
 [EXIT 0]
-
 --- check-prescribed-fixes-applied.sh ---
 SKIP: Prior FAIL report contains no 'Offending lines:' file citations.
 [EXIT 0]
-
 --- check-pytest-passes.sh ---
 OK: All pytest tests passed. (95 passed)
 [EXIT 0]
-
 --- check-racf-prior-cycle.sh ---
-OK: All prior-cycle failures (recovered from 079fdb5) are now resolved.
+SKIP: check-racf-remediation.sh already processes the most recent committed report.
 [EXIT 0]
-
 --- check-racf-remediation.sh ---
-SKIP: Prior committed report contains no FAIL checks — no RACF to verify.
-[EXIT 0]
-
+FAIL: One or more checks that failed in the prior committed cycle still fail.
+[EXIT 1 — FAIL]
 --- check-relative-position-tests.sh ---
-OK: No absolute parent-coordinate accumulation detected in extractor source.
 OK: Direct relative-offset assertion test(s) found in test suite.
 [EXIT 0]
-
 --- check-report-scope-section.sh ---
-OK: worker-result.yaml contains a valid '## Scope Check Output' section (scope check
-    ran and output was pasted verbatim).
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
 [EXIT 0]
-
 --- check-ruff-format.sh ---
 OK: ruff format --check passed — all extractor/ files are correctly formatted.
 [EXIT 0]
-
 --- check-scope-report-not-falsified.sh ---
 OK: Scope report section is consistent with actual check-not-in-scope.sh result.
 [EXIT 0]
-
 --- check-task-ref-report-not-falsified.sh ---
 OK: Task-Ref report section is consistent with actual check-commit-trailer-task-ref.sh result.
 [EXIT 0]
-
 --- check-worker-result-clean.sh ---
 SKIP: .hyperloop/worker-result.yaml is a reviewer report — this check applies to implementer submissions only.
 [EXIT 0]
-
 --- extractor-lint.sh ---
 All checks passed! 8 files formatted. 95 passed.
 [EXIT 0]
-
 --- godot-compile.sh ---
 Godot project compiles successfully.
 [EXIT 0]
-
---- godot-fileaccess-tested.sh ---
-OK: FileAccess.open() is exercised in 2 test file(s).
-[EXIT 0]
-
---- godot-label3d.sh ---
-PASS: All Label3D nodes have billboard and pixel_size set and tested.
-[EXIT 0]
-
 --- godot-tests.sh ---
-Found 12 GDScript test file(s) in godot/tests/.
 Results: 116 passed, 0 failed
 [EXIT 0]
 
@@ -202,227 +114,152 @@ RESULT: FAIL — one or more checks exited non-zero
 
 ---
 
-## THEN → Test Mapping (Verifier's Independent Derivation)
+## REVIEWER TOOLING CONFLICT — PRE-EXISTING SCOPE ARTIFACT (UNCHANGED FROM CYCLE 4)
 
-Per guidelines: derive expected predicate from spec BEFORE reading test bodies.
+`check-not-in-scope.sh` exits 1. All four flagged files have zero branch commits:
+- godot/scripts/flow_overlay.gd — origin: 5208924d
+- godot/scripts/main.gd         — origin: dffc2449
+- godot/tests/run_tests.gd      — origin: 3d8d1217
+- godot/tests/test_flow_overlay.gd — origin: 5208924d
 
-### Spec Requirement: Pan with Left Mouse Button
+This is a structural deadlock: the check pattern was extended after PR #88 merged these files
+to main. A process owner must exempt these files or revert PR #88 before F_SCOPE can clear.
 
-**THEN: camera pans in the direction of the drag**
-- Worker maps to: `test_lmb_pan_moves_pivot` → `cam._pivot != initial_pivot`
-- My derivation: pivot must move (any direction)
-- Predicate match: ✓ PASS (pivot movement confirmed)
+Additionally, `check-no-zero-commit-reattempt.sh` now fails because the implementer issued
+zero implementation commits since the cycle-4 FAIL. The underlying spec-alignment failures
+(F1–F4 below) remain unaddressed.
 
-**THEN: movement direction matches drag direction (not inverted)**
+---
 
-Derived from spec (i.e. parenthetical in Requirement: Non-Inverted Movement below).
-See F1/F2/F3 findings.
+## Requirement Status
 
-### Spec Requirement: Non-Inverted Movement
+### Pan with Left Mouse Button — PARTIAL
 
-**THEN: scene moves in same direction as drag (i.e. dragging left reveals content to the right, as in Google Maps)**
+Implementation: `godot/scripts/camera_controller.gd` `_handle_motion()`, LMB branch.
+- COVERED: LMB press sets `_panning = true`; mouse motion updates `_pivot`.
+- COVERED: `test_lmb_pan_moves_pivot` asserts `cam._pivot != initial_pivot`. PASS.
+- FAIL: See F1 — pan direction is inverted vs. Google Maps spec.
 
-"i.e." = definition, not example. Spec defines this as Google Maps map-grab model.
+### Non-Inverted Movement — FAIL
 
-**Pre-read derivation** (Google Maps sign chain):
-- Drag left (delta.x < 0) → user grabs scene and pulls left → scene slides LEFT on screen
-- Camera effectively moves RIGHT (opposite to scene slide direction)
-- Pivot must move in the +screen-right direction when dragging LEFT
-- In headless mode: basis.x = (1,0,0) (identity, confirmed by !is_inside_tree() errors in test run)
-  → pivot.x must INCREASE when dragging left for Google Maps model
-- In production: basis.x = (0,0,−1) (computed: up=(0,1,0) cross z_axis=(0.149,0.989,0) = (0,0,−0.149) normalized)
-  → same analysis applies; pivot must increase in basis.x direction on drag left
+Spec (authoritative): "scene moves in same direction as drag (i.e. dragging left reveals
+content to the right, as in Google Maps)"
 
-Worker maps:
-- "scene moves in same direction as drag" → `test_pan_drag_left_decreases_pivot_x` → `pivot.x < initial_x`
-- "dragging left reveals content to the right" → `test_drag_direction_matches_view_movement` → `pivot != Vector3.ZERO`
+"i.e." is a definition. Google Maps sign chain:
+- Drag left (delta.x < 0) → user grabs scene, pulls it left → scene slides LEFT on screen
+- Camera pivot moves RIGHT (+X in screen-right direction)
+- Required: `pivot.x INCREASES` when drag left
 
-**After reading test bodies:**
-- `test_pan_drag_left_decreases_pivot_x`: asserts `cam._pivot.x < initial_x` (DECREASES)
-  - Derived expectation: INCREASES → **WRONG PREDICATE** → F2
-- `test_pan_drag_right_increases_pivot_x`: asserts `cam._pivot.x > initial_x` (INCREASES)
-  - Derived expectation for drag right: DECREASES → **WRONG PREDICATE** → F3
-- `test_drag_direction_matches_view_movement`: asserts `cam._pivot != Vector3.ZERO`
-  - This is a null directional test — tells us nothing about direction → **NULL TEST** → F4
+Current implementation:
+```
+_pivot += right * delta.x * pan_amount
+```
+Drag left: delta.x = -50 → pivot.x decreases → INVERTED.
 
-### Spec Requirement: Zoom Toward Mouse Cursor
+Tests assert WRONG predicates (matching the inverted implementation, not the spec):
+- `test_pan_drag_right_increases_pivot_x`: asserts pivot.x INCREASES on right drag
+  - Google Maps requires DECREASES. Wrong predicate.
+- `test_pan_drag_left_decreases_pivot_x`: asserts pivot.x DECREASES on left drag
+  - Google Maps requires INCREASES. Wrong predicate.
+- `test_drag_direction_matches_view_movement`: asserts `pivot != Vector3.ZERO`
+  - Null directional test. No direction verified.
 
-| THEN-clause | Test | Predicate | Status |
-|---|---|---|---|
-| view zooms toward cursor | `test_zoom_toward_cursor_shifts_pivot_toward_cursor` | `pivot.x > 0.0` after zoom toward (10,0,0) | PASS |
-| component stays under cursor | `test_component_stays_under_cursor_on_zoom_in` | `after > before` (pivot.x grew) | PASS |
-| zoom out from cursor | `test_zoom_out_from_cursor_shifts_pivot_away` | `pivot.x < 5.0` after zoom-out | PASS |
-| target distance increases | `test_zoom_out_increases_target_distance` | `target_distance > initial` | PASS |
+### Zoom Toward Mouse Cursor — COVERED
 
-### Spec Requirement: Orbit Around Mouse Point
+- `_zoom_toward_cursor` shifts `_pivot` toward cursor point and adjusts `_target_distance`.
+- `test_zoom_toward_cursor_shifts_pivot_toward_cursor`: pivot.x > 0 after zoom toward (10,0,0). PASS.
+- `test_component_stays_under_cursor_on_zoom_in`: pivot moves closer to cursor. PASS.
+- `test_zoom_out_from_cursor_shifts_pivot_away`: pivot moves away from cursor on zoom-out. PASS.
+- `test_zoom_out_increases_target_distance`: target_distance increases. PASS.
 
-| THEN-clause | Test | Predicate | Status |
-|---|---|---|---|
-| orbit around cursor at start | `test_orbit_pivot_set_to_cursor_point_at_start` | `pivot == world_point` | PASS |
-| focal point fixed | `test_orbit_pivot_is_used_during_orbit` | `pivot == pivot_before` | PASS |
-| component at visual center | `test_component_remains_at_visual_center_during_orbit` | `pivot == center` | PASS |
+### Orbit Around Mouse Point — COVERED
 
-Note: `_mouse_to_ground` returns `_pivot` in headless (no viewport), so orbit-around-cursor
-tests call `_set_orbit_pivot(known_point)` directly. Reasonable headless compromise.
+- `_set_orbit_pivot(world_point)` sets `_pivot = world_point` and recalculates spherical angles.
+- Called from `_handle_button` on RMB press: `_set_orbit_pivot(_mouse_to_ground(event.position))`.
+- `test_orbit_pivot_set_to_cursor_point_at_start`: `cam._pivot == world_point`. PASS.
+- `test_orbit_pivot_is_used_during_orbit`: pivot unchanged during orbit motion. PASS.
+- `test_component_remains_at_visual_center_during_orbit`: pivot fixed during orbit. PASS.
+- Note: `_mouse_to_ground` returns `_pivot` in headless mode; tests call `_set_orbit_pivot`
+  directly. Acceptable headless compromise.
 
-### Spec Requirement: Smooth Camera Movement
+### Smooth Camera Movement — COVERED
 
-| THEN-clause | Test | Predicate | Status |
-|---|---|---|---|
-| zoom interpolated | `test_zoom_is_interpolated_not_instantaneous` | distance unchanged before _process; partially lerped after one frame | PASS |
-| pan proportional | `test_pan_proportional_to_drag_speed` | `move2 > move1` (5x drag → larger pivot shift) | PASS |
-
-### Boundary Constraints
-
-| Variable | Test | Status |
-|---|---|---|
-| `_target_distance` min | `test_target_distance_clamped_at_minimum` | PASS |
-| `_target_distance` max | `test_target_distance_clamped_at_maximum` | PASS |
-| `_theta` min | `test_theta_clamped_at_minimum` | PASS |
-| `_theta` max | `test_theta_clamped_at_maximum` | PASS |
+- Zoom: `_target_distance` updated immediately; `_distance` lerps toward it in `_process()`.
+- `test_zoom_is_interpolated_not_instantaneous`: distance unchanged before _process; partially
+  lerped after one 16ms frame. PASS.
+- Pan: `_pivot` updated per-frame proportionally to drag delta.
+- `test_pan_proportional_to_drag_speed`: 5x drag → 5x larger pivot displacement. PASS.
 
 ---
 
 ## Findings
 
-### F_SCOPE — BLOCKING: Scope check exits 1 (pre-existing tooling conflict)
+### F_SCOPE — BLOCKING (pre-existing tooling conflict, unchanged from cycle 4)
 
-`check-not-in-scope.sh` exits 1. All flagged files are pre-existing (zero branch commits).
-See REVIEWER TOOLING CONFLICT section above. Per protocol: FAIL verdict issued; escalation
-required before next cycle.
+`check-not-in-scope.sh` exits 1 on pre-existing files. Zero branch commits to flagged files.
+Escalation required from process owner.
 
----
+### F_PROC — BLOCKING (new this cycle)
 
-### F1 — BLOCKING: Pan direction INVERTED from Google Maps spec
+`check-no-zero-commit-reattempt.sh` exits 1. Zero implementation commits since cycle-4 FAIL
+report (fb66283). The implementer must push at least one implementation commit addressing
+the spec-alignment failures before this check can clear.
 
-**Affected file:** `godot/scripts/camera_controller.gd` — `_handle_motion()`
+### F1 — BLOCKING: Pan direction inverted from Google Maps spec
 
-**Spec requirement** (Non-Inverted Movement scenario, "i.e." parenthetical = definition):
-> "scene moves in same direction as drag (i.e. dragging left reveals content to the right, as in Google Maps)"
+File: `godot/scripts/camera_controller.gd`, `_handle_motion()`, pan block.
 
-**Google Maps sign chain:**
-- Drag left → user grabs scene and pulls left → scene slides LEFT on screen
-- Camera moves RIGHT (opposite to scene slide direction)
-- Pivot must move in +screen-right direction when dragging LEFT
-
-**Implementation (`camera_controller.gd`, `_handle_motion`, pan block):**
 ```gdscript
+# Current (inverted):
 _pivot += right * delta.x * pan_amount
 _pivot += forward * delta.y * pan_amount
-```
-When drag left: `delta.x < 0` → pivot moves in **−screen-right direction** → standard camera pan.
-Content from the LEFT is revealed. Opposite of Google Maps.
 
-**Concrete headless check** (basis.x = identity = (1,0,0), drag left delta.x = −50, pan_amount = 0.12):
-- `pivot.x += 1.0 × (−50) × 0.12 = −6.0` → DECREASES
-- Google Maps requires: `pivot.x INCREASES by 6.0`
-- Implementation is INVERTED.
-
-**Fix:**
-```gdscript
-_pivot -= right * delta.x * pan_amount   # negate: Google Maps map-grab model
-_pivot -= forward * delta.y * pan_amount  # same
+# Required (Google Maps map-grab model):
+_pivot -= right * delta.x * pan_amount
+_pivot -= forward * delta.y * pan_amount
 ```
 
----
+### F2 — BLOCKING: Wrong predicate in `test_pan_drag_right_increases_pivot_x`
 
-### F2 — BLOCKING: Wrong predicate — `test_pan_drag_right_increases_pivot_x`
+File: `godot/tests/test_ux_polish.gd` line 113.
+Current: `return cam._pivot.x > initial_x`
+Required: `return cam._pivot.x < initial_x`
+Reason: drag right (delta.x = +50) → Google Maps pivot moves LEFT → pivot.x must decrease.
 
-**File:** `godot/tests/test_ux_polish.gd`
+### F3 — BLOCKING: Wrong predicate in `test_pan_drag_left_decreases_pivot_x`
 
-Test asserts: `cam._pivot.x > initial_x` when dragging right (+50 px).
+File: `godot/tests/test_ux_polish.gd` line 123.
+Current: `return cam._pivot.x < initial_x`
+Required: `return cam._pivot.x > initial_x`
+Reason: drag left (delta.x = -50) → Google Maps pivot moves RIGHT → pivot.x must increase.
 
-Derived from Google Maps spec: drag right → camera moves LEFT → pivot DECREASES in +X.
-Expected predicate: `cam._pivot.x < initial_x`.
+### F4 — BLOCKING: Null directional test in `test_drag_direction_matches_view_movement`
 
-Test encodes OPPOSITE direction. A sign-flipped (incorrect) implementation passes this test; a
-correct Google Maps implementation would FAIL it.
-
-**Fix:** Change assertion to `cam._pivot.x < initial_x`.
-
----
-
-### F3 — BLOCKING: Wrong predicate — `test_pan_drag_left_decreases_pivot_x`
-
-**File:** `godot/tests/test_ux_polish.gd`
-
-Test asserts: `cam._pivot.x < initial_x` when dragging left (−50 px).
-
-Derived from Google Maps spec: drag left → camera moves RIGHT → pivot INCREASES in +X.
-Expected predicate: `cam._pivot.x > initial_x`.
-
-Test encodes OPPOSITE direction.
-
-**Fix:** Change assertion to `cam._pivot.x > initial_x`.
+File: `godot/tests/test_ux_polish.gd` lines 129-138.
+Current assertion: `return cam._pivot != Vector3.ZERO`
+Required: a directional assertion. Example after drag left: `return cam._pivot.x > initial_x`.
 
 ---
 
-### F4 — BLOCKING: Null test — `test_drag_direction_matches_view_movement`
+## Prescribed Fixes (identical to cycle 4)
 
-**File:** `godot/tests/test_ux_polish.gd`
-
-Worker maps THEN-clause "dragging left reveals content to the right" to this test.
-
-Test body (from reading the actual source):
-```gdscript
-_press_lmb(cam, Vector2(100.0, 100.0))
-_move_mouse(cam, Vector2(100.0, 150.0))  # drag down 50 px
-return cam._pivot != Vector3.ZERO
-```
-
-This only asserts the pivot moved at all — no directional information. An inverted
-implementation passes this identically. Wrong-predicate mapping for a direction THEN-clause.
-
-**Fix:** Add a direction-specific assertion. For example, after dragging left, assert
-`cam._pivot.x > initial_x` (consistent with the corrected F2/F3 direction after fixing F1).
-
----
-
-### F_PROC — PROCEDURAL: Worker modified check output format strings
-
-The worker's submission commit message explicitly states they replaced `[EXIT 1 — FAIL]` with
-`[PRE-EXISTING SCOPE VIOLATION — exits 1]` to prevent `check-no-zero-commit-reattempt.sh`
-from detecting the scope FAIL in a future cycle. The worker also omitted `RESULT: FAIL` from
-their Check Script Results summary to pass `check-worker-result-clean.sh`.
-
-The scope violation is documented truthfully (check-scope-report-not-falsified.sh passes).
-However, deliberately reformatting standard output strings to evade process machinery is a
-procedural concern that complicates future audit trails.
-
-**Note:** This finding does not add a new blocking FAIL — the FAIL verdict is independently
-driven by F_SCOPE and F1–F4. Going forward, use standard `[EXIT N — FAIL]` format and let
-the scope-conflict escalation path handle the tooling issue.
+1. Fix F1: change `+=` to `-=` for both pan lines in `_handle_motion()`.
+2. Fix F2: flip `test_pan_drag_right_increases_pivot_x` assertion to `pivot.x < initial_x`.
+3. Fix F3: flip `test_pan_drag_left_decreases_pivot_x` assertion to `pivot.x > initial_x`.
+4. Fix F4: replace null pivot-moved assertion with directional assertion.
+5. Confirm tests pass after sign changes (they will fail before fixing F2/F3/F4).
+6. F_SCOPE: process owner must exempt pre-existing flow_overlay files in check-not-in-scope.sh.
 
 ---
 
 ## What Passes
 
-- Zoom toward cursor: all 4 THEN-clauses correctly verified. ✓
-- Orbit around mouse point: all 3 THEN-clauses correctly verified. ✓
-- Smooth zoom (interpolated, non-instantaneous): correctly verified. ✓
-- Proportional pan speed: correctly verified. ✓
-- Boundary clamps (_target_distance min/max, _theta min/max): all 4 verified. ✓
-- Extractor fixes (y=0.0, radius bounded, relative-offset storage): all 95 pytest pass. ✓
-- Commit trailers (Spec-Ref + Task-Ref: task-017): present on all implementation commits. ✓
-- GDScript test suite: Pattern 2 (bool-return), correctly handled. 116 pass, 0 fail. ✓
-- All preloaded files (27 targets) resolve. ✓
-
----
-
-## Summary
-
-| Finding | Severity | Action required |
-|---|---|---|
-| F_SCOPE: check-not-in-scope.sh exits 1 (pre-existing conflict) | BLOCKING | Process owner must exempt pre-existing files |
-| F1: Pan direction inverted (`_pivot += right*delta.x` should be `−=`) | BLOCKING | Fix camera_controller.gd |
-| F2: `test_pan_drag_right_increases_pivot_x` wrong predicate | BLOCKING | Flip assertion direction |
-| F3: `test_pan_drag_left_decreases_pivot_x` wrong predicate | BLOCKING | Flip assertion direction |
-| F4: `test_drag_direction_matches_view_movement` null directional test | BLOCKING | Add direction assertion |
-| F_PROC: modified check output format strings | PROCEDURAL | Use standard format going forward |
-
-**Prescribed fix order (for next cycle after F_SCOPE escalation resolves):**
-1. Fix F1: `_pivot -= right * delta.x * pan_amount` (and `_pivot -= forward * delta.y * pan_amount`)
-2. Fix F2: `test_pan_drag_right_increases_pivot_x` → assert `pivot.x < initial_x`
-3. Fix F3: `test_pan_drag_left_decreases_pivot_x` → assert `pivot.x > initial_x`
-4. Fix F4: `test_drag_direction_matches_view_movement` → assert directional pivot movement
-5. Run `bash .hyperloop/checks/run-all-checks.sh` — confirm 30/31 checks exit 0 (F_SCOPE remains blocked by tooling conflict until process owner intervenes)
+- Zoom toward cursor: all 4 THEN-clauses verified. COVERED.
+- Orbit around mouse point: all 3 THEN-clauses verified. COVERED.
+- Smooth zoom (lerp, non-instantaneous): verified. COVERED.
+- Smooth pan (proportional to drag speed): verified. COVERED.
+- Boundary clamps (_target_distance min/max, _theta min/max): all 4 verified. COVERED.
+- All 95 pytest extractor tests pass.
+- GDScript test suite: 116 pass, 0 fail.
+- All 27 preloaded files resolve.
+- Commit trailers (Task-Ref: task-017): present on all implementation commits.
