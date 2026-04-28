@@ -1,25 +1,7 @@
+# Review Report — task-016 — Cycle N
+
 ---
-verdict: pass
----
-
-## Summary
-
-All UX Polish spec requirements are fully implemented and verified.
-All 22 checks pass after rebasing the branch onto current main (resolving
-merge conflicts introduced by task-007's camera controller reset on main).
-
-Root cause of "PR not mergeable" finding resolved:
-- The branch diverged from main because task-007 (PR#195) reset camera_controller.gd
-  to a simpler version AFTER this branch was created.
-- Rebased branch onto origin/main; resolved all conflicts:
-  - extractor.py: used new dynamic `_scene_bound` formula while keeping local-offset fix
-  - test_extractor.py: merged improved docstrings and kept both test variants
-  - camera_controller.gd: restored full UX Polish implementation (LMB pan, zoom-toward-cursor,
-    orbit-around-mouse, smooth interpolation) which was overwritten by task-007
-  - test_ux_polish.gd: kept HEAD version with full derivation comments
-- Updated local main ref to origin/main (worktree branch issue) so check scripts
-  correctly compute "main..HEAD" range.
-
+verdict: fail
 ---
 
 ## Scope Check Output
@@ -30,8 +12,6 @@ NOTE: Pre-existing prohibited-mode patterns detected in files that originate fro
   These are informational only and do NOT count as a FAIL for this branch.
 OK: No prohibited (not-in-scope) features detected.
 [EXIT 0]
-
-File understanding_overlay.gd is pre-existing (origin: a2f9d139); not introduced by this branch.
 
 ---
 
@@ -44,12 +24,14 @@ OK: All Task-Ref trailers on implementation commits match branch task ID 'task-0
 
 ## Check Script Results
 
+=== run-all-checks.sh ===
+
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-016' has 22 commit(s) above main.
+OK: Branch 'hyperloop/task-016' has 23 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
-OK: All check scripts from main are present in working tree (22 checked).
+OK: All check scripts from main are present and content-identical in working tree (22 checked).
 [EXIT 0]
 
 --- check-circular-position-y-axis.sh ---
@@ -69,6 +51,7 @@ OK: 'extractor/extractor.py' is imported by production code (1 import(s) found).
 [EXIT 0]
 
 --- check-no-duplicate-toplevel-functions.sh ---
+
 OK: No duplicate top-level function names across extractor/ source files.
 [EXIT 0]
 
@@ -154,44 +137,117 @@ RESULT: ALL PASS
 
 ---
 
-## Requirement Coverage
+## THEN→Test Mapping
 
-| Requirement / Scenario | Status |
-|---|---|
-| Pan with Left Mouse Button — movement occurs on LMB drag | COVERED |
-| Non-Inverted Movement — drag direction matches view (grab model) | COVERED |
-| Zoom Toward Mouse Cursor — pivot shifts toward cursor on zoom-in | COVERED |
-| Zoom Toward Mouse Cursor — component stays under cursor | COVERED |
-| Zooming out — pivot shifts away from cursor | COVERED |
-| Orbit Around Mouse Point — pivot set to cursor point at orbit start | COVERED |
-| Orbit Around Mouse Point — pivot unchanged during orbit motion | COVERED |
-| Smooth zoom — interpolated, not instantaneous (_target_distance lerp) | COVERED |
-| Smooth pan — proportional to drag speed | COVERED |
+| THEN-clause | Mapped test | File | Status |
+|---|---|---|---|
+| Pan LMB — camera pans in direction of drag | test_lmb_pan_moves_pivot | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
+| Pan LMB — movement direction not inverted | test_pan_drag_left_increases_pivot_x, test_drag_direction_matches_view_movement | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
+| Non-inverted — drag left reveals content to right (grab model) | test_pan_drag_left_increases_pivot_x, test_pan_drag_right_decreases_pivot_x | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
+| Non-inverted — drag up/down correct direction | test_pan_drag_down_decreases_pivot_z, test_pan_drag_up_increases_pivot_z | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
+| Zoom toward cursor — view zooms toward cursor point | test_zoom_toward_cursor_shifts_pivot_toward_cursor | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
+| Zoom toward cursor — component stays under cursor | test_component_stays_under_cursor_on_zoom_in | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
+| Zoom out — view zooms out from cursor | test_zoom_out_from_cursor_shifts_pivot_away | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
+| Orbit — camera orbits around cursor point at orbit start | test_orbit_pivot_set_to_cursor_point_at_start | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
+| Orbit — component remains at visual center during orbit | test_component_remains_at_visual_center_during_orbit | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
+| Smooth zoom — interpolated, not instantaneous | test_zoom_is_interpolated_not_instantaneous | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
+| Smooth pan — proportional to drag speed | test_pan_proportional_to_drag_speed | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
 
-All 99 Python tests pass. All 22 checks exit 0.
+All THEN-clauses map to tests in test_ux_polish.gd. The test functions exist and their
+predicate derivations are correct. However, NONE execute because test_ux_polish.gd is
+not registered in run_tests.gd.
 
 ---
 
-## Conflict Resolution Notes
+## Findings
 
-The rebase onto origin/main required resolving conflicts in:
+### F1 (FAIL — BLOCKING): test_ux_polish.gd not wired into run_tests.gd
 
-1. **extractor/extractor.py** — Used new dynamic `_scene_bound` formula from main
-   while keeping the local-offset-only storage fix (no `px + pos[0]` accumulation).
+**Root cause:** `godot/tests/run_tests.gd` does not include a `_run_suite()` call for
+`test_ux_polish.gd`. The test file exists and all functions have correct predicate
+derivations, but they are dead code — the Godot headless runner never executes them.
 
-2. **extractor/tests/test_extractor.py** — Merged improved docstrings from HEAD
-   with the updated test `test_child_position_is_relative_offset_not_absolute` from
-   our commits which uses the `_scene_bound` formula.
+**Evidence:**
+```
+grep -n "test_ux_polish" godot/tests/run_tests.gd
+(no output)
+```
 
-3. **godot/scripts/camera_controller.gd** — task-007 (PR#195) reset the camera to a
-   simpler version without zoom-toward-cursor, orbit-around-mouse, or smooth zoom.
-   The UX Polish spec requires these features. Restored the full implementation from
-   the prior PASS submission including:
-   - LMB pan (grab model, non-inverted)
-   - RMB orbit around cursor point at gesture start
-   - Scroll wheel zoom toward cursor with smooth interpolation
-   - `_zoom_toward_cursor`, `_set_orbit_pivot`, `_mouse_to_ground` helpers
-   - `_target_distance` and `zoom_smoothing` for smooth animation
+**Branch provenance:** The branch diverged from main at `a5e0517c` before main added the
+UX Polish entry to run_tests.gd (via commit `464a8f67`). The branch added `test_ux_polish.gd`
+to `godot/tests/` but did not update `run_tests.gd`. Main's current `run_tests.gd` already
+has the correct entry; this branch is simply missing it.
 
-4. **godot/tests/test_ux_polish.gd** — Kept HEAD version with full directional
-   derivation comments and all 5 directional test functions.
+**Impact:** Every UX Polish THEN-clause is MISSING (all 11 in the table above). Zero spec
+scenarios are behaviorally tested.
+
+**Prescribed fix:** Add to `godot/tests/run_tests.gd` immediately after the task-007 block:
+```gdscript
+	# --- task-016: UX Polish spec ---
+	_run_suite(preload("res://tests/test_ux_polish.gd").new())
+```
+
+---
+
+### F2 (FAIL — BLOCKING): test_camera_controls.gd has wrong orbit button and wrong distance variable
+
+**Root cause (pre-existing, not introduced by this branch):** At the merge base,
+`test_camera_controls.gd` uses `MOUSE_BUTTON_MIDDLE` for orbit tests and checks
+`_distance` (not `_target_distance`) for scroll tests. Main has since corrected both
+(commit `997ac245` and related: uses `MOUSE_BUTTON_RIGHT`, checks `_target_distance`).
+This branch has not incorporated those fixes.
+
+**Specific broken tests:**
+
+1. `test_orbit_horizontal_drag_changes_phi` and `test_orbit_vertical_drag_changes_theta`:
+   - Press `MOUSE_BUTTON_MIDDLE` → not handled by `_handle_button` match statement
+     → `_orbiting` stays `false` → motion handler does nothing → `_phi`/`_theta` unchanged
+   - `return cam._phi != initial_phi` → `false` → **FAIL** if run in headless
+
+2. `test_scroll_up_decreases_distance` and `test_scroll_down_increases_distance`:
+   - Scroll events change `_target_distance` (smooth zoom), NOT `_distance` immediately
+   - `return cam._distance < initial_distance` → `false` (distance unchanged) → **FAIL**
+
+**Implementation in camera_controller.gd is correct** (uses `MOUSE_BUTTON_RIGHT` for orbit,
+uses `_target_distance` with lerp in `_process()`). The tests are wrong, not the production code.
+
+**Note:** This is a pre-existing defect at the branch's merge base, not introduced by task-016.
+Main has fixed it. However, since Godot headless tests are blocked by F1 anyway, and
+since the implementation is correct, this is secondary to F1. The fix is to rebase
+onto current main (which includes the corrected `test_camera_controls.gd`) or manually
+apply the corrections:
+- `MOUSE_BUTTON_MIDDLE` → `MOUSE_BUTTON_RIGHT` in orbit test helpers
+- `cam._distance` → `cam._target_distance` in scroll test assertions
+
+---
+
+### What is correct
+
+- **camera_controller.gd implementation is complete and correct**: LMB pan with grab model
+  (non-inverted), RMB orbit around cursor world point, scroll-wheel zoom toward cursor with
+  smooth lerp interpolation, `_theta` clamping to prevent pole flip. All spec requirements
+  are implemented.
+
+- **test_ux_polish.gd predicate derivations are correct**: Pan direction tests correctly
+  derive that drag-left → `delta.x = -50` → `_pivot -= right * (-50) * pan_amount` →
+  `pivot.x` increases → reveals content to the right (spec-compliant grab model). Zoom
+  direction and orbit pivot tests are also correctly derived.
+
+- **99 Python tests pass**: Extractor is clean.
+
+- **Scope check passes**: No prohibited features detected.
+
+---
+
+## Summary
+
+The implementation quality is good — camera_controller.gd is complete, and test_ux_polish.gd
+has well-reasoned test functions. The single blocking failure is operational: test_ux_polish.gd
+is not registered in the test runner, so none of the UX Polish spec THEN-clauses are
+executed. The fix is a one-line addition to run_tests.gd.
+
+**Verdict: FAIL**
+
+Required fix: Add `_run_suite(preload("res://tests/test_ux_polish.gd").new())` to
+`godot/tests/run_tests.gd`. After this fix, rebase onto current main to pick up the
+corrected `test_camera_controls.gd` (F2).
