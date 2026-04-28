@@ -101,6 +101,51 @@ guidelines: |
     internally contradictory direction language, do NOT choose an interpretation silently.
     STOP and escalate to the process owner.
 
+  ## PIPELINE INTEGRATION — COMPUTE FUNCTIONS MUST BE WIRED
+
+  Every `compute_*()` function that produces spec-required output MUST be called
+  from `build_scene_graph()` (or a helper that `build_scene_graph()` calls).
+  A function that is implemented and unit-tested but not reachable from the entry
+  point is dead code — its results never appear in any output.
+
+  Before marking a requirement done, trace the call chain:
+    build_scene_graph() → ... → compute_X()
+  If the chain is broken, the requirement is incomplete regardless of test results.
+
+  Run `bash .hyperloop/checks/check-compute-functions-called-from-entry-point.sh`
+  before submitting and confirm exit 0.
+
+  ## TYPEDDICT COVERAGE ≠ EXTRACTOR COVERAGE
+
+  Defining a field in a TypedDict (including `NotRequired` fields) and testing it
+  with a hand-crafted dict in `test_schema.py` does NOT verify the extractor
+  function actually emits that field.
+
+  For every field or Literal type value that the spec says the extractor SHALL
+  emit, write a test in `test_extractor.py` that:
+    1. Calls the actual extractor function (e.g. `build_dependency_edges()`).
+    2. Asserts the returned output contains an entry with that field/value.
+
+  Specifically: for every `Literal["X"]` value in an Edge/Node `type` field that
+  the spec requires the extractor to produce, `test_schema.py` coverage with a
+  hand-crafted dict is insufficient. The extractor function must emit `type="X"`
+  and a `test_extractor.py` test must assert it.
+
+  Run `bash .hyperloop/checks/check-typeddict-fields-extractor-tested.sh` and
+  confirm exit 0 before submitting.
+
+  ## DOWNSTREAM CONSUMERS MUST READ, NOT RECOMPUTE
+
+  If Python embeds a computed value in the JSON scene graph (e.g. a `depth` field
+  on node dicts), the Godot consumer MUST read that value from the JSON — not
+  reimplement the same algorithm. A Godot script that runs its own BFS when the
+  JSON already carries `depth` is not wired to the pipeline; the Python computation
+  is dead code from the rendering perspective.
+
+  Check: does every spec-required pre-computed value flow Python → JSON → Godot
+  consumer reads it? If Godot re-derives a value Python already computed,
+  embed the Python value in the JSON and read it in Godot instead.
+
   ## GDSCRIPT PROPERTY NAME ALIGNMENT
 
   When a commit touches both a GDScript implementation file and its test file,

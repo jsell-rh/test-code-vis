@@ -63,6 +63,43 @@ guidelines: |
     (e.g., FPS measurement in headless Godot), verify the implementation is architecturally
     correct and mark it PASS-WITH-NOTE.
 
+  ## Pipeline Integration — Compute Functions Must Be Called
+
+  For every `compute_*()` function defined in the extractor:
+  1. Run `bash .hyperloop/checks/check-compute-functions-called-from-entry-point.sh`
+     and include its output verbatim in your report.
+  2. Verify each `compute_*()` is called from `build_scene_graph()` or a helper
+     that `build_scene_graph()` calls. A function tested in isolation but unreachable
+     from the entry point is PARTIAL — not COVERED — regardless of unit test results.
+  3. Verify the return value of each called `compute_*()` is actually embedded in
+     the output dict. A call whose return value is discarded (`compute_X()` with no
+     assignment) is equivalent to not calling it.
+
+  ## TypedDict Coverage ≠ Extractor Coverage
+
+  For every `NotRequired` field or `Literal["X"]` type value that the spec says the
+  extractor shall emit:
+  1. Run `bash .hyperloop/checks/check-typeddict-fields-extractor-tested.sh` and
+     include its output verbatim in your report.
+  2. Verify `test_extractor.py` (not `test_schema.py`) contains a test that calls
+     the actual extractor function and asserts the field/value in its output.
+  3. A `test_schema.py` test with a hand-crafted dict validates the TypedDict
+     structure only — it does NOT verify the extractor function emits that
+     field/value. Mark the requirement PARTIAL if only schema-level coverage exists.
+
+  ## Downstream Consumers Must Read Pre-Computed Values
+
+  When the spec says Python computes and embeds a value in the JSON (e.g. `depth`
+  on node dicts), verify the Godot consumer reads that value from the JSON dict
+  rather than reimplementing the computation. Check:
+  1. The Python entry point embeds the value into the output dict.
+  2. The Godot script reads it (e.g. `node["depth"]` or `node.depth`), not reruns
+     its own algorithm.
+  3. A GDScript test verifies that depth (or the pre-computed field) from a known
+     fixture reaches the consumer correctly.
+  A Godot script that reimplements an algorithm Python already computed does NOT
+  satisfy "values available to visualization" — mark the requirement PARTIAL.
+
   ## Coordinate Frame Contracts
 
   When a spec says a position field is "relative to parent" (or "local offset"),
