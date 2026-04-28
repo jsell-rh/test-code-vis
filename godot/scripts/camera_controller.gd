@@ -126,6 +126,12 @@ func _handle_motion(event: InputEventMouseMotion) -> void:
 	_last_mouse = event.position
 
 	if _orbiting:
+		# Orbit sign derivation — horizontal drag right (delta.x > 0):
+		#   drag right → delta.x > 0 → _phi -= positive * orbit_speed → phi decreases
+		#   → camera azimuth rotates clockwise around pivot ✓
+		# Orbit sign derivation — vertical drag down (delta.y > 0):
+		#   drag down → delta.y > 0 → _theta -= positive * orbit_speed → theta decreases
+		#   → polar angle shrinks toward 0 → camera tilts toward straight overhead ✓
 		_phi -= delta.x * orbit_speed
 		# Clamp theta so the camera never flips past the poles.
 		_theta = clamp(_theta - delta.y * orbit_speed, 0.01, PI - 0.01)
