@@ -87,14 +87,19 @@ fi
 # ── Find implementation commits added AFTER the prior report commit ───────────
 # "Implementation commit" = any commit on this branch after PRIOR_REPORT_SHA
 # that does NOT exclusively touch .hyperloop/ files (those are process/report commits).
-PRIOR_REPORT_TIME=$(git show -s --format="%ct" "$PRIOR_REPORT_SHA" 2>/dev/null || echo "0")
-
-IMPL_COMMITS=$(git log main..HEAD \
-    --format="%H %ct" \
+#
+# IMPORTANT: use topological ordering (git range A..B), NOT timestamp comparison.
+# The hyperloop harness may assign identical %ct (committer epoch) to multiple
+# commits within a single session.  When that happens, the old "%ct -le prior_ts"
+# filter incorrectly skips genuine implementation commits that share the same
+# second as the prior FAIL report.  git log A..B is purely graph-based and
+# immune to timestamp collisions (task-014 cycle 9: three real implementation
+# commits were invisible to the timestamp filter — F_TOOLING finding).
+IMPL_COMMITS=$(git log "${PRIOR_REPORT_SHA}..HEAD" \
+    --format="%H" \
     2>/dev/null \
-    | while IFS=' ' read -r sha ts; do
-        # Skip commits at or before the prior report
-        [[ "$ts" -le "$PRIOR_REPORT_TIME" ]] && continue
+    | while IFS= read -r sha; do
+        [[ -z "$sha" ]] && continue
         # Skip commits that only touch .hyperloop/ files (report/process commits)
         CHANGED=$(git show --name-only --format="" "$sha" 2>/dev/null | grep -v '^$' || true)
         NON_HYPERLOOP=$(echo "$CHANGED" | grep -v '^\.hyperloop/' | grep -c '.' 2>/dev/null || true)

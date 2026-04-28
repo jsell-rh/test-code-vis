@@ -239,6 +239,13 @@ guidelines: |
 
   Apply fixes in this exact loop for every failing check — no exceptions:
 
+  - Step 0 — Describing a fix is NOT fixing it: writing "fix X" in a commit message
+    or verdict text does NOT constitute applying the fix. The only proof a fix was
+    applied is the specific check script exiting 0 AFTER the change. A rebase that
+    was not completed, a file edit that was not saved, or a note in a verdict message
+    about an intended action — none of these count. Run the check; if it still exits
+    non-zero, the fix was not applied.
+
   - Step 1 — Fix at the cited location: apply the fix to the EXACT file path and
     line number from the check's "Offending lines:" output. A fix written in a
     different file leaves the original cited line unchanged; the check will still
@@ -248,6 +255,14 @@ guidelines: |
     (`bash .hyperloop/checks/<check>.sh`) to confirm exit 0, then commit
     (`git commit -m 'fix: <description>'`). Do not accumulate multiple fixes before
     committing — each fix requires its own commit and exit-0 confirmation.
+
+  - Step 2b — Rebase fixes require the rebase to actually complete: if
+    `check-commit-trailer-task-ref.sh` fails, you must run `git rebase -i main`,
+    mark the offending commit as `reword`, change the trailer text in the editor,
+    save, and confirm the rebase finishes. After the rebase, run
+    `bash .hyperloop/checks/check-commit-trailer-task-ref.sh` — it must exit 0.
+    A comment in a subsequent commit message saying "fix Task-Ref on commit X" does
+    NOT change commit X's trailer. Only the rebase changes the commit object.
 
   - Step 3 — Fix in dependency order when multiple checks fail:
       1. Trailer/history fixes (check-commit-trailer-task-ref.sh) — rebase only, no code
