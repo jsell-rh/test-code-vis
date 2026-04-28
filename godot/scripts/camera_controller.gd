@@ -79,14 +79,22 @@ func _handle_button(event: InputEventMouseButton) -> void:
 				# Orbit around the world point under cursor at gesture start.
 				_set_orbit_pivot(_mouse_to_ground(event.position))
 		MOUSE_BUTTON_WHEEL_UP:
-			# scroll up → zoom IN → _target_distance decreases → direction must be negative
 			_zoom_toward_cursor(_mouse_to_ground(event.position), -zoom_speed)
 		MOUSE_BUTTON_WHEEL_DOWN:
-			# scroll down → zoom OUT → _target_distance increases → direction must be positive
 			_zoom_toward_cursor(_mouse_to_ground(event.position), zoom_speed)
 
 
 ## Zoom _target_distance and shift _pivot so the cursor world-point stays fixed.
+##
+## Sign derivation — zoom-in (direction < 0):
+##   step < 0 → target_distance decreases →
+##   zoom_fraction = 1 − (smaller / larger) > 0 → pivot.lerp(cursor, +f) →
+##   pivot shifts toward cursor → component stays under cursor ✓
+##
+## Sign derivation — zoom-out (direction > 0):
+##   step > 0 → target_distance increases →
+##   zoom_fraction = 1 − (larger / smaller) < 0 → pivot.lerp(cursor, −f) →
+##   pivot shifts away from cursor → view expands outward from cursor point ✓
 func _zoom_toward_cursor(cursor_world: Vector3, direction: float) -> void:
 	var old_target: float = _target_distance
 	var step: float = direction * (_target_distance * 0.05 + 1.0)
@@ -94,10 +102,6 @@ func _zoom_toward_cursor(cursor_world: Vector3, direction: float) -> void:
 	# Shift pivot toward/away from cursor proportional to zoom fraction.
 	if old_target > 0.0:
 		var zoom_fraction: float = 1.0 - (_target_distance / old_target)
-		# zoom in: direction < 0 -> step < 0 -> target_distance < old_target
-		#   -> zoom_fraction = 1 - (smaller/larger) > 0 -> lerp toward cursor -> pivot shifts toward cursor
-		# zoom out: direction > 0 -> step > 0 -> target_distance > old_target
-		#   -> zoom_fraction = 1 - (larger/smaller) < 0 -> lerp away from cursor -> pivot shifts away
 		_pivot = _pivot.lerp(cursor_world, zoom_fraction)
 	_update_transform()
 
@@ -127,8 +131,17 @@ func _handle_motion(event: InputEventMouseMotion) -> void:
 		_update_transform()
 
 	elif _panning:
-		# Move the pivot in the camera's local XZ plane.
-		# Grab model (Google Maps): drag left → content to right appears → pivot moves RIGHT.
+		# Move the pivot in the camera's local XZ plane using the map-grab model.
+		#
+		# Map-grab (Google Maps) sign derivation — drag right (delta.x > 0):
+		#   drag right → delta.x = +50 → _pivot -= right(1,0,0) * +50 * pan_amount
+		#   → pivot.x decreases → camera looks left → scene shifts right on screen
+		#   → content from the left enters view ✓  (matches "scene moves right" = drag direction)
+		#
+		# Drag left (delta.x < 0):
+		#   drag left → delta.x = -50 → _pivot -= right(1,0,0) * (-50) * pan_amount
+		#   → pivot.x increases → camera looks right → scene shifts left on screen
+		#   → content from the right enters view ✓  (spec: "dragging left reveals content to the right")
 		var right: Vector3 = global_transform.basis.x
 		var forward: Vector3 = Vector3(
 			global_transform.basis.z.x,
@@ -136,9 +149,7 @@ func _handle_motion(event: InputEventMouseMotion) -> void:
 			global_transform.basis.z.z
 		).normalized()
 		var pan_amount: float = pan_speed * (_distance * 0.05 + 1.0)
-		# drag left → delta.x = -50 → negate → pivot.x += 50 * pan_amount (moves right) ✓
 		_pivot -= right * delta.x * pan_amount
-		# drag down → delta.y = +50 → negate → pivot.z -= 50 * pan_amount (moves backward) ✓
 		_pivot -= forward * delta.y * pan_amount
 		_update_transform()
 
@@ -153,6 +164,8 @@ func _mouse_to_ground(screen_pos: Vector2) -> Vector3:
 	if abs(ray_dir.y) < 0.0001:
 		return _pivot
 	var t: float = (_pivot.y - ray_origin.y) / ray_dir.y
+	if t < 0.0:
+		return _pivot
 	return ray_origin + ray_dir * t
 
 
@@ -164,5 +177,10 @@ func _update_transform() -> void:
 	var x: float = _distance * sin(_theta) * cos(_phi)
 	var y: float = _distance * cos(_theta)
 	var z: float = _distance * sin(_theta) * sin(_phi)
-	global_position = _pivot + Vector3(x, y, z)
-	look_at(_pivot, Vector3.UP)
+	var cam_pos: Vector3 = _pivot + Vector3(x, y, z)
+	if is_inside_tree():
+		global_position = cam_pos
+		look_at(_pivot, Vector3.UP)
+	else:
+		# Headless / not-in-tree: update position directly via transform.
+		position = cam_pos

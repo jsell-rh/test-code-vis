@@ -25,7 +25,7 @@ func _init() -> void:
 	_run_suite(preload("res://tests/test_scene_graph_loader.gd").new())
 	_run_suite(preload("res://tests/test_node_renderer.gd").new())
 
-	# --- task-007: Godot Application spec ---
+	# --- task-009: Godot Application spec ---
 	_run_suite(preload("res://tests/test_scene_graph_loading.gd").new())
 	_run_suite(preload("res://tests/test_containment_rendering.gd").new())
 	_run_suite(preload("res://tests/test_dependency_rendering.gd").new())
@@ -33,8 +33,29 @@ func _init() -> void:
 	_run_suite(preload("res://tests/test_camera_controls.gd").new())
 	_run_suite(preload("res://tests/test_engine_version.gd").new())
 
-	# --- task-016: UX Polish spec ---
+	# --- task-013: Godot 4.6 / Engine version scenario ---
+	_run_suite(preload("res://tests/test_godot_version.gd").new())
+
+	# --- task-014: Spatial structure spec ---
+	_run_suite(preload("res://tests/test_spatial_structure.gd").new())
+
+	# --- task-026: UX Polish spec ---
 	_run_suite(preload("res://tests/test_ux_polish.gd").new())
+
+	# --- task-028: System purpose spec (core/system-purpose.spec.md) ---
+	_run_suite(preload("res://tests/test_system_purpose.gd").new())
+
+	# --- task-031: Understanding modes spec (core/understanding-modes.spec.md) ---
+	_run_suite(preload("res://tests/test_understanding_overlay.gd").new())
+
+	# --- task-033: Understanding analyzer (core/understanding-modes.spec.md) ---
+	_run_suite(preload("res://tests/test_understanding_modes.gd").new())
+
+	# --- task-023: NFR spec — Performance at Kartograph Scale ---
+	_run_suite(preload("res://tests/test_nfr_scale.gd").new())
+
+	# --- task-023: NFR spec — Desktop Platform ---
+	_run_suite(preload("res://tests/test_desktop_platform.gd").new())
 
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])

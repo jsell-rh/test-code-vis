@@ -98,7 +98,7 @@ func test_lmb_pan_moves_pivot() -> bool:
 # ---------------------------------------------------------------------------
 # Non-Inverted Movement — Map-Grab Model (Google Maps)
 # THEN the scene moves in the same direction as the drag
-# (i.e. dragging left reveals content to the right, as in Google Maps)
+# AND the movement direction matches the drag direction (not inverted)
 #
 # Map-grab (Google Maps) model: the pivot moves OPPOSITE to drag direction so
 # that scene content follows the drag.  In headless mode global_transform is
