@@ -352,3 +352,28 @@ guidelines: |
   have committed code fixes to the files cited in the prior FAIL report. Reading the
   prior report, re-running checks, or updating worker-result.yaml does NOT count as
   making a fix; only a committed change to a source file satisfies this gate.
+
+  ## GDSCRIPT PROPERTY NAME ALIGNMENT
+
+  When a commit touches both a GDScript implementation file and its test file,
+  verify that every `var` and `const` name the test accesses on the implementation
+  object exists with the EXACT same name and case in that GDScript file.
+
+  GDScript does NOT raise a compile error for missing property access in headless
+  mode — it emits `SCRIPT ERROR:` at runtime, aborts the test function before any
+  `assert` runs, and the runner still reports PASS (because `_test_failed` is never
+  set). The test is silently inert: it always PASS regardless of whether the
+  implementation is correct.
+
+  Common mismatch forms:
+    - Test uses `cam._target_distance`; impl defines `var _distance` (missing `_target_distance`)
+    - Test uses `cam.MIN_DISTANCE`; impl defines `var min_distance` (case mismatch)
+    - Test uses `cam.MAX_DISTANCE`; impl defines `var max_distance` (case mismatch)
+
+  Before committing: grep the test file for every `.` member access on the object
+  under test, then grep the implementation file to confirm each name exists.
+
+  Run `bash .hyperloop/checks/check-godot-no-script-errors.sh` before submitting.
+  A FAIL means the Godot test output contains `SCRIPT ERROR:` lines — those tests are
+  inert and provide zero behavioral assurance. Fix the property/constant name
+  mismatch, then re-run to confirm zero SCRIPT ERRORs before writing worker-result.yaml.
