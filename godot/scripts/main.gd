@@ -12,6 +12,8 @@ extends Node3D
 ## The JSON file path is configurable via the exported variable.
 
 const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
+const LodManager = preload("res://scripts/lod_manager.gd")
+const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -20,6 +22,24 @@ var _anchors: Dictionary = {}
 
 ## Node id → world-space centre Vector3 (computed from relative positions).
 var _world_positions: Dictionary = {}
+
+## LOD manager — toggles node/edge visibility by camera distance.
+var _lod: LodManager = LodManager.new()
+
+## Node anchor entries for LOD visibility management.
+var _lod_node_entries: Array = []
+
+## Edge MeshInstance3D entries for LOD visibility management.
+var _lod_edge_entries: Array = []
+
+## Edge entries with source/target ids for dependency-direction tracking.
+var _path_edge_entries: Array = []
+
+## Cached graph for overlay functions that need to re-read nodes/edges.
+var _graph: Dictionary = {}
+
+## Understanding overlay helper — handles all node-colour transformations.
+var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
 
 @onready var _camera: Camera3D = $Camera3D
 
@@ -49,6 +69,7 @@ func _ready() -> void:
 ## Build the 3D scene from a parsed scene-graph dictionary.
 ## Called from _ready() at startup and from tests directly.
 func build_from_graph(graph: Dictionary) -> void:
+	_graph = graph
 	var nodes: Array = graph.get("nodes", [])
 	var edges: Array = graph.get("edges", [])
 
@@ -127,16 +148,28 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	anchor.position = Vector3(float(p["x"]), float(p["y"]), float(p["z"]))
 	parent_node.add_child(anchor)
 	_anchors[nd["id"]] = anchor
+	# Register with LOD manager so visibility can be toggled by camera distance.
+	_lod_node_entries.append({"anchor": anchor, "node_type": nd["type"]})
 
 	var sz: float = float(nd["size"])
-	var is_context: bool = nd["type"] == "bounded_context"
+	var node_type: String = nd["type"]
+	var is_context: bool = node_type == "bounded_context"
+	var is_spec: bool = node_type == "spec"
 
 	# Mesh ----------------------------------------------------------------
 	var mesh_instance := MeshInstance3D.new()
 	var box := BoxMesh.new()
 
 	var mat := StandardMaterial3D.new()
-	if is_context:
+	if is_spec:
+		# Spec nodes represent the *intended design* — rendered as thin gold slabs
+		# so the human can immediately distinguish them from the realized code nodes.
+		# Gold colour signals "intended / authoritative specification".
+		box.size = Vector3(sz, sz * 0.15, sz)
+		mat.albedo_color = Color(0.95, 0.80, 0.10, 0.55)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	elif is_context:
 		# Larger, flat, translucent slab — acts as a visible floor/boundary.
 		box.size = Vector3(sz, sz * 0.2, sz)
 		mat.albedo_color = Color(0.25, 0.45, 0.85, 0.18)
@@ -204,6 +237,10 @@ func _create_edge(ed: Dictionary) -> void:
 	mesh_instance.material_override = mat
 	# Edges live at the scene root so their positions are already world-space.
 	add_child(mesh_instance)
+	# Register line with LOD manager.
+	_lod_edge_entries.append({"visual": mesh_instance, "edge_type": ed["type"]})
+	# Track edge direction (source/target) so dependency direction can be verified.
+	_path_edge_entries.append({"visual": mesh_instance, "source": src, "target": tgt})
 
 	# Arrowhead: a cone (CylinderMesh, top_radius=0 = pointed tip) placed at the
 	# target end, oriented along the edge direction, indicating dependency flow.
@@ -226,6 +263,10 @@ func _create_edge(ed: Dictionary) -> void:
 	# Centre the cone so its tip lands exactly at to_pos.
 	arrow.position = to_pos - dir * (cone_mesh.height * 0.5)
 	add_child(arrow)
+	# Register arrowhead with LOD manager (same edge_type as the line).
+	_lod_edge_entries.append({"visual": arrow, "edge_type": ed["type"]})
+	# Track arrowhead direction for dependency direction verification.
+	_path_edge_entries.append({"visual": arrow, "source": src, "target": tgt})
 
 
 # ---------------------------------------------------------------------------
@@ -249,3 +290,29 @@ func _frame_camera() -> void:
 
 	if _camera.has_method("set_pivot"):
 		_camera.call("set_pivot", centre, distance)
+
+
+# ---------------------------------------------------------------------------
+# Understanding overlays — delegated to UnderstandingOverlay helper.
+# These methods are invoked via keyboard shortcuts (H / J / K) to visualise
+# how the realized build relates to the intended design.
+# ---------------------------------------------------------------------------
+
+func _apply_alignment_overlay() -> void:
+	var nodes: Array = _graph.get("nodes", [])
+	_understanding_overlay.apply_alignment_overlay(nodes, _anchors)
+
+
+func _apply_quality_overlay() -> void:
+	var nodes: Array = _graph.get("nodes", [])
+	var edges: Array = _graph.get("edges", [])
+	_understanding_overlay.apply_quality_overlay(nodes, edges, _anchors)
+
+
+func _apply_failure_impact_overlay() -> void:
+	var nodes: Array = _graph.get("nodes", [])
+	if nodes.is_empty():
+		return
+	var target_id: String = nodes[0].get("id", "")
+	if not target_id.is_empty():
+		_understanding_overlay.apply_failure_overlay(target_id, _graph, _anchors, self)
