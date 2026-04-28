@@ -1,11 +1,11 @@
-# Review Report — task-015 — Cycle 7
+# Review Report — task-015 — Cycle 8
 ---
 verdict: pass
 ---
 
 Branch: hyperloop/task-015
 Spec: specs/prototype/ux-polish.spec.md
-Reviewer cycle: 7
+Reviewer cycle: 8
 
 ---
 
@@ -18,63 +18,14 @@ OK: No prohibited (not-in-scope) features detected.
 
 ## Check Script Results
 
-(Checks synced from main before run — `git checkout main -- .hyperloop/checks/`
- adds check-nondirectional-movement-assertions.sh; now 32 checks vs implementer's 31.
- This is a process note, not a violation — the check was added to main after the branch
- was created. All 32 checks exit 0 after my report is written correctly.)
-
-=== run-all-checks.sh ===
+=== run-all-checks.sh (cycle 8, 17 commits above main) ===
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-015' has 16 commit(s) above main.
+OK: Branch 'hyperloop/task-015' has 17 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
 OK: All check scripts from main are present in working tree (22 checked).
-[EXIT 0]
-
---- check-circular-position-y-axis.sh ---
-OK: All _circular_positions calls use y=0.0 (no non-zero y detected).
-[EXIT 0]
-
---- check-clamp-boundary-tests.sh ---
-OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
-OK: All 4 clamped variable(s) have boundary-asserting tests
-[EXIT 0]
-
---- check-commit-trailer-task-ref.sh ---
-OK: All Task-Ref trailers on implementation commits match branch task ID 'task-015'.
-[EXIT 0]
-
---- check-extractor-cli-tested.sh ---
-OK: A test calls main() from the extractor CLI entry point.
-[EXIT 0]
-
---- check-extractor-stdlib-only.sh ---
-OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
-[EXIT 0]
-
---- check-gdscript-only-test.sh ---
-OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
-[EXIT 0]
-
---- check-kartograph-integration-test.sh ---
-OK: Integration test referencing kartograph codebase with expected-context assertions found.
-[EXIT 0]
-
---- check-layout-radius-bound.sh ---
-OK: No unbounded spatial-layout radius pattern found.
-[EXIT 0]
-
---- check-new-modules-wired.sh ---
-OK: 'extractor/extractor.py' is imported by production code (1 import(s) found).
-[EXIT 0]
-
---- check-no-duplicate-toplevel-functions.sh ---
-OK: No duplicate top-level function names across extractor/ source files.
 [EXIT 0]
 
 --- check-nondirectional-movement-assertions.sh ---
@@ -85,272 +36,237 @@ OK: All directional test functions use signed comparison predicates
 OK: No prohibited (not-in-scope) features detected.
 [EXIT 0]
 
---- check-no-zero-commit-reattempt.sh ---
-SKIP: Prior committed report contains no FAIL checks — no zero-commit re-attempt possible.
-[EXIT 0]
-
---- check-pipeline-wiring.sh ---
-SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
-      This check only applies to tasks that implement the LLM->view-spec pipeline.
-[EXIT 0]
-
---- check-preloaded-gdscript-files.sh ---
-OK: All 24 preload() target(s) resolve to existing files.
-[EXIT 0]
-
---- check-prescribed-fixes-applied.sh ---
-SKIP: No prior FAIL report found — nothing to verify.
-[EXIT 0]
-
 --- check-pytest-passes.sh ---
-Running: pytest extractor/tests/ -v --tb=short
-============================== 96 passed in 0.16s ==============================
+96 passed in 0.27s
 OK: All pytest tests passed.
 [EXIT 0]
 
---- check-racf-prior-cycle.sh ---
-SKIP: No prior committed report with FAIL lines found in branch or main history.
-[EXIT 0]
-
---- check-racf-remediation.sh ---
-SKIP: Prior committed report contains no FAIL checks — no RACF to verify.
-[EXIT 0]
-
---- check-relative-position-tests.sh ---
-OK: No absolute parent-coordinate accumulation detected in extractor source.
-OK: Direct relative-offset assertion test(s) found in test suite.
-[EXIT 0]
-
---- check-report-scope-section.sh ---
-OK: worker-result.yaml contains a valid '## Scope Check Output' section (scope check
-    ran and output was pasted verbatim).
-[EXIT 0]
-
---- check-ruff-format.sh ---
-OK: ruff format --check passed — all extractor/ files are correctly formatted.
-[EXIT 0]
-
---- check-scope-report-not-falsified.sh ---
-OK: Scope report section is consistent with actual check-not-in-scope.sh result.
-[EXIT 0]
-
---- check-task-ref-report-not-falsified.sh ---
-OK: Task-Ref report section is consistent with actual check-commit-trailer-task-ref.sh result.
-[EXIT 0]
-
---- check-worker-result-clean.sh ---
-SKIP: .hyperloop/worker-result.yaml is a reviewer report — this check applies to implementer submissions only.
-[EXIT 0]
-
---- extractor-lint.sh ---
-Linting extractor...
-All checks passed!
-Running extractor tests...
-96 passed in 0.17s
-Extractor checks passed.
-[EXIT 0]
-
---- godot-compile.sh ---
-Compiling Godot project...
-Godot project compiles successfully.
-[EXIT 0]
-
---- godot-fileaccess-tested.sh ---
-Found FileAccess.open() in 1 production script file(s).
-OK: FileAccess.open() is exercised in 2 test file(s).
-[EXIT 0]
-
---- godot-label3d.sh ---
-PASS: All Label3D nodes have billboard and pixel_size set and tested.
-[EXIT 0]
-
 --- godot-tests.sh ---
-Found 11 GDScript test file(s) in godot/tests/.
-Running custom headless test runner...
-
-=== code-vis GDScript Tests ===
 Results: 95 passed, 0 failed
 GDScript behavioral tests passed.
 [EXIT 0]
+
+(All remaining checks EXIT 0 — omitted for brevity; full run confirmed RESULT: ALL PASS)
 
 === Summary: 32 check(s) run ===
 RESULT: ALL PASS
 
 ---
 
-## THEN → Test Mapping (Verifier's Independent Derivation)
+## THEN → Test Mapping (Independent Derivation — Cycle 8)
 
-Per guidelines: derive expected predicate from spec BEFORE reading test bodies.
+Per guidelines: derive expected signed predicate BEFORE reading test bodies.
 
-### Process note on check-nondirectional-movement-assertions.sh
-
-This check was added to main AFTER the branch was created. It now passes against the
-fixed implementation, which is additional machine-level confirmation that the prior
-cycle reviewers' F4 (null directional test) has been resolved.
-
-### Spec Requirement: Pan with Left Mouse Button
+### Requirement: Pan with Left Mouse Button
 
 **THEN: camera pans in the direction of the drag**
-- Spec: LMB + drag causes the camera to pan
-- Test: `test_lmb_pan_moves_pivot`
-- Assertion: `cam._pivot != initial_pivot`
-- Note: This is a presence test (pivot moved), not a directional test. The directional
-  requirement is covered by the adjacent Non-Inverted Movement tests below.
-  The function name `test_lmb_pan_moves_pivot` does NOT match the DIRECTION_RE pattern
-  in check-nondirectional-movement-assertions.sh (requires `test_pan_`, `test_drag_`,
-  etc. immediately after `test_`), so the null-predicate check does not apply here.
-- Status: COVERED (panning occurred)
 
-**AND: movement direction matches drag direction (not inverted)**
-- See Non-Inverted Movement mapping below.
+Implementation: LMB press → `_panning = true` (camera_controller.gd:73).
+Mouse motion → `_handle_motion` → `elif _panning:` (lines 123-135):
+`_pivot -= right * delta.x * pan_amount` (line 134)
+`_pivot -= forward * delta.y * pan_amount` (line 135)
 
-### Spec Requirement: Non-Inverted Movement
+Test: `test_lmb_pan_moves_pivot`
+- Press LMB at (100,100), move to (150,100).
+- Assertion: `cam._pivot != initial_pivot` — presence check (pivot moved).
+- The function name `test_lmb_pan_moves_pivot` does NOT match DIRECTION_RE in
+  check-nondirectional-movement-assertions.sh (pattern requires `test_pan_`,
+  `test_drag_`, etc. immediately after `test_`), so the null-predicate check
+  does not apply here. Directional coverage is in the Non-Inverted tests below.
 
-**THEN: scene moves in same direction as drag (i.e. dragging left reveals content to the right, as in Google Maps)**
+STATUS: **COVERED**
 
-Pre-read derivation from the "i.e." parenthetical (definition, not example):
+---
 
-Google Maps map-grab sign chain for drag LEFT:
-1. User drags left (delta.x = -50)
-2. User is "grabbing" the map and pulling left
-3. The map slides LEFT under the user's hand
-4. Content to the RIGHT of the initial viewport becomes visible
-5. Camera effectively moved RIGHT → camera origin moved in +X direction
-6. Pivot (camera focus) moved RIGHT → pivot.x INCREASES
-7. In headless identity basis (basis.x = (1,0,0)): pivot.x += |delta.x| × pan_amount
+### Requirement: Non-Inverted Movement
 
-Derivation for drag RIGHT (delta.x = +50, Google Maps):
-1. Map slides RIGHT → camera moves LEFT → pivot.x DECREASES
+**THEN: scene moves in same direction as drag
+  (i.e. dragging left reveals content to the right, as in Google Maps)**
 
-Implementation verification (camera_controller.gd lines 134-135):
-```
-_pivot -= right * delta.x * pan_amount
-```
-- drag left: delta.x = -50 → `_pivot -= (1,0,0) * (-50) * 0.12` = `_pivot += (6, 0, 0)` → pivot.x += 6 ✓
-- drag right: delta.x = +50 → `_pivot -= (1,0,0) * (+50) * 0.12` = `_pivot -= (6, 0, 0)` → pivot.x -= 6 ✓
+The "(i.e.)" parenthetical is a definition, not an illustration.
+
+#### Horizontal axis — pre-read derivation
+
+Drag LEFT (delta.x = -50, position 100→50):
+1. User grabs map and pulls left.
+2. Map slides left under hand.
+3. Content to the RIGHT becomes visible.
+4. Pivot moves RIGHT (+X).
+5. `_pivot -= right * (-50) * pan_amount` = `_pivot += right * 50 * pan_amount`
+6. In headless identity basis (basis.x = (1,0,0)): **pivot.x INCREASES**.
+
+Drag RIGHT (delta.x = +50, position 100→150):
+1. Content to the LEFT becomes visible.
+2. Pivot moves LEFT (-X).
+3. `_pivot -= right * (+50) * pan_amount` → **pivot.x DECREASES**.
+
+#### Vertical axis — pre-read derivation
+
+Drag DOWN (delta.y = +50, position 100→150):
+1. User grabs map and pulls down.
+2. Map slides down; content ABOVE becomes visible.
+3. Pivot moves in -forward direction.
+4. In headless identity basis, forward ≈ basis.z = (0,0,1).
+5. `_pivot -= forward * (+50) * pan_amount` → **pivot.z DECREASES**.
+
+#### Test verification
 
 | THEN-clause | Test | Derived predicate | Actual assertion | Match |
 |---|---|---|---|---|
-| Drag left reveals content to the right | `test_pan_drag_left_increases_pivot_x` | pivot.x INCREASES | `cam._pivot.x > initial_x` | ✓ PASS |
-| Drag right reveals content to the left | `test_pan_drag_right_decreases_pivot_x` | pivot.x DECREASES | `cam._pivot.x < initial_x` | ✓ PASS |
-| Scene moves in same direction (drag down) | `test_drag_direction_matches_view_movement` | pivot.z DECREASES (drag down: delta.y=+50; `_pivot -= forward*(+50)*pan`; headless basis.z=(0,0,1) → pivot.z -= 6.0) | `cam._pivot.z < 0.0` | ✓ PASS |
+| Drag left reveals content to right | `test_pan_drag_left_increases_pivot_x` | pivot.x INCREASES | `cam._pivot.x > initial_x` | ✓ |
+| Drag right reveals content to left | `test_pan_drag_right_decreases_pivot_x` | pivot.x DECREASES | `cam._pivot.x < initial_x` | ✓ |
+| Drag down (general direction test) | `test_drag_direction_matches_view_movement` | pivot.z DECREASES | `cam._pivot.z < 0.0` | ✓ |
 
-All three tests use signed comparisons — confirmed by check-nondirectional-movement-assertions.sh. ✓
+All three assertions are signed comparisons — confirmed by
+check-nondirectional-movement-assertions.sh EXIT 0.
 
-### Spec Requirement: Zoom Toward Mouse Cursor
+#### Inline derivation comment check (per Directional Behavior Review guidelines)
 
-| THEN-clause | Test | Predicate | Status |
-|---|---|---|---|
-| View zooms toward cursor | `test_zoom_toward_cursor_shifts_pivot_toward_cursor` | `pivot.x > 0.0` after zoom toward (10,0,0) | COVERED |
-| Component stays under cursor during zoom | `test_component_stays_under_cursor_on_zoom_in` | `after > before` (pivot.x grew toward cursor) | COVERED |
-| View zooms out from cursor | `test_zoom_out_from_cursor_shifts_pivot_away` | `pivot.x < 5.0` after zoom-out from cursor at (10,0,0) | COVERED |
-| Target distance increases on zoom-out | `test_zoom_out_increases_target_distance` | `target_distance > initial` | COVERED |
+Line 134 (`_pivot -= right * delta.x * pan_amount`):
+- Comment block lines 124-126: "Map-grab model (Google Maps): drag right → pivot
+  moves LEFT (reveals content to the left). Negate delta so pivot moves opposite
+  to drag direction." Explicit horizontal sign chain present. ✓
 
-### Spec Requirement: Orbit Around Mouse Point
+Line 135 (`_pivot -= forward * delta.y * pan_amount`):
+- Immediately preceding line is line 134 (code), not a comment.
+- The block comment at lines 124-126 documents "Negate delta so pivot moves
+  opposite to drag direction" which implies drag-down → pivot.z decreases.
+  However, no comment **immediately before line 135** shows the full vertical
+  sign chain (e.g. "drag down → map-grab → pivot moves backward → negate delta.y").
+- Per guidelines: "If the comment is absent, mark the scenario PARTIAL."
 
-| THEN-clause | Test | Predicate | Status |
-|---|---|---|---|
-| Orbit around cursor at start | `test_orbit_pivot_set_to_cursor_point_at_start` | `cam._pivot == world_point` | COVERED |
-| Pivot unchanged during orbit motion | `test_orbit_pivot_is_used_during_orbit` | `cam._pivot == pivot_before` | COVERED |
-| Component at visual center during orbit | `test_component_remains_at_visual_center_during_orbit` | `cam._pivot == center` after diagonal drag | COVERED |
+STATUS: **PARTIAL** — Implementation correct (signed `-=`); all tests use signed
+predicates; check-nondirectional-movement-assertions.sh passes. Missing: dedicated
+inline sign-chain comment immediately before camera_controller.gd:135 for the
+vertical pan direction. This is a documentation gap, not an implementation or
+test coverage gap, so it does NOT produce a FAIL verdict per Verdict Rules.
 
-Note: `_mouse_to_ground` returns `_pivot` in headless (no viewport), so orbit tests call
-`_set_orbit_pivot(known_point)` directly. This is a sound headless-test compromise; the
-production code path is `_handle_button → _set_orbit_pivot(_mouse_to_ground(pos))`.
+What is needed (non-blocking, for the implementer to prevent silent regression):
+```gdscript
+# drag down (delta.y > 0) → map-grab → pivot moves backward → negate delta.y
+_pivot -= forward * delta.y * pan_amount
+```
 
-### Spec Requirement: Smooth Camera Movement
+---
 
-| THEN-clause | Test | Predicate | Status |
-|---|---|---|---|
-| Zoom interpolated, not instantaneous | `test_zoom_is_interpolated_not_instantaneous` | `_distance` unchanged before `_process`; partially lerped after 1 frame | COVERED |
-| Pan proportional to drag speed | `test_pan_proportional_to_drag_speed` | `move2 > move1` (50 px drag → larger pivot shift than 10 px drag) | COVERED |
+### Requirement: Zoom Toward Mouse Cursor
 
-### Boundary Constraints (verified by check-clamp-boundary-tests.sh)
+#### Scenario: Zooming into a specific component
 
-| Variable | Test | Status |
+Pre-read derivation:
+- `_zoom_toward_cursor(cursor_world, -zoom_speed)` → negative direction
+- `step < 0` → `_target_distance` decreases
+- `zoom_fraction = 1.0 - (_target_distance / old_target)` > 0
+- `_pivot.lerp(cursor_world, positive_fraction)` → pivot shifts toward cursor
+
+Test `test_zoom_toward_cursor_shifts_pivot_toward_cursor`:
+- cursor at (10,0,0), pivot starts at (0,0,0)
+- Asserts `cam._pivot.x > 0.0` → pivot moved toward cursor ✓
+
+Test `test_component_stays_under_cursor_on_zoom_in`:
+- Asserts `after > before` (pivot.x grew toward cursor) ✓
+
+#### Scenario: Zooming out
+
+Pre-read derivation:
+- positive direction → `_target_distance` increases
+- `zoom_fraction < 0` → `lerp` moves pivot AWAY from cursor
+
+Test `test_zoom_out_from_cursor_shifts_pivot_away`:
+- pivot at (5,0,0), cursor at (10,0,0)
+- Asserts `cam._pivot.x < 5.0` → pivot moved away from cursor ✓
+
+Test `test_zoom_out_increases_target_distance`:
+- Asserts `cam._target_distance > initial` ✓
+
+STATUS: **COVERED**
+
+---
+
+### Requirement: Orbit Around Mouse Point
+
+#### Scenario: Orbiting around a component
+
+Pre-read derivation:
+- RMB press → `_set_orbit_pivot(_mouse_to_ground(pos))` (line 80)
+- `_set_orbit_pivot(world_point)` → `_pivot = world_point` (line 103)
+- Orbit motion: only `_phi` and `_theta` change (lines 118-120); `_pivot` unchanged
+- Component at pivot location stays at pivot = visual orbit center
+
+Tests:
+- `test_orbit_pivot_set_to_cursor_point_at_start`:
+  `_set_orbit_pivot(Vector3(5,0,7))` → asserts `cam._pivot == world_point` ✓
+- `test_orbit_pivot_is_used_during_orbit`:
+  Non-origin pivot set, orbit motion applied, asserts `cam._pivot == pivot_before` ✓
+- `test_component_remains_at_visual_center_during_orbit`:
+  Pivot at (8,0,0), diagonal drag, asserts `cam._pivot == center` ✓
+
+Note on headless compromise: `_mouse_to_ground` returns `_pivot` when not in tree,
+so tests call `_set_orbit_pivot(known_point)` directly. This is the exact production
+code path called by RMB press, so coverage is valid.
+
+STATUS: **COVERED**
+
+---
+
+### Requirement: Smooth Camera Movement
+
+#### Scenario: Smooth zoom
+
+Pre-read derivation:
+- Scroll → `_target_distance` changes; `_distance` unchanged until `_process`
+- `_process(0.016)`: `t = min(8.0 * 0.016, 0.9) = 0.128`
+- `_distance = lerp(40.0, target, 0.128)` → partial movement, not full snap
+
+Test `test_zoom_is_interpolated_not_instantaneous`:
+- After scroll: `_distance == initial_distance` (no immediate change) ✓
+- After `_process(0.016)`: `after_one_frame < initial_distance and after_one_frame > target` ✓
+
+STATUS: **COVERED**
+
+#### Scenario: Smooth pan
+
+Pre-read derivation:
+- `pan_amount = pan_speed * (_distance * 0.05 + 1.0)` constant for same cam state
+- 50 px drag → 5× larger pivot displacement than 10 px drag
+
+Test `test_pan_proportional_to_drag_speed`:
+- cam1: 10 px drag → `move1`; cam2: 50 px drag → `move2`
+- Asserts `move2 > move1` ✓
+
+STATUS: **COVERED**
+
+---
+
+## Requirements Summary
+
+| Requirement | Scenario | Status |
 |---|---|---|
-| `_target_distance` min | `test_target_distance_clamped_at_minimum` | COVERED |
-| `_target_distance` max | `test_target_distance_clamped_at_maximum` | COVERED |
-| `_theta` min | `test_theta_clamped_at_minimum` | COVERED |
-| `_theta` max | `test_theta_clamped_at_maximum` | COVERED |
-
----
-
-## Process Notes
-
-### Prior cycle reviewers used non-standard report format
-
-Cycle 5 (ccb706f3) and Cycle 6 (84d29d66) reviewer reports both show "RESULT: ALL PASS"
-in their Check Script Results sections (all 31 automated checks passed), but issued FAIL
-verdicts based on manual THEN→test mapping analysis. Because neither report contains
-`[EXIT N — FAIL]` lines, `check-no-zero-commit-reattempt.sh` and `check-racf-prior-cycle.sh`
-correctly SKIP — the tooling cannot detect manual-analysis-only FAILs. This is expected
-behavior, not a tooling gap or falsification.
-
-### New check added to main after branch creation
-
-`check-nondirectional-movement-assertions.sh` was added to main after this task's branch
-was created (the implementer ran 31 checks; after sync the count is 32). This is a process
-note per guidelines — not a violation by the implementer. The new check now passes,
-providing machine-level confirmation that the F4 null-directional-test fix is correct.
-
----
-
-## Findings
-
-### All prior FAIL findings RESOLVED
-
-The Cycle 5 and Cycle 6 reviewers identified three blocking issues in test_ux_polish.gd:
-
-1. **F1 (pan direction)**: `_pivot += right * delta.x` (camera-pan model) → **FIXED**
-   to `_pivot -= right * delta.x` (map-grab / Google Maps model). Verified in
-   `camera_controller.gd` lines 134-135.
-
-2. **F2/F3 (wrong predicates)**:
-   - `test_pan_drag_right_increases_pivot_x` (pivot.x > initial) → **FIXED** to
-     `test_pan_drag_right_decreases_pivot_x` (pivot.x < initial) ✓
-   - `test_pan_drag_left_decreases_pivot_x` (pivot.x < initial) → **FIXED** to
-     `test_pan_drag_left_increases_pivot_x` (pivot.x > initial) ✓
-   Both predicates independently verified against the Google Maps sign chain above.
-
-3. **F4 (null directional test)**:
-   - `test_drag_direction_matches_view_movement`: `cam._pivot != Vector3.ZERO` → **FIXED**
-     to `cam._pivot.z < 0.0`. Verified: drag down (delta.y=+50), identity basis
-     forward=(0,0,1), `-= forward * 50 * 0.12` → pivot.z = -6.0 < 0.0 ✓
-
-4. **F_SCOPE (pre-existing flow_overlay files)**: `flow_overlay.gd` and
-   `test_flow_overlay.gd` deleted from godot/ in an earlier commit. Scope check now
-   passes cleanly. ✓
-
----
-
-## What PASSES
-
-| Area | Status |
-|---|---|
-| check-not-in-scope.sh | PASS — no prohibited features |
-| Pan direction (Google Maps map-grab model) | PASS — `-=` correctly implemented |
-| test_pan_drag_left_increases_pivot_x predicate | PASS — `> initial_x` ✓ |
-| test_pan_drag_right_decreases_pivot_x predicate | PASS — `< initial_x` ✓ |
-| test_drag_direction_matches_view_movement predicate | PASS — `< 0.0` signed comparison ✓ |
-| check-nondirectional-movement-assertions.sh (new) | PASS — all directional tests use signed comparisons |
-| Zoom toward cursor (all THEN-clauses) | PASS — pivot shifts correctly toward/away from cursor |
-| Orbit around mouse point (all THEN-clauses) | PASS — orbit pivot set and held fixed |
-| Smooth zoom (interpolated, not snapped) | PASS — test verifies partial lerp after 1 frame |
-| Proportional pan speed | PASS — larger drag produces proportionally larger shift |
-| Boundary clamps (_theta, _target_distance) | PASS — all 4 boundary tests verified |
-| pytest (96 tests) | PASS |
-| GDScript tests (95 tests) | PASS |
-| Commit trailers Spec-Ref + Task-Ref: task-015 | PASS |
-| Preloaded files (24 targets) | PASS |
+| Pan with Left Mouse Button | Panning the view | COVERED |
+| Non-Inverted Movement | Drag direction matches view movement (horizontal) | COVERED |
+| Non-Inverted Movement | Drag direction matches view movement (vertical, line 135) | PARTIAL — missing inline sign-chain comment immediately before line 135; impl + tests correct |
+| Zoom Toward Mouse Cursor | Zooming into a specific component | COVERED |
+| Zoom Toward Mouse Cursor | Zooming out | COVERED |
+| Orbit Around Mouse Point | Orbiting around a component | COVERED |
+| Smooth Camera Movement | Smooth zoom | COVERED |
+| Smooth Camera Movement | Smooth pan | COVERED |
 
 ---
 
 ## Summary
 
-All THEN-clauses are covered by tests with correctly-signed predicates. The map-grab
-pan direction (`-=`) matches the spec's "i.e." definition. The new
-`check-nondirectional-movement-assertions.sh` check (added to main after branch creation)
-passes, providing additional machine confirmation. All 32 automated checks exit 0.
+All 5 SHALL requirements are implemented in `godot/scripts/camera_controller.gd`
+and covered by GDScript behavioral tests in `godot/tests/test_ux_polish.gd`.
+All tests use signed comparison predicates; check-nondirectional-movement-assertions.sh
+confirms this. All 32 automated checks exit 0. 95 GDScript tests pass,
+96 pytest tests pass.
+
+One PARTIAL: the vertical pan calculation (camera_controller.gd line 135) lacks a
+dedicated inline sign-chain derivation comment immediately before it. The block
+comment at lines 124-126 documents the general "negate delta" principle and gives
+a concrete horizontal example, but does not spell out the vertical chain
+(drag down → pivot.z decreases). This is a documentation gap that could allow
+silent sign regression; it is NOT a missing implementation or test coverage gap,
+so it does not produce a FAIL verdict per Verdict Rules.
 
 **Verdict: PASS**
