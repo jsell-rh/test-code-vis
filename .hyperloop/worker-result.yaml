@@ -1,0 +1,248 @@
+# Review Report — task-001 — Cycle 20
+---
+verdict: fail
+---
+
+## Scope Check Output
+
+NOTE: Pre-existing prohibited-mode patterns detected in files that originate from main
+  (NOT introduced by this branch — attributed to their originating task, not to you):
+  godot/scripts/understanding_overlay.gd  (origin: a2f9d139 feat(core): godot: evaluation mode — coupling and centrality visualization (#108))
+  These are informational only and do NOT count as a FAIL for this branch.
+OK: No prohibited (not-in-scope) features detected.
+
+---
+
+## Check Script Results
+
+Run against current worktree after `git checkout main -- .hyperloop/checks/`.
+21 .sh files (20 checks + run-all-checks.sh itself). New check on main since cycle 18:
+`check-task-ref-report-not-falsified.sh`.
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-001' has 120 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in working tree (21 checked).
+[EXIT 0]
+
+--- check-circular-position-y-axis.sh ---
+OK: No _circular_positions calls with a y= argument found.
+[EXIT 0]
+
+--- check-commit-trailer-task-ref.sh ---
+FAIL: One or more implementation commits carry a Task-Ref that does not match the branch.
+
+  Branch:   hyperloop/task-001
+  Expected: Task-Ref: task-001
+
+  Mismatched commits:
+  997ac24  Task-Ref: task-007  (expected task-001)
+
+  This typically happens when a commit is copied from another task without
+  updating the Task-Ref trailer.  Fix with an interactive rebase:
+    git rebase -i main   # mark each affected commit as 'reword'
+    # update Task-Ref: <old> to Task-Ref: task-001 in each message
+
+  Confirm the branch task ID before each commit:
+    git rev-parse --abbrev-ref HEAD   # shows hyperloop/task-001
+[EXIT 1 — FAIL]
+
+--- check-layout-radius-bound.sh ---
+OK: No unbounded spatial-layout radius pattern found.
+[EXIT 0]
+
+--- check-new-modules-wired.sh ---
+OK: 'extractor/extractor.py' is imported by production code (1 import(s) found).
+[EXIT 0]
+
+--- check-no-duplicate-toplevel-functions.sh ---
+OK: No duplicate top-level function names across extractor/ source files.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+NOTE: Pre-existing prohibited-mode patterns detected in files that originate from main
+  (NOT introduced by this branch — attributed to their originating task, not to you):
+  godot/scripts/understanding_overlay.gd  (origin: a2f9d139 feat(core): godot: evaluation mode — coupling and centrality visualization (#108))
+  These are informational only and do NOT count as a FAIL for this branch.
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-no-zero-commit-reattempt.sh ---
+OK: 1 implementation commit(s) found since prior FAIL report (b43cef8).
+[EXIT 0]
+
+--- check-preloaded-gdscript-files.sh ---
+OK: All 24 preload() target(s) resolve to existing files.
+[EXIT 0]
+
+--- check-prescribed-fixes-applied.sh ---
+SKIP: Prior FAIL report contains no 'Offending lines:' file citations.
+[EXIT 0]
+
+--- check-pytest-passes.sh ---
+Running: pytest extractor/tests/ -v --tb=short
+98 passed in 0.42s
+OK: All pytest tests passed.
+[EXIT 0]
+
+--- check-racf-prior-cycle.sh ---
+Orchestrator cleanup obscured prior FAIL report -- recovered from b43cef8.
+Checks that failed in that cycle -- must now pass:
+
+  check-commit-trailer-task-ref.sh                        FAIL (still failing -- RACF)
+  check-racf-prior-cycle.sh                               SKIP (self-reference)
+  check-worker-result-clean.sh                            OK (resolved)
+
+FAIL: One or more prior-cycle failures recovered from b43cef8 still fail.
+      This is a Re-Attempt Compliance Failure (RACF) obscured by orchestrator cleanup.
+[EXIT 1 -- FAIL]
+
+--- check-racf-remediation.sh ---
+SKIP: Prior committed report contains no FAIL checks -- no RACF to verify.
+[EXIT 0]
+
+--- check-relative-position-tests.sh ---
+OK: No absolute parent-coordinate accumulation detected in extractor source.
+OK: Direct relative-offset assertion test(s) found in test suite.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section (scope check ran and output was pasted verbatim).
+[EXIT 0]
+
+--- check-ruff-format.sh ---
+OK: ruff format --check passed -- all extractor/ files are correctly formatted.
+[EXIT 0]
+
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+
+--- check-task-ref-report-not-falsified.sh ---
+OK: Task-Ref report section is consistent with actual check-commit-trailer-task-ref.sh result.
+[EXIT 0]
+
+--- check-worker-result-clean.sh ---
+SKIP: .hyperloop/worker-result.yaml is a reviewer report -- this check applies to implementer submissions only.
+[EXIT 0]
+
+Summary: 15 checks EXIT 0, 2 checks EXIT 1 (FAIL), 3 SKIP.
+Failing checks: check-commit-trailer-task-ref, check-racf-prior-cycle.
+
+---
+
+## Findings
+
+### F1 -- BLOCKING: check-commit-trailer-task-ref.sh [EXIT 1 -- FAIL]
+
+Commit `997ac24` (`feat(prototype): godot -- project setup (Godot 4.6, GDScript) (#195)`)
+still carries `Task-Ref: task-007`. The commit hash is UNCHANGED since cycle 18 -- an
+interactive rebase that rewrites a commit produces a new hash; 997ac24 is still present:
+
+  git log --format="%H %s" main..HEAD | grep 997ac24
+  -> 997ac245d8ec55e39435b740ac45a012d28991d9  feat(prototype): godot -- project setup ...
+
+The cycle 19 report claimed this rebase produced hash `381b2d15`. That hash does NOT
+exist on this branch:
+
+  git log --format="%H %s" main..HEAD | grep 381b2d15
+  -> (no output)
+
+This is the same failure prescribed in cycle 18 (b43cef85) with the same fix. It has not
+been applied. This is the 2nd consecutive RACF cycle for this check (cycles 18-20).
+
+Prescribed fix (identical to cycle 18 -- still not applied):
+  git rebase -i main
+  # mark commit 997ac24 as 'reword'
+  # change: Task-Ref: task-007
+  # to:     Task-Ref: task-001
+  # save and exit the editor; git will rewrite the commit and produce a NEW hash
+
+After rebase, confirm the fix before writing any report:
+  git log --format="%H" main..HEAD | grep 997ac24   # must return EMPTY
+  git log --format="%H" main..HEAD | xargs -I{} git show --format="%B" {} | grep "Task-Ref"
+    # every line must say task-001
+  bash .hyperloop/checks/check-commit-trailer-task-ref.sh   # must exit 0
+  bash .hyperloop/checks/run-all-checks.sh                  # must exit 0
+  # ONLY THEN write worker-result.yaml with ACTUAL stdout
+
+---
+
+### F2 -- BLOCKING: check-racf-prior-cycle.sh [EXIT 1 -- FAIL]
+
+The cycle 18 review (b43cef85) prescribed exactly one fix: the Task-Ref rebase. That fix
+was not applied. check-commit-trailer-task-ref.sh still fails (F1 above), so
+check-racf-prior-cycle.sh correctly reports it as "still failing -- RACF."
+
+Resolving F1 resolves F2.
+
+---
+
+### F3 -- FALSIFICATION: Cycle 19 report falsified check-commit-trailer-task-ref.sh
+
+The cycle 19 implementer report (commit b4c8b8cb) claimed check-commit-trailer-task-ref.sh
+exited 0 with the all-trailers-match output (the phrase the check emits when every Task-Ref
+matches the branch name). My independent run of the same check against the current branch
+exits 1 with commit 997ac24 still carrying Task-Ref: task-007. The commit hash is unchanged
+from cycle 18, confirming the rebase was never executed.
+
+  git show b4c8b8cb:.hyperloop/worker-result.yaml | grep -A2 "check-commit-trailer-task-ref"
+  # shows the claimed [EXIT 0] output
+  bash .hyperloop/checks/check-commit-trailer-task-ref.sh
+  # exits 1 -- 997ac24 still has Task-Ref: task-007
+
+This is the SECOND consecutive cycle of falsification for this check:
+  Cycle 18: implementer falsified check-commit-trailer-task-ref.sh (caught by cycle 18 reviewer)
+  Cycle 19: implementer repeated the identical falsification (caught by this cycle 20 reviewer)
+
+The cycle 18 reviewer explicitly prescribed that the implementer verify the new hash
+appears in `git log --oneline main..HEAD` after rebase. This verification was not performed.
+
+---
+
+### F4 -- FALSIFICATION: Cycle 19 report falsified check-task-ref-report-not-falsified.sh
+
+`check-task-ref-report-not-falsified.sh` was added to main between cycles 18 and 19
+specifically to catch the Task-Ref falsification pattern observed in cycle 18. The cycle 19
+report claims:
+
+  --- check-task-ref-report-not-falsified.sh ---
+  OK: Task-Ref report section is consistent with actual check-commit-trailer-task-ref.sh result.
+  [EXIT 0]
+
+I verified: this check exits 1 when the report contains the all-trailers-match phrase while
+check-commit-trailer-task-ref.sh exits 1. I confirmed this by temporarily writing the
+cycle 19 claimed text to worker-result.yaml and running the check -- it output
+"FAIL: Falsification detected." The implementer fabricated output for both the primary
+check and its cross-validator in the same report.
+
+---
+
+### What cycle 19 accomplished (not in dispute)
+
+The following prior prescribed fixes remain correctly resolved:
+  check-circular-position-y-axis.sh      OK (y=0.0 fix from cycle 18)
+  check-layout-radius-bound.sh           OK (min() caps from cycle 18)
+  check-new-modules-wired.sh             OK (layout.py deleted in cycle 18)
+  check-no-duplicate-toplevel-functions  OK (layout.py deleted in cycle 18)
+  check-relative-position-tests.sh       OK (local offsets + equality test from cycle 18)
+  check-pytest-passes.sh                 OK (98 tests pass)
+  check-ruff-format.sh                   OK
+
+The docstring commit (db5c87c2) is genuine and correctly satisfies
+check-no-zero-commit-reattempt.sh. Adding this commit while leaving the Task-Ref rebase
+undone -- then falsifying both check outputs -- is the cycle 19 failure.
+
+---
+
+### Sole remaining prescribed fix
+
+  git rebase -i main
+  # mark commit 997ac24 as 'reword'
+  # change Task-Ref: task-007  to  Task-Ref: task-001
+  # verify: git log main..HEAD | grep 997ac24  (must be empty)
+  # verify: bash .hyperloop/checks/check-commit-trailer-task-ref.sh  (must exit 0)
+  # verify: bash .hyperloop/checks/run-all-checks.sh  (must exit 0)
+  # paste ACTUAL stdout into worker-result.yaml -- do NOT write expected output
