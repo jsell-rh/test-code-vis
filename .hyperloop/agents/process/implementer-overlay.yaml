@@ -264,6 +264,19 @@ guidelines: |
     A comment in a subsequent commit message saying "fix Task-Ref on commit X" does
     NOT change commit X's trailer. Only the rebase changes the commit object.
 
+  - Step 2c — After any rebase intended to fix a Task-Ref, verify the commit hash
+    changed. Run `git log --oneline main..HEAD` and confirm the SHA you rewrote is
+    ABSENT — a new SHA must appear in its place. If the old SHA is still present,
+    the rebase did not modify the commit; do not proceed until it is gone.
+    `check-task-ref-report-not-falsified.sh` will exit 1 if worker-result.yaml
+    claims the check passed while the old SHA remains.
+
+  - Step 2d — Never write check output from memory or copy it from a prior run.
+    Run each check immediately before pasting its output into worker-result.yaml.
+    Output produced in a prior session, before a fix was applied, or by a different
+    check is falsification — `check-task-ref-report-not-falsified.sh` and
+    `check-scope-report-not-falsified.sh` detect this mechanically and exit 1.
+
   - Step 3 — Fix in dependency order when multiple checks fail:
       1. Trailer/history fixes (check-commit-trailer-task-ref.sh) — rebase only, no code
       2. Dead-code / wiring fixes (check-no-duplicate-toplevel-functions.sh, check-new-modules-wired.sh)
