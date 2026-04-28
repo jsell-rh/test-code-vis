@@ -102,6 +102,7 @@ var _cluster_edge_reroutes: Dictionary = {}
 var _cluster_suggestions: Array = []
 
 @onready var _camera: Camera3D = $Camera3D
+@onready var _fp_controller: Node = $FirstPersonController
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +110,9 @@ var _cluster_suggestions: Array = []
 # ---------------------------------------------------------------------------
 
 func _ready() -> void:
+	# Wire the Camera3D reference into the FPS controller so it can move the camera.
+	if _fp_controller != null and _camera != null:
+		_fp_controller._camera = _camera
 	if FileAccess.file_exists(scene_graph_path):
 		var file := FileAccess.open(scene_graph_path, FileAccess.READ)
 		if file == null:
