@@ -1,38 +1,38 @@
 ---
 id: task-030
-title: Godot — conformance view (spec-vs-realisation overlay)
+title: Godot — Conformance Mode
 spec_ref: specs/core/understanding-modes.spec.md
 status: not-started
 phase: null
-deps: [task-028, task-029, task-008, task-027]
+deps: [task-028, task-009, task-010, task-013, task-029]
 round: 0
 branch: null
 pr: null
 ---
 
-Implement a conformance view mode in the Godot application. When active, the scene
-overlays spec-intended structure on the as-built structure, making alignment and
-divergence immediately visible. This implements the Conformance Mode requirement from
-`specs/core/understanding-modes.spec.md`.
+Implement Conformance Mode in the Godot application: a toggleable view that overlays
+the spec structure on the realized codebase structure so the human can see alignment and
+divergence at a glance.
 
-Covers:
-- Add a toggleable conformance mode (e.g., keyboard shortcut `C` or a UI button) that
-  activates/deactivates the overlay without reloading the scene.
-- When conformance mode is active:
-  - Nodes that carry one or more `spec_refs` are visually highlighted as "spec-covered"
-    (e.g., a green tint or border on the volume).
-  - Nodes that have no `spec_refs` are visually marked as "unspecced" (e.g., an amber
-    tint), indicating the agent built something not described in the spec.
-  - If the spec names a component as a separate entity but the realisation has merged
-    it into another node (i.e., no separate node exists for the spec component), display
-    a labelled indicator or annotation in the scene at the parent node's position, clearly
-    showing the divergence (e.g., a floating label "payment [spec: separate service]").
-- Conformance mode must not hide any node — it annotates on top of the existing scene.
-- When conformance mode is inactive, the scene returns to its default appearance.
-- Use GDScript and Godot 4.6 API only. No external libraries.
+Covers `specs/core/understanding-modes.spec.md` — Requirement: Conformance Mode:
 
-Scenario coverage:
-- Spec-aligned: a spec-named auth service maps to a realised auth bounded context →
-  the auth volume shows the "spec-covered" indicator.
-- Spec-divergent: spec names payment as separate but it is inlined in order service →
-  the order service node shows the divergence annotation.
+- Add a keyboard shortcut (e.g. `C`) that toggles Conformance Mode on and off.
+- When Conformance Mode is off, the scene looks and behaves as in the base structural view.
+- When Conformance Mode is on:
+  - Render `spec_item` nodes as distinct translucent volumes (e.g. flat diamond or disc
+    shape, coloured differently from codebase volumes) positioned on their spec plane.
+  - For each `spec_to_code` edge, draw a faint connecting line from the spec volume to
+    the corresponding codebase node, indicating the spec item is realized.
+  - Codebase nodes that are targeted by at least one `spec_to_code` edge are highlighted
+    in a "conformant" colour (e.g. green tint).
+  - Spec nodes that have no `spec_to_code` edge are highlighted in a "divergence" colour
+    (e.g. red/amber tint) to indicate unimplemented requirements.
+  - Codebase nodes that are not targeted by any spec edge are highlighted in a neutral
+    "undocumented" colour (e.g. grey tint) — they exist in the build but have no spec
+    counterpart.
+- Add a HUD label in the corner indicating "CONFORMANCE MODE" while active.
+- If the loaded scene graph contains no `spec_item` nodes (e.g. extractor was run without
+  `--specs`), toggling Conformance Mode shows a brief warning ("No spec data loaded")
+  instead of changing the scene.
+- Toggling off Conformance Mode resets all materials to their base structural appearance.
+- Use only GDScript and Godot 4.6 API.
