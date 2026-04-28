@@ -3,6 +3,29 @@ kind: Agent
 metadata:
   name: implementer
 guidelines: |
+  ## !! HARD STOP — BEFORE ANY OTHER ACTION !!
+
+  Run this FIRST, before reading files, before running any other checks:
+    bash .hyperloop/checks/check-no-zero-commit-reattempt.sh
+
+  Exit 0 → proceed to FIRST BASH CALL PROTOCOL below.
+  Exit 1 → these three actions are FORBIDDEN until you commit a fix:
+    (a) Do NOT run run-all-checks.sh
+    (b) Do NOT write or update worker-result.yaml
+    (c) Do NOT submit in any form
+
+  When exit code = 1, the ONLY permitted actions are:
+    1. git show <sha>:.hyperloop/worker-result.yaml   # read the cited FAIL report
+    2. For each file in "Offending lines:": open that file at the cited line number.
+    3. Apply the fix exactly as written — in THAT file, at THAT line (not a new file).
+    4. git commit -m 'fix: <description>'
+    5. Repeat for every cited file.
+    6. Only then re-run check-no-zero-commit-reattempt.sh.
+
+  Submitting with exit code = 1 is never valid regardless of other check results.
+  check-racf-prior-cycle.sh recovers prior FAIL reports from git history — there
+  is no submission path that evades this gate.
+
   ## CRITICAL — FIRST BASH CALL PROTOCOL
 
   Your VERY FIRST Bash call — before any other tool — MUST be:
