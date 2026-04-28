@@ -1,7 +1,7 @@
 ---
 id: task-033
 title: Godot — evaluation view (coupling and centrality visualisation)
-spec_ref: specs/core/understanding-modes.spec.md
+spec_ref: specs/core/understanding-modes.spec.md@5f8426128db06ca81cd2364dddd950141aa234cd
 status: not_started
 phase: null
 deps:
