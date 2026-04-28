@@ -23,6 +23,9 @@ from extractor.extractor import (
     build_dependency_edges,
     build_scene_graph,
     classify_edge_type,
+    compute_cascade_depth,
+    compute_clusters,
+    compute_independence_groups,
     compute_layout,
     compute_loc,
     discover_bounded_contexts,
@@ -35,7 +38,7 @@ from extractor.extractor import (
     is_python_package,
     size_from_loc,
 )
-from extractor.schema import Node
+from extractor.schema import Edge, Node
 
 
 # ---------------------------------------------------------------------------
@@ -572,6 +575,11 @@ class TestSceneGraphOutput:
         assert "nodes" in graph
         assert "edges" in graph
         assert "metadata" in graph
+        assert "clusters" in graph
+
+    def test_build_scene_graph_clusters_is_list(self, src: Path) -> None:
+        graph = build_scene_graph(src)
+        assert isinstance(graph["clusters"], list)
 
     def test_nodes_include_bounded_contexts(self, src: Path) -> None:
         graph = build_scene_graph(src)
@@ -928,3 +936,220 @@ class TestSpecNodeDiscovery:
     def test_position_spec_nodes_no_op_when_empty(self) -> None:
         """_position_spec_nodes does nothing (no crash) when given an empty list."""
         _position_spec_nodes([], code_radius=5.0)  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Independence Groups
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def src_independence(tmp_path: Path) -> Path:
+    """A source tree with two IAM modules where application depends on domain."""
+    iam = tmp_path / "iam"
+    domain = iam / "domain"
+    application = iam / "application"
+    isolated = iam / "isolated"
+    for d in [iam, domain, application, isolated]:
+        d.mkdir(parents=True)
+        (d / "__init__.py").write_text("")
+
+    # application depends on domain (internal edge)
+    (application / "services.py").write_text("from iam.domain import X\n")
+    (domain / "models.py").write_text("class X:\n    pass\n")
+    # isolated has no dependencies on domain or application
+    (isolated / "util.py").write_text("def helper(): pass\n")
+    return tmp_path
+
+
+class TestIndependenceGroups:
+    """Module nodes within the same BC get independence_group identifiers."""
+
+    def test_connected_modules_share_group(self, src_independence: Path) -> None:
+        nodes: list[Node] = discover_bounded_contexts(src_independence)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_independence, bc["id"]))
+        edges = build_dependency_edges(src_independence, nodes)
+        compute_independence_groups(nodes, edges)
+
+        groups = {
+            n["id"]: n.get("independence_group") for n in nodes if n["type"] == "module"
+        }
+        # iam.application and iam.domain are connected → same group
+        assert groups["iam.application"] == groups["iam.domain"], (
+            f"Connected modules must share group; got {groups}"
+        )
+
+    def test_isolated_module_has_own_group(self, src_independence: Path) -> None:
+        nodes: list[Node] = discover_bounded_contexts(src_independence)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_independence, bc["id"]))
+        edges = build_dependency_edges(src_independence, nodes)
+        compute_independence_groups(nodes, edges)
+
+        groups = {
+            n["id"]: n.get("independence_group") for n in nodes if n["type"] == "module"
+        }
+        # iam.isolated has no internal deps → its own group
+        assert groups["iam.isolated"] != groups["iam.application"], (
+            f"Isolated module must have its own group; got {groups}"
+        )
+
+    def test_independence_group_format(self, src_independence: Path) -> None:
+        nodes: list[Node] = discover_bounded_contexts(src_independence)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_independence, bc["id"]))
+        edges = build_dependency_edges(src_independence, nodes)
+        compute_independence_groups(nodes, edges)
+
+        for node in nodes:
+            if node["type"] != "module":
+                continue
+            group = node.get("independence_group")
+            assert group is not None, f"{node['id']} missing independence_group"
+            assert ":" in group, f"group must be '<context>:<index>', got {group!r}"
+            context_part, index_part = group.split(":", 1)
+            assert context_part == node["parent"], (
+                f"Group prefix must be parent context id; got {context_part!r}"
+            )
+            assert index_part.isdigit(), (
+                f"Group index must be a digit; got {index_part!r}"
+            )
+
+    def test_build_scene_graph_assigns_independence_groups(self, src: Path) -> None:
+        """build_scene_graph assigns independence_group to all module nodes."""
+        graph = build_scene_graph(src)
+        module_nodes = [n for n in graph["nodes"] if n["type"] == "module"]
+        assert len(module_nodes) > 0, "No module nodes found"
+        for node in module_nodes:
+            assert "independence_group" in node, (
+                f"Module node {node['id']} missing independence_group"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Clusters
+# ---------------------------------------------------------------------------
+
+
+class TestComputeClusters:
+    """compute_clusters produces cluster suggestions for coupled modules."""
+
+    def test_coupled_modules_form_cluster(self, src_independence: Path) -> None:
+        nodes: list[Node] = discover_bounded_contexts(src_independence)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_independence, bc["id"]))
+        edges = build_dependency_edges(src_independence, nodes)
+        # Give nodes positions so they have metrics
+        compute_layout(nodes, edges)
+        clusters = compute_clusters(nodes, edges)
+
+        # iam.application and iam.domain are coupled → 1 cluster
+        assert len(clusters) == 1, f"Expected 1 cluster; got {clusters}"
+        cluster = clusters[0]
+        assert "iam.application" in cluster["members"]
+        assert "iam.domain" in cluster["members"]
+        assert cluster["context"] == "iam"
+
+    def test_cluster_id_format(self, src_independence: Path) -> None:
+        nodes: list[Node] = discover_bounded_contexts(src_independence)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_independence, bc["id"]))
+        edges = build_dependency_edges(src_independence, nodes)
+        compute_layout(nodes, edges)
+        clusters = compute_clusters(nodes, edges)
+
+        for cluster in clusters:
+            assert cluster["id"].startswith(cluster["context"] + ":cluster_"), (
+                f"Cluster id must be '<context>:cluster_N'; got {cluster['id']!r}"
+            )
+
+    def test_no_clusters_when_no_coupling(self, tmp_path: Path) -> None:
+        """Bounded context with no internal deps → empty cluster list."""
+        bc = tmp_path / "solo"
+        bc.mkdir()
+        (bc / "__init__.py").write_text("")
+        mod_a = bc / "alpha"
+        mod_a.mkdir()
+        (mod_a / "__init__.py").write_text("")
+        mod_b = bc / "beta"
+        mod_b.mkdir()
+        (mod_b / "__init__.py").write_text("")
+
+        nodes: list[Node] = discover_bounded_contexts(tmp_path)
+        for bn in list(nodes):
+            nodes.extend(discover_submodules(tmp_path, bn["id"]))
+        edges = build_dependency_edges(tmp_path, nodes)
+        clusters = compute_clusters(nodes, edges)
+
+        assert clusters == [], f"Expected empty clusters; got {clusters}"
+
+    def test_cluster_aggregate_metrics_keys(self, src_independence: Path) -> None:
+        nodes: list[Node] = discover_bounded_contexts(src_independence)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_independence, bc["id"]))
+        edges = build_dependency_edges(src_independence, nodes)
+        compute_layout(nodes, edges)
+        clusters = compute_clusters(nodes, edges)
+
+        for cluster in clusters:
+            am = cluster["aggregate_metrics"]
+            assert "total_loc" in am
+            assert "in_degree" in am
+            assert "out_degree" in am
+
+    def test_build_scene_graph_includes_clusters(self, src: Path) -> None:
+        graph = build_scene_graph(src)
+        assert "clusters" in graph
+        assert isinstance(graph["clusters"], list)
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Cascade Depth
+# ---------------------------------------------------------------------------
+
+
+class TestCascadeDepth:
+    """compute_cascade_depth returns BFS hop distances from the origin node."""
+
+    def _make_edges(self, pairs: list[tuple[str, str]]) -> list[Edge]:
+        return [
+            {"source": src, "target": tgt, "type": "internal"} for src, tgt in pairs
+        ]
+
+    def test_direct_dependent_is_depth_1(self) -> None:
+        # A depends on X; cascade from X → A at depth 1
+        edges = self._make_edges([("A", "X")])
+        depths = compute_cascade_depth("X", edges)
+        assert depths["A"] == 1
+
+    def test_transitive_dependent_is_depth_2(self) -> None:
+        # A depends on X; B depends on A → cascade from X: A=1, B=2
+        edges = self._make_edges([("A", "X"), ("B", "A")])
+        depths = compute_cascade_depth("X", edges)
+        assert depths["A"] == 1
+        assert depths["B"] == 2
+
+    def test_origin_not_in_output(self) -> None:
+        edges = self._make_edges([("A", "X")])
+        depths = compute_cascade_depth("X", edges)
+        assert "X" not in depths
+
+    def test_minimum_depth_used(self) -> None:
+        # B depends on X directly (depth 1) AND on A which depends on X (depth 2).
+        # B must be recorded at depth 1.
+        edges = self._make_edges([("A", "X"), ("B", "X"), ("B", "A")])
+        depths = compute_cascade_depth("X", edges)
+        assert depths["B"] == 1
+
+    def test_no_dependents_returns_empty(self) -> None:
+        # X has no dependents → empty dict
+        edges = self._make_edges([("X", "Y")])
+        depths = compute_cascade_depth("X", edges)
+        assert depths == {}
+
+    def test_unrelated_nodes_excluded(self) -> None:
+        # C has no dependency on X or any affected node
+        edges = self._make_edges([("A", "X"), ("C", "Z")])
+        depths = compute_cascade_depth("X", edges)
+        assert "C" not in depths

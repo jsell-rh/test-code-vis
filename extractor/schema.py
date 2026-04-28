@@ -19,7 +19,7 @@ class Position(TypedDict):
 
 
 NodeType = Literal["bounded_context", "module", "spec"]
-EdgeType = Literal["cross_context", "internal"]
+EdgeType = Literal["cross_context", "internal", "aggregate"]
 
 
 class NodeMetrics(TypedDict):
@@ -56,6 +56,21 @@ class Node(TypedDict):
     metrics: NotRequired[NodeMetrics]
     """Raw complexity metrics. Present for code-derived nodes."""
 
+    independence_group: NotRequired[str]
+    """Identifier for the structural independence group, e.g. 'iam:0'.
+
+    Module nodes within the same bounded context that share internal
+    dependencies (directly or transitively) share the same group identifier.
+    Modules with no internal dependencies to any peer each form their own group.
+    """
+
+    depth: NotRequired[int]
+    """Cascade depth from a failure-simulation origin node.
+
+    Present only in simulation output.  A node at depth 1 directly depends on
+    the origin; depth 2 means it depends on a depth-1 node; and so on.
+    """
+
 
 class Edge(TypedDict):
     """A directed dependency edge between two nodes."""
@@ -67,7 +82,15 @@ class Edge(TypedDict):
     """ID of the node being depended upon."""
 
     type: EdgeType
-    """'cross_context' for inter-bounded-context deps, 'internal' for intra-context."""
+    """'cross_context' for inter-bounded-context deps, 'internal' for intra-context,
+    'aggregate' for a rolled-up cross-context summary edge."""
+
+    weight: NotRequired[int]
+    """Number of individual import statements this edge represents.
+
+    Omitting weight implies weight=1.  Aggregate edges carry the sum of all
+    individual import counts between the two bounded contexts.
+    """
 
 
 class Metadata(TypedDict):
@@ -80,14 +103,171 @@ class Metadata(TypedDict):
     """ISO-8601 UTC timestamp of when the extraction was performed."""
 
 
+class AggregateMetrics(TypedDict):
+    """Complexity and connectivity summary for a cluster of modules."""
+
+    total_loc: int
+    """Sum of lines-of-code across all member modules."""
+
+    in_degree: int
+    """Number of edges arriving at cluster members from outside the cluster."""
+
+    out_degree: int
+    """Number of edges leaving cluster members to nodes outside the cluster."""
+
+
+class Cluster(TypedDict):
+    """A pre-computed suggestion for a group of tightly-coupled modules.
+
+    The human may choose to collapse the members into a supernode.
+    The Godot application computes the supernode position as the centroid
+    of the member positions — the cluster entry does NOT prescribe a position.
+    """
+
+    id: str
+    """Unique cluster identifier, e.g. 'iam:cluster_0'."""
+
+    members: list[str]
+    """Node IDs of the modules belonging to this cluster."""
+
+    context: str
+    """ID of the parent bounded context that contains all members."""
+
+    aggregate_metrics: AggregateMetrics
+    """Rolled-up complexity and connectivity metrics for the cluster."""
+
+
 class SceneGraph(TypedDict):
     """Root of the JSON scene graph file.
 
     This is the complete contract between the Python extractor and the
-    Godot application.  The JSON file MUST contain exactly these three
+    Godot application.  The JSON file MUST contain exactly these four
     top-level fields.
     """
 
     nodes: list[Node]
     edges: list[Edge]
     metadata: Metadata
+    clusters: list[Cluster]
+
+
+# ---------------------------------------------------------------------------
+# Validation
+# ---------------------------------------------------------------------------
+
+_REQUIRED_NODE_KEYS: frozenset[str] = frozenset(
+    {"id", "name", "type", "position", "size", "parent"}
+)
+_REQUIRED_POSITION_KEYS: frozenset[str] = frozenset({"x", "y", "z"})
+_REQUIRED_EDGE_KEYS: frozenset[str] = frozenset({"source", "target", "type"})
+_REQUIRED_METADATA_KEYS: frozenset[str] = frozenset({"source_path", "timestamp"})
+_REQUIRED_GRAPH_KEYS: frozenset[str] = frozenset(
+    {"nodes", "edges", "metadata", "clusters"}
+)
+_REQUIRED_CLUSTER_KEYS: frozenset[str] = frozenset(
+    {"id", "members", "context", "aggregate_metrics"}
+)
+_REQUIRED_AGGREGATE_METRICS_KEYS: frozenset[str] = frozenset(
+    {"total_loc", "in_degree", "out_degree"}
+)
+
+
+def validate_scene_graph(graph: object) -> None:
+    """Assert that *graph* conforms to the scene graph schema.
+
+    Raises :class:`ValueError` with a descriptive message if any required
+    field is absent or has the wrong type.  Designed to be called by the
+    output writer (task-006) before persisting the JSON file.
+
+    Args:
+        graph: The object to validate — must be a dict with the four
+               top-level keys ``nodes``, ``edges``, ``metadata``, and
+               ``clusters``.
+
+    Raises:
+        ValueError: If any required field is missing or has the wrong type.
+    """
+    if not isinstance(graph, dict):
+        raise ValueError(f"Scene graph must be a dict, got {type(graph).__name__!r}")
+
+    missing = _REQUIRED_GRAPH_KEYS - graph.keys()
+    if missing:
+        raise ValueError(f"Scene graph missing top-level key(s): {sorted(missing)}")
+
+    extra = set(graph.keys()) - _REQUIRED_GRAPH_KEYS
+    if extra:
+        raise ValueError(
+            f"Scene graph has unexpected top-level key(s): {sorted(extra)}"
+        )
+
+    if not isinstance(graph["nodes"], list):
+        raise ValueError("'nodes' must be a list")
+    if not isinstance(graph["edges"], list):
+        raise ValueError("'edges' must be a list")
+    if not isinstance(graph["metadata"], dict):
+        raise ValueError("'metadata' must be a dict")
+    if not isinstance(graph["clusters"], list):
+        raise ValueError("'clusters' must be a list")
+
+    for i, node in enumerate(graph["nodes"]):
+        if not isinstance(node, dict):
+            raise ValueError(f"nodes[{i}] must be a dict, got {type(node).__name__!r}")
+        missing_node = _REQUIRED_NODE_KEYS - node.keys()
+        if missing_node:
+            raise ValueError(
+                f"nodes[{i}] missing required key(s): {sorted(missing_node)}"
+            )
+        pos = node.get("position")
+        if not isinstance(pos, dict):
+            raise ValueError(
+                f"nodes[{i}]['position'] must be a dict, got {type(pos).__name__!r}"
+            )
+        missing_pos = _REQUIRED_POSITION_KEYS - pos.keys()
+        if missing_pos:
+            raise ValueError(
+                f"nodes[{i}]['position'] missing key(s): {sorted(missing_pos)}"
+            )
+        for coord in ("x", "y", "z"):
+            if not isinstance(pos[coord], (int, float)):
+                raise ValueError(
+                    f"nodes[{i}]['position'][{coord!r}] must be numeric, "
+                    f"got {type(pos[coord]).__name__!r}"
+                )
+
+    for i, edge in enumerate(graph["edges"]):
+        if not isinstance(edge, dict):
+            raise ValueError(f"edges[{i}] must be a dict, got {type(edge).__name__!r}")
+        missing_edge = _REQUIRED_EDGE_KEYS - edge.keys()
+        if missing_edge:
+            raise ValueError(
+                f"edges[{i}] missing required key(s): {sorted(missing_edge)}"
+            )
+
+    meta = graph["metadata"]
+    missing_meta = _REQUIRED_METADATA_KEYS - meta.keys()
+    if missing_meta:
+        raise ValueError(f"metadata missing key(s): {sorted(missing_meta)}")
+
+    for i, cluster in enumerate(graph["clusters"]):
+        if not isinstance(cluster, dict):
+            raise ValueError(
+                f"clusters[{i}] must be a dict, got {type(cluster).__name__!r}"
+            )
+        missing_cluster = _REQUIRED_CLUSTER_KEYS - cluster.keys()
+        if missing_cluster:
+            raise ValueError(
+                f"clusters[{i}] missing required key(s): {sorted(missing_cluster)}"
+            )
+        if not isinstance(cluster["members"], list):
+            raise ValueError(f"clusters[{i}]['members'] must be a list")
+        am = cluster.get("aggregate_metrics")
+        if not isinstance(am, dict):
+            raise ValueError(
+                f"clusters[{i}]['aggregate_metrics'] must be a dict, "
+                f"got {type(am).__name__!r}"
+            )
+        missing_am = _REQUIRED_AGGREGATE_METRICS_KEYS - am.keys()
+        if missing_am:
+            raise ValueError(
+                f"clusters[{i}]['aggregate_metrics'] missing key(s): {sorted(missing_am)}"
+            )
