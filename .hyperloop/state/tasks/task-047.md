@@ -1,7 +1,7 @@
 ---
 id: task-047
 title: 'Godot — Simulation Mode: filter spec nodes and edges from graph traversal'
-spec_ref: specs/core/understanding-modes.spec.md
+spec_ref: specs/core/understanding-modes.spec.md@5f8426128db06ca81cd2364dddd950141aa234cd
 status: not_started
 phase: null
 deps:
