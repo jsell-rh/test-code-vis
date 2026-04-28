@@ -8,7 +8,16 @@ from __future__ import annotations
 
 import json
 
-from extractor.schema import Edge, Metadata, Node, Position, SceneGraph
+import pytest
+
+from extractor.schema import (
+    Edge,
+    Metadata,
+    Node,
+    Position,
+    SceneGraph,
+    validate_scene_graph,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -283,3 +292,92 @@ class TestPreComputedLayout:
         ]
         # At least one pair of nodes must differ in position.
         assert len(set(positions)) > 1 or len(positions) == 1
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Schema Validation
+# ---------------------------------------------------------------------------
+
+
+class TestValidateSceneGraph:
+    """validate_scene_graph() MUST raise ValueError for any missing required field."""
+
+    def test_valid_scene_graph_does_not_raise(self) -> None:
+        graph = make_scene_graph()
+        validate_scene_graph(graph)  # must not raise
+
+    def test_rejects_non_dict(self) -> None:
+        with pytest.raises(ValueError, match="dict"):
+            validate_scene_graph([])  # type: ignore[arg-type]
+
+    def test_rejects_missing_nodes_key(self) -> None:
+        graph = make_scene_graph()
+        del graph["nodes"]
+        with pytest.raises(ValueError, match="nodes"):
+            validate_scene_graph(graph)
+
+    def test_rejects_missing_edges_key(self) -> None:
+        graph = make_scene_graph()
+        del graph["edges"]
+        with pytest.raises(ValueError, match="edges"):
+            validate_scene_graph(graph)
+
+    def test_rejects_missing_metadata_key(self) -> None:
+        graph = make_scene_graph()
+        del graph["metadata"]
+        with pytest.raises(ValueError, match="metadata"):
+            validate_scene_graph(graph)
+
+    def test_rejects_extra_top_level_key(self) -> None:
+        graph = make_scene_graph()
+        graph["extra_field"] = "unexpected"  # type: ignore[typeddict-unknown-key]
+        with pytest.raises(ValueError, match="unexpected"):
+            validate_scene_graph(graph)
+
+    def test_rejects_node_missing_id(self) -> None:
+        graph = make_scene_graph()
+        del graph["nodes"][0]["id"]
+        with pytest.raises(ValueError, match="id"):
+            validate_scene_graph(graph)
+
+    def test_rejects_node_missing_position(self) -> None:
+        graph = make_scene_graph()
+        del graph["nodes"][0]["position"]
+        with pytest.raises(ValueError, match="position"):
+            validate_scene_graph(graph)
+
+    def test_rejects_node_position_missing_z(self) -> None:
+        graph = make_scene_graph()
+        del graph["nodes"][0]["position"]["z"]
+        with pytest.raises(ValueError, match="z"):
+            validate_scene_graph(graph)
+
+    def test_rejects_node_position_non_numeric(self) -> None:
+        graph = make_scene_graph()
+        graph["nodes"][0]["position"]["x"] = "bad"  # type: ignore[typeddict-item]
+        with pytest.raises(ValueError, match="numeric"):
+            validate_scene_graph(graph)
+
+    def test_rejects_edge_missing_source(self) -> None:
+        graph = make_scene_graph()
+        del graph["edges"][0]["source"]
+        with pytest.raises(ValueError, match="source"):
+            validate_scene_graph(graph)
+
+    def test_rejects_edge_missing_type(self) -> None:
+        graph = make_scene_graph()
+        del graph["edges"][0]["type"]
+        with pytest.raises(ValueError, match="type"):
+            validate_scene_graph(graph)
+
+    def test_rejects_metadata_missing_source_path(self) -> None:
+        graph = make_scene_graph()
+        del graph["metadata"]["source_path"]
+        with pytest.raises(ValueError, match="source_path"):
+            validate_scene_graph(graph)
+
+    def test_rejects_metadata_missing_timestamp(self) -> None:
+        graph = make_scene_graph()
+        del graph["metadata"]["timestamp"]
+        with pytest.raises(ValueError, match="timestamp"):
+            validate_scene_graph(graph)
