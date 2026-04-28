@@ -225,3 +225,18 @@ guidelines: |
   - Step 4 — Submission gate: check-no-zero-commit-reattempt.sh exiting 1 is an
     absolute blocker. Writing worker-result.yaml with this check failing is invalid;
     the verifier's check-racf-prior-cycle.sh will recover and flag it as RACF.
+
+  - Step 5 — Verify cited files were committed: run
+    `bash .hyperloop/checks/check-prescribed-fixes-applied.sh` — it exits 1 if any
+    file listed in a prior "Offending lines:" citation has zero commits since the FAIL
+    report. A fix applied to the wrong file still fails this check; the cited file must
+    itself appear in a commit.
+
+  ## ZERO-COMMIT RE-ATTEMPT GATE
+
+  Run `bash .hyperloop/checks/check-no-zero-commit-reattempt.sh` alone BEFORE
+  running run-all-checks.sh. A FAIL from this check makes all other check output
+  irrelevant — do not read, interpret, or paste any other check's output until you
+  have committed code fixes to the files cited in the prior FAIL report. Reading the
+  prior report, re-running checks, or updating worker-result.yaml does NOT count as
+  making a fix; only a committed change to a source file satisfies this gate.
