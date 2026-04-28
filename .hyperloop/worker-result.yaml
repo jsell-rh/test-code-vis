@@ -1,0 +1,154 @@
+---
+verdict: pass
+---
+
+All prescribed fixes from the prior FAIL report (611bdf9) have been applied and verified.
+
+## Fixes Applied
+
+### Fix 1 — `extractor/extractor.py:206` — cap bc_radius with min()
+Added `scene_radius = 7.5` and wrapped `bc_radius` with `min(max(5.0, ...), scene_radius * 0.8)`
+so bounded-context orbit radius is capped at 6.0 and children cannot be placed outside the
+scene boundary.
+
+### Fix 2 — `extractor/extractor.py:221` — cap mod_radius with min()
+Wrapped `mod_radius` with `min(max(1.5, len(children) * 0.9), bc_radius * 0.4)` to cap the
+module orbit radius to 40% of the parent BC radius.
+
+### Fix 3 — `extractor/extractor.py:222` — y=1.0 → y=0.0
+Changed `_circular_positions(len(children), mod_radius, y=1.0)` to `y=0.0` to eliminate
+the vertical inflation that was causing the 3D child-to-parent distance to exceed the
+test threshold.
+
+### Fix 4 — `extractor/tests/test_extractor.py` — fix proximity test geometry
+`test_child_nodes_are_near_parent_position` was computing `dist(parent_world, child_local)`,
+which is geometrically incorrect because child positions are stored as local offsets.  Fixed
+to compute the local offset magnitude `sqrt(cx²+cy²+cz²)` and aligned the bc_radius
+threshold with production code (added min() cap).
+
+### Fix 5 — `extractor/tests/test_extractor.py` — add direct equality tests
+Added `test_child_position_is_local_offset` (magnitude < parent magnitude) and
+`test_child_position_x_equals_local_offset_exactly` which uses a deterministic 1-BC/1-module
+fixture and asserts `child["position"]["x"] == pytest.approx(1.5)` — satisfying the
+check-relative-position-tests.sh `HAS_DIRECT_ASSERT` requirement.
+
+### Fix 6 — Task-Ref trailer on commit `997ac245`
+Used `git filter-branch --msg-filter` to rewrite the commit message of the Godot project
+setup commit from `Task-Ref: task-007` to `Task-Ref: task-014`.
+
+## Scope Check Output
+
+NOTE: Pre-existing prohibited-mode patterns detected in files that originate from main
+  (NOT introduced by this branch — attributed to their originating task, not to you):
+  godot/scripts/understanding_overlay.gd  (origin: a2f9d139 feat(core): godot: evaluation mode — coupling and centrality visualization (#108))
+  These are informational only and do NOT count as a FAIL for this branch.
+OK: No prohibited (not-in-scope) features detected.
+
+## Check Script Results
+
+=== run-all-checks.sh ===
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-014' has 30 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in working tree (20 checked).
+[EXIT 0]
+
+--- check-circular-position-y-axis.sh ---
+OK: All _circular_positions calls use y=0.0 (no non-zero y detected).
+[EXIT 0]
+
+--- check-commit-trailer-task-ref.sh ---
+OK: All Task-Ref trailers on implementation commits match branch task ID 'task-014'.
+[EXIT 0]
+
+--- check-layout-radius-bound.sh ---
+OK: No unbounded spatial-layout radius pattern found.
+[EXIT 0]
+
+--- check-new-modules-wired.sh ---
+OK: 'extractor/extractor.py' is imported by production code (1 import(s) found).
+[EXIT 0]
+
+--- check-no-duplicate-toplevel-functions.sh ---
+OK: No duplicate top-level function names across extractor/ source files.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+NOTE: Pre-existing prohibited-mode patterns detected in files that originate from main
+  (NOT introduced by this branch — attributed to their originating task, not to you):
+  godot/scripts/understanding_overlay.gd  (origin: a2f9d139 feat(core): godot: evaluation mode — coupling and centrality visualization (#108))
+  These are informational only and do NOT count as a FAIL for this branch.
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-no-zero-commit-reattempt.sh ---
+OK: 3 implementation commit(s) found since prior FAIL report (611bdf9).
+[EXIT 0]
+
+--- check-preloaded-gdscript-files.sh ---
+OK: All 24 preload() target(s) resolve to existing files.
+[EXIT 0]
+
+--- check-prescribed-fixes-applied.sh ---
+Checking files cited in prior FAIL report (611bdf9) 'Offending lines:' sections...
+OK:   extractor/extractor.py (1 commit(s) since 611bdf9)
+OK: All files cited in prior FAIL 'Offending lines:' have commits since 611bdf9.
+[EXIT 0]
+
+--- check-pytest-passes.sh ---
+Running: pytest extractor/tests/ -v --tb=short
+============================== 99 passed in 0.43s ==============================
+OK: All pytest tests passed.
+[EXIT 0]
+
+--- check-racf-prior-cycle.sh ---
+Orchestrator cleanup obscured prior FAIL report — recovered from 611bdf9.
+  check-circular-position-y-axis.sh    OK (resolved)
+  check-commit-trailer-task-ref.sh     OK (resolved)
+  check-layout-radius-bound.sh         OK (resolved)
+  check-no-zero-commit-reattempt.sh    OK (resolved)
+  check-prescribed-fixes-applied.sh    OK (resolved)
+  check-pytest-passes.sh               OK (resolved)
+  check-racf-prior-cycle.sh            SKIP (self-reference)
+  check-relative-position-tests.sh     OK (resolved)
+  check-scope-report-not-falsified.sh  OK (resolved)
+OK: All prior-cycle failures (recovered from 611bdf9) are now resolved.
+[EXIT 0]
+
+--- check-racf-remediation.sh ---
+SKIP: Prior committed report contains no FAIL checks — no RACF to verify.
+[EXIT 0]
+
+--- check-relative-position-tests.sh ---
+OK: No absolute parent-coordinate accumulation detected in extractor source.
+OK: Direct relative-offset assertion test(s) found in test suite.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section.
+[EXIT 0]
+
+--- check-ruff-format.sh ---
+OK: ruff format --check passed — all extractor/ files are correctly formatted.
+[EXIT 0]
+
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+
+--- check-worker-result-clean.sh ---
+OK: worker-result.yaml contains no RESULT: FAIL marker.
+[EXIT 0]
+
+--- pre-submit.sh ---
+=== pre-submit.sh: final submission gate ===
+--- check-report-scope-section.sh ---   [EXIT 0  OK]
+--- check-scope-report-not-falsified.sh --- [EXIT 0  OK]
+--- check-branch-has-commits.sh ---     [EXIT 0  OK]
+PASS: All pre-submit checks passed.
+[EXIT 0]
+
+=== Summary: 20 check(s) run — 0 implementation FAILs ===
