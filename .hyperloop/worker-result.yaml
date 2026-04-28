@@ -1,4 +1,4 @@
-# Review Report — task-016 — Cycle 4
+# Review Report — task-016 — Cycle 5
 ---
 verdict: pass
 ---
@@ -15,9 +15,10 @@ NOTE: Pre-existing data-flow visualization patterns detected in files that origi
 OK: No prohibited (not-in-scope) features detected.
 [EXIT 0]
 
-All 4 noted files are pre-existing from main (origin: commit 5208924d, task-017).
-Provenance confirmed: `git log main..HEAD --oneline -- <file>` returns empty for all four.
-This branch (hyperloop/task-016) introduced none of them. No scope violation.
+All 4 noted files originate from main (commit 5208924d, task-017). Zero commits from
+this branch (hyperloop/task-016) touch any of them. The F0 deadlock reported in prior
+cycles is fully resolved: commit bb51f370 synced check-not-in-scope.sh from main
+(added per-file provenance filtering for the data-flow section). No scope violation.
 
 ---
 
@@ -30,15 +31,8 @@ OK: All Task-Ref trailers on implementation commits match branch task ID 'task-0
 
 ## Check Script Results
 
-Reviewer synced `.hyperloop/checks/` from main before running checks
-(`git checkout main -- .hyperloop/checks/`). This pulled the latest
-check-checks-in-sync.sh (with blob-SHA content validation, added in main commit
-f28a1337 after the implementer's last sync). All 22 main-listed checks are
-present and content-identical; 10 extra branch-added scripts remain present and
-were also run, producing 32 total checks.
-
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-016' has 19 commit(s) above main.
+OK: Branch 'hyperloop/task-016' has 20 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -94,13 +88,6 @@ OK: All directional test functions use signed comparison predicates
 [EXIT 0]
 
 --- check-not-in-scope.sh ---
-NOTE: Pre-existing data-flow visualization patterns detected in files that originate from main
-  (NOT introduced by this branch — attributed to their originating task, not to you):
-  godot/scripts/flow_overlay.gd  (origin: 5208924d feat(visualization): godot: on-demand flow path activation and selection (#88))
-  godot/scripts/main.gd  (origin: 5208924d feat(visualization): godot: on-demand flow path activation and selection (#88))
-  godot/tests/run_tests.gd  (origin: 5208924d feat(visualization): godot: on-demand flow path activation and selection (#88))
-  godot/tests/test_flow_overlay.gd  (origin: 5208924d feat(visualization): godot: on-demand flow path activation and selection (#88))
-  These are informational only and do NOT count as a FAIL for this branch.
 OK: No prohibited (not-in-scope) features detected.
 [EXIT 0]
 
@@ -123,7 +110,7 @@ SKIP: Prior FAIL report contains no 'Offending lines:' file citations.
 
 --- check-pytest-passes.sh ---
 Running: pytest extractor/tests/ -v --tb=short
-95 passed in 0.12s
+95 passed in 0.11s
 OK: All pytest tests passed.
 [EXIT 0]
 
@@ -164,7 +151,7 @@ SKIP: .hyperloop/worker-result.yaml is a reviewer report — this check applies 
 
 --- extractor-lint.sh ---
 All checks passed!
-95 passed in 0.12s
+95 passed in 0.11s
 Extractor checks passed.
 [EXIT 0]
 
@@ -195,134 +182,108 @@ RESULT: ALL PASS
 
 ## Findings
 
-### Process Note: check-checks-in-sync.sh stale-detection gap (NOT a violation)
+### Directional Behavior Review
 
-Main commit `f28a1337` (2026-04-28 03:13:36) added blob-SHA content validation to
-`check-checks-in-sync.sh` AFTER the implementer's last sync commit (`bb51f370`,
-2026-04-28 02:58:38). The implementer could not have synced this change because it
-did not exist on main yet. Per guidelines: "Distinguish 'checks added after branch
-creation' from 'implementer failed to sync'." This is a timing gap, not a process
-violation. The reviewer's mandatory sync from main catches and closes it automatically.
+Per guidelines, directional THEN-clauses are derived independently before reading test bodies.
 
----
+**Non-Inverted Movement (i.e. parenthetical derivation):**
 
-### THEN→Test Mapping (all THEN-clauses verified)
+Spec: "the scene moves in the same direction as the drag (i.e. dragging left reveals content
+to the right, as in Google Maps)"
 
-| THEN-clause (spec) | Test function | Assertion predicate | Status |
-|---|---|---|---|
-| Camera pans in direction of drag | test_lmb_pan_moves_pivot | pivot != initial_pivot | PASS |
-| Movement not inverted — drag right | test_pan_drag_right_increases_pivot_x | pivot.x < initial_x (grab model) | PASS |
-| Movement not inverted — drag left | test_pan_drag_left_decreases_pivot_x | pivot.x > initial_x (grab model) | PASS |
-| Drag left reveals content right (i.e. parenthetical) | test_drag_direction_matches_view_movement | pivot.z < 0.0 for drag-down | PASS |
-| View zooms toward cursor | test_zoom_toward_cursor_shifts_pivot_toward_cursor | pivot.x > 0 (cursor at x=10) | PASS |
-| Component stays under cursor on zoom-in | test_component_stays_under_cursor_on_zoom_in | pivot.x after > before | PASS |
-| View zooms out from cursor | test_zoom_out_from_cursor_shifts_pivot_away | pivot.x < 5 (cursor at x=10) | PASS |
-| Camera orbits around cursor at orbit start | test_orbit_pivot_set_to_cursor_point_at_start | pivot == world_point | PASS |
-| Component at visual center during orbit | test_component_remains_at_visual_center_during_orbit | pivot unchanged after drag | PASS |
-| Zoom smooth (interpolated) | test_zoom_is_interpolated_not_instantaneous | _distance not jumped; partial after 1 frame | PASS |
-| Pan proportional to drag speed | test_pan_proportional_to_drag_speed | 50px drag > 10px drag displacement | PASS |
+The "(i.e.)" parenthetical defines the grab model:
+- Drag LEFT → map/scene slides LEFT → content from the RIGHT enters view → pivot moves RIGHT
+- In camera_controller.gd headless frame (identity basis): right = (1,0,0), forward = (0,0,1)
+- Drag left (delta.x = -50): `_pivot -= right * -50 * pan_amount` → pivot.x increases ✓
+- Derived predicate: `cam._pivot.x > initial_x` for drag-left
 
-All 11 THEN-clause assertions independently derived from spec before reading test bodies.
-Derivation cross-check:
+Implementation (camera_controller.gd line 136):
+  `_pivot -= right * delta.x * pan_amount`
+Inline derivation comment (line 135):
+  `# drag left → delta.x = -50 → negate → pivot.x += 50 * pan_amount (moves right) ✓`
+Inline derivation comment (line 137):
+  `# drag down → delta.y = +50 → negate → pivot.z -= 50 * pan_amount (moves backward) ✓`
+Both comments are present immediately before their respective calculation lines. ✓
 
-**Non-Inverted Movement parenthetical derivation:**
-The spec states: "dragging left reveals content to the right, as in Google Maps"
-- Grab model: drag left → map slides right → content to the RIGHT enters view
-- From camera perspective: pivot (focal point) moves RIGHT (positive x in identity frame)
-- Derived predicate: cam._pivot.x > initial_x for drag-left
-- `test_pan_drag_left_decreases_pivot_x` asserts `cam._pivot.x > initial_x` ✓ (name is misleading but assertion matches derivation)
-
-- By symmetry, drag right → pivot moves LEFT → x decreases
-- `test_pan_drag_right_increases_pivot_x` asserts `cam._pivot.x < initial_x` ✓ (name wrong, assertion correct)
-
-**Implementation derivation (camera_controller.gd):**
-```
-_pivot -= right * delta.x * pan_amount
-```
-- drag left: delta.x = -50 → -right * -50 = +right * 50 → pivot.x += 50*pan_amount (RIGHT) ✓
-- drag right: delta.x = +50 → -right * +50 = -right * 50 → pivot.x -= 50*pan_amount (LEFT) ✓
+check-nondirectional-movement-assertions.sh: EXIT 0 — all directional tests use signed predicates.
 
 **Zoom direction derivation:**
-- WHEEL_UP → direction = -zoom_speed (negative) → step negative → target_distance decreases → zoom IN
-- zoom_fraction = 1 - (new/old) = positive → pivot.lerp(cursor, positive) → pivot moves TOWARD cursor ✓
-- WHEEL_DOWN → direction = +zoom_speed → step positive → target_distance increases → zoom OUT
-- zoom_fraction = negative → pivot moves AWAY from cursor ✓
+
+WHEEL_UP → direction = -zoom_speed (negative) → step negative → _target_distance decreases → zoom IN
+  zoom_fraction = 1 - (new_target / old_target) > 0 → lerp toward cursor → pivot moves TOWARD cursor ✓
+WHEEL_DOWN → direction = +zoom_speed (positive) → step positive → _target_distance increases → zoom OUT
+  zoom_fraction = 1 - (new_target / old_target) < 0 → lerp away from cursor → pivot moves AWAY ✓
+
+Inline derivation comments (lines 82–86 of camera_controller.gd):
+  `# scroll up → zoom IN → _target_distance decreases → direction must be negative`
+  `# scroll down → zoom OUT → _target_distance increases → direction must be positive`
+Both present. ✓
 
 ---
 
-### Advisory: Test function names do not match assertions (not blocking)
+### THEN→Test Mapping
 
-Two test functions in test_ux_polish.gd have names that contradict their assertions:
-- `test_pan_drag_right_increases_pivot_x`: name says "increases", assertion is `< initial_x` (decreases). Assertion is CORRECT for grab model.
-- `test_pan_drag_left_decreases_pivot_x`: name says "decreases", assertion is `> initial_x` (increases). Assertion is CORRECT for grab model.
+All 11 THEN-clauses verified with signed predicates derived before reading test bodies:
 
-These names are relics from a prior camera-pan-model implementation (cycles 1–2). The assertions were corrected in cycle 3 (commit 4c8471e1) but names were not renamed.
+| THEN-clause | Test function | Assertion | Status |
+|---|---|---|---|
+| Camera pans on LMB drag | test_lmb_pan_moves_pivot | pivot != initial_pivot | PASS |
+| Drag right → pivot moves left (grab model) | test_pan_drag_right_increases_pivot_x | pivot.x < initial_x | PASS |
+| Drag left → pivot moves right (grab model) | test_pan_drag_left_decreases_pivot_x | pivot.x > initial_x | PASS |
+| Drag down → pivot.z < 0 (i.e. grab model) | test_drag_direction_matches_view_movement | pivot.z < 0.0 | PASS |
+| Zoom-in shifts pivot toward cursor | test_zoom_toward_cursor_shifts_pivot_toward_cursor | pivot.x > 0 | PASS |
+| Component stays under cursor on zoom-in | test_component_stays_under_cursor_on_zoom_in | pivot.x after > before | PASS |
+| Zoom-out shifts pivot away from cursor | test_zoom_out_from_cursor_shifts_pivot_away | pivot.x < 5.0 | PASS |
+| Orbit pivot set to cursor at orbit start | test_orbit_pivot_set_to_cursor_point_at_start | pivot == world_point | PASS |
+| Pivot unchanged during orbit motion | test_orbit_pivot_is_used_during_orbit | pivot == pivot_before | PASS |
+| Component stays at visual center during orbit | test_component_remains_at_visual_center_during_orbit | pivot == center | PASS |
+| Zoom smooth (interpolated) | test_zoom_is_interpolated_not_instantaneous | distance partial after 1 frame | PASS |
+| Pan proportional to drag speed | test_pan_proportional_to_drag_speed | 50px > 10px displacement | PASS |
 
-Per guidelines, the comparison is between the derived predicate and the ACTUAL ASSERTION STATEMENT — both align. The NAME is wrong but is not a behavioral defect. Not blocking. Implementer may rename in a follow-up for clarity.
-
----
-
-### test_ux_polish.gd wiring confirmed
-
-`run_tests.gd` line 43: `_run_suite(preload("res://tests/test_ux_polish.gd").new())`
-
-Confirmed by running godot headless and observing:
-```
-[test_ux_polish.gd]
-  PASS: test_lmb_pan_moves_pivot
-  PASS: test_pan_drag_right_increases_pivot_x
-  PASS: test_pan_drag_left_decreases_pivot_x
-  PASS: test_drag_direction_matches_view_movement
-  PASS: test_zoom_toward_cursor_shifts_pivot_toward_cursor
-  PASS: test_component_stays_under_cursor_on_zoom_in
-  PASS: test_zoom_out_from_cursor_shifts_pivot_away
-  PASS: test_zoom_out_increases_target_distance
-  PASS: test_orbit_pivot_set_to_cursor_point_at_start
-  PASS: test_orbit_pivot_is_used_during_orbit
-  PASS: test_component_remains_at_visual_center_during_orbit
-  PASS: test_zoom_is_interpolated_not_instantaneous
-  PASS: test_target_distance_clamped_at_minimum
-  PASS: test_target_distance_clamped_at_maximum
-  PASS: test_theta_clamped_at_minimum
-  PASS: test_theta_clamped_at_maximum (appears earlier in run)
-  PASS: test_pan_proportional_to_drag_speed
-```
-All 15 tests from test_ux_polish.gd run and pass.
+All predicates are signed or exact-equality comparisons. No `!= Vector3.ZERO` or `!= initial_*`
+presence-only checks among directional assertions.
 
 ---
 
-### Test pattern: Pattern 2 (bool-return), NOT Pattern 1 (_test_failed)
+### Advisory: Misleading test names (non-blocking)
 
-test_ux_polish.gd does NOT declare `_test_failed`. The runner detects this via
-`get_script_property_list()` and applies Pattern 2: each test function returns `bool`
-(true = PASS, false = FAIL). run_tests.gd checks `if result == true`. The tests are
-NOT inert — a failed assertion (returning `false`) is correctly reported as FAIL.
+`test_pan_drag_right_increases_pivot_x` — name says "increases"; assertion is `< initial_x`
+  (decreases). The ASSERTION is correct for the grab model. Name is a relic of the prior
+  camera-pan-model implementation (cycles 1–2).
+
+`test_pan_drag_left_decreases_pivot_x` — name says "decreases"; assertion is `> initial_x`
+  (increases). Again, the ASSERTION is correct. The name is wrong.
+
+Per guidelines, the comparison is between the derived predicate and the actual assertion
+statement. Both align with the grab model derivation. Not blocking. Renaming recommended
+for future maintainability.
 
 ---
 
-### Scope: pre-existing data-flow files (process note only)
+### F0 Resolution Confirmed
 
-Four files from task-017 (commit 5208924d) contain data-flow visualization keywords.
-Zero commits from this branch touch any of them. check-not-in-scope.sh section 4
-now has per-file provenance filtering (added in main commit 23b652f3, synced by
-implementer in bb51f370). These files emit NOTEs, not FAILs. No action required.
+The pre-existing scope deadlock (F0) from prior cycles is fully resolved in this cycle.
+- Root cause: check-not-in-scope.sh data-flow section lacked per-file provenance filtering.
+- Fix applied: commit bb51f370 synced the updated check-not-in-scope.sh from main.
+- Current result: check-not-in-scope.sh exits 0 with informational NOTEs only.
+- check-racf-prior-cycle.sh: All prior-cycle failures resolved. EXIT 0.
 
 ---
 
 ### Requirement Coverage
 
-| Requirement / Scenario | Status |
-|---|---|
-| Pan with Left Mouse Button — camera pans on drag | COVERED |
-| Non-Inverted Movement — drag right (grab model) | COVERED |
-| Non-Inverted Movement — drag left (grab model) | COVERED |
-| Non-Inverted Movement — drag down (grab model) | COVERED |
-| Zoom Toward Mouse Cursor — pivot shifts toward cursor (zoom-in) | COVERED |
-| Zoom Toward Mouse Cursor — component stays under cursor | COVERED |
-| Zooming Out — pivot shifts away from cursor | COVERED |
-| Orbit Around Mouse Point — pivot set to cursor at orbit start | COVERED |
-| Orbit Around Mouse Point — component stays at visual center | COVERED |
-| Smooth zoom — interpolated, not instantaneous | COVERED |
-| Smooth pan — proportional to drag speed | COVERED |
+| Requirement / Scenario | Code | Test | Status |
+|---|---|---|---|
+| Pan with LMB — panning occurs | camera_controller.gd:72–74, 125–139 | test_lmb_pan_moves_pivot | COVERED |
+| Non-Inverted — drag right (grab model) | camera_controller.gd:136 | test_pan_drag_right_increases_pivot_x | COVERED |
+| Non-Inverted — drag left (grab model) | camera_controller.gd:136 | test_pan_drag_left_decreases_pivot_x | COVERED |
+| Non-Inverted — drag down (grab model) | camera_controller.gd:138 | test_drag_direction_matches_view_movement | COVERED |
+| Zoom Toward Cursor — pivot toward cursor on zoom-in | camera_controller.gd:90–98 | test_zoom_toward_cursor_shifts_pivot_toward_cursor | COVERED |
+| Zoom Toward Cursor — component stays under cursor | camera_controller.gd:90–98 | test_component_stays_under_cursor_on_zoom_in | COVERED |
+| Zooming Out — pivot moves away from cursor | camera_controller.gd:90–98 | test_zoom_out_from_cursor_shifts_pivot_away | COVERED |
+| Orbit Around Mouse Point — pivot set at orbit start | camera_controller.gd:78–80, 103–112 | test_orbit_pivot_set_to_cursor_point_at_start | COVERED |
+| Orbit Around Mouse Point — component at visual center | camera_controller.gd:119–123 | test_component_remains_at_visual_center_during_orbit | COVERED |
+| Smooth zoom — interpolated, not instantaneous | camera_controller.gd:50–56 | test_zoom_is_interpolated_not_instantaneous | COVERED |
+| Smooth pan — proportional to drag speed | camera_controller.gd:134 | test_pan_proportional_to_drag_speed | COVERED |
 
-All 116 GDScript tests pass. All 95 Python tests pass. All 32 checks exit 0.
+All 116 GDScript behavioral tests pass. All 95 Python tests pass. All 32 checks exit 0.
