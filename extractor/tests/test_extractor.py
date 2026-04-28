@@ -406,8 +406,13 @@ class TestLayout:
     def test_child_nodes_are_near_parent_position(self, src: Path) -> None:
         """Spec: child nodes are positioned within the spatial bounds of their parent.
 
-        After compute_layout, every module node's position must be physically
-        close to its parent BC — specifically, closer than the full scene radius.
+        After compute_layout, every module node's LOCAL offset must be smaller
+        than the BC orbit radius — i.e., the child is visually inside the parent.
+
+        Children store LOCAL offsets (relative to the parent BC's origin).
+        The correct spatial check is the magnitude of that local offset vector,
+        not the world-space distance between child and parent, which mixes
+        coordinate frames and produces incorrect distances.
         """
         nodes: list[Node] = discover_bounded_contexts(src)
         for bc in list(nodes):
@@ -425,14 +430,58 @@ class TestLayout:
         for n in nodes:
             if n["parent"] is None:
                 continue
-            px, py, pz = node_pos[n["parent"]]
             cx, cy, cz = node_pos[n["id"]]
-            dist = math.sqrt((cx - px) ** 2 + (cy - py) ** 2 + (cz - pz) ** 2)
+            # Children store local offsets — measure magnitude from origin,
+            # not distance from the parent's world position (mixed-frame error).
+            dist = math.sqrt(cx**2 + cy**2 + cz**2)
             assert dist < bc_radius, (
-                f"Child {n['id']} is at distance {dist:.2f} from parent "
-                f"{n['parent']}, exceeding scene radius {bc_radius:.2f}. "
-                "Child must be positioned within parent's spatial bounds."
+                f"Child {n['id']} local offset magnitude {dist:.2f} exceeds "
+                f"scene radius {bc_radius:.2f}. "
+                "Child local offset must be smaller than the BC orbit radius."
             )
+
+    def test_child_position_is_local_offset(self, tmp_path: Path) -> None:
+        """Child positions are local offsets relative to parent, not world coordinates.
+
+        With one BC at a non-zero world position (x = bc_radius) and one child
+        module, _circular_positions(1, mod_radius, y=1.0) at angle=0 produces
+        the local offset (mod_radius, 1.0, 0.0).
+
+        The z-component MUST equal 0.0 exactly (sin(0) * r = 0) and the
+        x-component MUST equal the local mod_radius (1.5 for one child) —
+        NOT the parent world x (5.0) plus the offset (6.5 if absolute).
+        """
+        # Single BC with one child so positions are deterministic.
+        bc_dir = tmp_path / "testbc"
+        bc_dir.mkdir()
+        (bc_dir / "__init__.py").write_text("")
+        child_dir = bc_dir / "module"
+        child_dir.mkdir()
+        (child_dir / "__init__.py").write_text("")
+
+        nodes = discover_bounded_contexts(tmp_path)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(tmp_path, bc["id"]))
+        compute_layout(nodes)
+
+        parent = next(n for n in nodes if n["type"] == "bounded_context")
+        child = next(n for n in nodes if n["parent"] == parent["id"])
+
+        # bc_radius = min(max(5.0, 1*2.5), SCENE_RADIUS*0.8) = 5.0
+        # mod_radius = min(max(1.5, 1*0.9), 5.0*0.4) = min(1.5, 2.0) = 1.5
+        # angle=0 → x=mod_radius*cos(0)=1.5, z=mod_radius*sin(0)=0.0
+        assert child["position"]["z"] == 0.0, (
+            f"Expected z=0.0 (local offset: sin(0)*mod_radius=0); "
+            f"got {child['position']['z']:.6f}. "
+            f"Parent world z={parent['position']['z']:.4f}."
+        )
+        # x must equal the local mod_radius (1.5), not parent_x + mod_radius (6.5).
+        assert child["position"]["x"] == pytest.approx(1.5), (
+            f"Expected child x=1.5 (local mod_radius for 1 child); "
+            f"got {child['position']['x']:.4f}. "
+            f"Parent x={parent['position']['x']:.4f} -- world-coord storage "
+            f"would give x~{parent['position']['x'] + 1.5:.4f}."
+        )
 
     def test_coupled_bcs_are_closer_than_uncoupled(self, src_coupling: Path) -> None:
         """Spec: tightly coupled nodes have smaller distances between them.

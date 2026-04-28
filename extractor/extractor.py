@@ -24,6 +24,11 @@ _NON_CONTEXT_DIRS: frozenset[str] = frozenset(
     {"tests", "docs", "util", "__pycache__", "migrations", "alembic"}
 )
 
+# Maximum radius of the entire scene (world units).  Child orbit radii are
+# capped relative to this value so that no node is placed outside the visible
+# scene boundary.
+SCENE_RADIUS: float = 50.0
+
 
 # ---------------------------------------------------------------------------
 # Helpers: filesystem predicates
@@ -193,9 +198,11 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
     BC order is optimised by ``_order_by_coupling`` so tightly coupled pairs
     are placed adjacent, reducing their spatial distance.
 
-    Module nodes are placed in a smaller circle *offset by their parent BC's
-    absolute position* so that child nodes are always within the spatial bounds
-    of their parent.
+    Module nodes are placed in a smaller circle using LOCAL offsets relative to
+    the parent BC's origin so that child nodes are always within the spatial
+    bounds of their parent.  Godot's main.gd adds the parent world position at
+    render time — storing absolute coordinates here would cause double-offset
+    rendering.
 
     Spec nodes are placed in a row beyond the far edge of the code circle so
     that the intended design (specs) is spatially distinct from the realized
@@ -207,7 +214,7 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
     if edges:
         bc_nodes = _order_by_coupling(bc_nodes, edges)
 
-    bc_radius = max(5.0, len(bc_nodes) * 2.5)
+    bc_radius = min(max(5.0, len(bc_nodes) * 2.5), SCENE_RADIUS * 0.8)  # cap to scene
     bc_positions = _circular_positions(len(bc_nodes), bc_radius)
 
     bc_pos_map: dict[str, tuple[float, float, float]] = {}
@@ -222,7 +229,9 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
             parent_children.setdefault(n["parent"], []).append(n)
 
     for parent_id, children in parent_children.items():
-        mod_radius = max(1.5, len(children) * 0.9)
+        mod_radius = min(
+            max(1.5, len(children) * 0.9), bc_radius * 0.4
+        )  # cap inside parent
         mod_positions = _circular_positions(len(children), mod_radius, y=1.0)
         # Store LOCAL offsets only (relative to the parent BC's origin).
         # main.gd resolves world positions by adding parent world pos + local offset,
