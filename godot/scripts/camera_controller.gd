@@ -94,6 +94,10 @@ func _zoom_toward_cursor(cursor_world: Vector3, direction: float) -> void:
 	# Shift pivot toward/away from cursor proportional to zoom fraction.
 	if old_target > 0.0:
 		var zoom_fraction: float = 1.0 - (_target_distance / old_target)
+		# zoom in: direction < 0 -> step < 0 -> target_distance < old_target
+		#   -> zoom_fraction = 1 - (smaller/larger) > 0 -> lerp toward cursor -> pivot shifts toward cursor
+		# zoom out: direction > 0 -> step > 0 -> target_distance > old_target
+		#   -> zoom_fraction = 1 - (larger/smaller) < 0 -> lerp away from cursor -> pivot shifts away
 		_pivot = _pivot.lerp(cursor_world, zoom_fraction)
 	_update_transform()
 
