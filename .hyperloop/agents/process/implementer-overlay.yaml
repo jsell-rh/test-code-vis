@@ -3,84 +3,330 @@ kind: Agent
 metadata:
   name: implementer
 guidelines: |
-  ## Project: code-vis
+  ## !! HARD STOP — BEFORE ANY OTHER ACTION !!
 
-  This project has two components with different languages and tooling. Understand which
-  component your task targets before writing code.
+  Run this FIRST, before reading files, before running any other checks:
+    bash .hyperloop/checks/check-no-zero-commit-reattempt.sh
 
-  ### Component 1: Python Extractor (`extractor/`)
-  - Parses the kartograph codebase (~/code/kartograph) and outputs a JSON scene graph.
-  - Python 3.12+. Use only standard library + tree-sitter (or ast module).
-  - Output is a single JSON file that the Godot app consumes.
-  - No frameworks. Keep it simple — a CLI script.
-  - Use type hints throughout. Run `ruff check` and `ruff format --check` before committing.
-  - Write tests with pytest for extraction logic.
+  Exit 0 → proceed to FIRST BASH CALL PROTOCOL below.
+  Exit 1 → these three actions are FORBIDDEN until you commit a fix:
+    (a) Do NOT run run-all-checks.sh
+    (b) Do NOT write or update worker-result.yaml
+    (c) Do NOT submit in any form
 
-  ### Component 2: Godot Application (`godot/`)
-  - Godot 4.x with GDScript.
-  - Loads the JSON scene graph and renders it as a navigable 3D space.
-  - Use Godot's built-in node types (MeshInstance3D, Label3D, etc.).
-  - Keep scenes composable — one scene per logical visual element.
-  - Do not hardcode paths to the kartograph codebase in the Godot project. The JSON file
-    is the sole interface between the extractor and the Godot app.
-  - **GDScript tests are required for every Godot spec scenario.** A compile check (`godot --headless --quit`) is NOT a test — it only confirms the project parses, not that any behavior is correct.
-  - Write GDScript tests in `godot/tests/` (filenames: `test_*.gd`). Each test must instantiate the relevant node/script, call its functions with a known fixture dictionary, and assert the resulting scene-tree structure or property values.
-  - Use a headless test runner: either the GUT addon (`addons/gut/`) or a minimal custom `godot/tests/run_tests.gd` script that prints PASS/FAIL and exits non-zero on failure.
-  - Before marking a scenario complete, quote each THEN clause verbatim and confirm exactly which line of code implements it. Vague phrases like "direction is visually indicated" or "size is encoded" are implementation requirements — add the specific rendering element (arrowhead, cone, scaled mesh, etc.) and assert it in a test.
+  When exit code = 1, the ONLY permitted actions are:
+    1. git show <sha>:.hyperloop/worker-result.yaml   # read the cited FAIL report
+    2. For each file in "Offending lines:": open that file at the cited line number.
+    3. Apply the fix exactly as written — in THAT file, at THAT line (not a new file).
+    4. git commit -m 'fix: <description>'
+    5. Repeat for every cited file.
+    6. Only then re-run check-no-zero-commit-reattempt.sh.
 
-  ### General
-  - The JSON scene graph is the interface contract between the two components.
-    If you change its schema, update both sides.
-  - Specs are in `specs/`. Read the relevant spec thoroughly before implementing.
-  - This is a prototype — prefer simple and working over clever and flexible.
-  - Do not add dependencies beyond what the spec requires.
-  - **Empty `_ready()` / `_process()` stubs are never a complete implementation.** If a
-    spec scenario says Godot renders, positions, or instantiates something, the relevant
-    script must contain code that creates nodes and sets their properties — `pass` alone fails.
-  - **Dict-key assertions do not satisfy rendering THEN clauses.** A test that only checks
-    `dict.has("position")` or `dict["position"].has("x")` does NOT cover a scenario that
-    says "renders nodes at pre-computed positions." The test must instantiate the Node3D,
-    call the function under test, and assert the actual `.position.x`, `.position.y`,
-    `.position.z` values on the scene-tree node — not on an intermediate dictionary.
-  - **Node properties that produce visual behavior require property-value tests.** If a THEN clause is satisfied by setting a node property (e.g. `billboard`, `pixel_size`, `no_depth_test`, `transparency_mode`, `cull_mode`, `albedo_color.a`), write a test that builds the scene from fixture data and asserts that property value on the resulting node. "The engine renders it correctly" is never a substitute for asserting the property.
-  - **Label3D readability is mandatory, not optional.** Whenever you create a `Label3D` node, you MUST immediately set `label.billboard = BaseMaterial3D.BILLBOARD_ENABLED` and `label.pixel_size = 0.05` (or another legible value > 0.0). These are not style choices — a Label3D at default settings is illegible in a 3D scene. Write tests asserting both `billboard == BaseMaterial3D.BILLBOARD_ENABLED` and `pixel_size > 0.0` on the resulting node, even if the spec's THEN clause only mentions "add an annotation."
-  - **Technology/version constraint scenarios require behavioral tests too.** A spec scenario
-    like "Engine version" or "GDScript only" is NOT satisfied by setting a config file value
-    alone. Write a GDScript test that reads the config file via `FileAccess.open()` +
-    `get_as_text()` and asserts the expected version or constraint (e.g., assert the string
-    "4.6" appears in the `project.godot` content). Config-without-test is PARTIAL.
-  - **`_ready()` file I/O must be covered by at least one test.** If `_ready()` uses
-    `FileAccess.open()` + `get_as_text()` but unit tests bypass `_ready()` by calling
-    internal methods directly, add a test that exercises `FileAccess.open()` +
-    `get_as_text()` on a known file and asserts its content. The call path must appear in
-    a test, not only in production code.
-  - **Before submitting, run the master check runner — not individual scripts.** Execute `bash .hyperloop/checks/run-all-checks.sh` and paste its COMPLETE output into your submission report under a `## Check Script Results` heading. Running individual checks selectively and omitting others from your report is NOT acceptable — it is how working checks get silently bypassed. The master runner executes every script in `.hyperloop/checks/` so none can be skipped.
-  - **Audit the 'Not In Scope' section before writing any code.** Open the spec, find every item listed under "Not In Scope", "MUST NOT", or "prohibited", and write them down. Do not implement any of them in any form — not as code, a helper function, a CLI flag, a commented block, or a test. A prohibited feature that is flag-gated or disconnected is still a prohibited feature.
-  - **Run check-not-in-scope.sh before submitting.** Execute `.hyperloop/checks/check-not-in-scope.sh` and confirm it exits 0. Any prohibited feature detected is an automatic block on submission — remove the feature, its tests, and all wiring before reporting done.
-  - **Run check-not-in-scope.sh before creating any new file.** Do not wait until submission. If you are about to create a file, function, CLI flag, or test that would make the check fail, do not create it. Run the check after every logical chunk of new code, not only at the end.
-  - **There are no acceptable forms of a prohibited feature.** A prohibited feature implemented as "optional", "flag-gated", "helper", "commented out", or "disconnected from main" is still a prohibited feature and will fail the scope check. Remove it completely — code, tests, CLI flags, signal connections, and wiring — before reporting done.
-  - **Your submission MUST include the verbatim output of `check-not-in-scope.sh`.** Run `.hyperloop/checks/check-not-in-scope.sh` as the final step before reporting done, and paste its complete stdout into your submission report under a heading "## Scope Check Output". A submission that omits this section will be treated by the verifier as if the check was never run and will receive an automatic FAIL.
-  - **"Verbatim" means literal copy-paste — NOT a paraphrase, NOT a summary, NOT a bullet point.** Do NOT write things like "check-not-in-scope.sh: OK" or "scope check passed" anywhere as a substitute. The required format is exactly: a standalone `## Scope Check Output` section header followed by the raw terminal output on the next line, e.g.: `OK: No prohibited (not-in-scope) features detected.` Run `.hyperloop/checks/check-report-scope-section.sh` after drafting your report to mechanically confirm the section is present and correct before submitting.
-  - **Every THEN-clause requires its own named test assertion.** Before submitting, list every THEN-clause from the spec in your report and name the exact test function (and assertion line) that covers it. A THEN-clause that is correctly implemented in production code but has no test directly exercising the behavior is PARTIAL — not COVERED. "Indirect coverage" (e.g., another test incidentally touching the same path) does not count; the test must explicitly assert the observable outcome described in the THEN-clause.
-  - **"All X are Y" THEN-clauses require iteration tests — not config-string tests.** If a THEN-clause says "all [files/scripts/nodes] are [type/property]" (e.g., "all scripts use GDScript", "all nodes have a label"), write a test that iterates the complete set using `DirAccess`, an array loop, or equivalent, and asserts the predicate on every element. Mapping such a THEN-clause to a test that checks a config value, a version string, or a single representative sample is INCORRECT — the predicate "all" demands iteration. Before mapping, ask: "Does my named test actually enumerate every member of the set?"
-  - **Constraint behaviors (clamping, bounding, capping) require explicit constraint tests.** If a THEN-clause is satisfied by clamping, bounding, or limiting a value (e.g., theta clamped to prevent flip, distance clamped to minimum), write a test that drives the input past the limit and asserts the clamped result. A test that only verifies normal-range behavior does not cover the constraint.
-  - **`run-all-checks.sh` includes `check-clamp-boundary-tests.sh` automatically.** That script enumerates every `clamp()` assignment in production GDScript and fails if any clamped variable lacks a boundary-asserting test. Partial coverage (one clamped variable tested, another missed) is the exact failure mode it catches — and why you must use the master runner rather than selecting which checks to run.
-  - **A SKIP result from any check must be verified — it is not a free pass.** Read the check script's skip logic and confirm the skip condition genuinely applies to your branch. If the script skips when "no constraint found in spec" but your spec files contain the constraint, the correct result is FAIL not SKIP. Never report SKIP from memory or assumption; copy verbatim terminal output from an actual run on the current codebase. A falsely reported SKIP is treated identically to a falsely reported PASS: active falsification.
-  - **When run-all-checks.sh reveals a pre-existing failure (from code not introduced by your branch), fix it before submitting — do not cite attribution.** Add the missing test or code in a separate preparatory commit with message "fix: address pre-existing check failure in <area>" before your task implementation commits, then re-run run-all-checks.sh to confirm it exits 0. "This was broken before my branch" is never an acceptable reason to leave a FAIL unresolved.
-  - **Before writing a single line of code, write down every item from the spec's "Not In Scope" section as a bullet list in your scratchpad.** Keep that list visible throughout implementation. If you feel tempted to add a feature that resembles any item on that list, stop and consult the list — do not implement it.
-  - **Prohibited file NAMES do not prohibit the FEATURE.** If the spec's "Not In Scope" or "prohibited" list names a specific file (e.g., `view_spec_renderer.gd`), only that exact file name is prohibited — the feature itself must still be implemented using a different name (e.g., `view_spec_applier.gd`, `scene_updater.gd`). Read each prohibition literally: a name ban is not a feature ban.
-  - **Multi-stage pipelines require ALL stages to be implemented.** When the spec describes a data-flow pipeline (e.g., "LLM produces view spec; the renderer interprets it"), implement every stage — producer AND consumer. Producing an intermediate representation (e.g., a dictionary from `parse_response()`) without writing the code that consumes it and produces the final output (e.g., mutating the 3D scene) is a PARTIAL implementation. Before submitting, trace each intermediate value the spec describes and confirm there is code that reads it and acts on it.
-  - **Run `.hyperloop/checks/check-pipeline-wiring.sh` before submitting.** This script verifies that key pipeline stages are wired end-to-end. Fix any FAIL lines before reporting done.
-  - **Integration tests are required when the spec names a specific target path.** If the spec says "MUST use [path]" or describes a scenario "GIVEN the [named codebase]", write an automated test (pytest or shell) that invokes the code against that actual path and asserts that expected output is present. A committed output artifact (e.g., scene_graph.json) is evidence the pipeline was run manually, not an automated test. Run `check-kartograph-integration-test.sh` before submitting.
-  - **Delete prohibited files immediately — never plan to remove them later.** If you realise mid-implementation that a file you just created would be flagged by `check-not-in-scope.sh`, delete it, its tests, and all wiring now. A prohibited file left "temporarily" in the working tree is how scope violations survive to submission.
-  - **The check output you paste must come from a terminal run on the current codebase state.** Do not copy a previous "OK" result, recall it from memory, or paste it from an earlier run. If the latest run produced FAIL lines, those FAIL lines are your current scope check output — paste them, fix every violation, re-run the check, and only then update your report with the new passing output.
-  - **Pasting stale or fabricated check output is a more severe finding than a scope violation.** A report that shows "OK: No prohibited" while prohibited code is present is active falsification. The verifier will flag this explicitly. Always report what the script actually printed.
-  - **`run-all-checks.sh` exit-0 is the hard submission gate — no exceptions.** If `run-all-checks.sh` exits non-zero for any reason (including `check-report-scope-section.sh`), fix every FAIL and re-run until the master runner exits 0 before reporting done. Submitting with a known FAIL in the check output is invalid regardless of how minor the fix appears.
-  - **Sync `.hyperloop/checks/` from `main` before running `run-all-checks.sh`.** New check scripts may have been added to `main` after your worktree was created, so your worktree may contain a stale subset. Run `git checkout main -- .hyperloop/checks/` first — this pulls any missing check files into your worktree without switching branches. Only then run the master runner. If you skip this step, you will silently miss checks that the verifier will run, and your submission will fail on findings you never saw.
-  - **Pre-existing failures from check scripts still block your submission.** A check that FAILs because of code already present on `main` (unchanged by your branch) is not exempt. Fix the underlying issue before submitting — "this was broken before my branch" is not an acceptable reason to leave a FAIL unresolved.
-  - **Grep for every test function name you list in your THEN→test mapping before submitting.** For each entry in your mapping, run `grep -rn "<test_function_name>" godot/tests/` and confirm it returns at least one match. A test name you list that does not exist in the test files is fabrication — an automatic FAIL worse than a missing test. Do not invent names of tests you intended to write; if the test is missing, write it first.
-  - **"All X are Y" THEN-clauses cannot be satisfied by a test that checks a single instance or a config string.** If your mapping entry for such a THEN-clause names a test that reads a config file, checks a version string, or asserts one representative sample, your mapping is wrong even if the test exists. Replace the mapping with a test that iterates every member of the set (via DirAccess, array loop, etc.) and asserts the predicate on each.
-  - **Before running any check, verify your branch has commits: `git log main..HEAD --oneline`.** An empty result means your branch is identical to main — you have submitted no implementation. Commit your work first. `check-branch-has-commits.sh` (included in `run-all-checks.sh`) will fail loudly on an empty branch, but do not wait for it — check before running anything. A branch with zero commits is not a partial implementation; it is no implementation.
-  - **CLI entry points require dedicated tests.** If a Python component exposes a `main()` function (or `__main__.py` entry point), write at least one pytest test that calls `main([...])` directly or invokes the module via `subprocess.run(["python", "-m", "<pkg>", ...], check=True)` and asserts exit code 0 and valid output. A THEN-clause "runs as a standalone CLI tool" is PARTIAL until this test exists. `check-extractor-cli-tested.sh` enforces this mechanically.
-  - **"Stdlib-only" or "no dependencies" constraints require an explicit import-inspection test.** If a spec THEN-clause says a component "requires no dependencies beyond stdlib" or similar, write a test that parses the package's source with `ast` and asserts every top-level import name appears in `sys.stdlib_module_names`. Do not rely on the absence of a `requirements.txt` as a proxy — that is not a test. `check-extractor-stdlib-only.sh` enforces this mechanically.
-  - **Scale scenarios require a fixture at the scale stated in the spec.** If a MUST requirement says the system works at "N modules / M files across K bounded contexts", write a test that calls the relevant function with a synthetic fixture of at least that scale (or the actual target codebase) and asserts no errors and correct output counts. A test at a smaller scale does not cover the MUST. "Performance cannot be measured in headless tests" applies only to FPS; structural correctness at scale is always testable.
+  Submitting with exit code = 1 is never valid regardless of other check results.
+  check-racf-prior-cycle.sh recovers prior FAIL reports from git history — there
+  is no submission path that evades this gate.
+
+  CONSEQUENCE: Each zero-commit re-attempt is recorded as a RACF cycle by the
+  verifier. After 3 consecutive RACF cycles the verifier flags PROCESS ESCALATION
+  REQUIRED and the orchestrator may terminate the task. There is no path to
+  completion that bypasses committing code fixes.
+
+  RE-ATTEMPT STARTUP ORDER: When the branch already has commits above main,
+  check-no-zero-commit-reattempt.sh is your ABSOLUTE FIRST action — run it
+  BEFORE bootstrap-task.sh, before reading any files, before any other step.
+  bootstrap-task.sh is only required on a fresh checkout with zero prior commits.
+
+  ## CRITICAL — FIRST BASH CALL PROTOCOL
+
+  Your VERY FIRST Bash call — before any other tool — MUST be:
+  ```
+  bash .hyperloop/bootstrap-task.sh <task-id>
+  ```
+  This performs `git checkout -B` and the empty checkpoint commit atomically.
+  If it fails, report the error and STOP.
+
+  After bootstrap succeeds, immediately run:
+  ```
+  bash .hyperloop/checks/check-commit-trailer-task-ref.sh
+  ```
+  If it exits non-zero, fix all mismatched Task-Ref trailers via
+  `git rebase -i main` before any other work. This catches setup commits
+  (e.g., Godot project scaffold) that were created under a different task ID
+  and placed on this branch before bootstrap ran.
+
+  ## CHECKPOINT COMMIT
+
+  The checkpoint commit (`chore: begin <task-id>`) is the orchestrator liveness signal.
+  - FIRST commit on the branch (chronologically oldest)
+  - EMPTY — zero file changes (`git commit --allow-empty`)
+  - Before ANY other work
+
+  ## PROJECT: code-vis
+
+  ### Python Extractor (`extractor/`)
+  - Parses kartograph codebase, outputs JSON scene graph
+  - Python 3.12+, standard library + tree-sitter only
+  - Type hints throughout
+  - Run `ruff format extractor/` (auto-fix) then `ruff format --check extractor/` (verify) before committing — applies to ALL files including test files; running only `ruff check` is insufficient
+  - Write pytest tests for extraction logic
+
+  ### Godot Application (`godot/`)
+  - Godot 4.x with GDScript
+  - Write GDScript tests in `godot/tests/` (filenames: `test_*.gd`)
+  - Every spec scenario requires a behavioral test with fixture data and assertions on scene-tree properties — not just compile checks
+  - Use headless test runner (GUT addon or custom `run_tests.gd`)
+
+  ### General Requirements
+  - JSON scene graph is the interface contract between components
+  - Dict-key assertions are NOT rendering coverage. Tests must instantiate Node3D and assert `.position`, `.visible`, property values
+  - Label3D readability: `billboard = BILLBOARD_ENABLED` and `pixel_size > 0.0`
+  - Empty `_ready()` stubs are never a complete implementation
+  - Direction/sign derivation arrows must be inline `#` comments INSIDE the function body, not `##` docstrings above it
+  - "Relative to parent" positions require tests where parent is at NON-ZERO world position AND the assertion is a direct equality check (`child["position"]["x"] == local_offset`), NOT a proximity check (`dist < radius`) — proximity passes for both absolute and relative storage
+
+  ## COMMIT TRAILERS
+
+  Every implementation commit MUST carry both trailers with values that match
+  the CURRENT task and spec:
+    Spec-Ref: <path-to-spec-file>
+    Task-Ref: <task-id>          # e.g. task-014  — NOT a prior task's ID
+
+  Before writing each commit message, confirm the Task-Ref value matches the
+  branch: `git rev-parse --abbrev-ref HEAD` prints `hyperloop/task-NNN` →
+  use `task-NNN`.  Copying a commit from another task without updating this
+  trailer is a process violation caught by `check-commit-trailer-task-ref.sh`.
+
+  ## SCOPE COMPLIANCE
+
+  Prohibited features are forbidden under ANY name. Before writing ANY code:
+  1. Read every item in the spec's "Not In Scope" section
+  2. Run `bash .hyperloop/checks/check-not-in-scope.sh` — confirm exit 0
+  3. Re-run after every logical code chunk
+  4. Include verbatim output in `worker-result.yaml` under `## Scope Check Output`
+
+  **Pre-existing scope violations (files not introduced by your branch):**
+  If check-not-in-scope.sh exits non-zero because of a file you did NOT introduce,
+  run `git log main..HEAD --oneline -- <file>` to confirm zero commits for that file.
+  Then paste the verbatim FAIL output into the Scope Check Output section as-is —
+  check-report-scope-section.sh now accepts both "OK: No prohibited" (scope passes)
+  and "FAIL: Prohibited" (scope fails, truthfully reported) as valid outputs.
+  Also add a one-line note in your findings: "File X is pre-existing (origin: <sha>);
+  not introduced by this branch."  Do NOT write "OK: No prohibited" when the check
+  exits non-zero — that is falsification and will cause an immediate FAIL verdict.
+
+  ## SUBMISSION GATES
+
+  1. `bash .hyperloop/checks/run-all-checks.sh` — must exit 0. **If it exits non-zero
+     you MUST NOT write worker-result.yaml.** Submitting a FAIL result is not a valid
+     submission — the next verifier's check-racf-prior-cycle.sh will recover the FAIL
+     report from git history and flag every still-failing check as a RACF. Fix every
+     failure, commit, and re-run until `run-all-checks.sh` exits 0.
+     NOTE: `check-worker-result-clean.sh` (included in `run-all-checks.sh`) reads your
+     worker-result.yaml and exits 1 if the pasted output contains "RESULT: FAIL". This
+     makes it mechanically impossible to submit a FAIL-containing report — the only
+     path to a passing run-all-checks.sh is to fix the underlying check failures first.
+  2. Paste COMPLETE multi-line output into `## Check Script Results` section
+  3. Paste verbatim `check-not-in-scope.sh` output into `## Scope Check Output`
+  4. Never stage files under `.hyperloop/state/` — use `git add <file>` for specific files; `git add -A` and `git add .` are forbidden because they silently capture state files
+
+  ## COMBINED REWRITE PROTOCOL (state files + checkpoint ordering)
+
+  When BOTH check-no-state-files-committed.sh AND check-checkpoint-commit-is-first.sh fail:
+  - Run filter-branch FIRST to remove state files from history — this rewrites commit SHAs
+  - Run rebase -i SECOND to reorder commits — doing it before filter-branch invalidates the plan
+  - Reversing the order requires starting over; check-combined-rewrite-guide.sh emits the exact commands
+  - Do NOT run run-all-checks.sh until both individual checks exit 0
+
+  ## SHADOW-REPLACEMENT IS FORBIDDEN
+
+  When you create a new Python file to fix or replace a function defined in an
+  existing module, you MUST choose exactly one resolution path before submitting:
+
+  Option A — Fix in-place: apply the fix directly to the original file and delete
+    the new file entirely. `check-no-duplicate-toplevel-functions.sh` must exit 0.
+
+  Option B — Import and delegate: import the new file's function in the consuming
+    file and remove the original definition from that file.
+    Both `check-new-modules-wired.sh` AND `check-no-duplicate-toplevel-functions.sh`
+    must exit 0.
+
+  Leaving both definitions active means the consuming file calls the original
+  (potentially broken) function while tests on the new file give false confidence.
+  `check-new-modules-wired.sh` and `check-no-duplicate-toplevel-functions.sh` detect
+  this — BOTH must exit 0 before you write worker-result.yaml.
+
+  Passing tests in a new module do NOT prove the production bug is fixed — they prove
+  only that module's internal logic is correct; `check-new-modules-wired.sh` exit-0 is
+  the only proof the production code path calls the fixed function.
+
+  ## PYTEST IS A HARD GATE
+
+  Run `pytest extractor/tests/ -v --tb=short` before submitting.
+  `check-pytest-passes.sh` (included in `run-all-checks.sh`) will fail your
+  submission if any test fails.  A FAILED test is a blocking error — fix the
+  implementation or fix the test's coordinate-frame assumption before re-submitting.
+  Do NOT paste run-all-checks.sh output that contains a pytest FAIL — that submission
+  is invalid.
+
+  ## RE-ATTEMPT PROTOCOL
+
+  When dispatched to a branch with prior implementation commits:
+  -1. BEFORE ANYTHING ELSE: run `bash .hyperloop/checks/check-no-zero-commit-reattempt.sh`.
+     If it exits 1, you have no code fixes committed — write and commit code that addresses
+     each failing check BEFORE proceeding to step 0. Re-reading the prior report or
+     re-running checks without first committing code is NOT a valid re-attempt action.
+  0. Sync check scripts FIRST: `git checkout main -- .hyperloop/checks/`
+     New checks are added to main after branches are created. Running stale
+     scripts produces false passes — sync ensures you run the full current set.
+     Confirm sync succeeded: `bash .hyperloop/checks/check-checks-in-sync.sh`
+     must exit 0 before proceeding.
+  0b. After syncing, immediately run `bash .hyperloop/checks/check-commit-trailer-task-ref.sh`.
+     A newly-synced check may reveal Task-Ref mismatches in EXISTING commits (e.g., a
+     commit copied from another task). If it FAILs, fix all mismatched trailers via
+     interactive rebase BEFORE any other work:
+       git rebase -i main   # mark each mismatched commit as 'reword'
+                            # change Task-Ref: task-NNN → Task-Ref: <current-task-id>
+     The current task ID is always: `git rev-parse --abbrev-ref HEAD | sed 's/hyperloop\///'`
+     This check must exit 0 before proceeding to step 1.
+  1. Run `bash .hyperloop/checks/check-racf-remediation.sh` immediately
+  2. If it fails, apply every prescribed fix before new code
+  3. If it skips, run `bash .hyperloop/checks/check-racf-prior-cycle.sh`
+  4. If that also skips, inspect recent history manually:
+     `git log --oneline -10` and `git show <sha>:.hyperloop/worker-result.yaml`
+  5. Do NOT write new tests until all prior-cycle failures are resolved
+  6. After applying prescribed fixes, COMMIT them before writing worker-result.yaml.
+     A re-attempt with no new commits is invalid — the verifier will detect it.
+     Verify with: `git log --oneline main..HEAD` (must show new commit(s))
+  7. Self-verify before writing worker-result.yaml: confirm at least one commit
+     on this branch modifies source files (not just .hyperloop/ files):
+       git log main..HEAD --name-only --format="%H" | grep -v '^$' | grep -v '^\.hyperloop/'
+     If that grep finds nothing, you have not committed any fixes — stop and fix first.
+
+  ## COORDINATE FRAME — PRODUCTION SOURCE CODE
+
+  When computing child node positions in layout code, the stored value MUST be
+  the LOCAL offset only. NEVER add parent world coordinates to the child position:
+
+    WRONG: pos_x = parent_pos[0] + math.cos(angle) * offset_r   # absolute world coord
+    RIGHT: pos_x = math.cos(angle) * offset_r                   # local offset only
+
+  Godot's main.gd adds the parent world position at render time — storing an
+  absolute coordinate here causes double-offset rendering regardless of whether
+  tests pass. `check-relative-position-tests.sh` scans ALL Python files in
+  extractor/ for this anti-pattern, not just the primary module.
+
+  ## SPATIAL LAYOUT RADIUS BOUNDS
+
+  Every child-orbit radius computed with `max(lower, n * factor)` MUST be wrapped
+  in a `min(…, parent_size * fraction)` cap. An unbounded radius places children
+  outside the parent's scene boundary and fails check-pytest-passes.sh.
+
+  Correct form:
+    bc_radius  = min(max(5.0, len(bc_nodes)  * 2.5), scene_radius * 0.8)
+    mod_radius = min(max(1.5, len(children)  * 0.9), bc_radius    * 0.4)
+
+  Run `bash .hyperloop/checks/check-layout-radius-bound.sh` before submitting.
+  A FAIL from this check is blocking and will fail the full test suite.
+
+  Module-level `_circular_positions` calls MUST use `y=0.0`. A non-zero y value
+  (e.g. `y=1.0`) adds a vertical component to every child position and inflates
+  the 3D child-to-parent distance independently of the orbit radius, causing
+  `test_child_nodes_are_near_parent_position` to fail even when the radius is
+  correctly bounded. Run `bash .hyperloop/checks/check-circular-position-y-axis.sh`
+  before submitting — any FAIL is blocking.
+
+  ## PRESCRIBED-FIX PROTOCOL
+
+  Apply fixes in this exact loop for every failing check — no exceptions:
+
+  - Step 0 — Describing a fix is NOT fixing it: writing "fix X" in a commit message
+    or verdict text does NOT constitute applying the fix. The only proof a fix was
+    applied is the specific check script exiting 0 AFTER the change. A rebase that
+    was not completed, a file edit that was not saved, or a note in a verdict message
+    about an intended action — none of these count. Run the check; if it still exits
+    non-zero, the fix was not applied.
+
+  - Step 1 — Fix at the cited location: apply the fix to the EXACT file path and
+    line number from the check's "Offending lines:" output. A fix written in a
+    different file leaves the original cited line unchanged; the check will still
+    FAIL on the next run.
+
+  - Step 2 — Verify then commit: after applying the fix, run THAT SPECIFIC check
+    (`bash .hyperloop/checks/<check>.sh`) to confirm exit 0, then commit
+    (`git commit -m 'fix: <description>'`). Do not accumulate multiple fixes before
+    committing — each fix requires its own commit and exit-0 confirmation.
+
+  - Step 2b — Rebase fixes require the rebase to actually complete: if
+    `check-commit-trailer-task-ref.sh` fails, you must run `git rebase -i main`,
+    mark the offending commit as `reword`, change the trailer text in the editor,
+    save, and confirm the rebase finishes. After the rebase, run
+    `bash .hyperloop/checks/check-commit-trailer-task-ref.sh` — it must exit 0.
+    A comment in a subsequent commit message saying "fix Task-Ref on commit X" does
+    NOT change commit X's trailer. Only the rebase changes the commit object.
+
+  - Step 2c — After any rebase intended to fix a Task-Ref, verify the commit hash
+    changed. Run `git log --oneline main..HEAD` and confirm the SHA you rewrote is
+    ABSENT — a new SHA must appear in its place. If the old SHA is still present,
+    the rebase did not modify the commit; do not proceed until it is gone.
+    `check-task-ref-report-not-falsified.sh` will exit 1 if worker-result.yaml
+    claims the check passed while the old SHA remains.
+
+  - Step 2d — Never write check output from memory or copy it from a prior run.
+    Run each check immediately before pasting its output into worker-result.yaml.
+    Output produced in a prior session, before a fix was applied, or by a different
+    check is falsification — `check-task-ref-report-not-falsified.sh` and
+    `check-scope-report-not-falsified.sh` detect this mechanically and exit 1.
+
+  - Step 3 — Fix in dependency order when multiple checks fail:
+      1. Trailer/history fixes (check-commit-trailer-task-ref.sh) — rebase only, no code
+      2. Dead-code / wiring fixes (check-no-duplicate-toplevel-functions.sh, check-new-modules-wired.sh)
+      3. Coordinate-frame fixes (check-relative-position-tests.sh F3a)
+      4. Axis fixes (check-circular-position-y-axis.sh — y=1.0 → y=0.0)
+      5. Radius-bound fixes (check-layout-radius-bound.sh — add min() cap)
+      6. Run pytest (check-pytest-passes.sh) — should now pass from steps 3–5
+      7. Precision tests (check-relative-position-tests.sh F3b) — add after code is correct
+    Fixing a downstream check before its upstream cause always fails and wastes a cycle.
+
+  - Step 4 — Submission gate: check-no-zero-commit-reattempt.sh exiting 1 is an
+    absolute blocker. Writing worker-result.yaml with this check failing is invalid;
+    the verifier's check-racf-prior-cycle.sh will recover and flag it as RACF.
+
+  - Step 5 — Verify cited files were committed: run
+    `bash .hyperloop/checks/check-prescribed-fixes-applied.sh` — it exits 1 if any
+    file listed in a prior "Offending lines:" citation has zero commits since the FAIL
+    report. A fix applied to the wrong file still fails this check; the cited file must
+    itself appear in a commit.
+
+  ## DIRECTIONAL BEHAVIOR AND SIGN CONVENTIONS
+
+  - Sign derivation before coding: Before implementing ANY directional movement (pan,
+    orbit, zoom, drag), derive the expected sign from the spec's concrete example — the
+    "(i.e.)" parenthetical if present. Write the full derivation chain as an inline `#`
+    comment immediately BEFORE the implementation line (e.g., `# drag left → grab model
+    → pivot moves RIGHT → negate delta.x`). Write the comment first, then the code.
+    Implementing without this derivation comment is a process violation.
+
+  - Directional test predicates are mandatory: Any test that asserts a direction or sign
+    MUST use a signed comparison (`cam._pivot.x < initial_x`, `cam._pivot.z > 0.0`).
+    An assertion of `!= initial_value` or `!= Vector3.ZERO` verifies only that movement
+    occurred — a sign-inverted implementation passes it identically. Run
+    `bash .hyperloop/checks/check-nondirectional-movement-assertions.sh` before submitting;
+    a FAIL is blocking.
+
+  - Spec contradiction escalation — STOP and flag: When a spec THEN-clause contains
+    internally contradictory direction language (e.g., two sentences imply opposite signs;
+    a THEN-clause says "pans in the direction of drag" but an "(i.e.)" parenthetical
+    implies the opposite), do NOT choose an interpretation silently. STOP. Write the
+    contradictory sentences verbatim in `worker-result.yaml` under a `## SPEC AMBIGUITY`
+    heading and halt the implementation of that scenario until the process owner provides
+    explicit clarification. Proceeding silently always produces a FAIL on the clauses that
+    were not satisfied.
+
+  ## ZERO-COMMIT RE-ATTEMPT GATE
+
+  Run `bash .hyperloop/checks/check-no-zero-commit-reattempt.sh` alone BEFORE
+  running run-all-checks.sh. A FAIL from this check makes all other check output
+  irrelevant — do not read, interpret, or paste any other check's output until you
+  have committed code fixes to the files cited in the prior FAIL report. Reading the
+  prior report, re-running checks, or updating worker-result.yaml does NOT count as
+  making a fix; only a committed change to a source file satisfies this gate.

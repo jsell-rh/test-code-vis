@@ -464,6 +464,43 @@ func test_lod_edge_entries_populated_after_build() -> void:
 		"LOD edge entries must include internal type")
 
 
+## AND boundaries between elements are visually clear (module side) —
+## The module uses an opaque material (alpha == 1.0), which visually contrasts
+## with the translucent context boundary (alpha < 1.0). Together the two tests
+## `test_context_boundary_is_visually_distinct_translucent` and
+## `test_module_boundary_is_opaque` confirm that boundary regions are
+## perceptually distinct from the volumes they contain.
+## Implemented by: main.gd → _create_volume()
+##   module: `mat.albedo_color = Color(0.35, 0.70, 0.40, 1.0)` (alpha == 1.0)
+func test_module_boundary_is_opaque() -> void:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_multi_service_fixture())
+	var anchors: Dictionary = main_node.get("_anchors")
+	var mod_anchor: Node3D = anchors["svc_a.mod1"]
+
+	# Find the MeshInstance3D child of the module anchor.
+	var mod_mesh: MeshInstance3D = null
+	for child: Node in mod_anchor.get_children():
+		if child is MeshInstance3D:
+			mod_mesh = child as MeshInstance3D
+			break
+
+	_check(mod_mesh != null, "Module anchor must have a MeshInstance3D child")
+	if mod_mesh == null:
+		return
+
+	var mat := mod_mesh.material_override as StandardMaterial3D
+	_check(mat != null, "Module MeshInstance3D must have a StandardMaterial3D override")
+	if mat == null:
+		return
+
+	# Opacity: alpha must be == 1.0 — contrast with context alpha < 1.0 makes
+	# the spatial boundary between regions visually clear.
+	_check(mat.albedo_color.a >= 1.0,
+		"Module boundary material must be fully opaque (alpha >= 1.0) — contrast with "
+		+ "translucent context makes boundaries visually clear")
+
+
 ## LOD integrates with main: applying far LOD via lod_manager hides modules.
 ## This end-to-end test builds a graph, then calls update_lod() directly
 ## on the LOD manager with the populated entries, and asserts module visibility.

@@ -12,6 +12,7 @@
 ##     GIVEN any camera position
 ##     WHEN the user drags in any direction
 ##     THEN the scene moves in the same direction as the drag
+##         (i.e. dragging left reveals content to the right, as in Google Maps)
 ##
 ## Requirement: Zoom Toward Mouse Cursor
 ##   Scenario: Zooming into a specific component
@@ -95,52 +96,100 @@ func test_lmb_pan_moves_pivot() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Non-Inverted Movement
+# Non-Inverted Movement — Map-Grab Model (Google Maps)
 # THEN the scene moves in the same direction as the drag
 # AND the movement direction matches the drag direction (not inverted)
 #
-# In a headless test global_transform is identity → basis.x = (1,0,0).
-# Dragging right (positive delta.x) must increase pivot.x.
+# Map-grab (Google Maps) model: the pivot moves OPPOSITE to drag direction so
+# that scene content follows the drag.  In headless mode global_transform is
+# identity → basis.x = (1,0,0), basis.z = (0,0,1).
+#
+# Implementation: _pivot -= right * delta.x * pan_amount
+#                 _pivot -= forward * delta.y * pan_amount
 # ---------------------------------------------------------------------------
 
 func test_pan_drag_right_decreases_pivot_x() -> bool:
-	# Map-grab model: drag right → pivot moves LEFT (reveals content to the left).
-	# Spec: "dragging left reveals content to the right, as in Google Maps".
-	# Equivalently, drag right → reveals content to the left → pivot.x DECREASES.
 	var cam = _make_cam()
 	var initial_x: float = cam._pivot.x
 
 	_press_lmb(cam, Vector2(100.0, 100.0))
 	_move_mouse(cam, Vector2(150.0, 100.0))  # drag right → delta.x = +50
 
+	# Map-grab sign derivation — drag right:
+	#   drag right → delta.x = +50 → _pivot -= right(1,0,0) * +50 * pan_amount
+	#   → pivot.x decreases → camera looks left → scene shifts right on screen
+	#   → content from the left enters view ✓  (scene moves right = same direction as drag)
 	return cam._pivot.x < initial_x
 
 
 func test_pan_drag_left_increases_pivot_x() -> bool:
-	# Map-grab model: drag left → pivot moves RIGHT (reveals content to the right).
-	# Spec: "dragging left reveals content to the right, as in Google Maps".
-	# → pivot.x INCREASES.
 	var cam = _make_cam()
 	var initial_x: float = cam._pivot.x
 
 	_press_lmb(cam, Vector2(100.0, 100.0))
 	_move_mouse(cam, Vector2(50.0, 100.0))  # drag left → delta.x = -50
 
+	# Map-grab sign derivation — drag left:
+	#   drag left → delta.x = -50 → _pivot -= right(1,0,0) * (-50) * pan_amount
+	#   → pivot.x increases → camera looks right → scene shifts left on screen
+	#   → content from the right enters view ✓  (spec: "dragging left reveals content to the right")
 	return cam._pivot.x > initial_x
 
 
-# The scene "moves in the same direction" — dragging down reveals content above
-# by shifting pivot in the negative forward direction (map-grab model).
+## Spec: "THEN the scene moves in the same direction as the drag
+##        (i.e. dragging left reveals content to the right, as in Google Maps)"
+##
+## Map-grab model: a right drag reveals content from the left.
 func test_drag_direction_matches_view_movement() -> bool:
 	var cam = _make_cam()
+	var initial_x: float = cam._pivot.x  # starts at 0.0
 
-	# Drag down → delta.y = +50.  Map-grab: _pivot -= forward * delta.y * pan_amount.
-	# In headless identity transform, forward = basis.z = (0,0,1).
-	# So _pivot.z DECREASES.  Assert pivot.z < 0.0.
 	_press_lmb(cam, Vector2(100.0, 100.0))
-	_move_mouse(cam, Vector2(100.0, 150.0))  # drag down 50 px
+	_move_mouse(cam, Vector2(150.0, 100.0))  # drag right 50 px → delta.x = +50
 
-	return cam._pivot.z < 0.0
+	# Map-grab sign derivation — drag right:
+	#   drag right → delta.x = +50 → _pivot -= right(1,0,0) * +50 * pan_amount
+	#   → pivot.x decreases below initial_x → camera looks left → scene shifts right on screen
+	#   → content from the left enters view ✓  (scene moves in same direction as drag)
+	return cam._pivot.x < initial_x
+
+
+## Spec: "Dragging up moves the view up."
+## In headless mode global_transform is identity → forward = basis.z = (0,0,1).
+##
+## Map-grab sign derivation — drag down (screen Y increases):
+##   drag down → delta.y = +50 → _pivot -= forward(0,0,1) * +50 * pan_amount
+##   → pivot.z decreases → camera looks toward -Z → scene shifts toward +Z on screen
+##   → content from the -Z side enters view ✓
+func test_pan_drag_down_decreases_pivot_z() -> bool:
+	var cam = _make_cam()
+	var initial_z: float = cam._pivot.z
+
+	_press_lmb(cam, Vector2(100.0, 100.0))
+	_move_mouse(cam, Vector2(100.0, 150.0))  # drag down → delta.y = +50
+
+	# drag down → delta.y = +50 → _pivot -= forward(0,0,1) * +50 * pan_amount
+	# → pivot.z decreases → scene shifts downward on screen, content from above enters view ✓
+	return cam._pivot.z < initial_z
+
+
+## Spec: "Dragging up moves the view up."
+## In headless mode global_transform is identity → forward = basis.z = (0,0,1).
+##
+## Map-grab sign derivation — drag up (screen Y decreases):
+##   drag up → delta.y = -50 → _pivot -= forward(0,0,1) * (-50) * pan_amount
+##   → pivot.z increases → camera looks toward +Z → scene shifts toward -Z on screen
+##   → content from the +Z side enters view ✓
+func test_pan_drag_up_increases_pivot_z() -> bool:
+	var cam = _make_cam()
+	var initial_z: float = cam._pivot.z
+
+	_press_lmb(cam, Vector2(100.0, 100.0))
+	_move_mouse(cam, Vector2(100.0, 50.0))  # drag up → delta.y = -50
+
+	# drag up → delta.y = -50 → _pivot -= forward(0,0,1) * (-50) * pan_amount
+	# → pivot.z increases → scene shifts upward on screen, content from below enters view ✓
+	return cam._pivot.z > initial_z
 
 
 # ---------------------------------------------------------------------------
@@ -150,9 +199,13 @@ func test_drag_direction_matches_view_movement() -> bool:
 # ---------------------------------------------------------------------------
 
 func test_zoom_toward_cursor_shifts_pivot_toward_cursor() -> bool:
+	# zoom in (direction < 0) → target_distance decreases → zoom_fraction = 1-(smaller/larger) > 0 → pivot lerps toward cursor → pivot.x increases from 0 ✓
 	var cam = _make_cam()
 	# Pivot starts at origin; cursor is at world (10, 0, 0).
 	var cursor_world := Vector3(10.0, 0.0, 0.0)
+	# cursor at (10,0,0), pivot at (0,0,0):
+	#   zoom in → step < 0 → target_distance decreases → zoom_fraction = 1-(smaller/larger) > 0
+	#   → pivot.lerp(cursor, positive) → pivot.x > 0.0 ✓
 	cam._zoom_toward_cursor(cursor_world, -cam.zoom_speed)  # zoom in
 
 	# Pivot must have shifted toward the cursor (x increases from 0).
@@ -165,6 +218,7 @@ func test_component_stays_under_cursor_on_zoom_in() -> bool:
 	var cursor_world := Vector3(20.0, 0.0, 0.0)
 	var before: float = cam._pivot.x  # 0.0
 
+	# zoom in → pivot.lerp(cursor_world, positive_fraction) → pivot moves toward cursor ✓
 	cam._zoom_toward_cursor(cursor_world, -cam.zoom_speed)
 
 	# The pivot is now closer to the cursor than it was before.
@@ -182,16 +236,34 @@ func test_zoom_out_from_cursor_shifts_pivot_away() -> bool:
 	# Place pivot between origin and cursor.
 	cam._pivot = Vector3(5.0, 0.0, 0.0)
 	var cursor_world := Vector3(10.0, 0.0, 0.0)
-
+	# zoom out → step > 0 → target_distance increases →
+	# zoom_fraction = 1 − (larger / smaller) < 0 → pivot.lerp(cursor, negative) →
+	# pivot shifts away from cursor → pivot.x decreases below 5.0 ✓
 	cam._zoom_toward_cursor(cursor_world, cam.zoom_speed)  # zoom out
 
 	# Pivot should move away from cursor (x decreases below 5).
 	return cam._pivot.x < 5.0
 
 
+## Edge case: cursor exactly at pivot — pivot must not move.
+## Spec: "the component under the cursor stays under the cursor during the zoom"
+## When cursor == pivot, no shift should occur regardless of direction.
+func test_zoom_cursor_at_pivot_does_not_shift_pivot() -> bool:
+	# cursor == pivot → lerp(cursor, cursor, zoom_fraction) = cursor → pivot unchanged ✓
+	var cam = _make_cam()
+	cam._pivot = Vector3(3.0, 0.0, 3.0)
+	var initial_pivot: Vector3 = cam._pivot
+
+	# Cursor is exactly at the pivot — pivot must stay fixed regardless of zoom direction.
+	cam._zoom_toward_cursor(cam._pivot, -cam.zoom_speed)  # zoom in with cursor at pivot
+
+	return cam._pivot == initial_pivot
+
+
 func test_zoom_out_increases_target_distance() -> bool:
 	var cam = _make_cam()
 	var initial_target: float = cam._target_distance
+	# zoom out → step > 0 → target_distance increases ✓
 	cam._zoom_toward_cursor(cam._pivot, cam.zoom_speed)
 
 	return cam._target_distance > initial_target
@@ -205,7 +277,7 @@ func test_zoom_out_increases_target_distance() -> bool:
 func test_orbit_pivot_set_to_cursor_point_at_start() -> bool:
 	var cam = _make_cam()
 	# In headless mode _mouse_to_ground returns _pivot, so call _set_orbit_pivot
-	# directly with a known world point — the production code calls exactly this
+	# directly with a known world point — production code calls exactly this
 	# from _handle_button when RMB is pressed.
 	var world_point := Vector3(5.0, 0.0, 7.0)
 	cam._set_orbit_pivot(world_point)
@@ -221,7 +293,7 @@ func test_orbit_pivot_is_used_during_orbit() -> bool:
 	var pivot_before: Vector3 = cam._pivot
 
 	# Orbit: RMB already set the pivot; subsequent motion keeps pivot the same
-	# (orbit rotates the camera around _pivot, it does not move _pivot).
+	# (orbit rotates the camera around _pivot without moving _pivot itself).
 	cam._orbiting = true
 	cam._last_mouse = Vector2(100.0, 100.0)
 	_move_mouse(cam, Vector2(120.0, 100.0))  # horizontal drag
@@ -270,10 +342,13 @@ func test_zoom_is_interpolated_not_instantaneous() -> bool:
 	cam._process(0.016)
 	var after_one_frame: float = cam._distance
 
-	# Must have moved toward target but not fully snapped.
+	# Must have moved toward target but not fully snapped:
+	# after_one_frame < initial_distance (moved toward smaller target)
+	# after_one_frame > target (not yet fully at target — still interpolating) ✓
 	return after_one_frame < initial_distance and after_one_frame > target
 
 
+## Boundary: repeated zoom-in must not push _target_distance below min_distance.
 func test_target_distance_clamped_at_minimum() -> bool:
 	var cam = _make_cam()
 	var e := InputEventMouseButton.new()
@@ -282,9 +357,11 @@ func test_target_distance_clamped_at_minimum() -> bool:
 	e.position = Vector2(0.0, 0.0)
 	for _i: int in range(200):
 		cam._handle_button(e)
+	# Boundary assertion: target must be clamped ≥ min_distance ✓
 	return cam._target_distance >= cam.min_distance
 
 
+## Boundary: repeated zoom-out must not push _target_distance above max_distance.
 func test_target_distance_clamped_at_maximum() -> bool:
 	var cam = _make_cam()
 	var e := InputEventMouseButton.new()
@@ -293,10 +370,11 @@ func test_target_distance_clamped_at_maximum() -> bool:
 	e.position = Vector2(0.0, 0.0)
 	for _i: int in range(200):
 		cam._handle_button(e)
+	# Boundary assertion: target must be clamped ≤ max_distance ✓
 	return cam._target_distance <= cam.max_distance
 
 
-## _theta boundary: extreme upward orbit drag must not push theta below 0.01.
+## Boundary: extreme upward orbit drag must not push theta below 0.01 (prevents flip).
 func test_theta_clamped_at_minimum() -> bool:
 	var cam = _make_cam()
 	var press := InputEventMouseButton.new()
@@ -305,16 +383,17 @@ func test_theta_clamped_at_minimum() -> bool:
 	press.position = Vector2(100.0, 100.0)
 	cam._handle_button(press)
 
-	# Large positive delta.y drives theta toward 0 (top-down).
+	# Large positive delta.y drives theta toward 0 (top-down pole).
 	cam._last_mouse = Vector2(100.0, 100.0)
 	var motion := InputEventMouseMotion.new()
 	motion.position = Vector2(100.0, 9200.0)  # +9100 px downward
 	cam._handle_motion(motion)
 
+	# Boundary assertion: theta must be clamped ≥ 0.01 ✓
 	return cam._theta >= 0.01
 
 
-## _theta boundary: extreme downward orbit drag must not push theta above PI-0.01.
+## Boundary: extreme downward orbit drag must not push theta above PI-0.01.
 func test_theta_clamped_at_maximum() -> bool:
 	var cam = _make_cam()
 	var press := InputEventMouseButton.new()
@@ -323,12 +402,13 @@ func test_theta_clamped_at_maximum() -> bool:
 	press.position = Vector2(100.0, 100.0)
 	cam._handle_button(press)
 
-	# Large negative delta.y drives theta toward PI (straight below).
+	# Large negative delta.y drives theta toward PI (nadir pole).
 	cam._last_mouse = Vector2(100.0, 100.0)
 	var motion := InputEventMouseMotion.new()
 	motion.position = Vector2(100.0, -9000.0)  # -9100 px upward
 	cam._handle_motion(motion)
 
+	# Boundary assertion: theta must be clamped ≤ PI - 0.01 ✓
 	return cam._theta <= PI - 0.01
 
 
@@ -338,6 +418,9 @@ func test_theta_clamped_at_maximum() -> bool:
 # ---------------------------------------------------------------------------
 
 func test_pan_proportional_to_drag_speed() -> bool:
+	# Proportionality: a larger drag distance produces a proportionally larger pivot shift.
+	# drag 10px → delta.x=10 → pivot -= right * 10 * pan_amount → |pivot.x| = 10 * pan_amount
+	# drag 50px → delta.x=50 → pivot -= right * 50 * pan_amount → |pivot.x| = 50 * pan_amount → move2 > move1 ✓
 	var cam1 = _make_cam()
 	var cam2 = _make_cam()
 
@@ -351,5 +434,6 @@ func test_pan_proportional_to_drag_speed() -> bool:
 	_move_mouse(cam2, Vector2(150.0, 100.0))
 	var move2: float = cam2._pivot.length()
 
-	# Larger drag must produce a larger pivot displacement.
+	# small drag 10px → |pivot offset| = 10 * pan_amount
+	# large drag 50px → |pivot offset| = 50 * pan_amount → move2 > move1 ✓
 	return move2 > move1

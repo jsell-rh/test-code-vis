@@ -85,6 +85,16 @@ func _handle_button(event: InputEventMouseButton) -> void:
 
 
 ## Zoom _target_distance and shift _pivot so the cursor world-point stays fixed.
+##
+## Sign derivation — zoom-in (direction < 0):
+##   step < 0 → target_distance decreases →
+##   zoom_fraction = 1 − (smaller / larger) > 0 → pivot.lerp(cursor, +f) →
+##   pivot shifts toward cursor → component stays under cursor ✓
+##
+## Sign derivation — zoom-out (direction > 0):
+##   step > 0 → target_distance increases →
+##   zoom_fraction = 1 − (larger / smaller) < 0 → pivot.lerp(cursor, −f) →
+##   pivot shifts away from cursor → view expands outward from cursor point ✓
 func _zoom_toward_cursor(cursor_world: Vector3, direction: float) -> void:
 	var old_target: float = _target_distance
 	var step: float = direction * (_target_distance * 0.05 + 1.0)
@@ -121,9 +131,17 @@ func _handle_motion(event: InputEventMouseMotion) -> void:
 		_update_transform()
 
 	elif _panning:
-		# Move the pivot in the camera's local XZ plane.
-		# Map-grab model (Google Maps): drag right → pivot moves LEFT (reveals content to the left).
-		# Negate delta so pivot moves opposite to drag direction.
+		# Move the pivot in the camera's local XZ plane using the map-grab model.
+		#
+		# Map-grab (Google Maps) sign derivation — drag right (delta.x > 0):
+		#   drag right → delta.x = +50 → _pivot -= right(1,0,0) * +50 * pan_amount
+		#   → pivot.x decreases → camera looks left → scene shifts right on screen
+		#   → content from the left enters view ✓  (matches "scene moves right" = drag direction)
+		#
+		# Drag left (delta.x < 0):
+		#   drag left → delta.x = -50 → _pivot -= right(1,0,0) * (-50) * pan_amount
+		#   → pivot.x increases → camera looks right → scene shifts left on screen
+		#   → content from the right enters view ✓  (spec: "dragging left reveals content to the right")
 		var right: Vector3 = global_transform.basis.x
 		var forward: Vector3 = Vector3(
 			global_transform.basis.z.x,
