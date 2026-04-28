@@ -8,7 +8,7 @@ set -e
 FAIL=0
 
 # ── 1. Moldable views ─────────────────────────────────────────────────────────
-# Prohibited script files
+# 1a. Prohibited script files (by historic name)
 for f in godot/scripts/question_panel.gd godot/scripts/view_spec.gd godot/scripts/view_spec_renderer.gd; do
   if [ -f "$f" ]; then
     echo "FAIL: Prohibited file present: $f (moldable views are not in scope)"
@@ -16,7 +16,7 @@ for f in godot/scripts/question_panel.gd godot/scripts/view_spec.gd godot/script
   fi
 done
 
-# Prohibited test files
+# 1b. Prohibited test files (by historic name)
 for f in godot/tests/test_question_panel.gd godot/tests/test_view_spec.gd godot/tests/test_view_spec_renderer.gd; do
   if [ -f "$f" ]; then
     echo "FAIL: Prohibited test file present: $f (covers a not-in-scope feature)"
@@ -24,7 +24,25 @@ for f in godot/tests/test_question_panel.gd godot/tests/test_view_spec.gd godot/
   fi
 done
 
-# Wiring in main.gd
+# 1c. Moldable views by FEATURE KEYWORDS — catches renamed implementations.
+# The prohibited feature is "moldable views (LLM-powered question-driven views)".
+# Any code that implements this feature — under any file or class name — is prohibited.
+MOLDABLE_PATTERN="LlmViewGenerator\|llm_view_generator\|SceneInterpreter\|scene_interpreter\|moldable.view\|MoldableView\|build_prompt\b\|parse_response\b\|apply_spec\b"
+if grep -rl "$MOLDABLE_PATTERN" godot/ 2>/dev/null | grep -q .; then
+  echo "FAIL: Moldable-views feature detected by keyword search — prohibited regardless of file name."
+  echo "  The spec bans the FEATURE (moldable views / LLM-powered question-driven views), not just specific file names."
+  echo "  Matched files:"
+  grep -rl "$MOLDABLE_PATTERN" godot/ 2>/dev/null || true
+  FAIL=1
+fi
+
+# 1d. LLM question-UI wiring in main.gd (moldable-views pipeline entry point)
+if grep -q "_add_question_ui\|_call_llm\|_on_ask_button_pressed\|_on_question_submitted" godot/scripts/main.gd 2>/dev/null; then
+  echo "FAIL: main.gd contains moldable-views UI/LLM wiring — prohibited"
+  FAIL=1
+fi
+
+# 1e. Historic wiring patterns in main.gd
 if grep -q "question_panel\|QuestionPanel\|ViewSpec\|view_spec_requested\|view_spec_renderer\|ViewSpecRenderer" godot/scripts/main.gd 2>/dev/null; then
   echo "FAIL: main.gd contains references to prohibited moldable-views code"
   FAIL=1
@@ -46,13 +64,69 @@ if grep -rq "TestSpecExtraction\|test_spec_extraction\|src_with_specs" extractor
 fi
 
 # ── 3. Other prohibited modes (belt-and-suspenders) ──────────────────────────
-if grep -rq "conformance.mode\|evaluation.mode\|simulation.mode" godot/scripts/ extractor/ 2>/dev/null; then
-  echo "FAIL: Prohibited mode (conformance/evaluation/simulation) detected"
+# Use -i (case-insensitive) to catch title-cased usage such as "Conformance Mode",
+# "Evaluation Mode", "Simulation Mode" in addition to snake_case and lowercase forms.
+# Previously this check used case-sensitive patterns and missed pre-existing scripts
+# (understanding_analyzer.gd, understanding_overlay.gd) that used title-cased labels.
+#
+# Scope: only flag files INTRODUCED by the current branch (i.e., present in
+# git diff main..HEAD --name-only). Pre-existing files on main are attributed to
+# their originating task — flagging them here creates an unresolvable deadlock
+# because the current implementer cannot be required to clean up prior work.
+# Pre-existing violations are reported as NOTEs (informational) but do NOT set FAIL.
+_MODE_PATTERN="conformance.mode\|evaluation.mode\|simulation.mode"
+_ALL_MATCHES=$(grep -rli "$_MODE_PATTERN" godot/scripts/ extractor/ 2>/dev/null || true)
+if [ -n "$_ALL_MATCHES" ]; then
+  # Determine which files were introduced by this branch.
+  _BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+  if [[ "$_BRANCH" != "main" && "$_BRANCH" != "HEAD" ]]; then
+    _BRANCH_FILES=$(git diff main..HEAD --name-only 2>/dev/null || true)
+  else
+    # On main itself every file is "branch-introduced" (no filtering).
+    _BRANCH_FILES="$_ALL_MATCHES"
+  fi
+  _BRANCH_VIOLATIONS=""
+  _PREEXISTING_VIOLATIONS=""
+  for _f in $_ALL_MATCHES; do
+    if echo "$_BRANCH_FILES" | grep -qF "$_f"; then
+      _BRANCH_VIOLATIONS="$_BRANCH_VIOLATIONS $_f"
+    else
+      _PREEXISTING_VIOLATIONS="$_PREEXISTING_VIOLATIONS $_f"
+    fi
+  done
+  if [ -n "$_BRANCH_VIOLATIONS" ]; then
+    echo "FAIL: Prohibited mode (conformance/evaluation/simulation) detected"
+    echo "  Matched files (introduced by this branch):"
+    for _f in $_BRANCH_VIOLATIONS; do echo "  $_f"; done
+    FAIL=1
+  fi
+  if [ -n "$_PREEXISTING_VIOLATIONS" ]; then
+    echo "NOTE: Pre-existing prohibited-mode patterns detected in files that originate from main"
+    echo "  (NOT introduced by this branch — attributed to their originating task, not to you):"
+    for _f in $_PREEXISTING_VIOLATIONS; do
+      _origin=$(git log --oneline -1 -- "$_f" 2>/dev/null || echo "unknown")
+      echo "  $_f  (origin: $_origin)"
+    done
+    echo "  These are informational only and do NOT count as a FAIL for this branch."
+  fi
+fi
+
+# Data flow visualization: check broad semantic synonyms across scripts AND tests.
+# The prohibited feature covers any implementation of path/flow/aggregate overlay
+# visualisation — regardless of file name or class name.
+DATA_FLOW_PATTERN="data\.flow\|dataflow\|flow_overlay\|FlowOverlay\|show_path\b\|show_aggregate\b\|flow\.path\|flow_path\|clear_path\b\|is_path_active\b\|FlowPath\b"
+if grep -rq "$DATA_FLOW_PATTERN" godot/scripts/ godot/tests/ extractor/ 2>/dev/null; then
+  echo "FAIL: Prohibited data-flow visualization code detected (matched by feature keyword)."
+  echo "  The spec bans the FEATURE (data flow visualization), not just specific file names."
+  echo "  Matched files:"
+  grep -rl "$DATA_FLOW_PATTERN" godot/scripts/ godot/tests/ extractor/ 2>/dev/null || true
   FAIL=1
 fi
 
-if grep -rq "data.flow\|dataflow" godot/scripts/ extractor/ 2>/dev/null; then
-  echo "FAIL: Prohibited data-flow visualization code detected"
+# Data flow: also catch any file whose docstring cites the prohibited spec section.
+if grep -rq "data-flow\.spec\|data_flow\.spec\|visualization/data.flow" godot/ extractor/ 2>/dev/null; then
+  echo "FAIL: A file references specs/visualization/data-flow.spec.md in its docstring — this is an implementation of the prohibited data-flow visualization feature."
+  grep -rl "data-flow\.spec\|data_flow\.spec\|visualization/data.flow" godot/ extractor/ 2>/dev/null || true
   FAIL=1
 fi
 

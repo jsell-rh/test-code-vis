@@ -1,62 +1,81 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # check-checks-in-sync.sh
-# Fail if any check script present on the main branch is absent from this worktree.
 #
-# Motivation: check scripts are added to main over time. A worktree branched before
-# a check was added will silently skip it when running run-all-checks.sh.
-# This script detects that gap so implementers are forced to sync before submitting.
+# Verifies that every check script in main::.hyperloop/checks/ is also
+# present in the working tree.
 #
-# Resolution: git checkout main -- .hyperloop/checks/
+# Observed pattern (task-001, cycle 11):
+#   check-layout-radius-bound.sh was added to main AFTER the task branch was
+#   created. The implementer did not run `git checkout main -- .hyperloop/checks/`
+#   before submitting, so that check was absent from their run-all-checks.sh
+#   output, giving a false impression of a smaller failing set.
+#
+# The verifier overlay documents this risk and references this script:
+#   "The check-checks-in-sync.sh script in the master runner also detects this gap."
+#   "Flag missing check scripts as a process violation in your findings."
+#
+# This script makes that detection mechanical: if a check script exists on main
+# but not in the working tree, the implementer did not sync and their check run
+# is incomplete.
+#
+# Exit 0 = working tree is in sync with main (or on main / not a task branch).
+# Exit 1 = one or more checks present on main are absent from the working tree.
 
 set -uo pipefail
 
 CHECKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+SELF="$(basename "${BASH_SOURCE[0]}")"
 
-if [ -z "$GIT_ROOT" ]; then
-    echo "SKIP: Not inside a git repository"
+# Only meaningful on task branches.
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+if [[ -z "$CURRENT_BRANCH" || "$CURRENT_BRANCH" == "HEAD" || "$CURRENT_BRANCH" == "main" ]]; then
+    echo "SKIP: Not on a task branch."
     exit 0
 fi
 
-# Path to checks dir relative to git root (used for git ls-tree)
-CHECKS_REL="${CHECKS_DIR#${GIT_ROOT}/}"
+# List check scripts in main::.hyperloop/checks/ using git ls-tree.
+MAIN_CHECKS=$(git ls-tree --name-only "main:.hyperloop/checks/" 2>/dev/null \
+    | grep '\.sh$' \
+    || true)
 
-# Resolve main ref — try local 'main', then 'origin/main'
-MAIN_REF=""
-for candidate in main origin/main; do
-    if git rev-parse --verify "$candidate" >/dev/null 2>&1; then
-        MAIN_REF="$candidate"
-        break
-    fi
-done
-
-if [ -z "$MAIN_REF" ]; then
-    echo "SKIP: Could not resolve 'main' or 'origin/main' — skipping sync check"
+if [[ -z "$MAIN_CHECKS" ]]; then
+    echo "SKIP: Cannot list checks on main (git ls-tree failed — possibly no main branch)."
     exit 0
 fi
 
 FAIL=0
-CHECKED=0
+MISSING=()
 
-while IFS= read -r name; do
-    [ -z "$name" ] && continue
-    [[ "$name" == *.sh ]] || continue
-    CHECKED=$((CHECKED + 1))
-    if [ ! -f "$CHECKS_DIR/$name" ]; then
-        echo "FAIL: '$name' exists on $MAIN_REF but is missing from this worktree."
-        echo "      Run: git checkout $MAIN_REF -- $CHECKS_REL/$name"
-        echo "      Or sync all checks at once: git checkout $MAIN_REF -- $CHECKS_REL/"
+while IFS= read -r check_name; do
+    [[ -z "$check_name" ]] && continue
+    # Skip self to avoid false positives on first run before this script is on main.
+    [[ "$check_name" == "$SELF" ]] && continue
+
+    check_path="$CHECKS_DIR/$check_name"
+    if [[ ! -f "$check_path" ]]; then
+        MISSING+=("$check_name")
         FAIL=1
     fi
-done < <(git ls-tree --name-only "${MAIN_REF}:${CHECKS_REL}" 2>/dev/null || true)
+done <<< "$MAIN_CHECKS"
 
-if [ $CHECKED -eq 0 ]; then
-    echo "OK: No check scripts found on $MAIN_REF to compare against"
+if [[ $FAIL -eq 0 ]]; then
+    echo "OK: All check scripts from main are present in working tree ($(echo "$MAIN_CHECKS" | wc -l | tr -d ' ') checked)."
     exit 0
 fi
 
-if [ $FAIL -eq 1 ]; then
-    exit 1
-fi
-
-echo "OK: All check scripts from $MAIN_REF are present in this worktree"
+echo "FAIL: ${#MISSING[@]} check script(s) present on main are missing from this working tree:"
+for name in "${MISSING[@]}"; do
+    echo "  $name"
+done
+echo ""
+echo "  These checks were added to main after this branch was created."
+echo "  Without syncing, they cannot fire — their FAILs are invisible to run-all-checks.sh."
+echo ""
+echo "  Fix: sync from main before re-running checks:"
+echo "    git checkout main -- .hyperloop/checks/"
+echo "    bash .hyperloop/checks/run-all-checks.sh"
+echo ""
+echo "  This is a process violation (implementer did not sync checks as required"
+echo "  by the re-attempt protocol, step 0). Every FAIL produced by the missing"
+echo "  checks is still blocking regardless of when the check was added."
+exit 1
