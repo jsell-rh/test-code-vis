@@ -74,7 +74,11 @@ guidelines: |
 
   ## SUBMISSION GATES
 
-  1. `bash .hyperloop/checks/run-all-checks.sh` — must exit 0
+  1. `bash .hyperloop/checks/run-all-checks.sh` — must exit 0. **If it exits non-zero
+     you MUST NOT write worker-result.yaml.** Submitting a FAIL result is not a valid
+     submission — the next verifier's check-racf-prior-cycle.sh will recover the FAIL
+     report from git history and flag every still-failing check as a RACF. Fix every
+     failure, commit, and re-run until `run-all-checks.sh` exits 0.
   2. Paste COMPLETE multi-line output into `## Check Script Results` section
   3. Paste verbatim `check-not-in-scope.sh` output into `## Scope Check Output`
   4. Never stage files under `.hyperloop/state/` — use `git add <file>` for specific files; `git add -A` and `git add .` are forbidden because they silently capture state files
@@ -120,6 +124,8 @@ guidelines: |
   0. Sync check scripts FIRST: `git checkout main -- .hyperloop/checks/`
      New checks are added to main after branches are created. Running stale
      scripts produces false passes — sync ensures you run the full current set.
+     Confirm sync succeeded: `bash .hyperloop/checks/check-checks-in-sync.sh`
+     must exit 0 before proceeding.
   1. Run `bash .hyperloop/checks/check-racf-remediation.sh` immediately
   2. If it fails, apply every prescribed fix before new code
   3. If it skips, run `bash .hyperloop/checks/check-racf-prior-cycle.sh`
@@ -129,6 +135,23 @@ guidelines: |
   6. After applying prescribed fixes, COMMIT them before writing worker-result.yaml.
      A re-attempt with no new commits is invalid — the verifier will detect it.
      Verify with: `git log --oneline main..HEAD` (must show new commit(s))
+  7. Self-verify before writing worker-result.yaml: confirm at least one commit
+     on this branch modifies source files (not just .hyperloop/ files):
+       git log main..HEAD --name-only --format="%H" | grep -v '^$' | grep -v '^\.hyperloop/'
+     If that grep finds nothing, you have not committed any fixes — stop and fix first.
+
+  ## COORDINATE FRAME — PRODUCTION SOURCE CODE
+
+  When computing child node positions in layout code, the stored value MUST be
+  the LOCAL offset only. NEVER add parent world coordinates to the child position:
+
+    WRONG: pos_x = parent_pos[0] + math.cos(angle) * offset_r   # absolute world coord
+    RIGHT: pos_x = math.cos(angle) * offset_r                   # local offset only
+
+  Godot's main.gd adds the parent world position at render time — storing an
+  absolute coordinate here causes double-offset rendering regardless of whether
+  tests pass. `check-relative-position-tests.sh` scans ALL Python files in
+  extractor/ for this anti-pattern, not just the primary module.
 
   ## SPATIAL LAYOUT RADIUS BOUNDS
 
