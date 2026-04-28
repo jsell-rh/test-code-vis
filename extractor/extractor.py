@@ -193,9 +193,9 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
     BC order is optimised by ``_order_by_coupling`` so tightly coupled pairs
     are placed adjacent, reducing their spatial distance.
 
-    Module nodes are placed in a smaller circle *offset by their parent BC's
-    absolute position* so that child nodes are always within the spatial bounds
-    of their parent.
+    Module nodes are placed in a smaller circle and their positions are stored
+    as LOCAL offsets relative to their parent BC.  Godot's main.gd adds the
+    parent world position at render time.
     """
     bc_nodes = [n for n in nodes if n["type"] == "bounded_context"]
 
@@ -203,13 +203,12 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
     if edges:
         bc_nodes = _order_by_coupling(bc_nodes, edges)
 
-    bc_radius = max(5.0, len(bc_nodes) * 2.5)
+    # cap bc_radius so nodes stay within scene bounds  # noqa: E501
+    bc_radius = min(max(5.0, len(bc_nodes) * 2.5), 100.0)
     bc_positions = _circular_positions(len(bc_nodes), bc_radius)
 
-    bc_pos_map: dict[str, tuple[float, float, float]] = {}
     for bc_node, pos in zip(bc_nodes, bc_positions):
         bc_node["position"] = {"x": pos[0], "y": pos[1], "z": pos[2]}
-        bc_pos_map[bc_node["id"]] = pos
 
     # Group modules by parent
     parent_children: dict[str, list[Node]] = {}
@@ -217,17 +216,17 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
         if n["type"] == "module" and n["parent"]:
             parent_children.setdefault(n["parent"], []).append(n)
 
-    for parent_id, children in parent_children.items():
-        mod_radius = max(1.5, len(children) * 0.9)
-        mod_positions = _circular_positions(len(children), mod_radius, y=1.0)
-        # Offset by the parent BC's absolute position so children are
-        # spatially contained within their parent's bounds.
-        px, py, pz = bc_pos_map.get(parent_id, (0.0, 0.0, 0.0))
+    for _parent_id, children in parent_children.items():
+        # cap mod_radius relative to bc_radius so modules stay inside parent bounds
+        mod_radius = min(max(1.5, len(children) * 0.9), bc_radius * 0.4)
+        mod_positions = _circular_positions(len(children), mod_radius, y=0.0)
+        # Store LOCAL offset only — Godot's main.gd adds the parent world pos
+        # at render time, so storing absolute coords here causes double-offset.
         for child, pos in zip(children, mod_positions):
             child["position"] = {
-                "x": px + pos[0],
-                "y": py + pos[1],
-                "z": pz + pos[2],
+                "x": pos[0],  # local x offset from parent
+                "y": pos[1],  # local y offset from parent
+                "z": pos[2],  # local z offset from parent
             }
 
 
