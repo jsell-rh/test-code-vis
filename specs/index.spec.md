@@ -7,6 +7,8 @@ Spatial development environment for understanding agent-built software systems.
 ### Core
 - [System Purpose](core/system-purpose.spec.md) — Why this system exists, the problem it solves
 - [Understanding Modes](core/understanding-modes.spec.md) — Conformance, Evaluation, Simulation
+- [Visual Primitives](core/visual-primitives.spec.md) — The fixed vocabulary: extraction layer (6 data primitives) and composition layer (9 visual primitives)
+- [Primitive Research](core/primitive-research.spec.md) — Cross-disciplinary rationale: 20 perspectives that grounded the primitive choices
 
 ### Visualization
 - [Spatial Structure](visualization/spatial-structure.spec.md) — The persistent 3D geography of a software system, semantic zoom, cluster collapsing
