@@ -1,7 +1,7 @@
 ---
 id: task-028
-title: Extend scene graph schema with spec-reference annotations
-spec_ref: specs/core/understanding-modes.spec.md
+title: Extend JSON schema for spec nodes
+spec_ref: specs/core/system-purpose.spec.md
 status: not-started
 phase: null
 deps: [task-001]
@@ -10,22 +10,23 @@ branch: null
 pr: null
 ---
 
-Add a `spec_refs` field to node objects in the JSON scene graph schema to support
-conformance mode. Each code entity (bounded context, module) can carry a list of
-specification references indicating which spec requirements describe its intended role.
+Extend the JSON scene graph schema (task-001) to support spec nodes — a new node type
+that represents a human-authored specification element alongside the realized codebase
+structure.
 
-Covers:
-- Extend the node object shape in the schema document (from task-001) with an optional
-  `spec_refs` field: an array of objects, each with:
-  - `spec_file` (string) — relative path to the originating spec file
-  - `requirement` (string) — short identifier or heading of the requirement in that spec
-- `spec_refs` is optional: nodes without corresponding spec coverage carry an empty
-  array or omit the field; the validator must not reject nodes lacking `spec_refs`.
-- Update the Python validator function (from task-001) to accept and validate the
-  optional `spec_refs` field on nodes without requiring its presence.
-- Document the new field in the schema document with an example showing a bounded
-  context node carrying a spec reference to a requirement in an understanding-modes spec.
-- No extractor or Godot changes in this task — schema definition only.
-
-This is the shared interface contract that task-029 (extractor spec ingestion) writes
-to and task-030 (conformance view) reads from.
+Covers `specs/core/system-purpose.spec.md` — Requirement: Spec-Driven Context:
+- Add a new `type` value `"spec_item"` to the node type vocabulary.
+- Add an optional `spec_ref` field on node objects (string): the relative path of the
+  originating spec file (e.g. `"specs/core/system-purpose.spec.md"`).
+- Add an optional `spec_section` field on node objects (string): the section heading
+  within the spec that this node represents (e.g. `"Requirement: Conformance Mode"`).
+- Add an optional `realized_by` field on node objects (array of node ids): the codebase
+  node(s) that implement this spec item, enabling conformance comparison.
+- Add a new edge `type` value `"spec_to_code"` to represent the mapping between a spec
+  node and the codebase node that realises it.
+- Update the schema document (`extractor/schema.md` or `extractor/schema.json`) to
+  reflect all new fields and type values.
+- Update the Python validator function from task-001 to accept (but not require) the
+  new optional fields; it must not reject valid scene graphs that omit them.
+- The Godot loader (task-008) must not break when spec nodes or `spec_to_code` edges
+  are present; the schema change must remain backward-compatible.
