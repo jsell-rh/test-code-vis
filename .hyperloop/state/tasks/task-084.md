@@ -1,7 +1,7 @@
 ---
 id: task-084
 title: Extractor — badge computation from analysis results
-spec_ref: specs/core/visual-primitives.spec.md
+spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
 status: not_started
 phase: null
 deps:
