@@ -106,6 +106,21 @@ IMPL_COMMITS=$(git log main..HEAD \
 PRIOR_SHORT="${PRIOR_REPORT_SHA:0:7}"
 
 if [[ -z "$IMPL_COMMITS" ]]; then
+    # Extract the prior FAIL report content for display (already found above)
+    PRIOR_CONTENT=$(git show "${PRIOR_REPORT_SHA}:${RESULT_FILE}" 2>/dev/null || true)
+    FAILING_CHECKS=$(echo "$PRIOR_CONTENT" \
+        | awk '
+            /^--- check-[a-z0-9_-]+\.sh ---/ {
+                name = $0
+                sub(/^--- /, "", name)
+                sub(/ ---$/, "", name)
+                current = name
+            }
+            /\[EXIT [1-9]/ && /FAIL\]/ {
+                if (current != "") print current
+            }
+        ' | sort -u)
+
     echo "FAIL: Zero implementation commits since prior FAIL report (${PRIOR_SHORT})."
     echo ""
     echo "  The prior committed worker-result.yaml (${PRIOR_SHORT}) contains"
@@ -119,12 +134,28 @@ if [[ -z "$IMPL_COMMITS" ]]; then
     echo "  This means the implementer submitted a re-attempt without applying any"
     echo "  fixes.  This is the pattern that causes repeated RACF across many cycles."
     echo ""
-    echo "  Protocol:"
-    echo "    1. Run each failing check: bash .hyperloop/checks/<check>.sh"
-    echo "    2. Apply the prescribed fix from its FAIL output."
-    echo "    3. Commit the fix: git commit -m 'fix: <description>'"
-    echo "    4. Repeat for each failing check."
-    echo "    5. Only then run run-all-checks.sh and write worker-result.yaml."
+
+    if [[ -n "$FAILING_CHECKS" ]]; then
+        echo "  Checks that were failing in the prior report (fix these first):"
+        while IFS= read -r check_name; do
+            [[ -z "$check_name" ]] && continue
+            echo "    bash .hyperloop/checks/${check_name}"
+        done <<< "$FAILING_CHECKS"
+        echo ""
+        echo "  To see each check's prescribed fix:"
+        echo "    git show ${PRIOR_SHORT}:.hyperloop/worker-result.yaml"
+        echo "  Look for 'Offending lines:' under each failing check."
+        echo ""
+    fi
+
+    echo "  Protocol (no other actions are permitted while this check exits 1):"
+    echo "    1. git show ${PRIOR_SHORT}:.hyperloop/worker-result.yaml   # read the FAIL report"
+    echo "    2. For each check listed above: open the cited file at the cited line."
+    echo "    3. Apply the fix exactly as written in the 'Offending lines:' section."
+    echo "    4. git commit -m 'fix: <description>'   # commit EACH fix separately"
+    echo "    5. bash .hyperloop/checks/<check>.sh    # confirm exit 0 for THAT check"
+    echo "    6. Repeat steps 2-5 for every failing check."
+    echo "    7. Only then run run-all-checks.sh and write worker-result.yaml."
     exit 1
 fi
 
