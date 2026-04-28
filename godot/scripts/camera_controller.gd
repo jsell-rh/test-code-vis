@@ -122,7 +122,8 @@ func _handle_motion(event: InputEventMouseMotion) -> void:
 
 	elif _panning:
 		# Move the pivot in the camera's local XZ plane.
-		# Non-inverted: right = camera-right (basis.x, no negation).
+		# Google Maps drag model: drag left → grab scene → scene slides LEFT → pivot moves RIGHT → negate delta.x
+		# drag right → grab scene → scene slides RIGHT → pivot moves LEFT → negate delta.x (same sign rule)
 		var right: Vector3 = global_transform.basis.x
 		var forward: Vector3 = Vector3(
 			global_transform.basis.z.x,
@@ -130,8 +131,8 @@ func _handle_motion(event: InputEventMouseMotion) -> void:
 			global_transform.basis.z.z
 		).normalized()
 		var pan_amount: float = pan_speed * (_distance * 0.05 + 1.0)
-		_pivot += right * delta.x * pan_amount
-		_pivot += forward * delta.y * pan_amount
+		_pivot -= right * delta.x * pan_amount
+		_pivot -= forward * delta.y * pan_amount
 		_update_transform()
 
 

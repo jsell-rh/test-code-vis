@@ -99,8 +99,10 @@ func test_lmb_pan_moves_pivot() -> bool:
 # THEN the scene moves in the same direction as the drag
 # AND the movement direction matches the drag direction (not inverted)
 #
+# Google Maps drag model (non-inverted):
+#   drag right (delta.x = +50) → pivot moves LEFT → pivot.x decreases
+#   drag left  (delta.x = -50) → pivot moves RIGHT → pivot.x increases
 # In a headless test global_transform is identity → basis.x = (1,0,0).
-# Dragging right (positive delta.x) must increase pivot.x.
 # ---------------------------------------------------------------------------
 
 func test_pan_drag_right_increases_pivot_x() -> bool:
@@ -110,7 +112,8 @@ func test_pan_drag_right_increases_pivot_x() -> bool:
 	_press_lmb(cam, Vector2(100.0, 100.0))
 	_move_mouse(cam, Vector2(150.0, 100.0))  # drag right → delta.x = +50
 
-	return cam._pivot.x > initial_x
+	# Google Maps: drag right → pivot moves LEFT → pivot.x must decrease.
+	return cam._pivot.x < initial_x
 
 
 func test_pan_drag_left_decreases_pivot_x() -> bool:
@@ -120,22 +123,21 @@ func test_pan_drag_left_decreases_pivot_x() -> bool:
 	_press_lmb(cam, Vector2(100.0, 100.0))
 	_move_mouse(cam, Vector2(50.0, 100.0))  # drag left → delta.x = -50
 
-	return cam._pivot.x < initial_x
+	# Google Maps: drag left → pivot moves RIGHT → pivot.x must increase.
+	return cam._pivot.x > initial_x
 
 
-# The scene "moves in the same direction" — dragging right reveals left content
-# by shifting pivot right (non-inverted).  This is the same assertion as above,
-# expressed in terms of the spec's Google Maps analogy.
+# The scene "moves in the same direction" — dragging left reveals right content
+# by shifting pivot RIGHT (Google Maps map-grab model).
 func test_drag_direction_matches_view_movement() -> bool:
 	var cam = _make_cam()
+	var initial_x: float = cam._pivot.x
 
-	# Drag down → delta.y positive → forward * positive shifts pivot in forward dir.
-	# Assert pivot changed (direction is non-zero and non-inverted compared to left-right test).
+	# Drag left → delta.x = -50 → Google Maps model → pivot moves RIGHT → pivot.x increases.
 	_press_lmb(cam, Vector2(100.0, 100.0))
-	_move_mouse(cam, Vector2(100.0, 150.0))  # drag down 50 px
+	_move_mouse(cam, Vector2(50.0, 100.0))  # drag left 50 px
 
-	# Pivot must have moved in the drag direction (some axis).
-	return cam._pivot != Vector3.ZERO
+	return cam._pivot.x > initial_x
 
 
 # ---------------------------------------------------------------------------
