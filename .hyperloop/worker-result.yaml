@@ -1,7 +1,20 @@
-# Review Report — task-016 — Cycle N+1
-
 ---
-verdict: fail
+verdict: pass
+---
+
+## Summary
+
+Re-attempt resolving the sole blocking failure from the prior review cycle (F1):
+`test_ux_polish.gd` was not wired into `godot/tests/run_tests.gd`, causing all
+11 UX Polish spec THEN-clauses to execute as dead code (never called).
+
+**Fix applied:** Added `_run_suite(preload("res://tests/test_ux_polish.gd").new())`
+to `godot/tests/run_tests.gd` under the `# --- task-016: UX Polish spec ---` comment
+block. This is the exact line prescribed by the prior review.
+
+The camera_controller.gd implementation and test_ux_polish.gd test suite were already
+correct and complete (as confirmed by the prior review). Only the wire-up was missing.
+
 ---
 
 ## Scope Check Output
@@ -12,6 +25,9 @@ NOTE: Pre-existing prohibited-mode patterns detected in files that originate fro
   These are informational only and do NOT count as a FAIL for this branch.
 OK: No prohibited (not-in-scope) features detected.
 [EXIT 0]
+
+File godot/scripts/understanding_overlay.gd is pre-existing (origin: a2f9d139);
+not introduced by this branch.
 
 ---
 
@@ -27,7 +43,7 @@ OK: All Task-Ref trailers on implementation commits match branch task ID 'task-0
 === run-all-checks.sh ===
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-016' has 24 commit(s) above main.
+OK: Branch 'hyperloop/task-016' has 26 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -51,6 +67,7 @@ OK: 'extractor/extractor.py' is imported by production code (1 import(s) found).
 [EXIT 0]
 
 --- check-no-duplicate-toplevel-functions.sh ---
+
 OK: No duplicate top-level function names across extractor/ source files.
 [EXIT 0]
 
@@ -67,11 +84,11 @@ OK: No prohibited (not-in-scope) features detected.
 [EXIT 0]
 
 --- check-no-zero-commit-reattempt.sh ---
-OK: 1 implementation commit(s) found since prior FAIL report (0b85cf1).
+OK: 2 implementation commit(s) found since prior FAIL report (0b85cf1).
 [EXIT 0]
 
 --- check-preloaded-gdscript-files.sh ---
-OK: All 24 preload() target(s) resolve to existing files.
+OK: All 25 preload() target(s) resolve to existing files.
 [EXIT 0]
 
 --- check-prescribed-fixes-applied.sh ---
@@ -80,15 +97,129 @@ SKIP: Prior FAIL report contains no 'Offending lines:' file citations.
 
 --- check-pytest-passes.sh ---
 Running: pytest extractor/tests/ -v --tb=short
-============================== 99 passed in 0.39s ==============================
+
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-8.4.1, pluggy-1.6.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/jsell/code/sandbox/code-vis/worktrees/workers/task-016
+plugins: anyio-4.9.0, mock-3.14.1, cov-6.2.1, asyncio-1.0.0, respx-0.22.0, archon-0.0.7
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 99 items
+
+extractor/tests/test_cli.py::test_main_exits_zero PASSED                 [  1%]
+extractor/tests/test_cli.py::test_main_writes_json_output PASSED         [  2%]
+extractor/tests/test_cli.py::test_main_returns_nonzero_for_missing_path PASSED [  3%]
+extractor/tests/test_cli.py::test_extractor_imports_are_stdlib_only PASSED [  4%]
+extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_python_package_true PASSED [  5%]
+extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_python_package_false_no_init PASSED [  6%]
+extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_python_package_false_not_dir PASSED [  7%]
+extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_bounded_context_true PASSED [  8%]
+extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_bounded_context_excludes_tests PASSED [  9%]
+extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_bounded_context_excludes_underscored PASSED [ 10%]
+extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_internal_module_true PASSED [ 11%]
+extractor/tests/test_extractor.py::TestComplexityMetrics::test_compute_loc_counts_python_lines PASSED [ 12%]
+extractor/tests/test_extractor.py::TestComplexityMetrics::test_compute_loc_recursive PASSED [ 13%]
+extractor/tests/test_extractor.py::TestComplexityMetrics::test_compute_loc_empty_dir PASSED [ 14%]
+extractor/tests/test_extractor.py::TestComplexityMetrics::test_size_from_loc_minimum PASSED [ 15%]
+extractor/tests/test_extractor.py::TestComplexityMetrics::test_size_from_loc_grows_with_loc PASSED [ 16%]
+extractor/tests/test_extractor.py::TestComplexityMetrics::test_size_from_loc_is_float PASSED [ 17%]
+extractor/tests/test_extractor.py::TestImportExtraction::test_extract_absolute_import PASSED [ 18%]
+extractor/tests/test_extractor.py::TestImportExtraction::test_extract_from_import PASSED [ 19%]
+extractor/tests/test_extractor.py::TestImportExtraction::test_relative_imports_excluded PASSED [ 20%]
+extractor/tests/test_extractor.py::TestImportExtraction::test_syntax_error_returns_empty PASSED [ 21%]
+extractor/tests/test_extractor.py::TestImportExtraction::test_get_target_node_id_exact_match PASSED [ 22%]
+extractor/tests/test_extractor.py::TestImportExtraction::test_get_target_node_id_sub_module PASSED [ 23%]
+extractor/tests/test_extractor.py::TestImportExtraction::test_get_target_node_id_bc_level PASSED [ 24%]
+extractor/tests/test_extractor.py::TestImportExtraction::test_get_target_node_id_unknown PASSED [ 25%]
+extractor/tests/test_extractor.py::TestEdgeClassification::test_classify_cross_context PASSED [ 26%]
+extractor/tests/test_extractor.py::TestEdgeClassification::test_classify_internal PASSED [ 27%]
+extractor/tests/test_extractor.py::TestModuleDiscovery::test_discovers_bounded_contexts PASSED [ 28%]
+extractor/tests/test_extractor.py::TestModuleDiscovery::test_excludes_tests_directory PASSED [ 29%]
+extractor/tests/test_extractor.py::TestModuleDiscovery::test_bounded_context_node_has_required_keys PASSED [ 30%]
+extractor/tests/test_extractor.py::TestModuleDiscovery::test_bounded_context_type PASSED [ 31%]
+extractor/tests/test_extractor.py::TestModuleDiscovery::test_bounded_context_parent_is_none PASSED [ 32%]
+extractor/tests/test_extractor.py::TestModuleDiscovery::test_bounded_context_has_metrics_loc PASSED [ 33%]
+extractor/tests/test_extractor.py::TestModuleDiscovery::test_discovers_submodules_in_iam PASSED [ 34%]
+extractor/tests/test_extractor.py::TestModuleDiscovery::test_submodule_parent_references_bc PASSED [ 35%]
+extractor/tests/test_extractor.py::TestModuleDiscovery::test_submodule_type_is_module PASSED [ 36%]
+extractor/tests/test_extractor.py::TestModuleDiscovery::test_submodule_id_is_dotted PASSED [ 37%]
+extractor/tests/test_extractor.py::TestModuleDiscovery::test_submodule_has_metrics_loc PASSED [ 38%]
+extractor/tests/test_extractor.py::TestDependencyExtraction::test_cross_context_edge_created PASSED [ 39%]
+extractor/tests/test_extractor.py::TestDependencyExtraction::test_cross_context_edge_type PASSED [ 40%]
+extractor/tests/test_extractor.py::TestDependencyExtraction::test_internal_edge_created PASSED [ 41%]
+extractor/tests/test_extractor.py::TestDependencyExtraction::test_internal_edge_type PASSED [ 42%]
+extractor/tests/test_extractor.py::TestDependencyExtraction::test_no_self_edges PASSED [ 43%]
+extractor/tests/test_extractor.py::TestDependencyExtraction::test_edges_have_required_keys PASSED [ 44%]
+extractor/tests/test_extractor.py::TestLayout::test_all_nodes_have_positions_after_layout PASSED [ 45%]
+extractor/tests/test_extractor.py::TestLayout::test_bounded_contexts_have_distinct_positions PASSED [ 46%]
+extractor/tests/test_extractor.py::TestLayout::test_child_nodes_are_near_parent_position PASSED [ 47%]
+extractor/tests/test_extractor.py::TestLayout::test_child_position_is_local_offset PASSED [ 48%]
+extractor/tests/test_extractor.py::TestLayout::test_child_position_is_relative_offset_not_absolute PASSED [ 49%]
+extractor/tests/test_extractor.py::TestLayout::test_coupled_bcs_are_closer_than_uncoupled PASSED [ 50%]
+extractor/tests/test_extractor.py::TestLayout::test_order_by_coupling_places_coupled_adjacent PASSED [ 51%]
+extractor/tests/test_extractor.py::TestSceneGraphOutput::test_build_scene_graph_has_required_keys PASSED [ 52%]
+extractor/tests/test_extractor.py::TestSceneGraphOutput::test_nodes_include_bounded_contexts PASSED [ 53%]
+extractor/tests/test_extractor.py::TestSceneGraphOutput::test_nodes_include_internal_modules PASSED [ 54%]
+extractor/tests/test_extractor.py::TestSceneGraphOutput::test_edges_non_empty PASSED [ 55%]
+extractor/tests/test_extractor.py::TestSceneGraphOutput::test_metadata_has_source_path PASSED [ 56%]
+extractor/tests/test_extractor.py::TestSceneGraphOutput::test_metadata_has_timestamp PASSED [ 57%]
+extractor/tests/test_extractor.py::TestSceneGraphOutput::test_output_is_json_serialisable PASSED [ 58%]
+extractor/tests/test_extractor.py::TestSceneGraphOutput::test_node_ids_are_unique PASSED [ 59%]
+extractor/tests/test_extractor.py::TestSceneGraphOutput::test_every_node_has_position PASSED [ 60%]
+extractor/tests/test_extractor.py::test_main_cli_produces_valid_json PASSED [ 61%]
+extractor/tests/test_extractor.py::test_extractor_uses_only_stdlib_imports PASSED [ 62%]
+extractor/tests/test_extractor.py::test_extractor_with_kartograph_codebase PASSED [ 63%]
+extractor/tests/test_schema.py::TestSchemaStructure::test_scene_graph_has_nodes_key PASSED [ 64%]
+extractor/tests/test_schema.py::TestSchemaStructure::test_scene_graph_has_edges_key PASSED [ 65%]
+extractor/tests/test_schema.py::TestSchemaStructure::test_scene_graph_has_metadata_key PASSED [ 66%]
+extractor/tests/test_schema.py::TestSchemaStructure::test_scene_graph_has_no_extra_top_level_fields PASSED [ 67%]
+extractor/tests/test_schema.py::TestSchemaStructure::test_scene_graph_is_json_serialisable PASSED [ 68%]
+extractor/tests/test_schema.py::TestSchemaStructure::test_nodes_is_a_list PASSED [ 69%]
+extractor/tests/test_schema.py::TestSchemaStructure::test_edges_is_a_list PASSED [ 70%]
+extractor/tests/test_schema.py::TestSchemaStructure::test_metadata_is_a_dict PASSED [ 71%]
+extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_has_required_keys PASSED [ 72%]
+extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_id PASSED [ 73%]
+extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_name PASSED [ 74%]
+extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_type PASSED [ 75%]
+extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_position_has_xyz PASSED [ 76%]
+extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_position_values_are_numeric PASSED [ 77%]
+extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_size_is_numeric PASSED [ 78%]
+extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_parent_is_null PASSED [ 79%]
+extractor/tests/test_schema.py::TestNodeSchema::test_module_node_has_required_keys PASSED [ 80%]
+extractor/tests/test_schema.py::TestNodeSchema::test_module_node_id_dotted PASSED [ 81%]
+extractor/tests/test_schema.py::TestNodeSchema::test_module_node_type_is_module PASSED [ 82%]
+extractor/tests/test_schema.py::TestNodeSchema::test_module_node_parent_references_context PASSED [ 83%]
+extractor/tests/test_schema.py::TestNodeSchema::test_node_ids_are_unique PASSED [ 84%]
+extractor/tests/test_schema.py::TestEdgeSchema::test_cross_context_edge_has_required_keys PASSED [ 85%]
+extractor/tests/test_schema.py::TestEdgeSchema::test_cross_context_edge_source PASSED [ 86%]
+extractor/tests/test_schema.py::TestEdgeSchema::test_cross_context_edge_target PASSED [ 87%]
+extractor/tests/test_schema.py::TestEdgeSchema::test_cross_context_edge_type PASSED [ 88%]
+extractor/tests/test_schema.py::TestEdgeSchema::test_internal_edge_has_required_keys PASSED [ 89%]
+extractor/tests/test_schema.py::TestEdgeSchema::test_internal_edge_source PASSED [ 90%]
+extractor/tests/test_schema.py::TestEdgeSchema::test_internal_edge_target PASSED [ 91%]
+extractor/tests/test_schema.py::TestEdgeSchema::test_internal_edge_type PASSED [ 92%]
+extractor/tests/test_schema.py::TestMetadataSchema::test_metadata_has_source_path PASSED [ 93%]
+extractor/tests/test_schema.py::TestMetadataSchema::test_metadata_has_timestamp PASSED [ 94%]
+extractor/tests/test_schema.py::TestMetadataSchema::test_metadata_source_path_is_str PASSED [ 95%]
+extractor/tests/test_schema.py::TestMetadataSchema::test_metadata_timestamp_is_str PASSED [ 96%]
+extractor/tests/test_schema.py::TestPreComputedLayout::test_every_node_has_a_position PASSED [ 97%]
+extractor/tests/test_schema.py::TestPreComputedLayout::test_positions_are_floats PASSED [ 98%]
+extractor/tests/test_schema.py::TestPreComputedLayout::test_scene_graph_nodes_have_distinct_positions PASSED [ 99%]
+
+============================== 99 passed in 0.45s ==============================
+
 OK: All pytest tests passed.
 [EXIT 0]
 
 --- check-racf-prior-cycle.sh ---
 Orchestrator cleanup obscured prior FAIL report — recovered from 0b85cf1.
+To inspect: git show 0b85cf1:.hyperloop/worker-result.yaml
+
 Checks that failed in that cycle — must now pass:
+
   check-not-in-scope.sh                                   OK (resolved)
-  check-racf-prior-cycle.sh                               SKIP (self-reference)
+  check-racf-prior-cycle.sh                               SKIP (self-reference — cannot recursively verify; current invocation confirms it runs)
+
 OK: All prior-cycle failures (recovered from 0b85cf1) are now resolved.
 [EXIT 0]
 
@@ -114,174 +245,27 @@ OK: Scope report section is consistent with actual check-not-in-scope.sh result.
 [EXIT 0]
 
 --- check-task-ref-report-not-falsified.sh ---
-OK: Task-Ref trailers are consistent with actual check-commit-trailer-task-ref.sh result.
+OK: Task-Ref report section is consistent with actual check-commit-trailer-task-ref.sh result.
 [EXIT 0]
 
 --- check-worker-result-clean.sh ---
-SKIP: .hyperloop/worker-result.yaml is a reviewer report — this check applies to implementer submissions only.
+OK: worker-result.yaml contains no 'RESULT: FAIL' — submission is clean.
 [EXIT 0]
 
 --- pre-submit.sh ---
 === pre-submit.sh: final submission gate ===
+
 --- check-report-scope-section.sh ---             [EXIT 0  OK]
 --- check-scope-report-not-falsified.sh ---       [EXIT 0  OK]
 --- check-branch-has-commits.sh ---               [EXIT 0  OK]
 OK: worker-result.yaml confirms run-all-checks.sh exited 0.
-Summary: Passed: 3, Failed: 0
+
+--- Summary ---
+  Passed: 3
+  Failed: 0
+
 OK: All pre-submit checks passed. You may now write your verdict.
 [EXIT 0]
 
 === Summary: 22 check(s) run ===
 RESULT: ALL PASS
-
----
-
-## Nondirectional Movement Assertion Check
-
-```
-OK: All directional test functions use signed comparison predicates
-```
-
----
-
-## THEN→Test Mapping
-
-| THEN-clause | Mapped test | File | Status |
-|---|---|---|---|
-| Pan LMB — camera pans in direction of drag | test_lmb_pan_moves_pivot | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
-| Pan LMB — movement direction not inverted | test_pan_drag_left_increases_pivot_x, test_drag_direction_matches_view_movement | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
-| Non-inverted — drag left reveals content to right (grab model) | test_pan_drag_left_increases_pivot_x, test_pan_drag_right_decreases_pivot_x | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
-| Non-inverted — drag up/down correct direction | test_pan_drag_down_decreases_pivot_z, test_pan_drag_up_increases_pivot_z | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
-| Zoom toward cursor — view zooms toward cursor point | test_zoom_toward_cursor_shifts_pivot_toward_cursor | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
-| Zoom toward cursor — component stays under cursor | test_component_stays_under_cursor_on_zoom_in | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
-| Zoom out — view zooms out from cursor | test_zoom_out_from_cursor_shifts_pivot_away | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
-| Orbit — camera orbits around cursor point at orbit start | test_orbit_pivot_set_to_cursor_point_at_start | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
-| Orbit — component remains at visual center during orbit | test_component_remains_at_visual_center_during_orbit | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
-| Smooth zoom — interpolated, not instantaneous | test_zoom_is_interpolated_not_instantaneous | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
-| Smooth pan — proportional to drag speed | test_pan_proportional_to_drag_speed | test_ux_polish.gd | MISSING — file not wired into run_tests.gd |
-
-All THEN-clauses map to tests in test_ux_polish.gd. The test functions exist and their
-predicate derivations are correct. However, NONE execute because test_ux_polish.gd is
-not registered in run_tests.gd. This is unchanged from the prior review cycle (f11810fa).
-
----
-
-## Requirement Status
-
-### Requirement: Pan with Left Mouse Button (SHALL)
-- **Implementation:** COVERED — `camera_controller.gd` line 72–74 handles `MOUSE_BUTTON_LEFT`,
-  sets `_panning = true`, and `_handle_motion` lines 126–138 shifts `_pivot` via
-  `_pivot -= right * delta.x * pan_amount` / `_pivot -= forward * delta.y * pan_amount`.
-- **Scenario: Panning the view** — MISSING test coverage: `test_lmb_pan_moves_pivot` exists
-  in `test_ux_polish.gd` but is dead code — not registered in `run_tests.gd`.
-
-### Requirement: Non-Inverted Movement (SHALL)
-- **Implementation:** COVERED — grab-model comment at line 135: `# drag left → delta.x = -50
-  → negate → pivot.x += 50 * pan_amount (moves right) ✓`. Inline derivation comment is
-  present immediately before each directional calculation line as required.
-- **Scenario: Drag direction matches view movement** — MISSING test coverage:
-  `test_pan_drag_left_increases_pivot_x`, `test_pan_drag_right_decreases_pivot_x`,
-  `test_drag_direction_matches_view_movement`, `test_pan_drag_down_decreases_pivot_z`,
-  `test_pan_drag_up_increases_pivot_z` — all exist in `test_ux_polish.gd`, all dead code.
-
-### Requirement: Zoom Toward Mouse Cursor (SHALL)
-- **Implementation:** COVERED — `_zoom_toward_cursor` (lines 90–98) computes
-  `zoom_fraction = 1 - (_target_distance / old_target)` and calls
-  `_pivot = _pivot.lerp(cursor_world, zoom_fraction)`. WHEEL_UP passes `-zoom_speed`
-  (zoom in), WHEEL_DOWN passes `+zoom_speed` (zoom out). Derivation comments present.
-- **Scenario: Zooming into a specific component** — MISSING: `test_zoom_toward_cursor_shifts_pivot_toward_cursor`,
-  `test_component_stays_under_cursor_on_zoom_in` — dead code.
-- **Scenario: Zooming out** — MISSING: `test_zoom_out_from_cursor_shifts_pivot_away` — dead code.
-
-### Requirement: Orbit Around Mouse Point (SHALL)
-- **Implementation:** COVERED — RMB press (line 75–80) calls
-  `_set_orbit_pivot(_mouse_to_ground(event.position))`, which sets `_pivot = world_point`
-  and recalculates `_theta`/`_phi` from the new pivot (lines 103–112). Orbit motion
-  only changes `_phi`/`_theta`, never moves `_pivot`.
-- **Scenario: Orbiting around a component** — MISSING: `test_orbit_pivot_set_to_cursor_point_at_start`,
-  `test_orbit_pivot_is_used_during_orbit`, `test_component_remains_at_visual_center_during_orbit`
-  — dead code.
-
-### Requirement: Smooth Camera Movement (SHALL)
-- **Implementation (zoom):** COVERED — `_process` (lines 50–56) lerps `_distance` toward
-  `_target_distance` each frame using `t = min(zoom_smoothing * delta, 0.9)`. Distance
-  does not snap immediately on scroll events.
-- **Implementation (pan):** COVERED — Pan shifts `_pivot` proportionally to `delta.x`/`delta.y`
-  scaled by `pan_amount`. Larger drag → proportionally larger shift.
-- **Scenario: Smooth zoom** — MISSING: `test_zoom_is_interpolated_not_instantaneous` — dead code.
-- **Scenario: Smooth pan** — MISSING: `test_pan_proportional_to_drag_speed` — dead code.
-
----
-
-## Findings
-
-### F1 (FAIL — BLOCKING): test_ux_polish.gd not wired into run_tests.gd
-
-This is the same defect identified in the previous review cycle (commit f11810fa) and
-remains unresolved in the current branch state.
-
-**Evidence:**
-```
-grep -n "test_ux_polish" godot/tests/run_tests.gd
-(no output — confirmed NOT FOUND)
-```
-
-**Branch state:** The most recent commit on this branch is `f11810fa` (the prior FAIL review).
-The implementer's PASS claim (`21ea0d1a`) predates that reviewer commit. No new implementation
-commits have been added since the FAIL review. The branch has 24 commits above main (up from 23
-in the prior cycle — the additional commit is the prior reviewer verdict itself).
-
-**Why the fix is straightforward:** `origin/main` already contains the correct entry (under
-`# --- task-026: UX Polish spec ---`) added by commit `464a8f67`. The branch simply needs to
-incorporate this one line. The implementer's rebase claim (`21ea0d1a`) did not actually merge
-or cherry-pick this line.
-
-**Impact:** Every UX Polish spec scenario is MISSING (11 THEN-clauses, 0 executing). No spec
-scenario has behavioral test coverage.
-
-**Prescribed fix:** Add the following to `godot/tests/run_tests.gd` after the task-007 camera
-block:
-```gdscript
-	# --- task-016: UX Polish spec ---
-	_run_suite(preload("res://tests/test_ux_polish.gd").new())
-```
-This is exactly what `origin/main` has at line 38 (under the `task-026` comment). The simplest
-resolution is to rebase onto current main and resolve any conflicts — main already has this
-entry and the corrected `test_camera_controls.gd` (see N1 below).
-
----
-
-### N1 (NOTE — pre-existing, not introduced by this branch): test_camera_controls.gd uses stale button/variable names
-
-`test_camera_controls.gd` on this branch uses `MOUSE_BUTTON_MIDDLE` for orbit tests and checks
-`_distance` instead of `_target_distance` for scroll tests. Main's `test_camera_controls.gd`
-(corrected in commit `997ac245`) uses `MOUSE_BUTTON_RIGHT` and `_target_distance`. The production
-code (`camera_controller.gd`) is correct — this is a test-only inconsistency inherited from the
-branch's pre-rebase state. A rebase onto current main will resolve it automatically.
-
----
-
-### What is correct
-
-- **camera_controller.gd** is fully and correctly implemented for all five spec requirements.
-- **test_ux_polish.gd** contains all required test functions with correct signed predicates and
-  inline derivation comments.
-- **check-nondirectional-movement-assertions.sh** passes: all directional tests use signed
-  comparisons.
-- **99 Python pytest tests pass** cleanly.
-- **Scope, ruff format, commit trailers** — all clean.
-
----
-
-## Summary
-
-The implementation is complete and correct. The sole blocking failure is operational:
-`test_ux_polish.gd` is not registered in `godot/tests/run_tests.gd`, making all 11
-UX Polish spec THEN-clauses dead code. This defect was identified in the prior review
-cycle and has not been fixed.
-
-**Verdict: FAIL**
-
-Required action: add `_run_suite(preload("res://tests/test_ux_polish.gd").new())` to
-`godot/tests/run_tests.gd`. Recommended approach: rebase onto current `origin/main`
-(which already has this entry plus the corrected `test_camera_controls.gd`).
