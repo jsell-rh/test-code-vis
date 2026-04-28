@@ -11,8 +11,6 @@ import ast
 import sys
 from pathlib import Path
 
-import pytest
-
 from extractor.__main__ import main
 
 
