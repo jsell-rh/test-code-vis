@@ -42,6 +42,18 @@ guidelines: |
   - Direction/sign derivation arrows must be inline `#` comments INSIDE the function body, not `##` docstrings above it
   - "Relative to parent" positions require tests where parent is at NON-ZERO world position AND the assertion is a direct equality check (`child["position"]["x"] == local_offset`), NOT a proximity check (`dist < radius`) — proximity passes for both absolute and relative storage
 
+  ## COMMIT TRAILERS
+
+  Every implementation commit MUST carry both trailers with values that match
+  the CURRENT task and spec:
+    Spec-Ref: <path-to-spec-file>
+    Task-Ref: <task-id>          # e.g. task-014  — NOT a prior task's ID
+
+  Before writing each commit message, confirm the Task-Ref value matches the
+  branch: `git rev-parse --abbrev-ref HEAD` prints `hyperloop/task-NNN` →
+  use `task-NNN`.  Copying a commit from another task without updating this
+  trailer is a process violation caught by `check-commit-trailer-task-ref.sh`.
+
   ## SCOPE COMPLIANCE
 
   Prohibited features are forbidden under ANY name. Before writing ANY code:
