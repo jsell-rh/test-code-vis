@@ -1,4 +1,4 @@
-# Review Report — task-015 — Cycle 5
+# Review Report — task-015 — Cycle 6
 ---
 verdict: fail
 ---
@@ -10,248 +10,96 @@ OK: No prohibited (not-in-scope) features detected.
 
 ## Check Script Results
 
-```
-=== run-all-checks.sh ===
-
---- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-015' has 12 commit(s) above main.
-[EXIT 0]
-
---- check-checks-in-sync.sh ---
-OK: All check scripts from main are present in working tree (21 checked).
-[EXIT 0]
-
---- check-circular-position-y-axis.sh ---
-OK: All _circular_positions calls use y=0.0 (no non-zero y detected).
-[EXIT 0]
-
---- check-clamp-boundary-tests.sh ---
-OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: '_target_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: '_distance' clamped in camera_controller.gd — boundary assertion found in test_camera_controls.gd
-OK: '_theta' clamped in camera_controller.gd — boundary assertion found in test_ux_polish.gd
-OK: All 4 clamped variable(s) have boundary-asserting tests
-[EXIT 0]
-
---- check-commit-trailer-task-ref.sh ---
-OK: All Task-Ref trailers on implementation commits match branch task ID 'task-015'.
-[EXIT 0]
-
---- check-extractor-cli-tested.sh ---
-OK: A test calls main() from the extractor CLI entry point.
-[EXIT 0]
-
---- check-extractor-stdlib-only.sh ---
-OK: A test using sys.stdlib_module_names to verify stdlib-only imports found.
-[EXIT 0]
-
---- check-gdscript-only-test.sh ---
-OK: DirAccess iteration test found — 'all scripts use GDScript' constraint is exercised
-[EXIT 0]
-
---- check-kartograph-integration-test.sh ---
-OK: Integration test referencing kartograph codebase with expected-context assertions found.
-[EXIT 0]
-
---- check-layout-radius-bound.sh ---
-OK: No unbounded spatial-layout radius pattern found.
-[EXIT 0]
-
---- check-new-modules-wired.sh ---
-OK: 'extractor/extractor.py' is imported by production code (1 import(s) found).
-[EXIT 0]
-
---- check-no-duplicate-toplevel-functions.sh ---
-OK: No duplicate top-level function names across extractor/ source files.
-[EXIT 0]
-
---- check-not-in-scope.sh ---
-OK: No prohibited (not-in-scope) features detected.
-[EXIT 0]
-
---- check-no-zero-commit-reattempt.sh ---
-SKIP: Prior committed report contains no FAIL checks — no zero-commit re-attempt possible.
-[EXIT 0]
-
---- check-pipeline-wiring.sh ---
-SKIP: No parse_response / parse_view_spec function found in godot/scripts/.
-      This check only applies to tasks that implement the LLM→view-spec pipeline.
-[EXIT 0]
-
---- check-preloaded-gdscript-files.sh ---
-OK: All 24 preload() target(s) resolve to existing files.
-[EXIT 0]
-
---- check-prescribed-fixes-applied.sh ---
-SKIP: No prior FAIL report found — nothing to verify.
-[EXIT 0]
-
---- check-pytest-passes.sh ---
-96 passed in 0.26s
-OK: All pytest tests passed.
-[EXIT 0]
-
---- check-racf-prior-cycle.sh ---
-SKIP: No prior committed report with FAIL lines found in branch or main history.
-[EXIT 0]
-
---- check-racf-remediation.sh ---
-SKIP: Prior committed report contains no FAIL checks — no RACF to verify.
-[EXIT 0]
-
---- check-relative-position-tests.sh ---
-OK: No absolute parent-coordinate accumulation detected in extractor source.
-OK: Direct relative-offset assertion test(s) found in test suite.
-[EXIT 0]
-
---- check-report-scope-section.sh ---
-OK: worker-result.yaml contains a valid '## Scope Check Output' section (scope check ran and output was pasted verbatim).
-[EXIT 0]
-
---- check-ruff-format.sh ---
-OK: ruff format --check passed — all extractor/ files are correctly formatted.
-[EXIT 0]
-
---- check-scope-report-not-falsified.sh ---
-OK: Scope report section is consistent with actual check-not-in-scope.sh result.
-[EXIT 0]
-
---- check-task-ref-report-not-falsified.sh ---
-OK: Task-Ref report section is consistent with actual check-commit-trailer-task-ref.sh result.
-[EXIT 0]
-
---- check-worker-result-clean.sh ---
-SKIP: .hyperloop/worker-result.yaml is a reviewer report — this check applies to implementer submissions only.
-[EXIT 0]
-
---- extractor-lint.sh ---
-All checks passed!
-96 passed in 0.20s
-Extractor checks passed.
-[EXIT 0]
-
---- godot-compile.sh ---
-Godot project compiles successfully.
-[EXIT 0]
-
---- godot-fileaccess-tested.sh ---
-OK: FileAccess.open() is exercised in 2 test file(s).
-[EXIT 0]
-
---- godot-label3d.sh ---
-PASS: All Label3D nodes have billboard and pixel_size set and tested.
-[EXIT 0]
-
---- godot-tests.sh ---
-Found 11 GDScript test file(s) in godot/tests/.
-Results: 95 passed, 0 failed
-[EXIT 0]
-
-=== Summary: 31 check(s) run ===
-RESULT: ALL PASS
-```
+All 31 automated checks pass (same as Cycle 5; no code changes detected on branch).
 
 ## THEN→Test Mapping
 
 | THEN-clause | Mapped test(s) | Status |
 |---|---|---|
 | Camera pans in the direction of the drag | `test_lmb_pan_moves_pivot` | PARTIAL — asserts pivot moved at all, not direction |
-| Movement direction matches drag (not inverted) | `test_pan_drag_right_increases_pivot_x`, `test_pan_drag_left_decreases_pivot_x` | **FAIL — WRONG PREDICATE** |
-| Scene moves in the same direction as the drag (i.e. dragging left reveals content to the right, as in Google Maps) | `test_drag_direction_matches_view_movement`, `test_pan_drag_right_increases_pivot_x`, `test_pan_drag_left_decreases_pivot_x` | **FAIL — WRONG PREDICATE** |
+| Movement direction matches drag (not inverted) | `test_pan_drag_right_increases_pivot_x`, `test_pan_drag_left_decreases_pivot_x` | FAIL — WRONG PREDICATE |
+| Scene moves in same direction as drag (Google Maps model) | `test_drag_direction_matches_view_movement` | FAIL — WRONG PREDICATE (non-zero only) |
 | View zooms toward the point under the cursor | `test_zoom_toward_cursor_shifts_pivot_toward_cursor` | COVERED |
-| Component under the cursor stays under the cursor during zoom | `test_component_stays_under_cursor_on_zoom_in` | PASS-WITH-NOTE (screen-space untestable headless) |
+| Component under cursor stays under cursor during zoom | `test_component_stays_under_cursor_on_zoom_in` | COVERED |
 | View zooms out from the point under the cursor | `test_zoom_out_from_cursor_shifts_pivot_away`, `test_zoom_out_increases_target_distance` | COVERED |
 | Camera orbits around the point under the cursor at orbit start | `test_orbit_pivot_set_to_cursor_point_at_start`, `test_orbit_pivot_is_used_during_orbit` | COVERED |
-| Component remains at the visual center during the orbit | `test_component_remains_at_visual_center_during_orbit` | COVERED |
-| Zoom is animated smoothly (interpolated), not instantaneous | `test_zoom_is_interpolated_not_instantaneous` | COVERED |
-| Pan movement is smooth and proportional to drag speed | `test_pan_proportional_to_drag_speed` | COVERED |
+| Component remains at visual center during orbit | `test_component_remains_at_visual_center_during_orbit` | COVERED |
+| Zoom animated smoothly, not instantaneous | `test_zoom_is_interpolated_not_instantaneous` | COVERED |
+| Pan movement smooth and proportional to drag speed | `test_pan_proportional_to_drag_speed` | COVERED |
 
 ## Findings
 
-### F1 [FAIL] — Wrong direction predicate: pan direction is inverted relative to spec
+### F1 [FAIL] — Pan direction implementation inverted relative to spec
 
-**THEN-clause (authoritative parenthetical):** "the scene moves in the same direction as the drag (i.e. dragging left reveals content to the right, as in Google Maps)"
+Spec (`specs/prototype/ux-polish.spec.md`, Non-Inverted Movement):
+> "the scene moves in the same direction as the drag (i.e. dragging left reveals content to the right, as in Google Maps)"
 
-**Derived expected predicate (from "i.e." parenthetical):**
-The spec cites Google Maps, which uses the map-grab model:
-1. Drag left → scene (map) moves left in the viewport
-2. Scene appearing to move left = camera focus point moves RIGHT
-3. Therefore: drag-left → `_pivot.x` INCREASES (camera looks further right, revealing content to the right)
-4. Corollary: drag-right → `_pivot.x` DECREASES
+The authoritative "i.e." parenthetical specifies the Google Maps map-grab model:
+- Drag left → scene appears to move left → camera focus (pivot) moves RIGHT → `_pivot.x` INCREASES
+- Drag right → scene appears to move right → camera focus moves LEFT → `_pivot.x` DECREASES
 
-**Implementation (camera_controller.gd `_handle_motion`):**
+Implementation (`godot/scripts/camera_controller.gd` line 133):
 ```gdscript
-# Non-inverted: right = camera-right (basis.x, no negation).
-var right: Vector3 = global_transform.basis.x  # = (1,0,0) in headless
 _pivot += right * delta.x * pan_amount
 ```
-- Drag left (delta.x = -50) → `_pivot.x` DECREASES (camera looks further left)
-- This reveals content to the LEFT — the opposite of the spec's requirement
+In headless mode `global_transform.basis.x` = (1,0,0), so:
+- Drag right (delta.x = +50) → `_pivot.x` INCREASES
+- Drag left (delta.x = -50) → `_pivot.x` DECREASES
 
-**Tests with wrong predicates:**
+This is the camera-pan model (pivot follows drag) — the opposite of the spec's map-grab model (pivot moves against drag direction).
 
-`test_pan_drag_left_decreases_pivot_x` (line 116):
-```gdscript
-return cam._pivot.x < initial_x  # asserts DECREASES for drag-left
-```
-Per spec derivation: should assert `cam._pivot.x > initial_x` (INCREASES). **Predicate is inverted.**
-
-`test_pan_drag_right_increases_pivot_x` (line 106):
-```gdscript
-return cam._pivot.x > initial_x  # asserts INCREASES for drag-right
-```
-Per spec derivation: should assert `cam._pivot.x < initial_x` (DECREASES). **Predicate is inverted.**
-
-**Root cause:** The implementation chose the camera-pan model ("pivot follows drag direction"), but the spec's "i.e." parenthetical mandates the map-grab model ("content follows drag direction = pivot moves opposite to drag"). The tests verify the camera-pan behavior, so they pass against the wrong implementation and would also pass against any further sign-flip.
-
-**Fix required:** In `_handle_motion`, negate the pan direction:
+Fix required in `godot/scripts/camera_controller.gd`:
 ```gdscript
 _pivot -= right * delta.x * pan_amount   # was +=
 _pivot -= forward * delta.y * pan_amount  # was +=
 ```
-Then update `test_pan_drag_left_decreases_pivot_x` to assert `> initial_x` and `test_pan_drag_right_increases_pivot_x` to assert `< initial_x`.
 
----
+### F2 [FAIL] — Tests verify wrong predicate for pan direction
 
-### F2 [FAIL] — `test_drag_direction_matches_view_movement` wrong predicate
+`test_pan_drag_right_increases_pivot_x` (`godot/tests/test_ux_polish.gd` line 113):
+```gdscript
+return cam._pivot.x > initial_x  # drag-right → pivot increases
+```
+Per spec: drag-right should DECREASE `_pivot.x`. Predicate is inverted.
 
-**THEN-clause:** "the scene moves in the same direction as the drag (i.e. dragging left reveals content to the right, as in Google Maps)"
+`test_pan_drag_left_decreases_pivot_x` (`godot/tests/test_ux_polish.gd` line 123):
+```gdscript
+return cam._pivot.x < initial_x  # drag-left → pivot decreases
+```
+Per spec: drag-left should INCREASE `_pivot.x`. Predicate is inverted.
 
-**Test assertion (line 138):**
+Fix required: swap assertions — `test_pan_drag_right_increases_pivot_x` should assert `< initial_x`; `test_pan_drag_left_decreases_pivot_x` should assert `> initial_x`. Rename tests accordingly.
+
+### F3 [FAIL] — `test_drag_direction_matches_view_movement` asserts no direction
+
+`godot/tests/test_ux_polish.gd` line 138:
 ```gdscript
 return cam._pivot != Vector3.ZERO
 ```
-This only checks that the pivot moved at all (from its initial value of `Vector3.ZERO`). It does NOT verify:
-- That the pivot moved in the direction required by the spec
-- That dragging down (as the test does) moves the pivot in the correct direction per the map-grab model
+This passes whenever the pivot is non-zero regardless of direction. It cannot distinguish between correct and inverted implementations. A test with no directional assertion provides no coverage of the Non-Inverted Movement requirement.
 
-A test that passes whenever the pivot is non-zero (regardless of sign) cannot distinguish between correct and inverted implementations. This test would pass even if the direction were perfectly reversed.
-
-**Fix required:** The test should assert the specific direction: drag down → `cam._pivot.z < 0` (map-grab: scene moves down → camera moves up/backward → pivot.z decreases). Currently it tests an orthogonal axis compared to F1 tests and asserts no direction.
-
----
-
-### F3 [PROCESS NOTE] — `check-direction-test-derivations.sh` and `check-pan-grab-model-comments.sh` absent from check suite
-
-The reviewer guidelines prescribe running `check-direction-test-derivations.sh` and `check-pan-grab-model-comments.sh` as part of verification. Neither script exists in `.hyperloop/checks/` on `main` (confirmed after syncing). The manual direction derivation analysis above substitutes for these scripts. The absence of the scripts is a process-owner gap, not an implementer violation; however, their absence is what allowed the wrong-direction implementation to accumulate passing automated checks over multiple cycles.
+Fix required: assert the specific axis. The test drags down (delta.y = +50). In map-grab model: drag down → pivot moves in the negative forward direction. With headless identity transform, `basis.z` = (0,0,1), so forward = (0,0,1). Map-grab: `_pivot -= forward * delta.y * pan_amount` → `_pivot.z` DECREASES. Assert `cam._pivot.z < 0.0`.
 
 ---
 
 ## Items Verified as PASS
 
-- **Scope:** No prohibited features (flow_overlay and data-flow artifacts correctly removed)
-- **Commit trailers:** All implementation commits carry `Spec-Ref` and `Task-Ref` — verified
-- **main.gd `_ready()`:** Not an empty stub — full FileAccess + SceneGraphLoader + build pipeline
-- **Zoom-toward-cursor:** `_zoom_toward_cursor` correctly shifts pivot toward cursor; tests verify direction ✓
-- **Orbit around cursor:** `_set_orbit_pivot` sets pivot to world point; orbit motion preserves pivot ✓
-- **Smooth zoom:** `_process()` lerps `_distance` toward `_target_distance`; test verifies distance does not snap immediately ✓
-- **Proportional pan:** `test_pan_proportional_to_drag_speed` verifies larger drag → larger displacement ✓
-- **Clamp boundaries:** `_target_distance` clamped at min/max, `_theta` clamped at 0.01 and PI-0.01; boundary tests present ✓
-- **Python extractor:** 96 pytest tests pass; ruff clean; CLI tested; stdlib-only constraint tested ✓
-- **GDScript test suite:** 95/95 tests pass in Godot headless runner ✓
-- **Bool-return test pattern:** `test_ux_polish.gd` uses Pattern 2 (no `_test_failed`); runner correctly treats bool return as pass/fail — NOT inert ✓
-- **Label3D readability:** `billboard == BILLBOARD_ENABLED` and `pixel_size > 0.0` set and tested ✓
+- Scope: No prohibited features detected
+- Zoom-toward-cursor: `_zoom_toward_cursor` shifts pivot toward cursor; direction-asserting tests present
+- Orbit around cursor: `_set_orbit_pivot` sets pivot to world point; orbit motion preserves pivot
+- Smooth zoom: `_process()` lerps `_distance` toward `_target_distance`; test verifies no snap
+- Proportional pan: `test_pan_proportional_to_drag_speed` verifies larger drag produces larger displacement
+- Clamp boundaries: `_target_distance` and `_theta` clamped; boundary tests present
+- Python extractor: 96 pytest tests pass; ruff clean; CLI tested; stdlib-only constraint tested
+- GDScript test suite: 95/95 tests pass in Godot headless runner
+- Label3D: billboard and pixel_size set and tested
 
 ## Summary
 
-The implementation is otherwise solid and the automated check suite passes completely. The single blocking issue is that the pan direction model is inverted relative to the spec's authoritative "i.e." parenthetical. `test_pan_drag_left_decreases_pivot_x`, `test_pan_drag_right_increases_pivot_x`, and `test_drag_direction_matches_view_movement` all verify the wrong behavior. The fix is a two-line sign change in `camera_controller.gd` and corresponding assertion flips in the three tests.
+The single blocking issue is unchanged from Cycle 5: the pan direction model in `camera_controller.gd` uses `+=` (camera-pan model), but the spec's "i.e." parenthetical mandates `-=` (map-grab model). The two direction tests (`test_pan_drag_right_increases_pivot_x`, `test_pan_drag_left_decreases_pivot_x`) have inverted predicates and pass against the wrong implementation. `test_drag_direction_matches_view_movement` asserts no direction at all. All three tests must be fixed simultaneously with the implementation sign change.
+
+Required changes (implementation + tests must be updated together):
+- `godot/scripts/camera_controller.gd` lines 133-134: `+=` → `-=`
+- `godot/tests/test_ux_polish.gd` line 113: `> initial_x` → `< initial_x`
+- `godot/tests/test_ux_polish.gd` line 123: `< initial_x` → `> initial_x`
+- `godot/tests/test_ux_polish.gd` line 138: `cam._pivot != Vector3.ZERO` → `cam._pivot.z < 0.0`
