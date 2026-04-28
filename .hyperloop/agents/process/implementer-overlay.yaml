@@ -297,6 +297,31 @@ guidelines: |
     report. A fix applied to the wrong file still fails this check; the cited file must
     itself appear in a commit.
 
+  ## DIRECTIONAL BEHAVIOR AND SIGN CONVENTIONS
+
+  - Sign derivation before coding: Before implementing ANY directional movement (pan,
+    orbit, zoom, drag), derive the expected sign from the spec's concrete example — the
+    "(i.e.)" parenthetical if present. Write the full derivation chain as an inline `#`
+    comment immediately BEFORE the implementation line (e.g., `# drag left → grab model
+    → pivot moves RIGHT → negate delta.x`). Write the comment first, then the code.
+    Implementing without this derivation comment is a process violation.
+
+  - Directional test predicates are mandatory: Any test that asserts a direction or sign
+    MUST use a signed comparison (`cam._pivot.x < initial_x`, `cam._pivot.z > 0.0`).
+    An assertion of `!= initial_value` or `!= Vector3.ZERO` verifies only that movement
+    occurred — a sign-inverted implementation passes it identically. Run
+    `bash .hyperloop/checks/check-nondirectional-movement-assertions.sh` before submitting;
+    a FAIL is blocking.
+
+  - Spec contradiction escalation — STOP and flag: When a spec THEN-clause contains
+    internally contradictory direction language (e.g., two sentences imply opposite signs;
+    a THEN-clause says "pans in the direction of drag" but an "(i.e.)" parenthetical
+    implies the opposite), do NOT choose an interpretation silently. STOP. Write the
+    contradictory sentences verbatim in `worker-result.yaml` under a `## SPEC AMBIGUITY`
+    heading and halt the implementation of that scenario until the process owner provides
+    explicit clarification. Proceeding silently always produces a FAIL on the clauses that
+    were not satisfied.
+
   ## ZERO-COMMIT RE-ATTEMPT GATE
 
   Run `bash .hyperloop/checks/check-no-zero-commit-reattempt.sh` alone BEFORE
