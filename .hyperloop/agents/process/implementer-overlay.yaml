@@ -126,6 +126,14 @@ guidelines: |
      scripts produces false passes — sync ensures you run the full current set.
      Confirm sync succeeded: `bash .hyperloop/checks/check-checks-in-sync.sh`
      must exit 0 before proceeding.
+  0b. After syncing, immediately run `bash .hyperloop/checks/check-commit-trailer-task-ref.sh`.
+     A newly-synced check may reveal Task-Ref mismatches in EXISTING commits (e.g., a
+     commit copied from another task). If it FAILs, fix all mismatched trailers via
+     interactive rebase BEFORE any other work:
+       git rebase -i main   # mark each mismatched commit as 'reword'
+                            # change Task-Ref: task-NNN → Task-Ref: <current-task-id>
+     The current task ID is always: `git rev-parse --abbrev-ref HEAD | sed 's/hyperloop\///'`
+     This check must exit 0 before proceeding to step 1.
   1. Run `bash .hyperloop/checks/check-racf-remediation.sh` immediately
   2. If it fails, apply every prescribed fix before new code
   3. If it skips, run `bash .hyperloop/checks/check-racf-prior-cycle.sh`
