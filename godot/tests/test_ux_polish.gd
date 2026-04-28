@@ -103,39 +103,44 @@ func test_lmb_pan_moves_pivot() -> bool:
 # Dragging right (positive delta.x) must increase pivot.x.
 # ---------------------------------------------------------------------------
 
-func test_pan_drag_right_increases_pivot_x() -> bool:
+func test_pan_drag_right_decreases_pivot_x() -> bool:
+	# Map-grab model: drag right → pivot moves LEFT (reveals content to the left).
+	# Spec: "dragging left reveals content to the right, as in Google Maps".
+	# Equivalently, drag right → reveals content to the left → pivot.x DECREASES.
 	var cam = _make_cam()
 	var initial_x: float = cam._pivot.x
 
 	_press_lmb(cam, Vector2(100.0, 100.0))
 	_move_mouse(cam, Vector2(150.0, 100.0))  # drag right → delta.x = +50
 
-	return cam._pivot.x > initial_x
+	return cam._pivot.x < initial_x
 
 
-func test_pan_drag_left_decreases_pivot_x() -> bool:
+func test_pan_drag_left_increases_pivot_x() -> bool:
+	# Map-grab model: drag left → pivot moves RIGHT (reveals content to the right).
+	# Spec: "dragging left reveals content to the right, as in Google Maps".
+	# → pivot.x INCREASES.
 	var cam = _make_cam()
 	var initial_x: float = cam._pivot.x
 
 	_press_lmb(cam, Vector2(100.0, 100.0))
 	_move_mouse(cam, Vector2(50.0, 100.0))  # drag left → delta.x = -50
 
-	return cam._pivot.x < initial_x
+	return cam._pivot.x > initial_x
 
 
-# The scene "moves in the same direction" — dragging right reveals left content
-# by shifting pivot right (non-inverted).  This is the same assertion as above,
-# expressed in terms of the spec's Google Maps analogy.
+# The scene "moves in the same direction" — dragging down reveals content above
+# by shifting pivot in the negative forward direction (map-grab model).
 func test_drag_direction_matches_view_movement() -> bool:
 	var cam = _make_cam()
 
-	# Drag down → delta.y positive → forward * positive shifts pivot in forward dir.
-	# Assert pivot changed (direction is non-zero and non-inverted compared to left-right test).
+	# Drag down → delta.y = +50.  Map-grab: _pivot -= forward * delta.y * pan_amount.
+	# In headless identity transform, forward = basis.z = (0,0,1).
+	# So _pivot.z DECREASES.  Assert pivot.z < 0.0.
 	_press_lmb(cam, Vector2(100.0, 100.0))
 	_move_mouse(cam, Vector2(100.0, 150.0))  # drag down 50 px
 
-	# Pivot must have moved in the drag direction (some axis).
-	return cam._pivot != Vector3.ZERO
+	return cam._pivot.z < 0.0
 
 
 # ---------------------------------------------------------------------------
