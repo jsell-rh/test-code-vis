@@ -402,10 +402,12 @@ class TestLayout:
         assert len(set(positions)) == len(positions), "BC positions should be distinct"
 
     def test_child_nodes_are_near_parent_position(self, src: Path) -> None:
-        """Spec: child nodes are positioned within the spatial bounds of their parent.
+        """Spec: child node positions are stored as LOCAL offsets.
 
-        After compute_layout, every module node's position must be physically
-        close to its parent BC — specifically, closer than the full scene radius.
+        After compute_layout, every module node's position is a LOCAL offset
+        relative to its parent BC (i.e. the magnitude of child["position"] is
+        ≤ bc_radius * 0.4, the mod_radius cap). Godot's main.gd adds the parent
+        world position at render time — so we verify the stored value is small.
         """
         nodes: list[Node] = discover_bounded_contexts(src)
         for bc in list(nodes):
@@ -413,24 +415,60 @@ class TestLayout:
 
         compute_layout(nodes)
 
-        node_pos = {
-            n["id"]: (n["position"]["x"], n["position"]["y"], n["position"]["z"])
-            for n in nodes
-        }
         bc_count = sum(1 for n in nodes if n["type"] == "bounded_context")
-        bc_radius = max(5.0, bc_count * 2.5)
+        bc_radius = min(max(5.0, bc_count * 2.5), 80.0)
+        max_local_offset = bc_radius * 0.4  # mod_radius cap
 
         for n in nodes:
             if n["parent"] is None:
                 continue
-            px, py, pz = node_pos[n["parent"]]
-            cx, cy, cz = node_pos[n["id"]]
-            dist = math.sqrt((cx - px) ** 2 + (cy - py) ** 2 + (cz - pz) ** 2)
-            assert dist < bc_radius, (
-                f"Child {n['id']} is at distance {dist:.2f} from parent "
-                f"{n['parent']}, exceeding scene radius {bc_radius:.2f}. "
-                "Child must be positioned within parent's spatial bounds."
+            cx = n["position"]["x"]
+            cy = n["position"]["y"]
+            cz = n["position"]["z"]
+            local_dist = math.sqrt(cx**2 + cy**2 + cz**2)
+            assert local_dist <= max_local_offset, (
+                f"Child {n['id']} local offset magnitude {local_dist:.2f} exceeds "
+                f"max_offset {max_local_offset:.2f}. "
+                "Child position must be a LOCAL offset (not an absolute world coordinate)."
             )
+
+    def test_child_position_is_local_offset(self, tmp_path: Path) -> None:
+        """Spec: child position must equal the local circular offset, not parent + offset.
+
+        This test places the parent BC at a NON-ZERO world position and asserts
+        the child's stored position equals the local orbit offset directly.
+        If the extractor stored absolute coordinates, the child x would be
+        parent_x + local_offset_x (≈ 6.5), not just local_offset_x (1.5).
+        """
+        # 1 bounded context, 1 child module.
+        bc_dir = tmp_path / "payments"
+        bc_dir.mkdir()
+        (bc_dir / "__init__.py").write_text("")
+        mod_dir = bc_dir / "invoicing"
+        mod_dir.mkdir()
+        (mod_dir / "__init__.py").write_text("")
+
+        nodes: list[Node] = discover_bounded_contexts(tmp_path)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(tmp_path, bc["id"]))
+        compute_layout(nodes)
+
+        bc_node = next(n for n in nodes if n["type"] == "bounded_context")
+        child_node = next(n for n in nodes if n["type"] == "module")
+
+        # With 1 BC: bc_radius = min(max(5.0, 1*2.5), 80.0) = 5.0; angle=0 → x=5.0
+        parent_x: float = bc_node["position"]["x"]
+        assert parent_x != 0.0, "Parent BC must be at a non-zero position"
+
+        # With 1 child: mod_radius = min(max(1.5, 1*0.9), 5.0*0.4) = 1.5; angle=0 → x=1.5
+        expected_local_x: float = min(max(1.5, 1 * 0.9), 5.0 * 0.4) * math.cos(0.0)
+        assert child_node["position"]["x"] == pytest.approx(expected_local_x), (
+            f"Child position x must be the local offset {expected_local_x:.4f}, "
+            f"not the absolute coordinate (parent_x + offset = "
+            f"{parent_x + expected_local_x:.4f})"
+        )
+        # Confirm it is NOT stored as absolute world coordinate.
+        assert child_node["position"]["x"] != pytest.approx(parent_x + expected_local_x)
 
     def test_coupled_bcs_are_closer_than_uncoupled(self, src_coupling: Path) -> None:
         """Spec: tightly coupled nodes have smaller distances between them.

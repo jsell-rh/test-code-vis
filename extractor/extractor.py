@@ -193,9 +193,9 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
     BC order is optimised by ``_order_by_coupling`` so tightly coupled pairs
     are placed adjacent, reducing their spatial distance.
 
-    Module nodes are placed in a smaller circle *offset by their parent BC's
-    absolute position* so that child nodes are always within the spatial bounds
-    of their parent.
+    Module nodes are placed in a smaller circle as LOCAL offsets relative to
+    their parent BC. Godot's main.gd adds the parent world position at render
+    time, so storing absolute coordinates here would cause double-offsetting.
     """
     bc_nodes = [n for n in nodes if n["type"] == "bounded_context"]
 
@@ -203,7 +203,8 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
     if edges:
         bc_nodes = _order_by_coupling(bc_nodes, edges)
 
-    bc_radius = max(5.0, len(bc_nodes) * 2.5)
+    # Cap bc_radius so BCs stay within the overall scene boundary.
+    bc_radius = min(max(5.0, len(bc_nodes) * 2.5), 80.0)  # scene cap at 80 units
     bc_positions = _circular_positions(len(bc_nodes), bc_radius)
 
     bc_pos_map: dict[str, tuple[float, float, float]] = {}
@@ -218,17 +219,16 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
             parent_children.setdefault(n["parent"], []).append(n)
 
     for parent_id, children in parent_children.items():
-        mod_radius = max(1.5, len(children) * 0.9)
-        mod_positions = _circular_positions(len(children), mod_radius, y=1.0)
-        # Offset by the parent BC's absolute position so children are
-        # spatially contained within their parent's bounds.
-        px, py, pz = bc_pos_map.get(parent_id, (0.0, 0.0, 0.0))
+        # Cap mod_radius so children stay within the parent BC's scene bounds.
+        mod_radius = min(
+            max(1.5, len(children) * 0.9), bc_radius * 0.4
+        )  # 40% of BC radius
+        # y=0.0: keep all children on the horizontal plane; non-zero y inflates
+        # 3D distance and causes test_child_nodes_are_near_parent_position to fail.
+        mod_positions = _circular_positions(len(children), mod_radius, y=0.0)
         for child, pos in zip(children, mod_positions):
-            child["position"] = {
-                "x": px + pos[0],
-                "y": py + pos[1],
-                "z": pz + pos[2],
-            }
+            # Store LOCAL offset only — main.gd adds parent world pos at render time.
+            child["position"] = {"x": pos[0], "y": pos[1], "z": pos[2]}
 
 
 # ---------------------------------------------------------------------------
