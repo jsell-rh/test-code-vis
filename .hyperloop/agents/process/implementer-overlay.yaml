@@ -86,6 +86,12 @@ guidelines: |
     comment immediately BEFORE the implementation line (e.g., `# drag left → grab model
     → pivot moves RIGHT → negate delta.x`). Write the comment first, then the code.
 
+  - Sign-chain completeness sweep (run before `run-all-checks.sh`): After implementing
+    ALL directional blocks, grep `godot/scripts/*.gd` for `delta.x` and `delta.y`. For
+    every matching non-comment line, confirm there is a `#` comment containing `→` within
+    15 lines above it. A derivation block written for pan but omitted for orbit is a
+    FAIL — `check-directional-signchain-comments.sh` enforces this mechanically.
+
   - Directional test predicates are mandatory: Any test that asserts a direction or sign
     MUST use a signed comparison (`cam._pivot.x < initial_x`, `cam._pivot.z > 0.0`).
     An assertion of `!= initial_value` or `!= Vector3.ZERO` verifies only that movement
