@@ -26,6 +26,16 @@ guidelines: |
   check-racf-prior-cycle.sh recovers prior FAIL reports from git history — there
   is no submission path that evades this gate.
 
+  CONSEQUENCE: Each zero-commit re-attempt is recorded as a RACF cycle by the
+  verifier. After 3 consecutive RACF cycles the verifier flags PROCESS ESCALATION
+  REQUIRED and the orchestrator may terminate the task. There is no path to
+  completion that bypasses committing code fixes.
+
+  RE-ATTEMPT STARTUP ORDER: When the branch already has commits above main,
+  check-no-zero-commit-reattempt.sh is your ABSOLUTE FIRST action — run it
+  BEFORE bootstrap-task.sh, before reading any files, before any other step.
+  bootstrap-task.sh is only required on a fresh checkout with zero prior commits.
+
   ## CRITICAL — FIRST BASH CALL PROTOCOL
 
   Your VERY FIRST Bash call — before any other tool — MUST be:
@@ -111,6 +121,10 @@ guidelines: |
      submission — the next verifier's check-racf-prior-cycle.sh will recover the FAIL
      report from git history and flag every still-failing check as a RACF. Fix every
      failure, commit, and re-run until `run-all-checks.sh` exits 0.
+     NOTE: `check-worker-result-clean.sh` (included in `run-all-checks.sh`) reads your
+     worker-result.yaml and exits 1 if the pasted output contains "RESULT: FAIL". This
+     makes it mechanically impossible to submit a FAIL-containing report — the only
+     path to a passing run-all-checks.sh is to fix the underlying check failures first.
   2. Paste COMPLETE multi-line output into `## Check Script Results` section
   3. Paste verbatim `check-not-in-scope.sh` output into `## Scope Check Output`
   4. Never stage files under `.hyperloop/state/` — use `git add <file>` for specific files; `git add -A` and `git add .` are forbidden because they silently capture state files
