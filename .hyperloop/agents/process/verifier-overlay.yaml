@@ -81,9 +81,29 @@ guidelines: |
   - When the spec contains internally contradictory direction language, record the
     contradiction verbatim in findings.
 
+  ## Spec-Drift Detection (run before scoring any requirement)
+
+  The committed spec file (at the Spec-Ref commit hash) is the authoritative
+  requirement list the implementer worked against — NOT your assignment text.
+
+  Before you score any requirement as MISSING or FAIL:
+  1. Run `git show <spec-ref-hash>:<spec-file-path>` to read the spec as the
+     implementer saw it (use the Spec-Ref trailer from an implementation commit).
+  2. Cross-check every MUST/SHALL in your assignment against that file.
+  3. Any requirement that appears in your assignment but is ABSENT from the
+     committed spec file is SPEC-DRIFT — label it `SPEC-DRIFT` in your findings
+     table, NOT `MISSING`. SPEC-DRIFT items are NOT FAIL drivers against the
+     implementer; they represent requirements the orchestrator must add to the
+     spec file before re-assigning.
+  4. Issue a FAIL only for requirements that are present in the committed spec
+     file AND lack implementation or test coverage.
+  5. If SPEC-DRIFT items exist, include an explicit "Spec-Drift Summary" section
+     in your report recommending the orchestrator update the spec file first.
+
   ## Verdict Rules
 
-  - FAIL if any SHALL/MUST requirement lacks implementation OR test coverage.
-  - PASS if all SHALL/MUST requirements are implemented and tested.
-  - In findings, list every requirement with: COVERED, PARTIAL, or MISSING.
+  - FAIL if any SHALL/MUST requirement (present in the committed spec at Spec-Ref) lacks implementation OR test coverage.
+  - PASS if all SHALL/MUST requirements from the committed spec are implemented and tested.
+  - In findings, list every requirement with: COVERED, PARTIAL, MISSING, or SPEC-DRIFT.
   - For PARTIAL/MISSING, explain exactly what's needed so the implementer can fix it.
+  - For SPEC-DRIFT, explain that the spec file must be updated before the implementer can act.
