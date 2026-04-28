@@ -429,9 +429,8 @@ class TestLayout:
         for n in nodes:
             if n["parent"] is None:
                 continue
+            # Child position is a LOCAL offset — compare its magnitude to bc_radius.
             cx, cy, cz = node_pos[n["id"]]
-            # Child positions are stored as LOCAL offsets from the parent.
-            # The actual child-to-parent distance is the magnitude of that offset.
             local_magnitude = math.sqrt(cx**2 + cy**2 + cz**2)
             assert local_magnitude < bc_radius, (
                 f"Child {n['id']} is at distance {local_magnitude:.2f} from parent "
@@ -466,38 +465,64 @@ class TestLayout:
             f"with smaller magnitude than the parent position."
         )
 
-    def test_child_position_x_equals_local_offset_exactly(self, tmp_path: Path) -> None:
-        """Child x-position equals the local orbit offset, not a world coordinate.
+    def test_child_position_is_relative_offset_not_absolute(self) -> None:
+        """Spec: module positions store LOCAL offsets, not absolute world coordinates.
 
-        With one bounded context and one module the layout is deterministic:
-          bc_radius  = min(max(5.0, 1*2.5), 7.5*0.8) = 5.0  → parent at x=5.0
-          mod_radius = min(max(1.5, 1*0.9), 5.0*0.4) = 1.5  → child  at x=1.5
-
-        If child stored world coordinates its x would be 5.0 + 1.5 = 6.5.
-        As a local offset it must equal 1.5 exactly.
+        The parent BC is placed at a non-zero world position by compute_layout.
+        The child module must store only the local offset (the circular-position
+        result), NOT parent_x + local_x.  Godot's main.gd adds the parent world
+        position at render time — accumulating it here causes double-offset.
         """
-        bc_dir = tmp_path / "mycontext"
-        bc_dir.mkdir()
-        (bc_dir / "__init__.py").write_text("")
-        mod_dir = bc_dir / "domain"
-        mod_dir.mkdir()
-        (mod_dir / "__init__.py").write_text("")
-
-        nodes: list[Node] = discover_bounded_contexts(tmp_path)
-        for bc_node in list(nodes):
-            nodes.extend(discover_submodules(tmp_path, bc_node["id"]))
-
+        # Two BCs → first BC ends up at a non-zero world position (angle 0).
+        bc_iam: Node = {
+            "id": "iam",
+            "name": "IAM",
+            "type": "bounded_context",
+            "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "size": 1.0,
+            "parent": None,
+        }
+        bc_graph: Node = {
+            "id": "graph",
+            "name": "Graph",
+            "type": "bounded_context",
+            "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "size": 1.0,
+            "parent": None,
+        }
+        module: Node = {
+            "id": "iam.auth",
+            "name": "auth",
+            "type": "module",
+            "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "size": 1.0,
+            "parent": "iam",
+        }
+        nodes: list[Node] = [bc_iam, bc_graph, module]
         compute_layout(nodes)
 
-        child = next(n for n in nodes if n["type"] == "module")
-        parent = next(n for n in nodes if n["id"] == child["parent"])
+        parent_x: float = bc_iam["position"]["x"]
+        # 2 BCs: _circular_positions(2, bc_radius) → first BC at (bc_radius, 0, 0)
+        # so parent_x must be non-zero for this test to be meaningful.
+        assert parent_x != 0.0, (
+            "Parent BC should be at a non-zero world position after layout."
+        )
 
-        # Local offset: child["position"]["x"] == 1.5 (mod_radius at angle 0)
-        # World coord:  child["position"]["x"] == 6.5 (parent_x + mod_radius)
-        assert child["position"]["x"] == pytest.approx(1.5), (
-            f"Expected local offset x≈1.5; got {child['position']['x']:.4f}. "
-            f"Parent world x={parent['position']['x']:.4f}. "
-            "Child position must be a local offset, not a world coordinate."
+        # Derive expected local offset: _circular_positions(1, mod_radius) → (mod_radius, 0, 0)
+        _scene_bound = 30.0 + 2 * 5.0  # 2 BCs
+        bc_radius = min(max(5.0, 2 * 2.5), _scene_bound * 0.8)
+        mod_radius = min(max(1.5, 1 * 0.9), bc_radius * 0.4)  # 1 child
+        expected_local_x = mod_radius  # angle=0 → (mod_radius, 0.0, 0.0)
+
+        # Direct equality: child x must equal the local offset, not parent_x + offset.
+        assert module["position"]["x"] == expected_local_x, (
+            f"Child position x must be the local offset {expected_local_x:.4f}, "
+            f"not the absolute coord {parent_x + expected_local_x:.4f}. "
+            f"Got: {module['position']['x']:.4f}"
+        )
+        # Confirm it is NOT storing the absolute world coordinate.
+        assert module["position"]["x"] != parent_x + expected_local_x, (
+            "Child position must not accumulate the parent world position."
         )
 
     def test_coupled_bcs_are_closer_than_uncoupled(self, src_coupling: Path) -> None:

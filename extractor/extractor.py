@@ -225,14 +225,13 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
         mod_radius = min(max(1.5, len(children) * 0.9), bc_radius * 0.4)
         # y=0.0: module positions stay on the ground plane to avoid inflating 3D distance.
         mod_positions = _circular_positions(len(children), mod_radius, y=0.0)
-        # Store LOCAL offsets only (relative to the parent BC's origin).
-        # main.gd resolves world positions by adding parent world pos + local offset,
-        # so storing absolute coords here would cause double-offset rendering.
+        # Store LOCAL offset only — Godot's main.gd adds the parent world position
+        # at render time. Accumulating px/py/pz here would cause double-offset.
         for child, pos in zip(children, mod_positions):
             child["position"] = {
-                "x": pos[0],
-                "y": pos[1],
-                "z": pos[2],
+                "x": pos[0],  # local x offset from parent BC
+                "y": pos[1],  # local y (0.0 — y=0.0 in _circular_positions)
+                "z": pos[2],  # local z offset from parent BC
             }
 
 
