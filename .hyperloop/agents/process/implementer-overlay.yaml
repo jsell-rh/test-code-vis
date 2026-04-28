@@ -96,6 +96,13 @@ guidelines: |
   use `task-NNN`.  Copying a commit from another task without updating this
   trailer is a process violation caught by `check-commit-trailer-task-ref.sh`.
 
+  Cross-context commit anti-pattern: any commit whose conventional-commit scope or
+  existing Task-Ref trailer names a prior workflow phase — e.g., "chore(intake):",
+  "chore(spec-review):", Task-Ref: intake, Task-Ref: pm — that touches any file
+  outside .hyperloop/ is an implementation commit with a wrong Task-Ref; the commit
+  type prefix (chore, fix, feat) does NOT exempt it. Rebase is the only fix — a new
+  commit cannot correct a prior commit's trailer.
+
   ## SCOPE COMPLIANCE
 
   Prohibited features are forbidden under ANY name. Before writing ANY code:
@@ -276,6 +283,21 @@ guidelines: |
     Output produced in a prior session, before a fix was applied, or by a different
     check is falsification — `check-task-ref-report-not-falsified.sh` and
     `check-scope-report-not-falsified.sh` detect this mechanically and exit 1.
+
+  - Step 2e — Non-interactive rebase for agent environments: `git rebase -i main`
+    requires an interactive editor — in environments where one is unavailable, use
+    GIT_SEQUENCE_EDITOR and GIT_EDITOR to automate the reword. Get SHA7 (7-char
+    prefix) from check-commit-trailer-task-ref.sh output, then run:
+      TASK_ID=$(git rev-parse --abbrev-ref HEAD | sed 's/hyperloop\///')
+      SHA7=<7-char SHA from check output>
+      printf '#!/bin/bash\nsed -i "s/^pick %s/reword %s/" "$1"\n' \
+        "$SHA7" "$SHA7" > /tmp/seq.sh
+      printf '#!/bin/bash\nsed -i "s|^Task-Ref:.*|Task-Ref: %s|" "$1"\n' \
+        "$TASK_ID" > /tmp/msg.sh
+      chmod +x /tmp/seq.sh /tmp/msg.sh
+      GIT_SEQUENCE_EDITOR=/tmp/seq.sh GIT_EDITOR=/tmp/msg.sh git rebase -i main
+    Verify: `git log --oneline main..HEAD | grep "$SHA7"` must return empty
+    (old SHA is gone — replaced by new SHA with updated trailer).
 
   - Step 3 — Fix in dependency order when multiple checks fail:
       1. Trailer/history fixes (check-commit-trailer-task-ref.sh) — rebase only, no code
