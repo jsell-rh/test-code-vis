@@ -203,7 +203,8 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
     if edges:
         bc_nodes = _order_by_coupling(bc_nodes, edges)
 
-    bc_radius = max(5.0, len(bc_nodes) * 2.5)
+    scene_radius = 7.5
+    bc_radius = min(max(5.0, len(bc_nodes) * 2.5), scene_radius * 0.8)
     bc_positions = _circular_positions(len(bc_nodes), bc_radius)
 
     bc_pos_map: dict[str, tuple[float, float, float]] = {}
@@ -218,8 +219,8 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
             parent_children.setdefault(n["parent"], []).append(n)
 
     for parent_id, children in parent_children.items():
-        mod_radius = max(1.5, len(children) * 0.9)
-        mod_positions = _circular_positions(len(children), mod_radius, y=1.0)
+        mod_radius = min(max(1.5, len(children) * 0.9), bc_radius * 0.4)
+        mod_positions = _circular_positions(len(children), mod_radius, y=0.0)
         # Store LOCAL offsets only (relative to the parent BC's origin).
         # main.gd resolves world positions by adding parent world pos + local offset,
         # so storing absolute coords here would cause double-offset rendering.
