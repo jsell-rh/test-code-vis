@@ -324,9 +324,9 @@ func _frame_camera() -> void:
 # ---------------------------------------------------------------------------
 
 ## Handle keyboard shortcuts for understanding overlays.
-##   H → apply alignment overlay (Conformance Mode — shows spec vs. realization).
-##   J → apply quality overlay  (Evaluation Mode  — shows coupling and centrality).
-##   K → apply failure impact overlay (Simulation Mode — shows cascade from first node).
+##   H → apply alignment overlay (spec-vs-realization — shows how build matches design).
+##   J → apply quality overlay  (quality-metrics — shows coupling and centrality).
+##   K → apply failure impact overlay (cascade-injection — shows impact from first node).
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed:
 		return
@@ -340,10 +340,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 # ---------------------------------------------------------------------------
-# Understanding overlays (Conformance / Evaluation / Simulation modes)
+# Understanding overlays (alignment / quality / failure-impact)
 # ---------------------------------------------------------------------------
 
-## Apply alignment overlay (H key) — Conformance Mode.
+## Apply alignment overlay (H key) — spec-vs-realization view.
 ## Colours every node in the scene by its spec_status field so the human can
 ## see whether the as-built system matches the as-specced design.
 func _apply_alignment_overlay() -> void:
@@ -351,7 +351,7 @@ func _apply_alignment_overlay() -> void:
 	_understanding_overlay.apply_alignment_overlay(nodes, _anchors)
 
 
-## Apply quality overlay (J key) — Evaluation Mode.
+## Apply quality overlay (J key) — quality-metrics view.
 ## Colours nodes by coupling and centrality metrics so the human can evaluate
 ## the architectural quality of the realized system independently of the spec.
 func _apply_quality_overlay() -> void:
@@ -360,7 +360,7 @@ func _apply_quality_overlay() -> void:
 	_understanding_overlay.apply_quality_overlay(nodes, edges, _anchors)
 
 
-## Apply failure impact overlay (K key) — Simulation Mode (failure injection).
+## Apply failure impact overlay (K key) — cascade-injection view.
 ## Simulates a failure of the first node in the graph and cascades through
 ## dependents, colouring all affected components so the human can explore
 ## the impact of the hypothetical failure before committing to any change.

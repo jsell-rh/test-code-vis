@@ -232,7 +232,7 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
         mod_radius = min(
             max(1.5, len(children) * 0.9), bc_radius * 0.4
         )  # cap inside parent
-        mod_positions = _circular_positions(len(children), mod_radius, y=1.0)
+        mod_positions = _circular_positions(len(children), mod_radius, y=0.0)
         # Store LOCAL offsets only (relative to the parent BC's origin).
         # main.gd resolves world positions by adding parent world pos + local offset,
         # so storing absolute coords here would cause double-offset rendering.
