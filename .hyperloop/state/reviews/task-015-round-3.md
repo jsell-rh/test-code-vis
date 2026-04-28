@@ -1,0 +1,274 @@
+---
+task_id: task-015
+round: 3
+role: spec-reviewer
+verdict: fail
+---
+# Review Report — task-015 — Cycle 12
+
+Branch: hyperloop/task-015
+Spec: specs/prototype/ux-polish.spec.md
+Reviewer cycle: 12
+
+## Scope Check Output
+
+```
+NOTE: Pre-existing prohibited-mode patterns detected in files that originate from main
+  (NOT introduced by this branch — attributed to their originating task, not to you):
+  godot/scripts/main.gd  (origin: 2d77f8da feat(core): extractor: spec file structure extraction (#126))
+  godot/scripts/understanding_overlay.gd  (origin: a2f9d139 feat(core): godot: evaluation mode — coupling and centrality visualization (#108))
+  These are informational only and do NOT count as a FAIL for this branch.
+OK: No prohibited (not-in-scope) features detected.
+```
+
+## Check Script Results
+
+```
+=== run-all-checks.sh ===
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-015' has 109 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present and content-identical in working tree (22 checked).
+[EXIT 0]
+
+--- check-circular-position-y-axis.sh ---
+OK: All _circular_positions calls use y=0.0 (no non-zero y detected).
+[EXIT 0]
+
+--- check-commit-trailer-task-ref.sh ---
+FAIL: One or more implementation commits carry a Task-Ref that does not match the branch.
+
+  Branch:   hyperloop/task-015
+  Expected: Task-Ref: task-015
+
+  Mismatched commits:
+  d217468  Task-Ref: intake  (expected task-015)
+
+  This typically happens when a commit is copied from another task without
+  updating the Task-Ref trailer.  Fix with an interactive rebase:
+    git rebase -i main   # mark each affected commit as 'reword'
+    # update Task-Ref: <old> to Task-Ref: task-015 in each message
+
+  Confirm the branch task ID before each commit:
+    git rev-parse --abbrev-ref HEAD   # shows hyperloop/task-015
+[EXIT 1 — FAIL]
+
+--- check-layout-radius-bound.sh ---
+OK: No unbounded spatial-layout radius pattern found.
+[EXIT 0]
+
+--- check-new-modules-wired.sh ---
+OK: 'extractor/extractor.py' is imported by production code (1 import(s) found).
+[EXIT 0]
+
+--- check-no-duplicate-toplevel-functions.sh ---
+OK: No duplicate top-level function names across extractor/ source files.
+[EXIT 0]
+
+--- check-nondirectional-movement-assertions.sh ---
+OK: All directional test functions use signed comparison predicates
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+NOTE: Pre-existing prohibited-mode patterns detected in files that originate from main
+  (NOT introduced by this branch — attributed to their originating task, not to you):
+  godot/scripts/main.gd  (origin: 2d77f8da feat(core): extractor: spec file structure extraction (#126))
+  godot/scripts/understanding_overlay.gd  (origin: a2f9d139 feat(core): godot: evaluation mode — coupling and centrality visualization (#108))
+  These are informational only and do NOT count as a FAIL for this branch.
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-no-zero-commit-reattempt.sh ---
+FAIL: Zero implementation commits since prior FAIL report (30e2e5b).
+
+  The prior committed worker-result.yaml (30e2e5b) contains
+  1 FAIL check(s).  No non-hyperloop commits have been
+  added to this branch since that report was written.
+
+  Note: if the most-recently committed report appears clean (e.g., due to
+  an orchestrator cleanup commit), this check walks full branch history to
+  find the actual prior FAIL report — consistent with check-racf-prior-cycle.sh.
+
+  This means the implementer submitted a re-attempt without applying any
+  fixes.  This is the pattern that causes repeated RACF across many cycles.
+
+  Checks that were failing in the prior report (fix these first):
+    bash .hyperloop/checks/check-commit-trailer-task-ref.sh
+
+  To see each check's prescribed fix:
+    git show 30e2e5b:.hyperloop/worker-result.yaml
+  Look for 'Offending lines:' under each failing check.
+
+  Protocol (no other actions are permitted while this check exits 1):
+    1. git show 30e2e5b:.hyperloop/worker-result.yaml   # read the FAIL report
+    2. For each check listed above: open the cited file at the cited line.
+    3. Apply the fix exactly as written in the 'Offending lines:' section.
+    4. git commit -m 'fix: <description>'   # commit EACH fix separately
+    5. bash .hyperloop/checks/<check>.sh    # confirm exit 0 for THAT check
+    6. Repeat steps 2-5 for every failing check.
+    7. Only then run run-all-checks.sh and write worker-result.yaml.
+[EXIT 1 — FAIL]
+
+--- check-preloaded-gdscript-files.sh ---
+OK: All 34 preload() target(s) resolve to existing files.
+[EXIT 0]
+
+--- check-prescribed-fixes-applied.sh ---
+SKIP: Prior FAIL report contains no 'Offending lines:' file citations.
+[EXIT 0]
+
+--- check-pytest-passes.sh ---
+OK: All pytest tests passed (111 passed).
+[EXIT 0]
+
+--- check-racf-prior-cycle.sh ---
+SKIP: check-racf-remediation.sh already processes the most recent committed report — no gap to fill.
+[EXIT 0]
+
+--- check-racf-remediation.sh ---
+Prior committed report: 30e2e5b (.hyperloop/worker-result.yaml)
+Checks that failed in that cycle — must now pass:
+
+  check-commit-trailer-task-ref.sh                        FAIL (still failing — RACF)
+
+FAIL: One or more checks that failed in the prior committed cycle still fail.
+      This is a Re-Attempt Compliance Failure (RACF).
+[EXIT 1 — FAIL]
+
+--- check-relative-position-tests.sh ---
+OK: No absolute parent-coordinate accumulation detected in extractor source.
+OK: Direct relative-offset assertion test(s) found in test suite.
+[EXIT 0]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section (scope check ran and output was pasted verbatim).
+[EXIT 0]
+
+--- check-ruff-format.sh ---
+OK: ruff format --check passed — all extractor/ files are correctly formatted.
+[EXIT 0]
+
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+
+--- check-task-ref-report-not-falsified.sh ---
+OK: Task-Ref report section is consistent with actual check-commit-trailer-task-ref.sh result.
+[EXIT 0]
+
+--- check-worker-result-clean.sh ---
+SKIP: .hyperloop/worker-result.yaml is a reviewer report — this check applies to implementer submissions only.
+[EXIT 0]
+
+=== Summary: 21 check(s) run ===
+RESULT: FAIL — one or more checks exited non-zero
+```
+
+## Findings
+
+### F1 — BLOCKING: check-commit-trailer-task-ref.sh [EXIT 1 — FAIL]
+
+Same failure as cycle 11. Commit `d2174689` (`chore(intake): review modified core specs — no
+new tasks required`) carries `Task-Ref: intake` but touches `extractor/extractor.py`, a
+non-.hyperloop production file. The check classifies this as an implementation commit that must
+carry `Task-Ref: task-015`.
+
+No new implementation commits have been added since the cycle 11 FAIL report (30e2e5b7). The fix
+prescribed in cycle 11 was NOT applied.
+
+Prescribed fix (identical to cycle 11 — still not applied):
+```
+git rebase -i main
+# mark commit d2174689 as 'reword'
+# change: Task-Ref: intake
+# to:     Task-Ref: task-015
+# save and exit the editor; git will rewrite the commit with a new hash
+
+# Verify:
+git log main..HEAD | grep d2174689    # must return empty (old hash gone)
+bash .hyperloop/checks/check-commit-trailer-task-ref.sh   # must exit 0
+bash .hyperloop/checks/run-all-checks.sh                  # must exit 0
+```
+
+### F2 — BLOCKING: check-no-zero-commit-reattempt.sh [EXIT 1 — FAIL]
+
+Zero non-.hyperloop commits since cycle 11 FAIL report (30e2e5b7). The implementer submitted no
+new work between cycle 11 and this cycle 12 review. This check blocks re-review until at least
+one implementation commit (the Task-Ref rebase) is added.
+
+Resolving F1 (the rebase) satisfies this check — a rebase rewrites the commit and constitutes a
+new non-.hyperloop implementation commit.
+
+### F3 — BLOCKING: check-racf-remediation.sh [EXIT 1 — FAIL]
+
+`check-commit-trailer-task-ref.sh` failed in cycle 11 and still fails in cycle 12 (same commit,
+same error). This is a Re-Attempt Compliance Failure. Resolving F1 resolves F3.
+
+---
+
+## Spec Alignment Assessment (informational — does not override FAIL verdict)
+
+All 5 SHALL/MUST requirements from `specs/prototype/ux-polish.spec.md` are implemented and
+tested. This assessment is provided for the implementer's confidence when resubmitting.
+
+### Requirement: Pan with Left Mouse Button — COVERED
+
+- **Implementation**: `camera_controller.gd` lines 72–73 (LMB arms `_panning`); lines 133–154
+  (pivot shift with inline sign-derivation comment) ✓
+- **Scenario test**: `test_pan_drag_right_decreases_pivot_x` → `pivot.x < initial_x` (signed) ✓
+  `test_pan_drag_left_increases_pivot_x` → `pivot.x > initial_x` (signed) ✓
+
+### Requirement: Non-Inverted Movement — COVERED
+
+- **Spec (i.e.) clause**: "dragging left reveals content to the right" → pivot.x must INCREASE on
+  left drag → derivation: drag left → delta.x = −N → `_pivot -= right * (−N) * pan_amount` →
+  pivot.x += N ✓
+- **Implementation comment** at lines 136–144 matches this derivation ✓
+- **Tests**: `test_pan_drag_left_increases_pivot_x` (signed); `test_drag_direction_matches_view_movement`
+  (signed); `test_pan_drag_down_decreases_pivot_z` (signed); `test_pan_drag_up_increases_pivot_z`
+  (signed) — all use signed predicates; `check-nondirectional-movement-assertions.sh` OK ✓
+
+### Requirement: Zoom Toward Mouse Cursor — COVERED (both scenarios)
+
+- **Implementation**: `_zoom_toward_cursor` lines 98–106 with full sign-derivation comment
+  lines 89–97 ✓
+- **Zoom-in scenario**: `test_zoom_toward_cursor_shifts_pivot_toward_cursor` → `pivot.x > 0.0`
+  (signed); `test_component_stays_under_cursor_on_zoom_in` → `after > before` (signed) ✓
+- **Zoom-out scenario**: `test_zoom_out_from_cursor_shifts_pivot_away` → `pivot.x < 5.0` (signed);
+  `test_zoom_out_increases_target_distance` → `target > initial` (signed) ✓
+
+### Requirement: Orbit Around Mouse Point — COVERED
+
+- **Implementation**: RMB press → `_set_orbit_pivot(_mouse_to_ground(pos))` (lines 79–80) sets
+  `_pivot` to world point under cursor; orbit motion changes only `_phi` and `_theta` — `_pivot`
+  is never modified during orbit ✓
+- **Tests**: `test_orbit_pivot_set_to_cursor_point_at_start` → `_pivot == world_point` ✓;
+  `test_orbit_pivot_is_used_during_orbit` → `_pivot == pivot_before` after orbit drag ✓;
+  `test_component_remains_at_visual_center_during_orbit` → `_pivot == center` ✓
+
+### Requirement: Smooth Camera Movement — COVERED (both scenarios)
+
+- **Smooth zoom**: `_process()` lerps `_distance` toward `_target_distance` (lines 51–56);
+  `test_zoom_is_interpolated_not_instantaneous` verifies no immediate jump then partial lerp ✓
+- **Smooth pan**: pivot moves linearly proportional to drag; `test_pan_proportional_to_drag_speed`
+  verifies 5× drag produces 5× displacement (signed ordering) ✓
+
+---
+
+## Required Action — Sole Blocking Fix
+
+```
+git rebase -i main
+# mark commit d2174689 as 'reword'
+# change Task-Ref: intake  →  Task-Ref: task-015
+# verify the old hash is gone:
+git log main..HEAD | grep d2174689   # must return empty
+# verify the check passes:
+bash .hyperloop/checks/check-commit-trailer-task-ref.sh  # must exit 0
+# run full suite:
+bash .hyperloop/checks/run-all-checks.sh                 # must exit 0
+# only then write and commit worker-result.yaml with ACTUAL verbatim output
+```
