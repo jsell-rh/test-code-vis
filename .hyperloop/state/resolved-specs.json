@@ -8,9 +8,9 @@
     },
     {
       "spec": "specs/core/understanding-modes.spec.md",
-      "reason": "all three modes (Conformance, Evaluation, Simulation) explicitly excluded from prototype by prototype-scope.spec.md",
-      "resolved_at": "2026-04-25",
-      "reopen_condition": "new MUST/SHOULD/Scenario clause added to file, or prototype-scope.spec.md un-excludes a mode"
+      "reason": "Re-reviewed 2026-04-28. Spec now contains five requirements: Conformance Mode, Evaluation Mode, Simulation Mode (all three explicitly excluded by prototype-scope.spec.md), plus two new requirements: Cascade Depth (part of Simulation Mode, still excluded) and Mode Composition (depends on all three modes, all still excluded). No requirement is referenced by any prototype spec for implementation. The Cascade Depth schema field is addressed by task-072 via scene-graph-schema.spec.md, which is an extraction spec that independently mandates the field.",
+      "resolved_at": "2026-04-28",
+      "reopen_condition": "prototype-scope.spec.md un-excludes at least one of: Conformance Mode, Evaluation Mode, Simulation Mode"
     },
     {
       "spec": "specs/index.spec.md",
