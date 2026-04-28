@@ -316,6 +316,34 @@ func test_component_remains_at_visual_center_during_orbit() -> bool:
 	return cam._pivot == center
 
 
+## Spec: "THEN the camera orbits around the point under the cursor at orbit start"
+## Verify orbital motion actually changes phi (azimuth) with the correct sign.
+func test_orbit_horizontal_drag_changes_phi() -> bool:
+	var cam = _make_cam()
+	var initial_phi: float = cam._phi  # 0.0
+
+	cam._orbiting = true
+	cam._last_mouse = Vector2(100.0, 100.0)
+	_move_mouse(cam, Vector2(150.0, 100.0))  # drag right 50 px
+
+	# horizontal drag right → delta.x = +50 → _phi -= +50 * orbit_speed → phi decreases < initial_phi ✓
+	return cam._phi < initial_phi
+
+
+## Spec: "THEN the camera orbits around the point under the cursor at orbit start"
+## Verify orbital motion actually changes theta (polar angle) with the correct sign.
+func test_orbit_vertical_drag_changes_theta() -> bool:
+	var cam = _make_cam()
+	var initial_theta: float = cam._theta  # 0.15 (slight top-down tilt)
+
+	cam._orbiting = true
+	cam._last_mouse = Vector2(100.0, 100.0)
+	_move_mouse(cam, Vector2(100.0, 150.0))  # drag down 50 px
+
+	# vertical drag down → delta.y = +50 → _theta -= +50 * orbit_speed → theta decreases < initial_theta ✓
+	return cam._theta < initial_theta
+
+
 # ---------------------------------------------------------------------------
 # Smooth Camera Movement — Smooth zoom
 # THEN the zoom is animated smoothly (interpolated), not instantaneous

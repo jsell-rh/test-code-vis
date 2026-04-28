@@ -109,7 +109,8 @@ func _zoom_toward_cursor(cursor_world: Vector3, direction: float) -> void:
 ## Switch the orbit focal point to world_point while keeping the camera
 ## position unchanged (recalculate spherical angles from new pivot).
 func _set_orbit_pivot(world_point: Vector3) -> void:
-	var cam_pos: Vector3 = global_position
+	# Use position (local) when not in scene tree — mirrors _update_transform() headless guard.
+	var cam_pos: Vector3 = global_position if is_inside_tree() else position
 	_pivot = world_point
 	var offset: Vector3 = cam_pos - _pivot
 	var new_dist: float = offset.length()
@@ -142,11 +143,16 @@ func _handle_motion(event: InputEventMouseMotion) -> void:
 		#   drag left → delta.x = -50 → _pivot -= right(1,0,0) * (-50) * pan_amount
 		#   → pivot.x increases → camera looks right → scene shifts left on screen
 		#   → content from the right enters view ✓  (spec: "dragging left reveals content to the right")
-		var right: Vector3 = global_transform.basis.x
+		#
+		# Use local transform basis when not in the scene tree (headless tests).
+		# global_transform requires is_inside_tree(); local transform is available always.
+		# Identity basis gives right=(1,0,0) and forward=(0,0,1), correct for top-down defaults.
+		var _basis: Basis = global_transform.basis if is_inside_tree() else transform.basis
+		var right: Vector3 = _basis.x
 		var forward: Vector3 = Vector3(
-			global_transform.basis.z.x,
+			_basis.z.x,
 			0.0,
-			global_transform.basis.z.z
+			_basis.z.z
 		).normalized()
 		var pan_amount: float = pan_speed * (_distance * 0.05 + 1.0)
 		_pivot -= right * delta.x * pan_amount
