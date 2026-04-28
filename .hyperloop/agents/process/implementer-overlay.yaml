@@ -118,6 +118,10 @@ guidelines: |
   `check-new-modules-wired.sh` and `check-no-duplicate-toplevel-functions.sh` detect
   this — BOTH must exit 0 before you write worker-result.yaml.
 
+  Passing tests in a new module do NOT prove the production bug is fixed — they prove
+  only that module's internal logic is correct; `check-new-modules-wired.sh` exit-0 is
+  the only proof the production code path calls the fixed function.
+
   ## PYTEST IS A HARD GATE
 
   Run `pytest extractor/tests/ -v --tb=short` before submitting.
@@ -130,6 +134,10 @@ guidelines: |
   ## RE-ATTEMPT PROTOCOL
 
   When dispatched to a branch with prior implementation commits:
+  -1. BEFORE ANYTHING ELSE: run `bash .hyperloop/checks/check-no-zero-commit-reattempt.sh`.
+     If it exits 1, you have no code fixes committed — write and commit code that addresses
+     each failing check BEFORE proceeding to step 0. Re-reading the prior report or
+     re-running checks without first committing code is NOT a valid re-attempt action.
   0. Sync check scripts FIRST: `git checkout main -- .hyperloop/checks/`
      New checks are added to main after branches are created. Running stale
      scripts produces false passes — sync ensures you run the full current set.
