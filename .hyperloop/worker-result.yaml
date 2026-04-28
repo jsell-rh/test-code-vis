@@ -1,99 +1,6 @@
+# Review Report — task-016 — Cycle 1 (UX Polish spec)
 ---
-verdict: pass
----
-## Summary
-
-The UX Polish spec (`specs/prototype/ux-polish.spec.md`) is fully implemented.
-The implementation was delivered by task-026 (commit `6eaf8dc6`, PR #70) and is
-already on `main`. This branch:
-
-1. Synced updated check scripts from `main` (21 checks, up from 15 prior).
-2. Fixed three pre-existing bugs in `extractor/extractor.py` that the new checks
-   exposed:
-   - **F3a** — `compute_layout` was accumulating parent world coordinates into
-     child positions (`px + pos[0]` etc.). Fixed to store local offsets only.
-   - **check-layout-radius-bound** — `bc_radius` and `mod_radius` were unbounded
-     `max()` expressions. Added `min(…, parent_size * fraction)` caps.
-   - **check-circular-position-y-axis** — `_circular_positions` was called with
-     `y=1.0` for module positions, inflating 3D child-to-parent distance.
-     Changed to `y=0.0`.
-3. Updated `test_child_nodes_are_near_parent_position` to compare local-offset
-   magnitude (not world-distance-from-parent, which is semantically wrong after
-   child positions became local offsets).
-4. Added `test_child_position_is_relative_offset_not_absolute` — places a parent
-   BC at a known non-zero world position and asserts the child's stored position
-   equals the local offset (direct equality, not proximity).
-
-**Pre-existing scope violation note:**
-`check-not-in-scope.sh` flags four data-flow files that originate from `main`
-(introduced by PR #88 / task-017, commit `5208924d`). This branch has zero
-commits touching those files. The check has no branch-filtering for data-flow
-violations (unlike the conformance/simulation mode check which does), creating
-an unavoidable deadlock for any task branch based on `main`. Per the
-pre-existing scope violation guidelines, the verbatim FAIL output is pasted in
-the Scope Check Output section below, and the files are documented here:
-
-- `godot/scripts/flow_overlay.gd` — pre-existing (origin: `5208924d`)
-- `godot/scripts/main.gd` — pre-existing (origin: `5208924d`)
-- `godot/tests/run_tests.gd` — pre-existing (origin: `5208924d`)
-- `godot/tests/test_flow_overlay.gd` — pre-existing (origin: `5208924d`)
-
-All 4 files: `git log main..HEAD --oneline -- <file>` returns zero commits.
-
----
-
-## UX Polish Implementation Evidence
-
-### Camera Controller (`godot/scripts/camera_controller.gd`)
-
-All five requirements from the spec are implemented:
-
-| Requirement | Implementation | Test File |
-|---|---|---|
-| Pan with LMB | `_handle_button` MOUSE_BUTTON_LEFT → `_panning = true`; `_handle_motion` shifts `_pivot` | `test_ux_polish.gd` |
-| Non-inverted movement | `right = global_transform.basis.x` (no negation) | `test_pan_drag_right_increases_pivot_x`, `test_pan_drag_left_decreases_pivot_x` |
-| Zoom toward cursor | `_zoom_toward_cursor(cursor_world, dir)` shifts `_pivot` toward cursor | `test_zoom_toward_cursor_shifts_pivot_toward_cursor` |
-| Orbit around mouse point | `_set_orbit_pivot(world_point)` called on RMB press | `test_orbit_pivot_set_to_cursor_point_at_start` |
-| Smooth camera movement | `_process(delta)` lerps `_distance` toward `_target_distance` | `test_zoom_is_interpolated_not_instantaneous` |
-
-### THEN-Clause → Test Mapping
-
-#### Panning the view
-- THEN camera pans → `test_lmb_pan_moves_pivot` asserts `cam._pivot != initial_pivot`
-- AND movement matches drag direction → `test_pan_drag_right_increases_pivot_x` asserts
-  `pivot.x > initial_x` on rightward drag; `test_pan_drag_left_decreases_pivot_x` asserts
-  `pivot.x < initial_x` on leftward drag
-
-#### Drag direction matches view movement
-- THEN scene moves same direction as drag → `test_drag_direction_matches_view_movement`
-  confirms pivot changes on drag
-
-#### Zoom toward cursor
-- THEN view zooms toward point under cursor → `test_zoom_toward_cursor_shifts_pivot_toward_cursor`
-  asserts `pivot.x > 0` when cursor at `(10, 0, 0)` and zoom-in
-- AND component stays under cursor → `test_component_stays_under_cursor_on_zoom_in`
-  asserts pivot moves closer to cursor
-
-#### Zooming out
-- THEN view zooms out from point under cursor → `test_zoom_out_from_cursor_shifts_pivot_away`
-  asserts pivot moves away from cursor on zoom-out
-- `test_zoom_out_increases_target_distance` asserts `target_distance > initial`
-
-#### Orbiting around a component
-- THEN camera orbits around cursor-point at start → `test_orbit_pivot_set_to_cursor_point_at_start`
-  asserts `_pivot == world_point` after `_set_orbit_pivot`
-- AND component remains at visual center → `test_orbit_pivot_is_used_during_orbit` and
-  `test_component_remains_at_visual_center_during_orbit` assert `_pivot` unchanged during orbit
-
-#### Smooth zoom
-- THEN zoom is interpolated not instantaneous → `test_zoom_is_interpolated_not_instantaneous`
-  asserts `_distance` unchanged after scroll (only `_target_distance` changes),
-  then partially advanced after `_process(0.016)`
-
-#### Smooth pan
-- THEN pan proportional to drag speed → `test_pan_proportional_to_drag_speed` asserts
-  5× larger drag produces larger pivot displacement
-
+verdict: fail
 ---
 
 ## Scope Check Output
@@ -108,20 +15,26 @@ godot/tests/test_flow_overlay.gd
 FAIL: A file references specs/visualization/data-flow.spec.md in its docstring — this is an implementation of the prohibited data-flow visualization feature.
 godot/tests/run_tests.gd
 godot/tests/test_flow_overlay.gd
+[EXIT 1 — FAIL]
 
-Note: All 4 matched files are pre-existing from `main` (origin: commit `5208924d`,
-PR #88). Zero commits on `hyperloop/task-016` modify any of these files.
-`git log main..HEAD --oneline -- godot/scripts/flow_overlay.gd` returns empty.
-This branch did NOT introduce the data-flow violation.
+Provenance check (all 4 matched files):
+  git log main..HEAD --oneline -- godot/scripts/flow_overlay.gd  → (empty)
+  git log main..HEAD --oneline -- godot/scripts/main.gd          → (empty)
+  git log main..HEAD --oneline -- godot/tests/run_tests.gd       → (empty)
+  git log main..HEAD --oneline -- godot/tests/test_flow_overlay.gd → (empty)
+
+All 4 files are pre-existing from main. Zero commits on hyperloop/task-016 introduce or
+modify any of them. This is a REVIEWER TOOLING CONFLICT — PRE-EXISTING SCOPE ARTIFACT
+(see Findings section F0).
 
 ---
 
 ## Check Script Results
 
-=== run-all-checks.sh ===
+Synced .hyperloop/checks/ from main before running. 31 check scripts.
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-016' has 10 commit(s) above main.
+OK: Branch 'hyperloop/task-016' has 12 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -169,7 +82,6 @@ OK: 'extractor/extractor.py' is imported by production code (1 import(s) found).
 [EXIT 0]
 
 --- check-no-duplicate-toplevel-functions.sh ---
-
 OK: No duplicate top-level function names across extractor/ source files.
 [EXIT 0]
 
@@ -187,7 +99,7 @@ godot/tests/test_flow_overlay.gd
 [EXIT 1 — FAIL]
 
 --- check-no-zero-commit-reattempt.sh ---
-SKIP: Prior committed report contains no FAIL checks — no zero-commit re-attempt possible.
+OK: 1 implementation commit(s) found since prior FAIL report (5f96172).
 [EXIT 0]
 
 --- check-pipeline-wiring.sh ---
@@ -200,133 +112,28 @@ OK: All 27 preload() target(s) resolve to existing files.
 [EXIT 0]
 
 --- check-prescribed-fixes-applied.sh ---
-SKIP: No prior FAIL report found — nothing to verify.
+SKIP: Prior FAIL report contains no 'Offending lines:' file citations.
 [EXIT 0]
 
 --- check-pytest-passes.sh ---
 Running: pytest extractor/tests/ -v --tb=short
-
-============================= test session starts ==============================
-platform linux -- Python 3.13.12, pytest-8.4.1, pluggy-1.6.0 -- /usr/bin/python3
-cachedir: .pytest_cache
-rootdir: /home/jsell/code/sandbox/code-vis/worktrees/workers/task-016
-plugins: anyio-4.9.0, mock-3.14.1, cov-6.2.1, asyncio-1.0.0, respx-0.22.0, archon-0.0.7
-asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collecting ... collected 95 items
-
-extractor/tests/test_cli.py::test_main_exits_zero PASSED                 [  1%]
-extractor/tests/test_cli.py::test_main_writes_json_output PASSED         [  2%]
-extractor/tests/test_cli.py::test_main_returns_nonzero_for_missing_path PASSED [  3%]
-extractor/tests/test_cli.py::test_extractor_imports_are_stdlib_only PASSED [  4%]
-extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_python_package_true PASSED [  5%]
-extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_python_package_false_no_init PASSED [  6%]
-extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_python_package_false_not_dir PASSED [  7%]
-extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_bounded_context_true PASSED [  8%]
-extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_bounded_context_excludes_tests PASSED [  9%]
-extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_bounded_context_excludes_underscored PASSED [ 10%]
-extractor/tests/test_extractor.py::TestFilesystemPredicates::test_is_internal_module_true PASSED [ 11%]
-extractor/tests/test_extractor.py::TestComplexityMetrics::test_compute_loc_counts_python_lines PASSED [ 12%]
-extractor/tests/test_extractor.py::TestComplexityMetrics::test_compute_loc_recursive PASSED [ 13%]
-extractor/tests/test_extractor.py::TestComplexityMetrics::test_compute_loc_empty_dir PASSED [ 14%]
-extractor/tests/test_extractor.py::TestComplexityMetrics::test_size_from_loc_min_floor PASSED [ 15%]
-extractor/tests/test_extractor.py::TestComplexityMetrics::test_size_from_loc_scales_with_loc PASSED [ 16%]
-extractor/tests/test_extractor.py::TestImportExtraction::test_extract_imports_returns_module_names PASSED [ 17%]
-extractor/tests/test_extractor.py::TestImportExtraction::test_extract_imports_excludes_stdlib PASSED [ 18%]
-extractor/tests/test_extractor.py::TestImportExtraction::test_extract_imports_handles_from_import PASSED [ 19%]
-extractor/tests/test_extractor.py::TestImportExtraction::test_extract_imports_ignores_relative PASSED [ 20%]
-extractor/tests/test_extractor.py::TestImportExtraction::test_extract_imports_handles_syntax_errors PASSED [ 21%]
-extractor/tests/test_extractor.py::TestImportExtraction::test_extract_imports_multi_import PASSED [ 22%]
-extractor/tests/test_extractor.py::TestImportExtraction::test_relative_imports_excluded PASSED [ 23%]
-extractor/tests/test_extractor.py::TestBoundedContextDiscovery::test_discovers_top_level_packages PASSED [ 24%]
-extractor/tests/test_extractor.py::TestBoundedContextDiscovery::test_excludes_test_directories PASSED [ 25%]
-extractor/tests/test_extractor.py::TestBoundedContextDiscovery::test_node_has_required_fields PASSED [ 26%]
-extractor/tests/test_extractor.py::TestBoundedContextDiscovery::test_node_id_is_dir_name PASSED [ 27%]
-extractor/tests/test_extractor.py::TestBoundedContextDiscovery::test_node_type_is_bounded_context PASSED [ 28%]
-extractor/tests/test_extractor.py::TestBoundedContextDiscovery::test_node_parent_is_none PASSED [ 29%]
-extractor/tests/test_extractor.py::TestBoundedContextDiscovery::test_node_size_is_float PASSED [ 30%]
-extractor/tests/test_extractor.py::TestSubmoduleDiscovery::test_discovers_sub_packages PASSED [ 31%]
-extractor/tests/test_extractor.py::TestSubmoduleDiscovery::test_submodule_parent_references_bc PASSED [ 32%]
-extractor/tests/test_extractor.py::TestSubmoduleDiscovery::test_submodule_has_required_fields PASSED [ 33%]
-extractor/tests/test_extractor.py::TestSubmoduleDiscovery::test_submodule_id_is_dotted PASSED [ 34%]
-extractor/tests/test_extractor.py::TestSubmoduleDiscovery::test_submodule_type_is_module PASSED [ 35%]
-extractor/tests/test_extractor.py::TestSubmoduleDiscovery::test_submodule_size_from_loc PASSED [ 36%]
-extractor/tests/test_extractor.py::TestDependencyEdgeExtraction::test_cross_context_edge_detected PASSED [ 37%]
-extractor/tests/test_extractor.py::TestDependencyEdgeExtraction::test_internal_edge_detected PASSED [ 38%]
-extractor/tests/test_extractor.py::TestDependencyEdgeExtraction::test_edge_has_source_target_type PASSED [ 39%]
-extractor/tests/test_extractor.py::TestDependencyEdgeExtraction::test_no_self_imports PASSED [ 40%]
-extractor/tests/test_extractor.py::TestDependencyEdgeExtraction::test_no_stdlib_edges PASSED [ 41%]
-extractor/tests/test_extractor.py::TestDependencyEdgeExtraction::test_duplicate_imports_deduplicated PASSED [ 42%]
-extractor/tests/test_extractor.py::TestLayout::test_all_nodes_have_positions_after_layout PASSED [ 43%]
-extractor/tests/test_extractor.py::TestLayout::test_bounded_contexts_have_distinct_positions PASSED [ 44%]
-extractor/tests/test_extractor.py::TestLayout::test_child_nodes_are_near_parent_position PASSED [ 45%]
-extractor/tests/test_extractor.py::TestLayout::test_child_position_is_relative_offset_not_absolute PASSED [ 46%]
-extractor/tests/test_extractor.py::TestLayout::test_coupled_bcs_are_closer_than_uncoupled PASSED [ 47%]
-extractor/tests/test_extractor.py::TestLayout::test_order_by_coupling_places_coupled_adjacent PASSED [ 48%]
-extractor/tests/test_extractor.py::TestIntegration::test_kartograph_discovers_bounded_contexts PASSED [ 49%]
-extractor/tests/test_extractor.py::TestIntegration::test_kartograph_context_ids_are_known PASSED [ 50%]
-extractor/tests/test_extractor.py::TestIntegration::test_kartograph_submodules_discovered PASSED [ 51%]
-extractor/tests/test_extractor.py::TestIntegration::test_kartograph_dependencies_extracted PASSED [ 52%]
-extractor/tests/test_extractor.py::TestIntegration::test_kartograph_scene_graph_builds PASSED [ 53%]
-extractor/tests/test_extractor.py::TestBoundedContextNodeSchema::test_bounded_context_node_id PASSED [ 54%]
-extractor/tests/test_extractor.py::TestBoundedContextNodeSchema::test_bounded_context_node_name PASSED [ 55%]
-extractor/tests/test_extractor.py::TestBoundedContextNodeSchema::test_bounded_context_node_type PASSED [ 56%]
-extractor/tests/test_extractor.py::TestBoundedContextNodeSchema::test_bounded_context_parent_is_none PASSED [ 57%]
-extractor/tests/test_extractor.py::TestBoundedContextNodeSchema::test_bounded_context_node_has_position_key PASSED [ 58%]
-extractor/tests/test_extractor.py::TestSubmoduleNodeSchema::test_submodule_node_id_dotted PASSED [ 59%]
-extractor/tests/test_extractor.py::TestSubmoduleNodeSchema::test_submodule_node_type_is_module PASSED [ 60%]
-extractor/tests/test_extractor.py::TestSubmoduleNodeSchema::test_submodule_parent_references_bc PASSED [ 61%]
-extractor/tests/test_extractor.py::TestSceneGraphOutput::test_scene_graph_has_required_keys PASSED [ 62%]
-extractor/tests/test_extractor.py::TestSceneGraphOutput::test_node_ids_are_unique PASSED [ 63%]
-extractor/tests/test_extractor.py::TestSceneGraphOutput::test_every_node_has_position PASSED [ 64%]
-extractor/tests/test_schema.py::TestSchemaStructure::test_scene_graph_has_nodes_key PASSED [ 65%]
-extractor/tests/test_schema.py::TestSchemaStructure::test_scene_graph_has_edges_key PASSED [ 66%]
-extractor/tests/test_schema.py::TestSchemaStructure::test_scene_graph_has_metadata_key PASSED [ 67%]
-extractor/tests/test_schema.py::TestSchemaStructure::test_scene_graph_has_no_extra_top_level_fields PASSED [ 68%]
-extractor/tests/test_schema.py::TestSchemaStructure::test_scene_graph_is_json_serialisable PASSED [ 69%]
-extractor/tests/test_schema.py::TestSchemaStructure::test_nodes_is_a_list PASSED [ 70%]
-extractor/tests/test_schema.py::TestSchemaStructure::test_edges_is_a_list PASSED [ 71%]
-extractor/tests/test_schema.py::TestSchemaStructure::test_metadata_is_a_dict PASSED [ 72%]
-extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_has_required_keys PASSED [ 73%]
-extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_id PASSED [ 74%]
-extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_name PASSED [ 75%]
-extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_type PASSED [ 76%]
-extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_position_has_xyz PASSED [ 77%]
-extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_position_values_are_numeric PASSED [ 78%]
-extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_size_is_numeric PASSED [ 79%]
-extractor/tests/test_schema.py::TestNodeSchema::test_bounded_context_node_parent_is_null PASSED [ 80%]
-extractor/tests/test_schema.py::TestNodeSchema::test_module_node_has_required_keys PASSED [ 81%]
-extractor/tests/test_schema.py::TestNodeSchema::test_module_node_id_dotted PASSED [ 82%]
-extractor/tests/test_schema.py::TestNodeSchema::test_module_node_type_is_module PASSED [ 83%]
-extractor/tests/test_schema.py::TestNodeSchema::test_module_node_parent_references_context PASSED [ 84%]
-extractor/tests/test_schema.py::TestNodeSchema::test_node_ids_are_unique PASSED [ 85%]
-extractor/tests/test_schema.py::TestEdgeSchema::test_cross_context_edge_has_required_keys PASSED [ 86%]
-extractor/tests/test_schema.py::TestEdgeSchema::test_cross_context_edge_source PASSED [ 87%]
-extractor/tests/test_schema.py::TestEdgeSchema::test_cross_context_edge_target PASSED [ 88%]
-extractor/tests/test_schema.py::TestEdgeSchema::test_cross_context_edge_type PASSED [ 89%]
-extractor/tests/test_schema.py::TestEdgeSchema::test_internal_edge_has_required_keys PASSED [ 90%]
-extractor/tests/test_schema.py::TestEdgeSchema::test_internal_edge_source PASSED [ 91%]
-extractor/tests/test_schema.py::TestEdgeSchema::test_internal_edge_target PASSED [ 92%]
-extractor/tests/test_schema.py::TestEdgeSchema::test_internal_edge_type PASSED [ 93%]
-extractor/tests/test_schema.py::TestMetadataSchema::test_metadata_has_source_path PASSED [ 94%]
-extractor/tests/test_schema.py::TestMetadataSchema::test_metadata_has_timestamp PASSED [ 95%]
-extractor/tests/test_schema.py::TestMetadataSchema::test_metadata_source_path_is_str PASSED [ 96%]
-extractor/tests/test_schema.py::TestMetadataSchema::test_metadata_timestamp_is_str PASSED [ 97%]
-extractor/tests/test_schema.py::TestPreComputedLayout::test_every_node_has_a_position PASSED [ 98%]
-extractor/tests/test_schema.py::TestPreComputedLayout::test_positions_are_floats PASSED [ 99%]
-extractor/tests/test_schema.py::TestPreComputedLayout::test_scene_graph_nodes_have_distinct_positions PASSED [100%]
-
-============================== 95 passed in 0.12s ==============================
-
+95 passed in 0.12s
 OK: All pytest tests passed.
 [EXIT 0]
 
 --- check-racf-prior-cycle.sh ---
-SKIP: No prior committed report with FAIL lines found in branch or main history.
+SKIP: check-racf-remediation.sh already processes the most recent committed report — no gap to fill.
 [EXIT 0]
 
 --- check-racf-remediation.sh ---
-SKIP: Prior committed report contains no FAIL checks — no RACF to verify.
-[EXIT 0]
+Prior committed report: 5f96172 (.hyperloop/worker-result.yaml)
+Checks that failed in that cycle — must now pass:
+
+  check-not-in-scope.sh                                   FAIL (still failing — RACF)
+
+FAIL: One or more checks that failed in the prior committed cycle still fail.
+      This is a Re-Attempt Compliance Failure (RACF).
+[EXIT 1 — FAIL]
 
 --- check-relative-position-tests.sh ---
 OK: No absolute parent-coordinate accumulation detected in extractor source.
@@ -350,24 +157,17 @@ OK: Task-Ref report section is consistent with actual check-commit-trailer-task-
 [EXIT 0]
 
 --- check-worker-result-clean.sh ---
-OK: Check Script Results section does not contain a FAIL summary — report is clean.
+SKIP: .hyperloop/worker-result.yaml is a reviewer report — this check applies to implementer submissions only.
 [EXIT 0]
 
 --- extractor-lint.sh ---
-Linting extractor...
 All checks passed!
-8 files already formatted
-Running extractor tests...
-........................................................................ [ 75%]
-.......................                                                  [100%]
 95 passed in 0.12s
 Extractor checks passed.
 [EXIT 0]
 
 --- godot-compile.sh ---
-Compiling Godot project...
 Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
-
 Godot project compiles successfully.
 [EXIT 0]
 
@@ -383,157 +183,224 @@ PASS: All Label3D nodes have billboard and pixel_size set and tested.
 --- godot-tests.sh ---
 Found 12 GDScript test file(s) in godot/tests/.
 Running custom headless test runner...
-Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
-
-=== code-vis GDScript Tests ===
-
-[test_scene_graph_loader.gd]
-  PASS: test_nodes_list_is_returned
-  PASS: test_node_count_matches_input
-  PASS: test_node_has_id_field
-  PASS: test_node_has_name_field
-  PASS: test_node_has_type_field
-  PASS: test_node_top_level_has_null_parent
-  PASS: test_node_module_parent_references_bounded_context
-  PASS: test_node_has_metrics_field
-  PASS: test_node_has_position_field
-  PASS: test_node_has_size_field
-  PASS: test_edges_list_is_returned
-  PASS: test_edge_count_matches_input
-  PASS: test_edge_has_source_field
-  PASS: test_edge_has_target_field
-  PASS: test_edge_has_type_field
-  PASS: test_edge_direction_preserved_source_to_target
-  PASS: test_cross_context_edge_type_is_cross_context
-  PASS: test_internal_edge_type_is_internal
-  PASS: test_edge_types_are_distinguishable
-  PASS: test_metadata_is_returned
-  PASS: test_empty_graph_is_handled_gracefully
-  PASS: test_missing_top_level_keys_default_to_empty
-  PASS: test_spec_node_type_is_preserved
-  PASS: test_spec_nodes_have_id_prefixed_with_spec
-
-[test_node_renderer.gd]
-  PASS: test_node_rendered_at_json_position
-  PASS: test_second_node_rendered_at_json_position
-  PASS: test_no_layout_recomputed_in_godot
-  PASS: test_each_json_node_becomes_a_scene_tree_child
-
-[test_scene_graph_loading.gd]
-  PASS: test_volumes_created_for_each_node
-  PASS: test_mesh_instances_exist_in_anchors
-  PASS: test_edge_mesh_instances_created
-  PASS: test_anchor_positions_match_json
-  PASS: test_labels_are_billboard_and_readable
-
-[test_containment_rendering.gd]
-  PASS: test_bounded_context_is_translucent
-  PASS: test_module_is_opaque
-  PASS: test_module_parented_inside_context
-  PASS: test_bounded_context_larger_than_module
-  PASS: test_bounded_context_cull_disabled
-
-[test_dependency_rendering.gd]
-  PASS: test_edge_line_mesh_created
-  PASS: test_direction_indicator_cone_created
-  PASS: test_direction_cone_near_target
-  PASS: test_cross_context_cone_is_orange
-
-[test_size_encoding.gd]
-  PASS: test_large_module_has_bigger_mesh
-  PASS: test_mesh_sizes_proportional_to_metric
-
-[test_camera_controls.gd]
-  PASS: test_initial_theta_is_near_top_down
-  PASS: test_initial_distance_is_positive
-  PASS: test_scroll_up_decreases_distance
-  PASS: test_scroll_down_increases_distance
-  PASS: test_orbit_horizontal_drag_changes_phi
-  PASS: test_orbit_vertical_drag_changes_theta
-  PASS: test_set_pivot_updates_state
-  PASS: test_zoom_clamped_at_minimum
-
-[test_engine_version.gd]
-  PASS: test_project_godot_declares_46_feature
-  PASS: test_project_godot_config_features_line
-  PASS: test_project_does_not_declare_csharp
-  PASS: test_file_access_get_as_text_returns_non_empty_string
-  PASS: test_scripts_dir_contains_only_gdscript
-
-[test_godot_version.gd]
-  PASS: test_project_declares_godot_46
-  PASS: test_main_script_is_gdscript
-  PASS: test_main_uses_godot4_fileaccess_api
-
-[test_spatial_structure.gd]
-  PASS: test_camera_supports_zoom_in
-  PASS: test_camera_supports_zoom_out
-  PASS: test_camera_supports_orbit
-  PASS: test_camera_get_distance_returns_current_distance
-  PASS: test_spatial_layout_creates_node_per_structural_element
-  PASS: test_distinct_contexts_occupy_distinct_regions
-  PASS: test_context_boundary_is_visually_distinct_translucent
-  PASS: test_containment_expressed_as_scene_tree_parenting
-  PASS: test_dependency_expressed_as_visible_connection
-  PASS: test_far_distance_shows_only_bounded_contexts
-  PASS: test_far_distance_hides_all_edges
-  PASS: test_medium_distance_shows_modules
-  PASS: test_medium_distance_shows_cross_context_edges_only
-  PASS: test_near_distance_shows_all_nodes
-  PASS: test_near_distance_shows_internal_edges_as_fine_detail
-  PASS: test_lod_node_entries_populated_after_build
-  PASS: test_lod_edge_entries_populated_after_build
-  PASS: test_lod_integration_far_hides_modules_in_built_scene
-
-[test_ux_polish.gd]
-  PASS: test_lmb_pan_moves_pivot
-  PASS: test_pan_drag_right_increases_pivot_x
-  PASS: test_pan_drag_left_decreases_pivot_x
-  PASS: test_drag_direction_matches_view_movement
-  PASS: test_zoom_toward_cursor_shifts_pivot_toward_cursor
-  PASS: test_component_stays_under_cursor_on_zoom_in
-  PASS: test_zoom_out_from_cursor_shifts_pivot_away
-  PASS: test_zoom_out_increases_target_distance
-  PASS: test_orbit_pivot_set_to_cursor_point_at_start
-  PASS: test_orbit_pivot_is_used_during_orbit
-  PASS: test_component_remains_at_visual_center_during_orbit
-  PASS: test_zoom_is_interpolated_not_instantaneous
-  PASS: test_target_distance_clamped_at_minimum
-  PASS: test_target_distance_clamped_at_maximum
-  PASS: test_theta_clamped_at_minimum
-  PASS: test_theta_clamped_at_maximum
-  PASS: test_pan_proportional_to_drag_speed
-
-[test_flow_overlay.gd]
-  PASS: test_flow_not_active_by_default
-  PASS: test_path_mid_node_lit_up
-  PASS: test_entry_node_green
-  PASS: test_terminus_node_red
-  PASS: test_offpath_nodes_deemphasized
-  PASS: test_offpath_node_transparency_mode
-  PASS: test_offpath_nodes_still_in_scene
-  PASS: test_positions_unchanged_when_path_shown
-  PASS: test_path_edges_visible
-  PASS: test_path_edges_cyan
-  PASS: test_offpath_edges_hidden
-  PASS: test_clear_restores_materials
-  PASS: test_clear_restores_edge_visibility
-  PASS: test_is_not_active_after_clear
-  PASS: test_is_active_after_show_path
-  PASS: test_high_traffic_edge_orange
-  PASS: test_medium_traffic_edge_yellow
-  PASS: test_bottleneck_node_has_overlay
-  PASS: test_bottleneck_overlay_red
-  PASS: test_aggregate_sets_active
-  PASS: test_aggregate_preserves_edge_visibility
-
 Results: 116 passed, 0 failed
 GDScript behavioral tests passed.
 [EXIT 0]
 
 === Summary: 31 check(s) run ===
-NOTE: check-not-in-scope.sh exits 1 for pre-existing data-flow files from main
-(commit 5208924d, PR #88). All other 30 checks exit 0. Zero commits on
-hyperloop/task-016 modify those files. The check has no branch-filtering for
-data-flow violations, creating a deadlock for any branch based on main after
-PR #88 merged. This is documented per the pre-existing scope violation protocol.
+RESULT: FAIL — one or more checks exited non-zero
+Failing checks: check-not-in-scope.sh, check-racf-remediation.sh
+
+---
+
+## Missing Check Scripts (process note — not on main)
+
+The following checks are referenced in the review guidelines but do not exist on main
+(confirmed after `git checkout main -- .hyperloop/checks/`):
+
+  check-direction-test-derivations.sh    — not on main
+  check-pan-grab-model-comments.sh       — not on main
+  check-gdscript-test-bool-return.sh     — not on main
+  check-compound-then-clause-coverage.sh — not on main
+  check-compound-coverage-not-falsified.sh — not on main
+  check-reflects-mapping-consistency.sh  — not on main
+  check-desktop-platform-tested.sh       — not on main
+  check-end-to-end-integration-test.sh   — not on main
+
+These were never added to main and are therefore not process violations by the implementer.
+The direction and pan-model derivations have been verified manually in Findings F1–F2.
+
+---
+
+## Findings
+
+### F0 — REVIEWER TOOLING CONFLICT — PRE-EXISTING SCOPE ARTIFACT [FAIL — ESCALATED]
+
+`check-not-in-scope.sh` exits 1 and `check-racf-remediation.sh` cascades with FAIL, both
+caused exclusively by four data-flow visualization files that originated from `main` (commit
+`5208924d`, PR #88 / task-017) before this branch was created.
+
+Provenance of each matched file:
+
+  godot/scripts/flow_overlay.gd        — origin: 5208924d  (task-017)
+  godot/scripts/main.gd                — origin: 5208924d  (task-017)
+  godot/tests/run_tests.gd             — origin: 5208924d  (task-017)
+  godot/tests/test_flow_overlay.gd     — origin: 5208924d  (task-017)
+
+`git log main..HEAD --oneline -- <file>` returns empty for all four — zero commits on
+this branch touch any of them. This task did NOT introduce the data-flow violation.
+
+The implementer's report correctly identifies and documents this conflict. It is NOT
+falsification. `check-scope-report-not-falsified.sh` exits 0 confirming consistency.
+
+`check-racf-remediation.sh` fails as a pure cascade: the prior committed report
+(5f96172) shows `check-not-in-scope.sh` [EXIT 1 — FAIL] (same tooling conflict, same
+pre-existing files), and the check re-runs it and finds it still exits 1. This is
+mechanically correct but cannot be resolved by any action the implementer can take.
+
+**Result: FAIL verdict is mandatory per protocol. However, the implementer cannot
+resolve this — it requires process-owner intervention.**
+
+Prescribed process-owner action (choose one):
+  a) Update `check-not-in-scope.sh` to filter out violations where `git log main..HEAD
+     --oneline -- <file>` returns empty (no commits from this branch), or
+  b) Remove the pre-existing data-flow files from `main` (requires the originating
+     task-017 branch to clean them up first), or
+  c) Exempt `hyperloop/task-016` from the data-flow file check explicitly.
+
+Until one of these is done, every future reviewer of this branch will encounter the same
+deadlock. **This finding is escalated to the process owner. Do NOT require the implementer
+to modify the four pre-existing files — that would itself be a scope violation.**
+
+---
+
+### F1 — DIRECTION INVERSION: WRONG PREDICATE [FAIL]
+
+**Spec THEN-clause under review:**
+> THEN the scene moves in the same direction as the drag (i.e. dragging left reveals
+> content to the right, as in Google Maps)
+
+**Guideline-prescribed derivation (from the "(i.e.)" parenthetical alone):**
+> "dragging left reveals content to the right" → pivot moves RIGHT (opposite to drag)
+> → delta.x is negated in implementation
+
+**Independent derivation of expected predicate:**
+  1. "Dragging left reveals content to the right" (Google Maps grab model)
+  2. For right-side content to come into view: camera must pan RIGHT
+  3. Camera pans RIGHT = pivot moves RIGHT (positive x direction)
+  4. Drag LEFT = delta.x = negative
+  5. To get pivot.x to increase (move right) when delta.x is negative: NEGATE delta.x
+  6. Expected implementation: `_pivot -= right * delta.x * pan_amount`
+     (or equivalently: `_pivot += right * (-delta.x) * pan_amount`)
+
+**Actual implementation** (`godot/scripts/camera_controller.gd` line 133):
+  ```
+  _pivot += right * delta.x * pan_amount   # NO negation
+  ```
+  Drag LEFT (delta.x = -50) → `_pivot.x -= 50 * pan_amount` → pivot moves LEFT
+  This is the camera-pan model, not the spec's grab model.
+
+**Test predicate check — `test_pan_drag_right_increases_pivot_x`:**
+  Expected per guideline: drag RIGHT → pivot.x DECREASES (negate model)
+  Actual test asserts:    drag RIGHT → `cam._pivot.x > initial_x` (INCREASES)
+  → WRONG PREDICATE — test asserts the opposite direction from the guideline derivation
+
+**Test predicate check — `test_pan_drag_left_decreases_pivot_x`:**
+  Expected per guideline: drag LEFT → pivot.x INCREASES (negate model)
+  Actual test asserts:    drag LEFT → `cam._pivot.x < initial_x` (DECREASES)
+  → WRONG PREDICATE — test asserts the opposite direction from the guideline derivation
+
+**Spec ambiguity note (disclosed for process-owner awareness):**
+The spec contains internally contradictory direction requirements:
+  - "THEN the camera pans in the direction of the drag" → camera-pan model (no negate)
+  - "AND the movement direction matches the drag direction (not inverted)" → no negate
+  - "THEN the scene moves in the same direction as the drag (i.e. ...)" → grab model (negate)
+
+The first two THEN-clauses describe the camera-pan model; only the (i.e.) parenthetical
+describes the grab model. The implementation consistently follows the first two
+THEN-clauses and satisfies them correctly. The conflict is in the spec itself.
+
+Per the review guideline: "derive your expected predicate from the (i.e.) parenthetical
+alone." Applying this rule strictly: the implementation direction is WRONG and the tests
+assert the wrong predicate. **Verdict: FAIL.**
+
+**Prescribed fix (per guideline derivation):**
+  Negate delta.x in the pan handler:
+    Before: `_pivot += right * delta.x * pan_amount`
+    After:  `_pivot -= right * delta.x * pan_amount`
+
+  Update tests to match:
+    `test_pan_drag_right_increases_pivot_x`: change assertion to `cam._pivot.x < initial_x`
+    `test_pan_drag_left_decreases_pivot_x`: change assertion to `cam._pivot.x > initial_x`
+
+  **IMPORTANT**: The spec is ambiguous. The process owner should clarify whether the grab
+  model or camera-pan model is intended before the implementer applies this fix —
+  applying the fix will make the other two THEN-clauses fail ("camera pans in direction
+  of drag" / "not inverted"). This finding warrants a spec clarification request.
+
+---
+
+### F2 — WEAK DIRECTION TEST: WRONG PREDICATE [FAIL]
+
+**Spec THEN-clause under review:**
+> THEN the scene moves in the same direction as the drag (i.e. dragging left reveals
+> content to the right, as in Google Maps)
+
+**Mapped test:** `test_drag_direction_matches_view_movement`
+
+**Test body (read verbatim):**
+  ```gdscript
+  func test_drag_direction_matches_view_movement() -> bool:
+      var cam = _make_cam()
+      _press_lmb(cam, Vector2(100.0, 100.0))
+      _move_mouse(cam, Vector2(100.0, 150.0))  # drag down 50 px
+      return cam._pivot != Vector3.ZERO
+  ```
+
+**Required predicate:** The test must verify the DIRECTION of pivot movement matches the
+spec (either grab model or camera-pan model — but it must assert direction, not just
+non-zero movement).
+
+**Actual predicate:** `cam._pivot != Vector3.ZERO` — only asserts movement occurred.
+A pivot could move in any direction (or even diagonally) and this test would PASS.
+An implementation with completely inverted pan direction passes this test identically.
+
+This test provides zero assurance about which direction the scene moves. It is a
+wrong-predicate mapping regardless of which directional model (grab or camera-pan)
+the spec intends.
+
+**Prescribed fix:**
+  Replace the `!= Vector3.ZERO` assertion with a directional assertion.
+  For camera-pan model (drag down → pivot moves forward/positive Z in headless identity):
+    `return cam._pivot.z > 0.0`
+  For grab model (drag down → pivot moves backward/negative Z):
+    `return cam._pivot.z < 0.0`
+  The correct sign depends on F1 resolution (spec clarification required).
+
+---
+
+### What passes (not in dispute)
+
+The following requirements are correctly implemented and tested:
+
+| THEN-clause | Test | Status |
+|---|---|---|
+| Camera pans on LMB drag (movement occurs) | `test_lmb_pan_moves_pivot` | COVERED |
+| Zoom toward cursor shifts pivot toward cursor | `test_zoom_toward_cursor_shifts_pivot_toward_cursor` | COVERED |
+| Component stays under cursor on zoom-in | `test_component_stays_under_cursor_on_zoom_in` | COVERED |
+| Zoom-out shifts pivot away from cursor | `test_zoom_out_from_cursor_shifts_pivot_away` | COVERED |
+| Zoom-out increases target distance | `test_zoom_out_increases_target_distance` | COVERED |
+| Orbit pivot set to cursor at orbit start | `test_orbit_pivot_set_to_cursor_point_at_start` | COVERED |
+| Orbit pivot unchanged during orbit motion | `test_orbit_pivot_is_used_during_orbit` | COVERED |
+| Component at visual center during orbit | `test_component_remains_at_visual_center_during_orbit` | COVERED |
+| Zoom interpolated (not instantaneous) | `test_zoom_is_interpolated_not_instantaneous` | COVERED |
+| Pan proportional to drag speed | `test_pan_proportional_to_drag_speed` | COVERED |
+| Target distance clamped at min/max | `test_target_distance_clamped_at_minimum` / `_at_maximum` | COVERED |
+| Theta clamped to prevent pole flip | `test_theta_clamped_at_minimum` / `_at_maximum` | COVERED |
+
+The camera_controller.gd implementation is architecturally sound. The test runner
+correctly handles bool-return (Pattern 2) test functions — `run_tests.gd` explicitly
+invokes `_run_one` with `result = obj.call(method_name)` and checks `result == true`.
+The tests are not inert. All 116 GDScript tests pass, 95 Python tests pass.
+
+Commit trailers are present and correct on all 5 implementation commits:
+  Spec-Ref: specs/prototype/ux-polish.spec.md@3e5e297e...
+  Task-Ref: task-016
+
+---
+
+## Verdict Summary
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| F0: Scope check — pre-existing data-flow files from main | TOOLING CONFLICT | Process-owner action required — NOT implementer |
+| F1: Direction inversion — wrong predicate in pan tests | FAIL | Spec clarification needed before code fix |
+| F2: `test_drag_direction_matches_view_movement` weak assertion | FAIL | Add directional assertion |
+
+**verdict: fail**
+
+Primary blocking issue is F0 (tooling conflict — cannot be resolved by implementer).
+F1 and F2 are genuine quality findings but require spec clarification before the fix
+direction is unambiguous. The spec's "i.e." parenthetical and its other THEN-clauses
+give contradictory direction requirements; the process owner should resolve this before
+the next implementation cycle.
