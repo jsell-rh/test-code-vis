@@ -1,0 +1,429 @@
+---
+task_id: task-014
+round: 6
+role: verifier
+verdict: fail
+---
+## Scope Check Output
+
+NOTE: Pre-existing prohibited-mode patterns detected in files that originate from main
+  (NOT introduced by this branch — attributed to their originating task, not to you):
+  godot/scripts/understanding_overlay.gd  (origin: a2f9d139 feat(core): godot: evaluation mode — coupling and centrality visualization (#108))
+  These are informational only and do NOT count as a FAIL for this branch.
+OK: No prohibited (not-in-scope) features detected.
+
+## Check Script Results
+
+--- check-branch-has-commits.sh ---
+OK: Branch 'hyperloop/task-014' has 21 commit(s) above main.
+[EXIT 0]
+
+--- check-checks-in-sync.sh ---
+OK: All check scripts from main are present in working tree (18 checked).
+[EXIT 0]
+
+--- check-circular-position-y-axis.sh ---
+FAIL: Non-zero y-axis value in _circular_positions call inflates 3D distance.
+  A non-zero y argument (e.g. y=1.0) adds a vertical component to every child
+  position.  The proximity test computes a 3D distance, so this inflation causes
+  test_child_nodes_are_near_parent_position to fail even when the orbit radius is
+  correctly bounded.  This is a separate contributor from the unbounded max() issue.
+
+  Offending lines:
+  extractor/extractor.py:222:        mod_positions = _circular_positions(len(children), mod_radius, y=1.0)
+
+  Fix: use y=0.0 in every _circular_positions call for module-level positions:
+    _circular_positions(children, radius, center=(...), y=0.0)
+[EXIT 1 — FAIL]
+
+--- check-commit-trailer-task-ref.sh ---
+FAIL: One or more implementation commits carry a Task-Ref that does not match the branch.
+
+  Branch:   hyperloop/task-014
+  Expected: Task-Ref: task-014
+
+  Mismatched commits:
+  997ac24  Task-Ref: task-007  (expected task-014)
+
+  This typically happens when a commit is copied from another task without
+  updating the Task-Ref trailer.  Fix with an interactive rebase:
+    git rebase -i main   # mark each affected commit as 'reword'
+    # update Task-Ref: <old> to Task-Ref: task-014 in each message
+
+  Confirm the branch task ID before each commit:
+    git rev-parse --abbrev-ref HEAD   # shows hyperloop/task-014
+[EXIT 1 — FAIL]
+
+--- check-layout-radius-bound.sh ---
+FAIL: Unbounded child-orbit radius detected in layout source.
+  A bare max(lower, expr) without a wrapping min(…, parent_size * fraction)
+  allows child nodes to be placed outside the parent's scene bounds.
+
+  Offending lines:
+  extractor/extractor.py:206:    bc_radius = max(5.0, len(bc_nodes) * 2.5)
+  extractor/extractor.py:221:        mod_radius = max(1.5, len(children) * 0.9)
+
+  Fix: wrap the max() in a min() to cap the radius:
+    mod_radius = min(max(1.5, len(children) * 0.9), parent_size * 0.4)
+  Or, if no parent_size is available, derive a safe cap from a sibling
+  attribute (e.g., scene_radius) and clamp to it.
+
+  Alternatively, fix the test's coordinate-frame assumption: compare
+  the child LOCAL position magnitude against parent size rather than
+  world-distance from parent world position.
+[EXIT 1 — FAIL]
+
+--- check-new-modules-wired.sh ---
+OK: 'extractor/extractor.py' is imported by production code (1 import(s) found).
+[EXIT 0]
+
+--- check-no-duplicate-toplevel-functions.sh ---
+
+OK: No duplicate top-level function names across extractor/ source files.
+[EXIT 0]
+
+--- check-not-in-scope.sh ---
+NOTE: Pre-existing prohibited-mode patterns detected in files that originate from main
+  (NOT introduced by this branch — attributed to their originating task, not to you):
+  godot/scripts/understanding_overlay.gd  (origin: a2f9d139 feat(core): godot: evaluation mode — coupling and centrality visualization (#108))
+  These are informational only and do NOT count as a FAIL for this branch.
+OK: No prohibited (not-in-scope) features detected.
+[EXIT 0]
+
+--- check-no-zero-commit-reattempt.sh ---
+FAIL: Zero implementation commits since prior FAIL report (cda15d5).
+
+  The prior committed worker-result.yaml (cda15d5) contains
+  7 FAIL check(s).  No non-hyperloop commits have been
+  added to this branch since that report was written.
+
+  Note: if the most-recently committed report appears clean (e.g., due to
+  an orchestrator cleanup commit), this check walks full branch history to
+  find the actual prior FAIL report — consistent with check-racf-prior-cycle.sh.
+
+  This means the implementer submitted a re-attempt without applying any
+  fixes.  This is the pattern that causes repeated RACF across many cycles.
+
+  Protocol:
+    1. Run each failing check: bash .hyperloop/checks/<check>.sh
+    2. Apply the prescribed fix from its FAIL output.
+    3. Commit the fix: git commit -m 'fix: <description>'
+    4. Repeat for each failing check.
+    5. Only then run run-all-checks.sh and write worker-result.yaml.
+[EXIT 1 — FAIL]
+
+--- check-preloaded-gdscript-files.sh ---
+OK: All 24 preload() target(s) resolve to existing files.
+[EXIT 0]
+
+--- check-pytest-passes.sh ---
+FAIL: One or more pytest tests failed.
+
+  FAILED extractor/tests/test_extractor.py::TestLayout::test_child_nodes_are_near_parent_position
+
+  AssertionError: Child graph.infrastructure is at distance 9.35 from parent graph,
+  exceeding scene radius 7.50. Child must be positioned within parent's spatial bounds.
+  assert 9.353608929178085 < 7.5
+
+  (96 passed, 1 failed)
+[EXIT 1 — FAIL]
+
+--- check-racf-prior-cycle.sh ---
+Orchestrator cleanup obscured prior FAIL report — recovered from cda15d5.
+To inspect: git show cda15d5:.hyperloop/worker-result.yaml
+
+Checks that failed in that cycle — must now pass:
+
+  check-circular-position-y-axis.sh                       FAIL (still failing — RACF)
+  check-commit-trailer-task-ref.sh                        FAIL (still failing — RACF)
+  check-layout-radius-bound.sh                            FAIL (still failing — RACF)
+  check-no-zero-commit-reattempt.sh                       FAIL (still failing — RACF)
+  check-pytest-passes.sh                                  FAIL (still failing — RACF)
+  check-racf-prior-cycle.sh                               SKIP (self-reference)
+  check-relative-position-tests.sh                        FAIL (still failing — RACF)
+
+FAIL: One or more prior-cycle failures recovered from cda15d5 still fail.
+[EXIT 1 — FAIL]
+
+--- check-racf-remediation.sh ---
+SKIP: Prior committed report contains no FAIL checks — no RACF to verify.
+[EXIT 0]
+
+--- check-relative-position-tests.sh ---
+OK: No absolute parent-coordinate accumulation detected in extractor source.
+FAIL: Only proximity-based child position tests found — no direct relative-offset assertion.
+  A test like 'test_child_nodes_are_near_parent_position' that only checks
+  abs(child_pos - parent_pos) < threshold passes for BOTH absolute and relative
+  coordinate storage when the offset is small. It does NOT cover the spec
+  requirement that positions are stored as relative (local) offsets.
+
+  Required: a test that:
+    1. Places the parent at a non-zero world position (e.g., x=10.0)
+    2. Asserts child['position']['x'] == local_offset_x  (not proximity)
+    3. Optionally asserts child['position']['x'] != parent_x + local_offset_x
+[EXIT 1 — FAIL]
+
+--- check-report-scope-section.sh ---
+OK: worker-result.yaml contains a valid '## Scope Check Output' section (scope check ran and output was pasted verbatim).
+[EXIT 0]
+
+--- check-ruff-format.sh ---
+OK: ruff format --check passed — all extractor/ files are correctly formatted.
+[EXIT 0]
+
+--- check-scope-report-not-falsified.sh ---
+OK: Scope report section is consistent with actual check-not-in-scope.sh result.
+[EXIT 0]
+
+=== Summary: 18 check(s) run — 6 implementation FAILs ===
+
+## Findings
+
+### PROCESS NOTE — New check script added to main after branch creation
+
+`check-preloaded-gdscript-files.sh` was absent from the worktree before my sync
+(prior verifier saw 17 checks; post-sync 18 checks). This script was added to main
+AFTER the branch `hyperloop/task-014` was created. Per guidelines: this is NOT a
+process violation by the implementer. The check PASSES (EXIT 0) — all 24 preload()
+targets resolve to existing files. The previously-missing `test_readable_labels.gd`
+and `test_lod_manager.gd` preloads noted in the prior verifier's (cda15d5) observation
+are no longer present in `run_tests.gd`. No action required.
+
+---
+
+### REVIEWER SCOPE AUDIT — Pre-existing artifact
+
+`check-not-in-scope.sh` flags `godot/scripts/understanding_overlay.gd`.
+Running `git log main..HEAD --oneline -- godot/scripts/understanding_overlay.gd`
+returns zero commits — this file was NOT introduced by this task. Its origin commit
+is `a2f9d139` (a prior task). This is a pre-existing artifact; the check correctly
+reports it as informational only and exits 0.
+
+Independent grep for prohibited concepts across all branch files:
+- `llm`, `build_prompt`, `parse_response`, `apply_spec`, `LlmView`, `SceneInterpreter`,
+  `moldable`, `question_ui`: no matches in any source file on this branch.
+
+Scope is clean for task-014.
+
+---
+
+### F1 — FAIL: check-commit-trailer-task-ref.sh — wrong Task-Ref trailer (RACF, blocking)
+
+**Commit:** `997ac245`
+**Trailer present:** `Task-Ref: task-007`
+**Expected:** `Task-Ref: task-014`
+
+**Re-attempt compliance failure:** This check failed in cycle cda15d5 with the identical
+prescribed fix. Zero implementation commits have been added since that report. The trailer
+is unchanged.
+
+**Required fix:**
+```
+git rebase -i main   # mark 997ac245 as 'reword'
+# change: Task-Ref: task-007
+# to:     Task-Ref: task-014
+```
+
+---
+
+### F2 — FAIL: check-layout-radius-bound.sh — unbounded child-orbit radius (RACF, blocking)
+
+**File:** `extractor/extractor.py`
+**Offending lines (verified by grep on current HEAD):**
+- Line 206: `bc_radius = max(5.0, len(bc_nodes) * 2.5)` — no upper cap
+- Line 221: `mod_radius = max(1.5, len(children) * 0.9)` — no upper cap
+
+`mod_radius` grows unbounded as child count increases. For the `graph` bounded context
+in kartograph (with multiple submodules), `mod_radius` exceeds `bc_radius`, placing
+children outside the parent's spatial boundary.
+
+**Re-attempt compliance failure:** Same FAIL, same offending lines, same prescribed fix
+from cycle cda15d5. Fix not applied.
+
+**Required fix:**
+```python
+mod_radius = min(max(1.5, len(children) * 0.9), bc_radius * 0.4)
+```
+
+---
+
+### F3 — FAIL: check-circular-position-y-axis.sh — non-zero y-axis inflation (RACF, blocking)
+
+**File:** `extractor/extractor.py`
+**Offending line (verified by grep on current HEAD):**
+- Line 222: `mod_positions = _circular_positions(len(children), mod_radius, y=1.0)`
+
+`y=1.0` adds a 1-unit vertical component to every child's local position vector. The
+proximity test `test_child_nodes_are_near_parent_position` computes 3D Euclidean distance,
+so this vertical inflation contributes independently of `mod_radius`. Both F2 and F3 must
+be fixed to resolve F4.
+
+**Re-attempt compliance failure:** Same FAIL from cycle cda15d5. Fix not applied.
+
+**Required fix:**
+```python
+mod_positions = _circular_positions(len(children), mod_radius, y=0.0)
+```
+
+---
+
+### F4 — FAIL: check-pytest-passes.sh — proximity test fails (RACF, blocking)
+
+**Test:** `extractor/tests/test_extractor.py::TestLayout::test_child_nodes_are_near_parent_position`
+**Failure (verified by running pytest):**
+```
+AssertionError: Child graph.infrastructure is at distance 9.35 from parent graph,
+exceeding scene radius 7.50. Child must be positioned within parent's spatial bounds.
+assert 9.353608929178085 < 7.5
+```
+96 other tests pass; only this one fails.
+
+**Re-attempt compliance failure:** Identical failure message from cycle cda15d5. Zero
+implementation commits since that report. Runtime manifestation of F2 (unbounded
+mod_radius) and F3 (y=1.0 inflation). Applying both fixes resolves this test.
+
+---
+
+### F5 — FAIL: check-no-zero-commit-reattempt.sh — zero-commit re-attempt (blocking)
+
+**Prior FAIL report:** `cda15d5` (7 FAIL checks)
+**Implementation commits since cda15d5:**
+```
+git log cda15d5..HEAD --oneline -- extractor/ godot/
+(no output — zero implementation commits)
+```
+
+The only commit between cda15d5 and HEAD is `abf3d209 orchestrator: clean worker verdict` —
+a housekeeping commit. The implementer submitted without making any code changes to
+address the prescribed fixes from the prior verifier's report.
+
+**Zero-commit re-attempt:** This is the root cause of the accumulated RACF. All 6
+implementation checks that fail now are identical to the prior cycle. The implementer
+must apply code fixes and commit them before re-submitting.
+
+---
+
+### F6 — FAIL: check-racf-prior-cycle.sh — persistent RACF (blocking)
+
+Six checks that failed in cycle cda15d5 still fail with no code changes applied:
+`check-circular-position-y-axis.sh`, `check-commit-trailer-task-ref.sh`,
+`check-layout-radius-bound.sh`, `check-no-zero-commit-reattempt.sh`,
+`check-pytest-passes.sh`, `check-relative-position-tests.sh`.
+
+This branch has now accumulated multiple consecutive RACF cycles. Each cycle has had
+the same fixes prescribed; none have been applied.
+
+---
+
+### F7 — FAIL: check-relative-position-tests.sh — no direct relative-offset assertion (RACF, blocking)
+
+`test_child_nodes_are_near_parent_position` checks `abs(child_pos - parent_pos) < threshold`.
+This passes for both absolute and relative coordinate storage when offsets are small.
+It cannot verify that positions are stored as local (relative) offsets — which is the
+spec requirement.
+
+**Re-attempt compliance failure:** Same FAIL from cycle cda15d5. Same prescribed fix. Not applied.
+
+**Required fix — add an equality test:**
+```python
+def test_child_position_is_local_offset(self, src: Path) -> None:
+    """Child positions must be local offsets, not world (absolute) coordinates."""
+    nodes = build_scene_graph(src)["nodes"]
+    bcs = [n for n in nodes if n["type"] == "bounded_context"
+           and abs(n["position"]["x"]) > 1.0]
+    assert bcs, "Need a BC at non-zero world position for offset verification"
+    bc = bcs[0]
+    children = [n for n in nodes if n["parent"] == bc["id"]]
+    assert children
+    child = children[0]
+    assert abs(child["position"]["x"]) < abs(bc["position"]["x"]), (
+        f"child_x={child['position']['x']:.2f} looks like a world coord "
+        f"(parent_x={bc['position']['x']:.2f}); expected a small local offset"
+    )
+```
+
+---
+
+### GDScript / Godot Application — THEN→Test Mapping
+
+All test functions grep-verified in working tree. All test suites are Pattern-2
+(bool-return, extends RefCounted, no `_test_failed` property) — no inert test
+functions. Verified by reading actual test bodies.
+
+`run_tests.gd` preloads 8 test suites; all 8 target files exist on disk
+(`check-preloaded-gdscript-files.sh` exits 0).
+
+| # | THEN-clause | Test function | File | Predicate (read from file) | Verdict |
+|---|---|---|---|---|---|
+| 1 | reads the JSON file | `test_file_access_reads_fixture_json` | test_scene_graph_loading.gd | Opens `res://data/scene_graph.json`; asserts `text.length() > 0` | COVERED |
+| 2 | generates 3D volumes for each node | `test_mesh_instances_exist_in_anchors` | test_scene_graph_loading.gd | Iterates `_anchors`; confirms MeshInstance3D child exists for each node id | COVERED |
+| 3 | generates connections for each edge | `test_edge_mesh_instances_created` | test_scene_graph_loading.gd | Counts MeshInstance3D children of main node; asserts `edge_mesh_count >= 2` | COVERED |
+| 4 | positions elements according to JSON | `test_volumes_positioned_from_json` | test_scene_graph_loading.gd | `ctx_anchor.position.is_equal_approx(Vector3(0,0,0))` and `mod_anchor.position.is_equal_approx(Vector3(2,0,2))` | COVERED |
+| 5 | bounded context = larger translucent volume | `test_bounded_context_is_translucent` | test_containment_rendering.gd | `transparency != TRANSPARENCY_DISABLED and albedo_color.a < 1.0` | COVERED |
+| 6a | child modules = smaller opaque volumes | `test_module_is_opaque` | test_containment_rendering.gd | `albedo_color.a >= 1.0` | COVERED |
+| 6b | child modules inside parent | `test_module_parented_inside_context` | test_containment_rendering.gd | `mod_anchor.get_parent() == ctx_anchor` | COVERED |
+| 7 | parent boundary visually distinct | `test_bounded_context_cull_disabled` | test_containment_rendering.gd | `cull_mode == BaseMaterial3D.CULL_DISABLED` | COVERED |
+| 8 | line connects the two context volumes | `test_edge_line_mesh_created` | test_dependency_rendering.gd | Finds MeshInstance3D whose `.mesh is ImmediateMesh` | COVERED |
+| 9 | direction is visually indicated | `test_direction_indicator_cone_created` | test_dependency_rendering.gd | Finds CylinderMesh with `top_radius == 0.0` (arrowhead cone — explicit rendering element) | COVERED |
+| 10 | larger volume for more-code module | `test_large_module_has_bigger_mesh` | test_size_encoding.gd | `large_mesh.size.x > small_mesh.size.x` (fixture: size=9 vs size=3) | COVERED |
+| 11 | sizes proportional to metric | `test_mesh_sizes_proportional_to_metric` | test_size_encoding.gd | `abs(actual_ratio - 3.0) < 0.001` where expected = 9/3; fixture varies input — algorithm-quality | COVERED |
+| 12 | camera defaults to top-down view | `test_initial_theta_is_near_top_down` | test_camera_controls.gd | `cam._theta < PI / 4.0` | COVERED |
+| 13 | camera moves closer on zoom | `test_scroll_up_decreases_distance` | test_camera_controls.gd | `cam._distance < initial_distance` after WHEEL_UP event | COVERED |
+| 14 | internal structure becomes visible | (none — untestable headless) | — | No render pipeline in headless Godot. Modules are always parented inside context anchors with no `visible=false`. | PASS-WITH-NOTE |
+| 15 | labels scale to remain readable | `test_labels_are_billboard_and_readable` | test_scene_graph_loading.gd | `billboard == BILLBOARD_ENABLED and pixel_size > 0.0 and no_depth_test == true` | COVERED |
+| 16 | camera rotates around focal point | `test_orbit_changes_theta_and_phi` | test_camera_controls.gd | `cam._phi != initial_phi and cam._theta != initial_theta` after diagonal middle-mouse drag | COVERED |
+| 17 | orientation remains intuitive (up stays up) | `test_theta_clamped_at_minimum_to_prevent_flip` + `test_theta_clamped_at_maximum_to_prevent_flip` | test_camera_controls.gd | Min: drives delta.y=+10000 from _theta=0.02; asserts `cam._theta >= 0.01`. Max: drives delta.y=-10000 from _theta=PI-0.02; asserts `cam._theta <= PI-0.01`. Both are constraint boundary tests. | COVERED |
+| 18 | uses Godot 4.6.x | `test_project_uses_godot_4_6` | test_engine_version.gd | Reads `res://project.godot` via FileAccess.get_as_text(); asserts `content.contains("4.6")` | COVERED |
+| 19 | all scripts use GDScript | `test_scripts_dir_contains_only_gdscript` | test_engine_version.gd | Iterates `res://scripts/` with DirAccess; asserts every non-directory file ends in `.gd` | COVERED |
+| 20 | all API calls valid for Godot 4.6 | `test_file_access_get_as_text_is_usable` | test_engine_version.gd | Calls `FileAccess.open() + get_as_text()` and asserts `text.length() > 0` | COVERED |
+
+**Note on THEN-clause 14:** Untestable in headless Godot (no render pipeline active).
+Architectural coverage only — modules are scene-tree children of context anchors with no
+`visible = false` suppression anywhere in `main.gd`. PASS-WITH-NOTE is not resolvable
+by code change in this environment.
+
+**GDScript assessment:** 19/20 THEN-clauses covered by named, grep-verified,
+predicate-verified tests (file bodies read directly). Clause 14 is PASS-WITH-NOTE
+(genuinely untestable headless). The GDScript implementation and test suite are complete
+and correct. All blocking issues reside in the Python extractor layout algorithm only.
+
+---
+
+## Required Fixes (in dependency order)
+
+1. **`extractor/extractor.py` line 221** — cap `mod_radius`:
+   ```python
+   mod_radius = min(max(1.5, len(children) * 0.9), bc_radius * 0.4)
+   ```
+   Resolves F2.
+
+2. **`extractor/extractor.py` line 222** — remove y-axis inflation:
+   ```python
+   mod_positions = _circular_positions(len(children), mod_radius, y=0.0)
+   ```
+   Together with fix 1, resolves F3 and F4.
+
+3. **Add direct relative-offset assertion test** to `extractor/tests/test_extractor.py`.
+   See F7 for prescribed skeleton. Resolves F7.
+
+4. **Fix Task-Ref trailer on commit `997ac245`** via interactive rebase:
+   ```
+   git rebase -i main   # reword 997ac245; change Task-Ref: task-007 to Task-Ref: task-014
+   ```
+   Resolves F1.
+
+5. **Commit each fix** with a new implementation commit (at minimum one non-hyperloop
+   commit per fix group), then run `bash .hyperloop/checks/run-all-checks.sh` and
+   confirm all checks pass before re-submitting. Resolves F5 and F6.
+
+## Verdict Summary
+
+| # | Check | Category | Finding |
+|---|---|---|---|
+| F1 | check-commit-trailer-task-ref.sh | RACF | 997ac245 has Task-Ref: task-007; branch is task-014 |
+| F2 | check-layout-radius-bound.sh | RACF | mod_radius = max(1.5, …) at line 221 is unbounded; no min() cap |
+| F3 | check-circular-position-y-axis.sh | RACF | y=1.0 in _circular_positions at line 222 inflates 3D distance |
+| F4 | check-pytest-passes.sh | RACF | test_child_nodes_are_near_parent_position: dist 9.35 > scene_radius 7.50 |
+| F5 | check-no-zero-commit-reattempt.sh | BLOCKING | Zero implementation commits since prior FAIL report cda15d5 |
+| F6 | check-racf-prior-cycle.sh | RACF | F1/F2/F3/F4/F7 all unchanged from prior cycle cda15d5 |
+| F7 | check-relative-position-tests.sh | RACF | Only proximity-based child position test; no direct relative-offset equality assertion |
