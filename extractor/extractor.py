@@ -193,9 +193,11 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
     BC order is optimised by ``_order_by_coupling`` so tightly coupled pairs
     are placed adjacent, reducing their spatial distance.
 
-    Module nodes are placed in a smaller circle *offset by their parent BC's
-    absolute position* so that child nodes are always within the spatial bounds
-    of their parent.
+    Module nodes are placed in a smaller circle using LOCAL offsets relative to
+    the parent BC's origin so that child nodes are always within the spatial
+    bounds of their parent.  Godot's main.gd adds the parent world position at
+    render time — storing absolute coordinates here would cause double-offset
+    rendering.
     """
     bc_nodes = [n for n in nodes if n["type"] == "bounded_context"]
 
