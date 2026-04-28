@@ -230,7 +230,7 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
         for child, pos in zip(children, mod_positions):
             child["position"] = {
                 "x": pos[0],  # local x offset from parent BC
-                "y": pos[1],  # local y (0.0 — y=0.0 in _circular_positions)
+                "y": pos[1],  # local y (always 0.0 — ground plane)
                 "z": pos[2],  # local z offset from parent BC
             }
 
