@@ -1,0 +1,119 @@
+---
+task_id: task-016
+round: 0
+role: spec-reviewer
+verdict: fail
+---
+## Spec Alignment Review — task-016 — UX Polish Spec (Cycle 2)
+
+### Requirement Coverage Summary
+
+| Requirement / Scenario | Status |
+|---|---|
+| Pan with Left Mouse Button — movement occurs | COVERED |
+| Non-Inverted Movement — drag direction matches view (grab model) | FAIL |
+| Zoom Toward Mouse Cursor — pivot shifts toward cursor on zoom-in | COVERED |
+| Zoom Toward Mouse Cursor — component stays under cursor | COVERED |
+| Zooming out — pivot shifts away from cursor | COVERED |
+| Orbit Around Mouse Point — pivot set to cursor point at orbit start | COVERED |
+| Orbit Around Mouse Point — pivot unchanged during orbit motion | COVERED |
+| Smooth zoom — interpolated, not instantaneous | COVERED |
+| Smooth pan — proportional to drag speed | COVERED |
+
+---
+
+### Misalignments in Completed Work
+
+#### FAIL 1: Pan direction inverted relative to spec grab model
+
+Spec (Non-Inverted Movement scenario, "(i.e.)" parenthetical):
+> THEN the scene moves in the same direction as the drag
+> (i.e. dragging left reveals content to the right, as in Google Maps)
+
+"Dragging left reveals content to the right" is the grab model: pivot must move RIGHT when
+user drags LEFT. This requires negating delta.x:
+  `_pivot -= right * delta.x * pan_amount`
+
+Actual implementation (`godot/scripts/camera_controller.gd` line 133):
+  `_pivot += right * delta.x * pan_amount`  ← NO negation
+
+Drag left (delta.x = -50) → `pivot.x -= 50 * pan_amount` → pivot moves LEFT.
+Content to the left comes into view. This is the camera-pan model, not the grab model.
+
+#### FAIL 2: test_pan_drag_right_increases_pivot_x — wrong predicate
+
+Spec grab model: drag RIGHT → content to LEFT appears → pivot moves LEFT (pivot.x decreases).
+Test asserts: `cam._pivot.x > initial_x` (pivot INCREASES on right drag).
+Required assertion: `cam._pivot.x < initial_x`.
+
+#### FAIL 3: test_pan_drag_left_decreases_pivot_x — wrong predicate
+
+Spec grab model: drag LEFT → content to RIGHT appears → pivot moves RIGHT (pivot.x increases).
+Test asserts: `cam._pivot.x < initial_x` (pivot DECREASES on left drag).
+Required assertion: `cam._pivot.x > initial_x`.
+
+#### FAIL 4: test_drag_direction_matches_view_movement — non-directional predicate
+
+Test asserts `cam._pivot != Vector3.ZERO` after a downward drag.
+This verifies only that movement occurred, not the direction of movement.
+A completely direction-inverted implementation passes this test identically.
+Required: a directional assertion (e.g. `cam._pivot.z > 0.0` for camera-pan model or
+`cam._pivot.z < 0.0` for grab model, depending on spec resolution).
+
+---
+
+### What Passes (Not in Dispute)
+
+- LMB pan produces movement (test_lmb_pan_moves_pivot) — COVERED
+- Zoom toward cursor: pivot shifts toward cursor on zoom-in — COVERED
+- Component stays under cursor on zoom-in — COVERED
+- Zoom-out shifts pivot away from cursor — COVERED
+- Zoom-out increases target distance — COVERED
+- Orbit pivot set to world point at RMB press (called directly via _set_orbit_pivot) — COVERED
+- Orbit pivot unchanged during orbit drag — COVERED
+- Component at visual center during orbit (pivot fixed) — COVERED
+- Smooth zoom: _distance lerps toward _target_distance, not instantaneous — COVERED
+- Pan proportional to drag speed — COVERED
+- All 116 GDScript tests pass, 95 Python tests pass
+
+---
+
+### Note on Spec Ambiguity (F1 from prior cycle, unresolved)
+
+The spec contains internally contradictory direction language:
+- "THEN the camera pans in the direction of the drag" → camera-pan model (no negate)
+- "AND the movement direction matches the drag direction (not inverted)" → no negate
+- "(i.e. dragging left reveals content to the right, as in Google Maps)" → grab model (negate)
+
+The first two THEN-clauses support the current (no-negate) implementation.
+Only the "(i.e.)" parenthetical requires negation.
+
+The implementation satisfies THEN-clauses 1 and 2 and violates the "(i.e.)" parenthetical.
+The tests (FAIL 2, FAIL 3, FAIL 4) validate the camera-pan model, not the grab model.
+
+Per review protocol: derive expected predicate from the "(i.e.)" parenthetical.
+Result: implementation direction and test predicates are WRONG per this derivation.
+
+The process owner should clarify the spec before the implementer applies the fix — applying
+the grab model (negation) will make "camera pans in the direction of the drag" fail.
+
+---
+
+### Prescribed Fixes
+
+1. `godot/scripts/camera_controller.gd` line 133:
+   Change: `_pivot += right * delta.x * pan_amount`
+   To:     `_pivot -= right * delta.x * pan_amount`
+
+2. `godot/tests/test_ux_polish.gd` — test_pan_drag_right_increases_pivot_x:
+   Change: `return cam._pivot.x > initial_x`
+   To:     `return cam._pivot.x < initial_x`
+
+3. `godot/tests/test_ux_polish.gd` — test_pan_drag_left_decreases_pivot_x:
+   Change: `return cam._pivot.x < initial_x`
+   To:     `return cam._pivot.x > initial_x`
+
+4. `godot/tests/test_ux_polish.gd` — test_drag_direction_matches_view_movement:
+   Change: `return cam._pivot != Vector3.ZERO`
+   To:     directional assertion (e.g. `return cam._pivot.z < 0.0` for grab model
+           where downward drag reveals upward content)
