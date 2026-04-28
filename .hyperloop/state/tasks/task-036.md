@@ -1,7 +1,7 @@
 ---
 id: task-036
 title: Schema + extractor — capture spec requirement body text
-spec_ref: specs/core/system-purpose.spec.md
+spec_ref: specs/core/system-purpose.spec.md@f1f52d804d7ad3bdd7c18b8aeea74cbfd01cfeca
 status: not_started
 phase: null
 deps:
