@@ -1,3 +1,4 @@
+# Review Report — task-016 — Cycle N
 ---
 verdict: pass
 ---
@@ -17,7 +18,7 @@ OK: No prohibited (not-in-scope) features detected.
 === run-all-checks.sh ===
 
 --- check-branch-has-commits.sh ---
-OK: Branch 'hyperloop/task-016' has 45 commit(s) above main.
+OK: Branch 'hyperloop/task-016' has 46 commit(s) above main.
 [EXIT 0]
 
 --- check-checks-in-sync.sh ---
@@ -33,8 +34,6 @@ OK: All Task-Ref trailers on implementation commits match branch task ID 'task-0
 [EXIT 0]
 
 --- check-godot-no-script-errors.sh ---
-Found 16 GDScript test file(s).
-Using custom headless runner (tests/run_tests.gd).
 OK: Godot tests passed — zero test failures, zero SCRIPT ERRORs.
 [EXIT 0]
 
@@ -71,7 +70,6 @@ SKIP: Prior FAIL report contains no 'Offending lines:' file citations.
 [EXIT 0]
 
 --- check-pytest-passes.sh ---
-Running: pytest extractor/tests/ -v --tb=short
 OK: All pytest tests passed.
 [EXIT 0]
 
@@ -113,104 +111,79 @@ RESULT: ALL PASS
 
 ---
 
-## Implementation Summary
+## Independent Review Findings
 
-UX Polish spec (specs/prototype/ux-polish.spec.md) is fully implemented and verified.
+### Pre-review actions
+- Synced `.hyperloop/checks/` from `main` before running any checks (`git checkout main -- .hyperloop/checks/`).
+- Ran `check-not-in-scope.sh` as the first action — exits 0, pre-existing artifact properly flagged.
+- Created skeleton `worker-result.yaml` with placeholders before running `run-all-checks.sh`.
 
-### Requirement: Pan with Left Mouse Button — COVERED
+### Commit Trailers
+- Implementation commits carry `Spec-Ref: specs/prototype/ux-polish.spec.md@3e5e297e216c7876224564ee099a38334e3dbd55` and `Task-Ref: task-016`. ✅
+- `check-commit-trailer-task-ref.sh` and `check-task-ref-report-not-falsified.sh` both EXIT 0. ✅
 
-**Implementation** (`camera_controller.gd`):
-- `_panning` flag set on LMB press/release (line 73).
-- `_handle_motion` shifts `_pivot` via `_pivot -= right * delta.x * pan_amount` and
-  `_pivot -= forward * delta.y * pan_amount` when `_panning` is true (lines 133–154).
-- Inline derivation comment at lines 136–144 documents the full sign chain before
-  each directional calculation (requirement per guidelines). ✅
+### Test wiring
+- `godot/tests/test_ux_polish.gd` is preloaded and run at line 43 of `run_tests.gd`. ✅
+- All 15 mapped test function names confirmed present in `godot/tests/test_ux_polish.gd` via grep — none are fabricated. ✅
 
-**Scenario: Panning the view**
-- `test_lmb_pan_moves_pivot` — LMB press + drag right 50 px → `pivot != initial_pivot`. ✅
-- Directional coverage: `test_pan_drag_right_decreases_pivot_x` (signed: `pivot.x < initial_x`) and
-  `test_pan_drag_left_increases_pivot_x` (signed: `pivot.x > initial_x`). ✅
+### Test pattern
+- `test_ux_polish.gd` is a Pattern-2 suite (no `var _test_failed` declaration; functions return `bool`). The runner at `run_tests.gd` lines 100–108 handles bool-return correctly (`if result == true`). Tests are NOT inert. ✅
+- `check-gdscript-test-bool-return.sh` is not in the current check suite; verified manually.
 
----
+### THEN-clause → test mapping (independently verified)
 
-### Requirement: Non-Inverted Movement — COVERED
+| THEN-clause | Mapped test | Predicate verified |
+|---|---|---|
+| Camera pans on LMB drag | `test_lmb_pan_moves_pivot` | `pivot != initial_pivot` for right drag ✅ |
+| Movement not inverted (drag right → scene right) | `test_pan_drag_right_decreases_pivot_x` | `pivot.x < initial_x` ✅ |
+| Drag left reveals content to right (i.e. parenthetical) | `test_pan_drag_left_increases_pivot_x` | `pivot.x > initial_x` ✅ |
+| Drag direction matches view movement | `test_drag_direction_matches_view_movement` | `pivot.x < initial_x` for right drag ✅ |
+| Drag up/down non-inverted | `test_pan_drag_down_decreases_pivot_z`, `test_pan_drag_up_increases_pivot_z` | signed z predicates ✅ |
+| View zooms toward cursor | `test_zoom_toward_cursor_shifts_pivot_toward_cursor` | `pivot.x > 0.0` ✅ |
+| Component stays under cursor on zoom-in | `test_component_stays_under_cursor_on_zoom_in` | `after > before` ✅ |
+| View zooms out from cursor | `test_zoom_out_from_cursor_shifts_pivot_away` | `pivot.x < 5.0` ✅ |
+| Zoom-out increases distance | `test_zoom_out_increases_target_distance` | `target > initial` ✅ |
+| Orbit pivot set at cursor start | `test_orbit_pivot_set_to_cursor_point_at_start` | `_pivot == world_point` ✅ |
+| Orbit pivot unchanged during orbit motion | `test_orbit_pivot_is_used_during_orbit` | `_pivot == pivot_before` ✅ |
+| Component at visual center during orbit | `test_component_remains_at_visual_center_during_orbit` | `_pivot == center` ✅ |
+| Zoom smooth (interpolated) | `test_zoom_is_interpolated_not_instantaneous` | partial lerp after 1 frame ✅ |
+| Pan proportional to drag speed | `test_pan_proportional_to_drag_speed` | move2 (50px) > move1 (10px) ✅ |
 
-**Implementation** (`camera_controller.gd` lines 133–154):
-Map-grab model: `_pivot -= right * delta.x * pan_amount`. Inline sign-chain comment present
-immediately before the calculation lines. ✅
+### Sign-chain independent derivations (from spec parenthetical)
 
-**Independent sign derivation (pre-read):**
-- Spec "(i.e.)": "dragging left reveals content to the right"
-  - drag left → delta.x = −50 → `_pivot -= right * (−50) * pan_amount` → pivot.x increases
-  - Camera moves right → right-side content enters view ✓
-  - Expected predicate: `pivot.x > initial_x`
-  - `test_pan_drag_left_increases_pivot_x` asserts: `cam._pivot.x > initial_x` — MATCH ✅
+**Spec (i.e.): "dragging left reveals content to the right"**
+- drag left → delta.x = −50
+- `_pivot -= right(1,0,0) * (−50) * pan_amount` → pivot.x **increases**
+- Camera pivot moves right → camera looks right → content from right enters view ✓
+- Expected predicate: `pivot.x > initial_x`
+- `test_pan_drag_left_increases_pivot_x` asserts `cam._pivot.x > initial_x` — **MATCH** ✅
 
-**Scenario: Drag direction matches view movement**
-- `test_drag_direction_matches_view_movement` — drag right 50 px, asserts `pivot.x < initial_x`. ✅
-- `test_pan_drag_right_decreases_pivot_x` — signed: `pivot.x < initial_x`. ✅
-- `test_pan_drag_left_increases_pivot_x` — signed: `pivot.x > initial_x`. ✅
-- `test_pan_drag_down_decreases_pivot_z` — signed: `pivot.z < initial_z`. ✅
-- `test_pan_drag_up_increases_pivot_z` — signed: `pivot.z > initial_z`. ✅
+**Zoom-in (direction < 0):**
+- step < 0 → `_target_distance` decreases → `zoom_fraction = 1 − (smaller/larger) > 0`
+- `_pivot.lerp(cursor, positive)` → pivot shifts **toward** cursor ✓
+- `test_zoom_toward_cursor_shifts_pivot_toward_cursor` asserts `pivot.x > 0.0` with cursor at (10,0,0) — **MATCH** ✅
 
----
+**Zoom-out (direction > 0):**
+- step > 0 → `_target_distance` increases → `zoom_fraction = 1 − (larger/smaller) < 0`
+- `_pivot.lerp(cursor, negative)` → pivot shifts **away** from cursor ✓
+- `test_zoom_out_from_cursor_shifts_pivot_away` asserts `pivot.x < 5.0` with pivot at (5,0,0) and cursor at (10,0,0) — **MATCH** ✅
 
-### Requirement: Zoom Toward Mouse Cursor — COVERED
+### Constraint boundary tests
+- Theta clamped [0.01, PI−0.01] to prevent gimbal flip: `test_theta_clamped_at_minimum`, `test_theta_clamped_at_maximum` — both drive input past the limit and assert clamped result ✅
+- Distance clamped [min_distance, max_distance]: `test_target_distance_clamped_at_minimum`, `test_target_distance_clamped_at_maximum` — both drive 200 scroll events and assert boundary ✅
 
-**Implementation** (`camera_controller.gd`):
-- `_handle_button` calls `_zoom_toward_cursor(_mouse_to_ground(event.position), direction)`
-  for both WHEEL_UP (direction = −zoom_speed) and WHEEL_DOWN (direction = +zoom_speed)
-  (lines 82–84).
-- `_zoom_toward_cursor` shifts `_pivot` via `_pivot = _pivot.lerp(cursor_world, zoom_fraction)`
-  (lines 98–106).
-- Inline sign-chain derivation comment at lines 89–97. ✅
+### main.gd entry-point check
+- `_ready()` at line 57 of `main.gd` is not a stub — it calls `SceneGraphLoader`, builds the scene, and wires LOD and UnderstandingOverlay. ✅
 
-**Scenario: Zooming into a specific component**
-- `test_zoom_toward_cursor_shifts_pivot_toward_cursor` — signed `pivot.x > 0.0`. ✅
-- `test_component_stays_under_cursor_on_zoom_in` — `after > before`. ✅
+### Python extractor
+- `ruff check` and `ruff format --check` pass (EXIT 0). ✅
+- `pytest extractor/tests/` passes 111 tests. ✅
 
-**Scenario: Zooming out**
-- `test_zoom_out_from_cursor_shifts_pivot_away` — signed `pivot.x < 5.0`. ✅
-- `test_zoom_out_increases_target_distance` — `target > initial`. ✅
-
----
-
-### Requirement: Orbit Around Mouse Point — COVERED
-
-**Implementation** (`camera_controller.gd`):
-- RMB press → `_set_orbit_pivot(_mouse_to_ground(event.position))` (line 80).
-- `_set_orbit_pivot` sets `_pivot = world_point` and recalculates spherical angles
-  from the current camera position (lines 111–121).
-- Orbit motion (`_handle_motion` lines 127–131) updates `_phi` and `_theta` only;
-  `_pivot` is not modified during orbit.
-
-**Scenario: Orbiting around a component**
-- `test_orbit_pivot_set_to_cursor_point_at_start` — `_pivot == world_point`. ✅
-- `test_orbit_pivot_is_used_during_orbit` — `_pivot == pivot_before` after orbit motion. ✅
-- `test_component_remains_at_visual_center_during_orbit` — `_pivot == center` after diagonal drag. ✅
-
----
-
-### Requirement: Smooth Camera Movement — COVERED
-
-**Implementation** (`camera_controller.gd`):
-- Zoom: `_process` lerps `_distance` toward `_target_distance` via
-  `lerp(_distance, _target_distance, min(zoom_smoothing * delta, 0.9))` (lines 50–56). ✅
-- Pan: pivot update is immediate but proportional to `delta.x` / `delta.y` via
-  `pan_amount = pan_speed * (_distance * 0.05 + 1.0)` (lines 151–153). ✅
-
-**Scenario: Smooth zoom**
-- `test_zoom_is_interpolated_not_instantaneous` — partial move toward target after 1 frame. ✅
-
-**Scenario: Smooth pan**
-- `test_pan_proportional_to_drag_speed` — move2 (50 px) > move1 (10 px). ✅
+### Pre-existing scope artifact
+- `godot/scripts/understanding_overlay.gd` is flagged by `check-not-in-scope.sh` with a NOTE (not a FAIL). File introduced by commit `a2f9d139` on `main`, not by this branch (`git log main..HEAD -- godot/scripts/understanding_overlay.gd` returns no commits on this branch). Correctly handled. ✅
 
 ---
 
 ## Verdict
 
-All 5 requirements from the UX Polish spec are implemented, tested with signed directional
-predicates, and accompanied by inline sign-chain derivation comments.
-
-File `godot/scripts/understanding_overlay.gd` is pre-existing (origin: a2f9d139);
-not introduced by this branch.
+**PASS.** All 5 requirements of the UX Polish spec are implemented, tested with correctly-signed directional predicates independently derived from the spec's "(i.e.)" parenthetical, and verified against actual test bodies. All 22 automated checks exit 0. Commit trailers are present. No prohibited features detected. No inert tests. No fabricated test names.
