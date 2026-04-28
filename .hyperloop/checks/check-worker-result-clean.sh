@@ -37,6 +37,16 @@ if [[ ! -f "$RESULT_FILE" ]]; then
     exit 0
 fi
 
+# Reviewer reports start with "# Review Report — task-NNN — Cycle N".
+# They must document verbatim FAIL check output as evidence, so this
+# check must not apply to them.  Implementer submissions are YAML files
+# that begin with a 'verdict:' field — never with a Markdown heading.
+FIRST_LINE=$(head -1 "$RESULT_FILE")
+if [[ "$FIRST_LINE" == "# Review Report"* ]]; then
+    echo "SKIP: $RESULT_FILE is a reviewer report — this check applies to implementer submissions only."
+    exit 0
+fi
+
 # Extract only the ## Check Script Results section to avoid false positives
 # from findings text that might quote a FAIL line.
 SECTION=$(awk '
