@@ -23,6 +23,30 @@
       "reason": "project guidelines: NFRs are cross-cutting constraints embedded as acceptance criteria on existing tasks, not standalone work items",
       "resolved_at": "2026-04-25",
       "reopen_condition": "new NFR that cannot be expressed as acceptance criteria on an existing task"
+    },
+    {
+      "spec": "specs/core/visual-primitives.spec.md",
+      "reason": "All 8 Extraction Layer requirements, 10 Composition Layer primitives, 3 Composition Principles, and 2 Primitive Interaction constraints covered by tasks 074–106. Overlay/Facet Composition (LLM-driven selection) excluded from prototype. Confirmed fully covered in pass 215 (2026-04-28).",
+      "resolved_at": "2026-04-28",
+      "reopen_condition": "new primitive added to Extraction or Composition layer, new Composition Principle added, or a primitive's MUST-level constraint changes materially"
+    },
+    {
+      "spec": "specs/extraction/scene-graph-schema.spec.md",
+      "reason": "All 7 requirements covered by tasks 001, 005, 061–066, 072, 102, 103. Schema Structure, Node Schema (incl. independence_group, class/function types), Edge Schema (incl. weight and aggregate), Metadata, Pre-Computed Layout, Cluster Schema, and Cascade Depth in Simulation Output. Confirmed fully covered in pass 215 (2026-04-28).",
+      "resolved_at": "2026-04-28",
+      "reopen_condition": "new requirement added beyond the 7 currently present in the spec"
+    },
+    {
+      "spec": "specs/visualization/orthogonal-independence.spec.md",
+      "reason": "All 3 requirements covered: Independence Detection → task-062; Spatial Separation of Independent Groups → task-065 (extractor layout), task-070 (Godot animation), task-106 (hot-reload trigger); Queryable Property → task-071. Confirmed fully covered in pass 215 (2026-04-28).",
+      "resolved_at": "2026-04-28",
+      "reopen_condition": "new requirement added beyond the 3 currently present in the spec"
+    },
+    {
+      "spec": "specs/visualization/spatial-structure.spec.md",
+      "reason": "All in-scope requirements covered: Structure as Persistent Geography → task-008, task-009; Scale Through Zoom (semantic contract, LOD) → task-019, task-067; Cluster Collapsing → task-068, task-069. 3D Interactive Navigation (first-person) excluded from prototype. Confirmed fully covered in pass 215 (2026-04-28).",
+      "resolved_at": "2026-04-28",
+      "reopen_condition": "new in-scope requirement added, or 3D first-person navigation is un-excluded from prototype"
     }
   ]
 }
