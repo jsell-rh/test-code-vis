@@ -1,69 +1,39 @@
 ---
 id: task-038
-title: Godot — Mode Manager: mutual exclusivity and transitions
+title: Godot — mode controller autoload (mutual exclusivity)
 spec_ref: specs/core/understanding-modes.spec.md
 status: not-started
 phase: null
-deps: [task-030, task-031, task-032]
+deps: [task-030, task-031, task-034]
 round: 0
 branch: null
 pr: null
 ---
 
-Implement a Mode Manager autoload singleton in Godot that coordinates Conformance Mode
-(task-030), Evaluation Mode (task-031), and Simulation Mode (task-032), enforcing that
-only one mode can be active at a time and that transitions between modes are clean.
+Implement a lightweight `ModeController` autoload (GDScript) that is the single
+authority for which understanding mode is active. Without this coordinator, the three
+mode scripts (task-030, task-031, task-034) each toggle only their own state — entering
+Conformance Mode does not deactivate an already-active Evaluation Mode, and vice versa.
+This task makes mode transitions correct.
 
-Covers `specs/core/understanding-modes.spec.md` — Purpose: "the transitions between
-them"; and `specs/core/system-purpose.spec.md` — Requirement: Support the Architecture
-Feedback Loop (the iterative evaluate → refine loop requires moving fluidly between all
-three modes without leftover visual state from a prior mode).
+Covers `specs/core/understanding-modes.spec.md` — Purpose: "transitions between them":
 
-**Mode Manager singleton (`ModeManager.gd` registered as an autoload):**
-- Tracks the currently active mode as an enum: `NONE`, `CONFORMANCE`, `EVALUATION`,
-  `SIMULATION`.
-- Exposes a `set_mode(new_mode)` method that:
-  1. If `new_mode` equals the current mode, deactivates it (toggle off) and sets mode
-     to `NONE`.
-  2. Otherwise, calls the active mode's cleanup/reset function first (so no stale
-     visual state leaks into the next mode), then activates the requested mode.
-- Emits a `mode_changed(old_mode, new_mode)` signal after every transition so the HUD
-  and individual mode controllers can react without polling.
-
-**Keyboard routing:**
-- Remove direct toggle handling from each mode's own script for the activation keys
-  (`C`, `E`, `S`). Instead, `ModeManager` handles `_unhandled_input` for these three
-  keys and calls `set_mode()`.
-- Each mode controller retains its internal rendering logic and its own cleanup/reset
-  function (called by the Mode Manager on deactivation); it no longer handles its own
-  activation keypress.
-
-**HUD integration:**
-- Replace the per-mode HUD labels ("CONFORMANCE MODE", "EVALUATION MODE",
-  "SIMULATION MODE") with a single shared HUD element driven by the `mode_changed`
-  signal: show the active mode name in the corner, or nothing when `NONE`.
-- The existing per-mode HUD content (legends, warning banners, simulation HUD buttons)
-  is unchanged; only the top-level mode-name label is unified.
-
-**Cleanup contract for each mode:**
-- Conformance Mode cleanup: reset all node/edge materials to base structural appearance,
-  hide spec-item volumes and connecting lines, clear the HUD.
-- Evaluation Mode cleanup: reset all node/edge materials and remove CRITICAL Label3D
-  nodes, clear the HUD.
-- Simulation Mode cleanup: call the existing Escape-exit path from task-032 (remove
-  failure/affected markers, restore base appearance), clear the HUD.
-
-**Invariants:**
-- At most one mode is active at any time; no combination of two or three modes is
-  ever simultaneously active.
-- Calling `set_mode(NONE)` is always safe and always results in the base structural
-  appearance being restored regardless of which mode was previously active.
-- The Mode Manager does not reparse or reload the scene graph; it operates only on
-  already-loaded Godot node state.
-
-**Escape handling:**
-- `Escape` remains the exit key for Simulation Mode (task-032) but is now also wired
-  through the Mode Manager so it calls `set_mode(NONE)`, ensuring a clean state reset
-  consistent with all other mode exits.
-
-Use only GDScript and Godot 4.6 API.
+- Add an autoload singleton `ModeController` (e.g. `godot/autoload/mode_controller.gd`)
+  registered in `project.godot` so every scene can access it.
+- Expose a `set_mode(mode: String)` method. Valid values:
+  - `"conformance"` — activate Conformance Mode (task-030)
+  - `"evaluation"` — activate Evaluation Mode (task-031)
+  - `"simulation"` — activate Simulation Mode (task-034)
+  - `""` — deactivate all modes
+  Passing the currently-active mode name again toggles it off (sets mode to `""`).
+- Emit a `mode_changed(new_mode: String)` signal after every state change. All three
+  mode scripts connect to this signal and use it to activate or deactivate themselves:
+  - If the signal carries their own mode name → activate.
+  - If the signal carries a different name or `""` → run their cleanup/deactivation.
+- Update the keyboard toggle handlers in task-030 (key `C`), task-031 (key `E`), and
+  task-034 (key `S`) to call `ModeController.set_mode(...)` instead of toggling local
+  state directly. Do not change any other logic in those scripts.
+- Store the current mode in a `current_mode: String` property (default `""`).
+- ModeController must not contain any rendering or scene-graph logic — it is a state
+  machine only. All visual changes remain in the individual mode scripts.
+- Use only GDScript and Godot 4.6 API. No external libraries.
