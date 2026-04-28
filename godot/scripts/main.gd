@@ -9,6 +9,11 @@ extends Node3D
 ##   - edges                  → coloured lines with arrowhead cones
 ##     (orange = cross-context, grey = internal)
 ##
+## Level-of-detail (LOD) is applied every frame via LodManager:
+##   far distance  → only bounded_context nodes visible
+##   medium distance → bounded_context + module nodes visible
+##   near distance  → all nodes and edges visible (finest detail)
+##
 ## The JSON file path is configurable via the exported variable.
 
 const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
@@ -23,22 +28,23 @@ var _anchors: Dictionary = {}
 ## Node id → world-space centre Vector3 (computed from relative positions).
 var _world_positions: Dictionary = {}
 
-## LOD manager — toggles node/edge visibility by camera distance.
-var _lod: LodManager = LodManager.new()
-
-## Node anchor entries for LOD visibility management.
-var _lod_node_entries: Array = []
-
-## Edge MeshInstance3D entries for LOD visibility management.
-var _lod_edge_entries: Array = []
-
-## Edge entries with source/target ids for dependency-direction tracking.
-var _path_edge_entries: Array = []
-
-## Cached graph for overlay functions that need to re-read nodes/edges.
+## The parsed scene graph.
 var _graph: Dictionary = {}
 
-## Understanding overlay helper — handles all node-colour transformations.
+## LOD manager instance — controls visibility based on camera distance.
+var _lod: LodManager = LodManager.new()
+
+## Entries for LOD: Array of {anchor: Node3D, node_type: String}
+var _lod_node_entries: Array = []
+
+## Entries for LOD: Array of {visual: Node3D, edge_type: String}
+var _lod_edge_entries: Array = []
+
+## Entries for edge direction tracking: Array of {visual: Node3D, source: String, target: String}
+## Used to verify dependency direction (which component depends on which).
+var _path_edge_entries: Array = []
+
+## Understanding overlay controller — activates alignment, quality, and impact overlays.
 var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
 
 @onready var _camera: Camera3D = $Camera3D
@@ -60,15 +66,17 @@ func _ready() -> void:
 		if json.parse(json_text) != OK:
 			push_error("JSON parse error: " + json.get_error_message())
 			return
-		var graph: Dictionary = SceneGraphLoader.load_from_dict(json.data)
-		build_from_graph(graph)
+		_graph = SceneGraphLoader.load_from_dict(json.data)
+		build_from_graph(_graph)
 	else:
 		push_warning("CodeVis: scene graph not found at '%s'." % scene_graph_path)
 
-
 ## Build the 3D scene from a parsed scene-graph dictionary.
 ## Called from _ready() at startup and from tests directly.
+## Caches the graph so overlay functions (_apply_alignment_overlay, etc.) can
+## access node/edge data after the scene has been built.
 func build_from_graph(graph: Dictionary) -> void:
+	# Cache graph so overlay functions can use it even when called from tests.
 	_graph = graph
 	var nodes: Array = graph.get("nodes", [])
 	var edges: Array = graph.get("edges", [])
@@ -102,6 +110,25 @@ func build_from_graph(graph: Dictionary) -> void:
 
 	# Reposition camera to frame the whole graph.
 	_frame_camera()
+
+	# Apply initial LOD pass so visibility is correct before any _process tick.
+	_update_lod()
+
+
+# ---------------------------------------------------------------------------
+# Per-frame LOD update
+# ---------------------------------------------------------------------------
+
+func _process(_delta: float) -> void:
+	_update_lod()
+
+
+## Query the camera's current distance and apply LOD visibility accordingly.
+func _update_lod() -> void:
+	if _camera == null or not _camera.has_method("get_distance"):
+		return
+	var dist: float = _camera.call("get_distance")
+	_lod.update_lod(_lod_node_entries, _lod_edge_entries, dist)
 
 
 # ---------------------------------------------------------------------------
@@ -293,22 +320,50 @@ func _frame_camera() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Understanding overlays — delegated to UnderstandingOverlay helper.
-# These methods are invoked via keyboard shortcuts (H / J / K) to visualise
-# how the realized build relates to the intended design.
+# Keyboard input handling
 # ---------------------------------------------------------------------------
 
+## Handle keyboard shortcuts for understanding overlays.
+##   H → apply alignment overlay (spec-vs-realization — shows how build matches design).
+##   J → apply quality overlay  (quality-metrics — shows coupling and centrality).
+##   K → apply failure impact overlay (cascade-injection — shows impact from first node).
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event is InputEventKey) or not event.pressed:
+		return
+	match event.keycode:
+		KEY_H:
+			_apply_alignment_overlay()
+		KEY_J:
+			_apply_quality_overlay()
+		KEY_K:
+			_apply_failure_impact_overlay()
+
+
+# ---------------------------------------------------------------------------
+# Understanding overlays (alignment / quality / failure-impact)
+# ---------------------------------------------------------------------------
+
+## Apply alignment overlay (H key) — spec-vs-realization view.
+## Colours every node in the scene by its spec_status field so the human can
+## see whether the as-built system matches the as-specced design.
 func _apply_alignment_overlay() -> void:
 	var nodes: Array = _graph.get("nodes", [])
 	_understanding_overlay.apply_alignment_overlay(nodes, _anchors)
 
 
+## Apply quality overlay (J key) — quality-metrics view.
+## Colours nodes by coupling and centrality metrics so the human can evaluate
+## the architectural quality of the realized system independently of the spec.
 func _apply_quality_overlay() -> void:
 	var nodes: Array = _graph.get("nodes", [])
 	var edges: Array = _graph.get("edges", [])
 	_understanding_overlay.apply_quality_overlay(nodes, edges, _anchors)
 
 
+## Apply failure impact overlay (K key) — cascade-injection view.
+## Simulates a failure of the first node in the graph and cascades through
+## dependents, colouring all affected components so the human can explore
+## the impact of the hypothetical failure before committing to any change.
 func _apply_failure_impact_overlay() -> void:
 	var nodes: Array = _graph.get("nodes", [])
 	if nodes.is_empty():

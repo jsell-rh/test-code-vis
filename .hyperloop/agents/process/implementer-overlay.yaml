@@ -3,6 +3,39 @@ kind: Agent
 metadata:
   name: implementer
 guidelines: |
+  ## !! HARD STOP — BEFORE ANY OTHER ACTION !!
+
+  Run this FIRST, before reading files, before running any other checks:
+    bash .hyperloop/checks/check-no-zero-commit-reattempt.sh
+
+  Exit 0 → proceed to FIRST BASH CALL PROTOCOL below.
+  Exit 1 → these three actions are FORBIDDEN until you commit a fix:
+    (a) Do NOT run run-all-checks.sh
+    (b) Do NOT write or update worker-result.yaml
+    (c) Do NOT submit in any form
+
+  When exit code = 1, the ONLY permitted actions are:
+    1. git show <sha>:.hyperloop/worker-result.yaml   # read the cited FAIL report
+    2. For each file in "Offending lines:": open that file at the cited line number.
+    3. Apply the fix exactly as written — in THAT file, at THAT line (not a new file).
+    4. git commit -m 'fix: <description>'
+    5. Repeat for every cited file.
+    6. Only then re-run check-no-zero-commit-reattempt.sh.
+
+  Submitting with exit code = 1 is never valid regardless of other check results.
+  check-racf-prior-cycle.sh recovers prior FAIL reports from git history — there
+  is no submission path that evades this gate.
+
+  CONSEQUENCE: Each zero-commit re-attempt is recorded as a RACF cycle by the
+  verifier. After 3 consecutive RACF cycles the verifier flags PROCESS ESCALATION
+  REQUIRED and the orchestrator may terminate the task. There is no path to
+  completion that bypasses committing code fixes.
+
+  RE-ATTEMPT STARTUP ORDER: When the branch already has commits above main,
+  check-no-zero-commit-reattempt.sh is your ABSOLUTE FIRST action — run it
+  BEFORE bootstrap-task.sh, before reading any files, before any other step.
+  bootstrap-task.sh is only required on a fresh checkout with zero prior commits.
+
   ## CRITICAL — FIRST BASH CALL PROTOCOL
 
   Your VERY FIRST Bash call — before any other tool — MUST be:
@@ -11,6 +44,15 @@ guidelines: |
   ```
   This performs `git checkout -B` and the empty checkpoint commit atomically.
   If it fails, report the error and STOP.
+
+  After bootstrap succeeds, immediately run:
+  ```
+  bash .hyperloop/checks/check-commit-trailer-task-ref.sh
+  ```
+  If it exits non-zero, fix all mismatched Task-Ref trailers via
+  `git rebase -i main` before any other work. This catches setup commits
+  (e.g., Godot project scaffold) that were created under a different task ID
+  and placed on this branch before bootstrap ran.
 
   ## CHECKPOINT COMMIT
 
@@ -42,6 +84,25 @@ guidelines: |
   - Direction/sign derivation arrows must be inline `#` comments INSIDE the function body, not `##` docstrings above it
   - "Relative to parent" positions require tests where parent is at NON-ZERO world position AND the assertion is a direct equality check (`child["position"]["x"] == local_offset`), NOT a proximity check (`dist < radius`) — proximity passes for both absolute and relative storage
 
+  ## COMMIT TRAILERS
+
+  Every implementation commit MUST carry both trailers with values that match
+  the CURRENT task and spec:
+    Spec-Ref: <path-to-spec-file>
+    Task-Ref: <task-id>          # e.g. task-014  — NOT a prior task's ID
+
+  Before writing each commit message, confirm the Task-Ref value matches the
+  branch: `git rev-parse --abbrev-ref HEAD` prints `hyperloop/task-NNN` →
+  use `task-NNN`.  Copying a commit from another task without updating this
+  trailer is a process violation caught by `check-commit-trailer-task-ref.sh`.
+
+  Cross-context commit anti-pattern: any commit whose conventional-commit scope or
+  existing Task-Ref trailer names a prior workflow phase — e.g., "chore(intake):",
+  "chore(spec-review):", Task-Ref: intake, Task-Ref: pm — that touches any file
+  outside .hyperloop/ is an implementation commit with a wrong Task-Ref; the commit
+  type prefix (chore, fix, feat) does NOT exempt it. Rebase is the only fix — a new
+  commit cannot correct a prior commit's trailer.
+
   ## SCOPE COMPLIANCE
 
   Prohibited features are forbidden under ANY name. Before writing ANY code:
@@ -50,9 +111,27 @@ guidelines: |
   3. Re-run after every logical code chunk
   4. Include verbatim output in `worker-result.yaml` under `## Scope Check Output`
 
+  **Pre-existing scope violations (files not introduced by your branch):**
+  If check-not-in-scope.sh exits non-zero because of a file you did NOT introduce,
+  run `git log main..HEAD --oneline -- <file>` to confirm zero commits for that file.
+  Then paste the verbatim FAIL output into the Scope Check Output section as-is —
+  check-report-scope-section.sh now accepts both "OK: No prohibited" (scope passes)
+  and "FAIL: Prohibited" (scope fails, truthfully reported) as valid outputs.
+  Also add a one-line note in your findings: "File X is pre-existing (origin: <sha>);
+  not introduced by this branch."  Do NOT write "OK: No prohibited" when the check
+  exits non-zero — that is falsification and will cause an immediate FAIL verdict.
+
   ## SUBMISSION GATES
 
-  1. `bash .hyperloop/checks/run-all-checks.sh` — must exit 0
+  1. `bash .hyperloop/checks/run-all-checks.sh` — must exit 0. **If it exits non-zero
+     you MUST NOT write worker-result.yaml.** Submitting a FAIL result is not a valid
+     submission — the next verifier's check-racf-prior-cycle.sh will recover the FAIL
+     report from git history and flag every still-failing check as a RACF. Fix every
+     failure, commit, and re-run until `run-all-checks.sh` exits 0.
+     NOTE: `check-worker-result-clean.sh` (included in `run-all-checks.sh`) reads your
+     worker-result.yaml and exits 1 if the pasted output contains "RESULT: FAIL". This
+     makes it mechanically impossible to submit a FAIL-containing report — the only
+     path to a passing run-all-checks.sh is to fix the underlying check failures first.
   2. Paste COMPLETE multi-line output into `## Check Script Results` section
   3. Paste verbatim `check-not-in-scope.sh` output into `## Scope Check Output`
   4. Never stage files under `.hyperloop/state/` — use `git add <file>` for specific files; `git add -A` and `git add .` are forbidden because they silently capture state files
@@ -65,10 +144,236 @@ guidelines: |
   - Reversing the order requires starting over; check-combined-rewrite-guide.sh emits the exact commands
   - Do NOT run run-all-checks.sh until both individual checks exit 0
 
+  ## SHADOW-REPLACEMENT IS FORBIDDEN
+
+  When you create a new Python file to fix or replace a function defined in an
+  existing module, you MUST choose exactly one resolution path before submitting:
+
+  Option A — Fix in-place: apply the fix directly to the original file and delete
+    the new file entirely. `check-no-duplicate-toplevel-functions.sh` must exit 0.
+
+  Option B — Import and delegate: import the new file's function in the consuming
+    file and remove the original definition from that file.
+    Both `check-new-modules-wired.sh` AND `check-no-duplicate-toplevel-functions.sh`
+    must exit 0.
+
+  Leaving both definitions active means the consuming file calls the original
+  (potentially broken) function while tests on the new file give false confidence.
+  `check-new-modules-wired.sh` and `check-no-duplicate-toplevel-functions.sh` detect
+  this — BOTH must exit 0 before you write worker-result.yaml.
+
+  Passing tests in a new module do NOT prove the production bug is fixed — they prove
+  only that module's internal logic is correct; `check-new-modules-wired.sh` exit-0 is
+  the only proof the production code path calls the fixed function.
+
+  ## PYTEST IS A HARD GATE
+
+  Run `pytest extractor/tests/ -v --tb=short` before submitting.
+  `check-pytest-passes.sh` (included in `run-all-checks.sh`) will fail your
+  submission if any test fails.  A FAILED test is a blocking error — fix the
+  implementation or fix the test's coordinate-frame assumption before re-submitting.
+  Do NOT paste run-all-checks.sh output that contains a pytest FAIL — that submission
+  is invalid.
+
   ## RE-ATTEMPT PROTOCOL
 
   When dispatched to a branch with prior implementation commits:
+  -1. BEFORE ANYTHING ELSE: run `bash .hyperloop/checks/check-no-zero-commit-reattempt.sh`.
+     If it exits 1, you have no code fixes committed — write and commit code that addresses
+     each failing check BEFORE proceeding to step 0. Re-reading the prior report or
+     re-running checks without first committing code is NOT a valid re-attempt action.
+  0. Sync check scripts FIRST: `git checkout main -- .hyperloop/checks/`
+     New checks are added to main after branches are created. Running stale
+     scripts produces false passes — sync ensures you run the full current set.
+     Confirm sync succeeded: `bash .hyperloop/checks/check-checks-in-sync.sh`
+     must exit 0 before proceeding.
+  0b. After syncing, immediately run `bash .hyperloop/checks/check-commit-trailer-task-ref.sh`.
+     A newly-synced check may reveal Task-Ref mismatches in EXISTING commits (e.g., a
+     commit copied from another task). If it FAILs, fix all mismatched trailers via
+     interactive rebase BEFORE any other work:
+       git rebase -i main   # mark each mismatched commit as 'reword'
+                            # change Task-Ref: task-NNN → Task-Ref: <current-task-id>
+     The current task ID is always: `git rev-parse --abbrev-ref HEAD | sed 's/hyperloop\///'`
+     This check must exit 0 before proceeding to step 1.
   1. Run `bash .hyperloop/checks/check-racf-remediation.sh` immediately
   2. If it fails, apply every prescribed fix before new code
   3. If it skips, run `bash .hyperloop/checks/check-racf-prior-cycle.sh`
-  4. Do NOT write new tests until all prior-cycle failures are resolved
+  4. If that also skips, inspect recent history manually:
+     `git log --oneline -10` and `git show <sha>:.hyperloop/worker-result.yaml`
+  5. Do NOT write new tests until all prior-cycle failures are resolved
+  6. After applying prescribed fixes, COMMIT them before writing worker-result.yaml.
+     A re-attempt with no new commits is invalid — the verifier will detect it.
+     Verify with: `git log --oneline main..HEAD` (must show new commit(s))
+  7. Self-verify before writing worker-result.yaml: confirm at least one commit
+     on this branch modifies source files (not just .hyperloop/ files):
+       git log main..HEAD --name-only --format="%H" | grep -v '^$' | grep -v '^\.hyperloop/'
+     If that grep finds nothing, you have not committed any fixes — stop and fix first.
+
+  ## COORDINATE FRAME — PRODUCTION SOURCE CODE
+
+  When computing child node positions in layout code, the stored value MUST be
+  the LOCAL offset only. NEVER add parent world coordinates to the child position:
+
+    WRONG: pos_x = parent_pos[0] + math.cos(angle) * offset_r   # absolute world coord
+    RIGHT: pos_x = math.cos(angle) * offset_r                   # local offset only
+
+  Godot's main.gd adds the parent world position at render time — storing an
+  absolute coordinate here causes double-offset rendering regardless of whether
+  tests pass. `check-relative-position-tests.sh` scans ALL Python files in
+  extractor/ for this anti-pattern, not just the primary module.
+
+  ## SPATIAL LAYOUT RADIUS BOUNDS
+
+  Every child-orbit radius computed with `max(lower, n * factor)` MUST be wrapped
+  in a `min(…, parent_size * fraction)` cap. An unbounded radius places children
+  outside the parent's scene boundary and fails check-pytest-passes.sh.
+
+  Correct form:
+    bc_radius  = min(max(5.0, len(bc_nodes)  * 2.5), scene_radius * 0.8)
+    mod_radius = min(max(1.5, len(children)  * 0.9), bc_radius    * 0.4)
+
+  Run `bash .hyperloop/checks/check-layout-radius-bound.sh` before submitting.
+  A FAIL from this check is blocking and will fail the full test suite.
+
+  Module-level `_circular_positions` calls MUST use `y=0.0`. A non-zero y value
+  (e.g. `y=1.0`) adds a vertical component to every child position and inflates
+  the 3D child-to-parent distance independently of the orbit radius, causing
+  `test_child_nodes_are_near_parent_position` to fail even when the radius is
+  correctly bounded. Run `bash .hyperloop/checks/check-circular-position-y-axis.sh`
+  before submitting — any FAIL is blocking.
+
+  ## PRESCRIBED-FIX PROTOCOL
+
+  Apply fixes in this exact loop for every failing check — no exceptions:
+
+  - Step 0 — Describing a fix is NOT fixing it: writing "fix X" in a commit message
+    or verdict text does NOT constitute applying the fix. The only proof a fix was
+    applied is the specific check script exiting 0 AFTER the change. A rebase that
+    was not completed, a file edit that was not saved, or a note in a verdict message
+    about an intended action — none of these count. Run the check; if it still exits
+    non-zero, the fix was not applied.
+
+  - Step 1 — Fix at the cited location: apply the fix to the EXACT file path and
+    line number from the check's "Offending lines:" output. A fix written in a
+    different file leaves the original cited line unchanged; the check will still
+    FAIL on the next run.
+
+  - Step 2 — Verify then commit: after applying the fix, run THAT SPECIFIC check
+    (`bash .hyperloop/checks/<check>.sh`) to confirm exit 0, then commit
+    (`git commit -m 'fix: <description>'`). Do not accumulate multiple fixes before
+    committing — each fix requires its own commit and exit-0 confirmation.
+
+  - Step 2b — Rebase fixes require the rebase to actually complete: if
+    `check-commit-trailer-task-ref.sh` fails, you must run `git rebase -i main`,
+    mark the offending commit as `reword`, change the trailer text in the editor,
+    save, and confirm the rebase finishes. After the rebase, run
+    `bash .hyperloop/checks/check-commit-trailer-task-ref.sh` — it must exit 0.
+    A comment in a subsequent commit message saying "fix Task-Ref on commit X" does
+    NOT change commit X's trailer. Only the rebase changes the commit object.
+
+  - Step 2c — After any rebase intended to fix a Task-Ref, verify the commit hash
+    changed. Run `git log --oneline main..HEAD` and confirm the SHA you rewrote is
+    ABSENT — a new SHA must appear in its place. If the old SHA is still present,
+    the rebase did not modify the commit; do not proceed until it is gone.
+    `check-task-ref-report-not-falsified.sh` will exit 1 if worker-result.yaml
+    claims the check passed while the old SHA remains.
+
+  - Step 2d — Never write check output from memory or copy it from a prior run.
+    Run each check immediately before pasting its output into worker-result.yaml.
+    Output produced in a prior session, before a fix was applied, or by a different
+    check is falsification — `check-task-ref-report-not-falsified.sh` and
+    `check-scope-report-not-falsified.sh` detect this mechanically and exit 1.
+
+  - Step 2e — Non-interactive rebase for agent environments: `git rebase -i main`
+    requires an interactive editor — in environments where one is unavailable, use
+    GIT_SEQUENCE_EDITOR and GIT_EDITOR to automate the reword. Get SHA7 (7-char
+    prefix) from check-commit-trailer-task-ref.sh output, then run:
+      TASK_ID=$(git rev-parse --abbrev-ref HEAD | sed 's/hyperloop\///')
+      SHA7=<7-char SHA from check output>
+      printf '#!/bin/bash\nsed -i "s/^pick %s/reword %s/" "$1"\n' \
+        "$SHA7" "$SHA7" > /tmp/seq.sh
+      printf '#!/bin/bash\nsed -i "s|^Task-Ref:.*|Task-Ref: %s|" "$1"\n' \
+        "$TASK_ID" > /tmp/msg.sh
+      chmod +x /tmp/seq.sh /tmp/msg.sh
+      GIT_SEQUENCE_EDITOR=/tmp/seq.sh GIT_EDITOR=/tmp/msg.sh git rebase -i main
+    Verify: `git log --oneline main..HEAD | grep "$SHA7"` must return empty
+    (old SHA is gone — replaced by new SHA with updated trailer).
+
+  - Step 3 — Fix in dependency order when multiple checks fail:
+      1. Trailer/history fixes (check-commit-trailer-task-ref.sh) — rebase only, no code
+      2. Dead-code / wiring fixes (check-no-duplicate-toplevel-functions.sh, check-new-modules-wired.sh)
+      3. Coordinate-frame fixes (check-relative-position-tests.sh F3a)
+      4. Axis fixes (check-circular-position-y-axis.sh — y=1.0 → y=0.0)
+      5. Radius-bound fixes (check-layout-radius-bound.sh — add min() cap)
+      6. Run pytest (check-pytest-passes.sh) — should now pass from steps 3–5
+      7. Precision tests (check-relative-position-tests.sh F3b) — add after code is correct
+    Fixing a downstream check before its upstream cause always fails and wastes a cycle.
+
+  - Step 4 — Submission gate: check-no-zero-commit-reattempt.sh exiting 1 is an
+    absolute blocker. Writing worker-result.yaml with this check failing is invalid;
+    the verifier's check-racf-prior-cycle.sh will recover and flag it as RACF.
+
+  - Step 5 — Verify cited files were committed: run
+    `bash .hyperloop/checks/check-prescribed-fixes-applied.sh` — it exits 1 if any
+    file listed in a prior "Offending lines:" citation has zero commits since the FAIL
+    report. A fix applied to the wrong file still fails this check; the cited file must
+    itself appear in a commit.
+
+  ## DIRECTIONAL BEHAVIOR AND SIGN CONVENTIONS
+
+  - Sign derivation before coding: Before implementing ANY directional movement (pan,
+    orbit, zoom, drag), derive the expected sign from the spec's concrete example — the
+    "(i.e.)" parenthetical if present. Write the full derivation chain as an inline `#`
+    comment immediately BEFORE the implementation line (e.g., `# drag left → grab model
+    → pivot moves RIGHT → negate delta.x`). Write the comment first, then the code.
+    Implementing without this derivation comment is a process violation.
+
+  - Directional test predicates are mandatory: Any test that asserts a direction or sign
+    MUST use a signed comparison (`cam._pivot.x < initial_x`, `cam._pivot.z > 0.0`).
+    An assertion of `!= initial_value` or `!= Vector3.ZERO` verifies only that movement
+    occurred — a sign-inverted implementation passes it identically. Run
+    `bash .hyperloop/checks/check-nondirectional-movement-assertions.sh` before submitting;
+    a FAIL is blocking.
+
+  - Spec contradiction escalation — STOP and flag: When a spec THEN-clause contains
+    internally contradictory direction language (e.g., two sentences imply opposite signs;
+    a THEN-clause says "pans in the direction of drag" but an "(i.e.)" parenthetical
+    implies the opposite), do NOT choose an interpretation silently. STOP. Write the
+    contradictory sentences verbatim in `worker-result.yaml` under a `## SPEC AMBIGUITY`
+    heading and halt the implementation of that scenario until the process owner provides
+    explicit clarification. Proceeding silently always produces a FAIL on the clauses that
+    were not satisfied.
+
+  ## ZERO-COMMIT RE-ATTEMPT GATE
+
+  Run `bash .hyperloop/checks/check-no-zero-commit-reattempt.sh` alone BEFORE
+  running run-all-checks.sh. A FAIL from this check makes all other check output
+  irrelevant — do not read, interpret, or paste any other check's output until you
+  have committed code fixes to the files cited in the prior FAIL report. Reading the
+  prior report, re-running checks, or updating worker-result.yaml does NOT count as
+  making a fix; only a committed change to a source file satisfies this gate.
+
+  ## GDSCRIPT PROPERTY NAME ALIGNMENT
+
+  When a commit touches both a GDScript implementation file and its test file,
+  verify that every `var` and `const` name the test accesses on the implementation
+  object exists with the EXACT same name and case in that GDScript file.
+
+  GDScript does NOT raise a compile error for missing property access in headless
+  mode — it emits `SCRIPT ERROR:` at runtime, aborts the test function before any
+  `assert` runs, and the runner still reports PASS (because `_test_failed` is never
+  set). The test is silently inert: it always PASS regardless of whether the
+  implementation is correct.
+
+  Common mismatch forms:
+    - Test uses `cam._target_distance`; impl defines `var _distance` (missing `_target_distance`)
+    - Test uses `cam.MIN_DISTANCE`; impl defines `var min_distance` (case mismatch)
+    - Test uses `cam.MAX_DISTANCE`; impl defines `var max_distance` (case mismatch)
+
+  Before committing: grep the test file for every `.` member access on the object
+  under test, then grep the implementation file to confirm each name exists.
+
+  Run `bash .hyperloop/checks/check-godot-no-script-errors.sh` before submitting.
+  A FAIL means the Godot test output contains `SCRIPT ERROR:` lines — those tests are
+  inert and provide zero behavioral assurance. Fix the property/constant name
+  mismatch, then re-run to confirm zero SCRIPT ERRORs before writing worker-result.yaml.
