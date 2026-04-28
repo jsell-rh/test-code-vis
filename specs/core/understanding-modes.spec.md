@@ -55,3 +55,50 @@ The system MUST allow the human to explore the impact of hypothetical changes be
 - WHEN the human simulates a component failure
 - THEN the cascade of effects through the system is visible
 - AND components that would be affected are clearly identified
+
+### Requirement: Cascade Depth
+When simulating failure propagation, the system MUST encode propagation distance — not just which nodes are affected, but how many hops away each affected node is from the failure origin.
+
+#### Scenario: Visualizing blast radius by depth
+- GIVEN the human simulates failure of a central component
+- WHEN the cascade is computed
+- THEN first-order dependents (direct consumers) are visually distinct from second-order, third-order, etc.
+- AND depth is encoded as a gradient (e.g. intensity, saturation, or size of the effect marker)
+- AND the cascade animates outward in waves — first-order lights up first, then second-order, then third — so the human perceives propagation sequence, not just final state
+
+#### Scenario: Cascade wave animation
+- GIVEN the cascade involves nodes at depths 1 through N
+- WHEN the simulation plays
+- THEN each depth level animates in sequence with a brief staggered delay
+- AND the animation is smooth and continuous, not stepped
+- AND the human can see where the cascade attenuates (few or no nodes at deeper levels)
+
+### Requirement: Mode Composition
+Understanding modes are orthogonal, not mutually exclusive. Multiple modes MAY be active simultaneously, and their visual encodings layer to answer compound questions that no single mode addresses alone.
+
+#### Scenario: Conformance + Evaluation
+- GIVEN the human activates both Conformance and Evaluation modes
+- WHEN both are active
+- THEN the human can see which spec-aligned modules are also single points of failure
+- AND which divergent modules have healthy architectural properties
+- AND visual encodings layer: one mode controls a primary visual channel (e.g. fill color), the other controls a secondary channel (e.g. border or annotation)
+
+#### Scenario: Evaluation + Simulation
+- GIVEN the human activates Evaluation mode and then simulates a failure
+- WHEN both are active
+- THEN cascade-affected nodes show both their cascade depth and their architectural risk level
+- AND the human can prioritize: "which affected nodes are already high-risk?"
+
+#### Scenario: Activating a second mode
+- GIVEN one mode is active
+- WHEN the human activates a second mode
+- THEN the second mode's visual encoding fades in smoothly, layering on top of the first
+- AND the first mode's encoding remains visible, adjusting channel if needed to avoid conflict
+- AND no visual state snaps or pops — transitions are always animated
+
+#### Scenario: Deactivating a mode
+- GIVEN two modes are active
+- WHEN the human deactivates one
+- THEN that mode's visual encoding fades out smoothly
+- AND the remaining mode's encoding expands to use the freed visual channels if appropriate
+- AND the transition is animated and continuous

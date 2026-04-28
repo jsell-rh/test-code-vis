@@ -9,7 +9,8 @@ Spatial development environment for understanding agent-built software systems.
 - [Understanding Modes](core/understanding-modes.spec.md) — Conformance, Evaluation, Simulation
 
 ### Visualization
-- [Spatial Structure](visualization/spatial-structure.spec.md) — The persistent 3D geography of a software system
+- [Spatial Structure](visualization/spatial-structure.spec.md) — The persistent 3D geography of a software system, semantic zoom, cluster collapsing
+- [Orthogonal Independence](visualization/orthogonal-independence.spec.md) — Making structural independence visible: what can change without affecting what
 - [Data Flow](visualization/data-flow.spec.md) — On-demand flow visualization through the structure
 
 ### Interaction
