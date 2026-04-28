@@ -517,8 +517,6 @@ class TestLayout:
 
     def test_order_by_coupling_places_coupled_adjacent(self) -> None:
         """Unit test for _order_by_coupling: coupled BCs end up next to each other."""
-        from extractor.schema import Edge
-
         bc_a: Node = {
             "id": "a",
             "name": "A",
