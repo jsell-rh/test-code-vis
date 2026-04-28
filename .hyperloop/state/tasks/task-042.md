@@ -1,7 +1,7 @@
 ---
 id: task-042
 title: Extractor — classify spec item divergence type
-spec_ref: specs/core/understanding-modes.spec.md@5f8426128db06ca81cd2364dddd950141aa234cd
+spec_ref: specs/core/understanding-modes.spec.md@1b8307fdc9a651c51a0b9aa1e18a6141404f3a6a
 status: not_started
 phase: null
 deps:
