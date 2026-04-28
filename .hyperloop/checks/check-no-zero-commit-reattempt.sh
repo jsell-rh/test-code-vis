@@ -4,25 +4,28 @@
 # Detects re-attempt submissions where the implementer made no new implementation
 # commits since the prior cycle's FAIL verdict.
 #
-# The anti-pattern (task-001, cycles 6-9):
+# The anti-pattern (task-001, cycles 6-9; task-014, cycle 2):
 #   The implementer was dispatched to fix F1–F4 in cycles 5, 6, 7, and 8.
 #   In each of cycles 6-9, check-racf-prior-cycle.sh detected and re-ran the
 #   same four failing checks — all still failed.  No new commits appeared on
 #   the branch after cycle 5's implementation commit (5d8aff2f).  The
 #   implementer submitted without changing anything.
 #
-# This check identifies that pattern: when prior-cycle FAILs exist AND no
-# implementation commit has been added since the prior worker-result.yaml was
-# written.
+#   task-014 cycle 2: the orchestrator cleanup commit blanked worker-result.yaml,
+#   causing the original head-1 logic to read an empty/clean report and emit SKIP.
+#   check-racf-prior-cycle.sh still caught it via full-history search (sha 5e92f82).
+#   This check now uses the same full-history approach so it produces the correct
+#   FAIL output instead of a misleading SKIP.
 #
 # Algorithm:
-#   1. Find the most recent commit that touched worker-result.yaml ("prior report").
-#   2. Check whether that report contains [EXIT N — FAIL] lines.
-#   3. If yes (prior FAILs exist), find the commit made AFTER the prior report
-#      commit that is NOT itself a worker-result.yaml commit.
-#   4. If no such commit exists, the implementer has submitted without any fixes.
+#   1. Walk ALL commits on this branch that touched worker-result.yaml (not just head-1).
+#   2. Stop at the first commit whose content contains [EXIT N — FAIL] lines.
+#      (This skips orchestrator-cleanup commits that blanked the file.)
+#   3. If no branch commit has FAILs, fall back to main's history (post-reset branches).
+#   4. If a prior FAIL report is found, find implementation commits added AFTER it.
+#   5. If no such commit exists, the implementer has submitted without any fixes.
 #
-# Exit 0 = no prior FAILs, or at least one implementation commit added since them.
+# Exit 0 = no prior FAILs found anywhere, or at least one implementation commit added since.
 # Exit 1 = prior FAILs exist but zero new implementation commits were made.
 
 set -uo pipefail
@@ -42,26 +45,41 @@ if [[ "$COMMIT_COUNT" -le 1 ]]; then
     exit 0
 fi
 
-# ── Find the most recent committed worker-result.yaml on this branch ──────────
-PRIOR_REPORT_SHA=$(git log main..HEAD --format="%H" -- "$RESULT_FILE" 2>/dev/null | head -1)
+# ── Walk ALL branch commits to find the most recent one WITH FAIL lines ───────
+# The orchestrator cleanup commit may have blanked the file; using head-1 would
+# read the blank version and emit a false SKIP.  Walking all commits finds the
+# actual prior FAIL report even when a cleanup commit sits on top of it.
+PRIOR_REPORT_SHA=""
+PRIOR_FAIL_COUNT=0
 
-if [[ -z "$PRIOR_REPORT_SHA" ]]; then
-    # No prior report on branch — check main history (post-reset branches)
-    PRIOR_REPORT_SHA=$(git log main --format="%H" -- "$RESULT_FILE" 2>/dev/null | head -1)
-    if [[ -z "$PRIOR_REPORT_SHA" ]]; then
-        echo "SKIP: No prior committed worker-result.yaml found."
-        exit 0
+while IFS= read -r sha; do
+    [[ -z "$sha" ]] && continue
+    content=$(git show "${sha}:${RESULT_FILE}" 2>/dev/null || true)
+    [[ -z "$content" ]] && continue
+    fail_count=$(echo "$content" | grep -c '\[EXIT [1-9]' 2>/dev/null || true)
+    if [[ "$fail_count" -gt 0 ]]; then
+        PRIOR_REPORT_SHA="$sha"
+        PRIOR_FAIL_COUNT="$fail_count"
+        break
     fi
+done < <(git log main..HEAD --format="%H" -- "$RESULT_FILE" 2>/dev/null)
+
+# ── Fallback: walk main's history (post-reset branches) ──────────────────────
+if [[ -z "$PRIOR_REPORT_SHA" ]]; then
+    while IFS= read -r sha; do
+        [[ -z "$sha" ]] && continue
+        content=$(git show "${sha}:${RESULT_FILE}" 2>/dev/null || true)
+        [[ -z "$content" ]] && continue
+        fail_count=$(echo "$content" | grep -c '\[EXIT [1-9]' 2>/dev/null || true)
+        if [[ "$fail_count" -gt 0 ]]; then
+            PRIOR_REPORT_SHA="$sha"
+            PRIOR_FAIL_COUNT="$fail_count"
+            break
+        fi
+    done < <(git log main --format="%H" -- "$RESULT_FILE" 2>/dev/null | head -10)
 fi
 
-# ── Does the prior report contain FAIL lines? ─────────────────────────────────
-PRIOR_CONTENT=$(git show "${PRIOR_REPORT_SHA}:${RESULT_FILE}" 2>/dev/null || true)
-# grep -c exits 1 when count is 0 but still prints "0" to stdout.
-# Using "|| echo 0" would produce "0\n0" (two lines), breaking the [[ -eq 0 ]] test.
-# "|| true" swallows the non-zero exit without adding extra output.
-PRIOR_FAIL_COUNT=$(echo "$PRIOR_CONTENT" | grep -c '\[EXIT [1-9]' 2>/dev/null || true)
-
-if [[ "$PRIOR_FAIL_COUNT" -eq 0 ]]; then
+if [[ -z "$PRIOR_REPORT_SHA" ]]; then
     echo "SKIP: Prior committed report contains no FAIL checks — no zero-commit re-attempt possible."
     exit 0
 fi
@@ -94,6 +112,10 @@ if [[ -z "$IMPL_COMMITS" ]]; then
     echo "  ${PRIOR_FAIL_COUNT} FAIL check(s).  No non-hyperloop commits have been"
     echo "  added to this branch since that report was written."
     echo ""
+    echo "  Note: if the most-recently committed report appears clean (e.g., due to"
+    echo "  an orchestrator cleanup commit), this check walks full branch history to"
+    echo "  find the actual prior FAIL report — consistent with check-racf-prior-cycle.sh."
+    echo ""
     echo "  This means the implementer submitted a re-attempt without applying any"
     echo "  fixes.  This is the pattern that causes repeated RACF across many cycles."
     echo ""
@@ -106,5 +128,5 @@ if [[ -z "$IMPL_COMMITS" ]]; then
     exit 1
 fi
 
-echo "OK: ${IMPL_COMMITS_COUNT:-$(echo "$IMPL_COMMITS" | wc -l | tr -d ' ')} implementation commit(s) found since prior FAIL report."
+echo "OK: $(echo "$IMPL_COMMITS" | wc -l | tr -d ' ') implementation commit(s) found since prior FAIL report (${PRIOR_SHORT})."
 exit 0
