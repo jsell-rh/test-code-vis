@@ -12,6 +12,15 @@ guidelines: |
   This performs `git checkout -B` and the empty checkpoint commit atomically.
   If it fails, report the error and STOP.
 
+  After bootstrap succeeds, immediately run:
+  ```
+  bash .hyperloop/checks/check-commit-trailer-task-ref.sh
+  ```
+  If it exits non-zero, fix all mismatched Task-Ref trailers via
+  `git rebase -i main` before any other work. This catches setup commits
+  (e.g., Godot project scaffold) that were created under a different task ID
+  and placed on this branch before bootstrap ran.
+
   ## CHECKPOINT COMMIT
 
   The checkpoint commit (`chore: begin <task-id>`) is the orchestrator liveness signal.
@@ -173,3 +182,10 @@ guidelines: |
 
   Run `bash .hyperloop/checks/check-layout-radius-bound.sh` before submitting.
   A FAIL from this check is blocking and will fail the full test suite.
+
+  Module-level `_circular_positions` calls MUST use `y=0.0`. A non-zero y value
+  (e.g. `y=1.0`) adds a vertical component to every child position and inflates
+  the 3D child-to-parent distance independently of the orbit radius, causing
+  `test_child_nodes_are_near_parent_position` to fail even when the radius is
+  correctly bounded. Run `bash .hyperloop/checks/check-circular-position-y-axis.sh`
+  before submitting — any FAIL is blocking.
