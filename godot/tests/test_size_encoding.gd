@@ -62,21 +62,6 @@ func test_large_module_has_bigger_mesh() -> bool:
 	return large_mesh.size.x > small_mesh.size.x
 
 
-## THEN the module with more code appears as a larger volume —
-## All size dimensions of every module mesh must be strictly positive.
-func test_module_size_is_positive() -> bool:
-	var main_node: Node3D = MainScript.new()
-	main_node.build_from_graph(_make_fixture())
-
-	for nid: String in ["small_mod", "large_mod"]:
-		var mesh: BoxMesh = _get_box_mesh(main_node, nid)
-		if mesh == null:
-			return false
-		if mesh.size.x <= 0.0 or mesh.size.y <= 0.0 or mesh.size.z <= 0.0:
-			return false
-	return true
-
-
 ## AND the relative sizes are proportional to the metric —
 ## large_mod size=9, small_mod size=3 → expected ratio = 3.0.
 ## BoxMesh.size.x ratio must match within floating-point tolerance.

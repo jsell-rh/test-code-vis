@@ -9,9 +9,16 @@ extends Node3D
 ##   - edges                  → coloured lines with arrowhead cones
 ##     (orange = cross-context, grey = internal)
 ##
+## Level-of-detail (LOD) is applied every frame via LodManager:
+##   far distance  → only bounded_context nodes visible
+##   medium distance → bounded_context + module nodes visible
+##   near distance  → all nodes and edges visible (finest detail)
+##
 ## The JSON file path is configurable via the exported variable.
 
 const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
+const LodManager = preload("res://scripts/lod_manager.gd")
+const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -20,6 +27,25 @@ var _anchors: Dictionary = {}
 
 ## Node id → world-space centre Vector3 (computed from relative positions).
 var _world_positions: Dictionary = {}
+
+## The parsed scene graph.
+var _graph: Dictionary = {}
+
+## LOD manager instance — controls visibility based on camera distance.
+var _lod: LodManager = LodManager.new()
+
+## Entries for LOD: Array of {anchor: Node3D, node_type: String}
+var _lod_node_entries: Array = []
+
+## Entries for LOD: Array of {visual: Node3D, edge_type: String}
+var _lod_edge_entries: Array = []
+
+## Entries for edge direction tracking: Array of {visual: Node3D, source: String, target: String}
+## Used to verify dependency direction (which component depends on which).
+var _path_edge_entries: Array = []
+
+## Understanding overlay controller — activates alignment, quality, and impact overlays.
+var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
 
 @onready var _camera: Camera3D = $Camera3D
 
@@ -40,15 +66,18 @@ func _ready() -> void:
 		if json.parse(json_text) != OK:
 			push_error("JSON parse error: " + json.get_error_message())
 			return
-		var graph: Dictionary = SceneGraphLoader.load_from_dict(json.data)
-		build_from_graph(graph)
+		_graph = SceneGraphLoader.load_from_dict(json.data)
+		build_from_graph(_graph)
 	else:
 		push_warning("CodeVis: scene graph not found at '%s'." % scene_graph_path)
 
-
 ## Build the 3D scene from a parsed scene-graph dictionary.
 ## Called from _ready() at startup and from tests directly.
+## Caches the graph so overlay functions (_apply_alignment_overlay, etc.) can
+## access node/edge data after the scene has been built.
 func build_from_graph(graph: Dictionary) -> void:
+	# Cache graph so overlay functions can use it even when called from tests.
+	_graph = graph
 	var nodes: Array = graph.get("nodes", [])
 	var edges: Array = graph.get("edges", [])
 
@@ -81,6 +110,25 @@ func build_from_graph(graph: Dictionary) -> void:
 
 	# Reposition camera to frame the whole graph.
 	_frame_camera()
+
+	# Apply initial LOD pass so visibility is correct before any _process tick.
+	_update_lod()
+
+
+# ---------------------------------------------------------------------------
+# Per-frame LOD update
+# ---------------------------------------------------------------------------
+
+func _process(_delta: float) -> void:
+	_update_lod()
+
+
+## Query the camera's current distance and apply LOD visibility accordingly.
+func _update_lod() -> void:
+	if _camera == null or not _camera.has_method("get_distance"):
+		return
+	var dist: float = _camera.call("get_distance")
+	_lod.update_lod(_lod_node_entries, _lod_edge_entries, dist)
 
 
 # ---------------------------------------------------------------------------
@@ -127,16 +175,28 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	anchor.position = Vector3(float(p["x"]), float(p["y"]), float(p["z"]))
 	parent_node.add_child(anchor)
 	_anchors[nd["id"]] = anchor
+	# Register with LOD manager so visibility can be toggled by camera distance.
+	_lod_node_entries.append({"anchor": anchor, "node_type": nd["type"]})
 
 	var sz: float = float(nd["size"])
-	var is_context: bool = nd["type"] == "bounded_context"
+	var node_type: String = nd["type"]
+	var is_context: bool = node_type == "bounded_context"
+	var is_spec: bool = node_type == "spec"
 
 	# Mesh ----------------------------------------------------------------
 	var mesh_instance := MeshInstance3D.new()
 	var box := BoxMesh.new()
 
 	var mat := StandardMaterial3D.new()
-	if is_context:
+	if is_spec:
+		# Spec nodes represent the *intended design* — rendered as thin gold slabs
+		# so the human can immediately distinguish them from the realized code nodes.
+		# Gold colour signals "intended / authoritative specification".
+		box.size = Vector3(sz, sz * 0.15, sz)
+		mat.albedo_color = Color(0.95, 0.80, 0.10, 0.55)
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	elif is_context:
 		# Larger, flat, translucent slab — acts as a visible floor/boundary.
 		box.size = Vector3(sz, sz * 0.2, sz)
 		mat.albedo_color = Color(0.25, 0.45, 0.85, 0.18)
@@ -204,6 +264,10 @@ func _create_edge(ed: Dictionary) -> void:
 	mesh_instance.material_override = mat
 	# Edges live at the scene root so their positions are already world-space.
 	add_child(mesh_instance)
+	# Register line with LOD manager.
+	_lod_edge_entries.append({"visual": mesh_instance, "edge_type": ed["type"]})
+	# Track edge direction (source/target) so dependency direction can be verified.
+	_path_edge_entries.append({"visual": mesh_instance, "source": src, "target": tgt})
 
 	# Arrowhead: a cone (CylinderMesh, top_radius=0 = pointed tip) placed at the
 	# target end, oriented along the edge direction, indicating dependency flow.
@@ -226,6 +290,10 @@ func _create_edge(ed: Dictionary) -> void:
 	# Centre the cone so its tip lands exactly at to_pos.
 	arrow.position = to_pos - dir * (cone_mesh.height * 0.5)
 	add_child(arrow)
+	# Register arrowhead with LOD manager (same edge_type as the line).
+	_lod_edge_entries.append({"visual": arrow, "edge_type": ed["type"]})
+	# Track arrowhead direction for dependency direction verification.
+	_path_edge_entries.append({"visual": arrow, "source": src, "target": tgt})
 
 
 # ---------------------------------------------------------------------------
@@ -249,3 +317,57 @@ func _frame_camera() -> void:
 
 	if _camera.has_method("set_pivot"):
 		_camera.call("set_pivot", centre, distance)
+
+
+# ---------------------------------------------------------------------------
+# Keyboard input handling
+# ---------------------------------------------------------------------------
+
+## Handle keyboard shortcuts for understanding overlays.
+##   H → apply alignment overlay (Conformance Mode — shows spec vs. realization).
+##   J → apply quality overlay  (Evaluation Mode  — shows coupling and centrality).
+##   K → apply failure impact overlay (Simulation Mode — shows cascade from first node).
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event is InputEventKey) or not event.pressed:
+		return
+	match event.keycode:
+		KEY_H:
+			_apply_alignment_overlay()
+		KEY_J:
+			_apply_quality_overlay()
+		KEY_K:
+			_apply_failure_impact_overlay()
+
+
+# ---------------------------------------------------------------------------
+# Understanding overlays (Conformance / Evaluation / Simulation modes)
+# ---------------------------------------------------------------------------
+
+## Apply alignment overlay (H key) — Conformance Mode.
+## Colours every node in the scene by its spec_status field so the human can
+## see whether the as-built system matches the as-specced design.
+func _apply_alignment_overlay() -> void:
+	var nodes: Array = _graph.get("nodes", [])
+	_understanding_overlay.apply_alignment_overlay(nodes, _anchors)
+
+
+## Apply quality overlay (J key) — Evaluation Mode.
+## Colours nodes by coupling and centrality metrics so the human can evaluate
+## the architectural quality of the realized system independently of the spec.
+func _apply_quality_overlay() -> void:
+	var nodes: Array = _graph.get("nodes", [])
+	var edges: Array = _graph.get("edges", [])
+	_understanding_overlay.apply_quality_overlay(nodes, edges, _anchors)
+
+
+## Apply failure impact overlay (K key) — Simulation Mode (failure injection).
+## Simulates a failure of the first node in the graph and cascades through
+## dependents, colouring all affected components so the human can explore
+## the impact of the hypothetical failure before committing to any change.
+func _apply_failure_impact_overlay() -> void:
+	var nodes: Array = _graph.get("nodes", [])
+	if nodes.is_empty():
+		return
+	var target_id: String = nodes[0].get("id", "")
+	if not target_id.is_empty():
+		_understanding_overlay.apply_failure_overlay(target_id, _graph, _anchors, self)

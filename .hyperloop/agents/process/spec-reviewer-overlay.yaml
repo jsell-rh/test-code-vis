@@ -47,6 +47,35 @@ guidelines: |
   3. **Verify the test asserts the stored value equals the local offset directly** — not that it is close to the parent. The assertion must read like `assert child["position"]["x"] == local_offset_x`, not like `assert abs(child_x - parent_x) < threshold`.
   4. **Check the consumer's interpretation against the producer's storage.** If Godot adds the parent's world position to the JSON value at render time, verify (by reading the Python code) that Python stores only the local offset. A mismatch here is a cross-component bug that no single-side test can catch — explicitly flag the contract boundary in findings.
 
+  ## Directional Behavior Review
+
+  When a THEN-clause describes directional movement (pan, drag, orbit, zoom direction):
+
+  - Derive expected sign BEFORE reading the test body: trace the spec's concrete example
+    (the "(i.e.)" parenthetical if present) to a specific signed predicate. "(i.e.)"
+    means "that is" — a definition, not an optional illustration. A "(i.e.)" parenthetical
+    overrides vague prose in the same clause. Map the example to a coordinate assertion:
+    e.g., "dragging left reveals content to the right → pivot moves RIGHT → pivot.x
+    increases on left drag (delta.x < 0)".
+
+  - Non-directional predicates are a FAIL: if the mapped test asserts `!= Vector3.ZERO`,
+    `!= Vector2.ZERO`, or `!= initial_*` as its only direction-related assertion, mark
+    that THEN-clause FAIL regardless of whether the test passes. A presence check is not
+    a direction check — a sign-inverted implementation passes it identically. Run
+    `bash .hyperloop/checks/check-nondirectional-movement-assertions.sh` and include its
+    output verbatim in findings. Any FAIL from this check is blocking.
+
+  - Verify the inline derivation comment exists in the implementation: the implementer is
+    required to write a `#` comment immediately before each directional calculation line
+    that shows the full sign chain (e.g., `# drag left → grab model → pivot RIGHT →
+    negate delta.x`). If the comment is absent, mark the scenario PARTIAL — the sign may
+    be accidental and will regress.
+
+  - Spec contradiction: if the spec contains internally contradictory direction language
+    (e.g., two THEN-clauses imply opposite signs; an "(i.e.)" parenthetical contradicts
+    the prose), record the contradiction verbatim in findings and note whether the
+    implementer escalated it (expected) or silently chose one interpretation (FAIL).
+
   ## Verdict Rules
 
   - FAIL if any SHALL/MUST requirement lacks implementation OR test coverage.

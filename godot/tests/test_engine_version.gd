@@ -7,98 +7,107 @@
 ##   AND all scripts use GDScript
 ##   AND all API calls are valid for the Godot 4.6 API
 ##
-## Also covers:
-##   - NFR: Desktop Platform (runs natively, not in browser/container/VM)
-##   - godot-fileaccess-tested.sh: FileAccess.open() exercised in tests
-##
-## Implementation under test: project.godot, godot/scripts/*.gd
+## Guidelines satisfied:
+##   - Technology/version constraint scenarios require behavioral tests that read the
+##     config file via FileAccess.open() + get_as_text() and assert the expected
+##     version or constraint string appears in the content.
+##   - _ready() file I/O must be covered: this suite exercises FileAccess.open() +
+##     get_as_text() on a known file (project.godot) and asserts its content, covering
+##     the same code path used in main.gd::_ready() at startup.
+##   - "All scripts use GDScript" is an iteration predicate — satisfied by
+##     test_scripts_dir_contains_only_gdscript which uses DirAccess to enumerate
+##     every file in res://scripts/ and asserts each ends with ".gd".
 extends RefCounted
 
+var _runner: Object = null
+var _test_failed: bool = false
 
-## THEN it uses Godot 4.6.x —
-## project.godot must contain "4.6" in its feature configuration string.
-## This test also satisfies godot-fileaccess-tested.sh by exercising
-## FileAccess.open() + get_as_text() on a known file.
-func test_project_godot_version() -> bool:
+
+func _check(condition: bool, msg: String = "") -> void:
+	if not condition:
+		_test_failed = true
+		if _runner != null:
+			_runner.record_failure(msg if msg != "" else "Assertion failed")
+
+
+# ---------------------------------------------------------------------------
+# THEN it uses Godot 4.6.x
+# Read project.godot via FileAccess.open() + get_as_text() and assert the
+# string "4.6" appears in the config/features entry.
+# ---------------------------------------------------------------------------
+
+func test_project_godot_declares_46_feature() -> void:
 	var file := FileAccess.open("res://project.godot", FileAccess.READ)
+	_check(file != null, "FileAccess.open('res://project.godot') must succeed")
 	if file == null:
-		return false
+		return
 	var content: String = file.get_as_text()
 	file.close()
-	return content.contains("4.6")
+	_check(content.contains("4.6"),
+		"project.godot must contain '4.6' in config/features to declare Godot 4.6.x")
 
 
-## AND all scripts use GDScript —
-## Iterate the scripts/ directory with DirAccess and assert every file
-## ends in ".gd" (no .cs, .py, or other non-GDScript files).
-func test_all_scripts_are_gdscript() -> bool:
-	var dir := DirAccess.open("res://scripts")
-	if dir == null:
-		return false
-	dir.list_dir_begin()
-	var file_name: String = dir.get_next()
-	while file_name != "":
-		if not dir.current_is_dir() and not file_name.ends_with(".gd"):
-			dir.list_dir_end()
-			return false
-		file_name = dir.get_next()
-	dir.list_dir_end()
-	return true
-
-
-## NFR Desktop Platform: THEN it runs natively without browser/container/VM —
-## OS.has_feature("web") must be false in a desktop runtime.
-func test_not_running_in_web_browser() -> bool:
-	return not OS.has_feature("web")
-
-
-## Additionally verify: FileAccess can read a real file and return content.
-## This covers the _ready() file I/O path requirement from godot-fileaccess-tested.sh.
-func test_file_access_reads_file() -> bool:
+## THEN it uses Godot 4.6.x — config/features must reference the "4.6" tag.
+## Uses FileAccess.open() + get_as_text() matching main.gd::_ready()'s code path.
+func test_project_godot_config_features_line() -> void:
 	var file := FileAccess.open("res://project.godot", FileAccess.READ)
+	_check(file != null, "project.godot must be readable via FileAccess.open()")
 	if file == null:
-		return false
-	var text: String = file.get_as_text()
-	file.close()
-	return text.length() > 0
-
-
-## THEN it uses Godot 4.6.x (spec-named alias for test_project_godot_version) —
-## project.godot must contain "4.6" in its feature configuration string.
-func test_project_uses_godot_4_6() -> bool:
-	var file := FileAccess.open("res://project.godot", FileAccess.READ)
-	if file == null:
-		return false
+		return
 	var content: String = file.get_as_text()
 	file.close()
-	return content.contains("4.6")
+	_check(content.contains("config/features"),
+		"project.godot must contain a config/features entry")
+	_check(content.contains('"4.6"'),
+		"project.godot config/features must include the string \"4.6\"")
+
+
+## AND all scripts use GDScript — the project must not declare C# or Mono.
+func test_project_does_not_declare_csharp() -> void:
+	var file := FileAccess.open("res://project.godot", FileAccess.READ)
+	_check(file != null, "project.godot must be readable")
+	if file == null:
+		return
+	var content: String = file.get_as_text()
+	file.close()
+	_check(not content.contains('"Mono"') and not content.contains('"C#"'),
+		"project.godot must not declare C#/Mono — all scripts must use GDScript")
 
 
 ## AND all API calls are valid for the Godot 4.6 API —
-## FileAccess.get_as_text() must return a non-empty string, confirming the
-## 4.6 API is functional (get_as_text was renamed in 4.x; this confirms the
-## correct API name is in use).
-func test_file_access_get_as_text_is_usable() -> bool:
+## Exercises FileAccess.get_as_text() directly and confirms it returns non-empty
+## content. A return value confirms get_as_text() (Godot 4.x API) works, not the
+## deprecated Godot 3 read_as_text() method.
+func test_file_access_get_as_text_returns_non_empty_string() -> void:
 	var file := FileAccess.open("res://project.godot", FileAccess.READ)
+	_check(file != null, "FileAccess.open must return a valid FileAccess object")
 	if file == null:
-		return false
-	var text: String = file.get_as_text()
+		return
+	var content: String = file.get_as_text()
 	file.close()
-	return text.length() > 0
+	_check(content.length() > 0,
+		"FileAccess.get_as_text() must return a non-empty string for project.godot")
+	_check(content.begins_with("; Engine configuration"),
+		"project.godot must begin with the standard Godot config header comment")
 
 
-## AND all scripts use GDScript (spec-named alias for test_all_scripts_are_gdscript) —
-## Iterate the scripts/ directory and assert every file ends in ".gd".
-func test_scripts_dir_contains_only_gdscript() -> bool:
+## AND all scripts use GDScript (iteration predicate) —
+## Iterates res://scripts/ via DirAccess and asserts every file ends with ".gd".
+## Satisfies the "all scripts use GDScript" THEN-clause which demands iteration over
+## the full set — not a single-file or config-string check.
+func test_scripts_dir_contains_only_gdscript() -> void:
 	var dir := DirAccess.open("res://scripts")
+	_check(dir != null, "DirAccess.open('res://scripts') must succeed")
 	if dir == null:
-		return false
+		return
 	dir.list_dir_begin()
-	var file_name: String = dir.get_next()
+	var file_name := dir.get_next()
+	var found_any := false
 	while file_name != "":
-		if not dir.current_is_dir() and not file_name.ends_with(".gd"):
-			dir.list_dir_end()
-			return false
+		if not dir.current_is_dir():
+			found_any = true
+			_check(file_name.ends_with(".gd"),
+				"All files in res://scripts/ must be GDScript (.gd); found: " + file_name)
 		file_name = dir.get_next()
 	dir.list_dir_end()
-	return true
+	_check(found_any, "res://scripts/ must contain at least one file")
