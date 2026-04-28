@@ -1,7 +1,7 @@
 ---
 id: task-101
 title: Godot — tier-2 LOD rendering of class and function scope nodes
-spec_ref: specs/core/visual-primitives.spec.md
+spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
 status: not_started
 phase: null
 deps:
