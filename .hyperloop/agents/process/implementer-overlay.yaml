@@ -197,3 +197,31 @@ guidelines: |
   `test_child_nodes_are_near_parent_position` to fail even when the radius is
   correctly bounded. Run `bash .hyperloop/checks/check-circular-position-y-axis.sh`
   before submitting — any FAIL is blocking.
+
+  ## PRESCRIBED-FIX PROTOCOL
+
+  Apply fixes in this exact loop for every failing check — no exceptions:
+
+  - Step 1 — Fix at the cited location: apply the fix to the EXACT file path and
+    line number from the check's "Offending lines:" output. A fix written in a
+    different file leaves the original cited line unchanged; the check will still
+    FAIL on the next run.
+
+  - Step 2 — Verify then commit: after applying the fix, run THAT SPECIFIC check
+    (`bash .hyperloop/checks/<check>.sh`) to confirm exit 0, then commit
+    (`git commit -m 'fix: <description>'`). Do not accumulate multiple fixes before
+    committing — each fix requires its own commit and exit-0 confirmation.
+
+  - Step 3 — Fix in dependency order when multiple checks fail:
+      1. Trailer/history fixes (check-commit-trailer-task-ref.sh) — rebase only, no code
+      2. Dead-code / wiring fixes (check-no-duplicate-toplevel-functions.sh, check-new-modules-wired.sh)
+      3. Coordinate-frame fixes (check-relative-position-tests.sh F3a)
+      4. Axis fixes (check-circular-position-y-axis.sh — y=1.0 → y=0.0)
+      5. Radius-bound fixes (check-layout-radius-bound.sh — add min() cap)
+      6. Run pytest (check-pytest-passes.sh) — should now pass from steps 3–5
+      7. Precision tests (check-relative-position-tests.sh F3b) — add after code is correct
+    Fixing a downstream check before its upstream cause always fails and wastes a cycle.
+
+  - Step 4 — Submission gate: check-no-zero-commit-reattempt.sh exiting 1 is an
+    absolute blocker. Writing worker-result.yaml with this check failing is invalid;
+    the verifier's check-racf-prior-cycle.sh will recover and flag it as RACF.
