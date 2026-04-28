@@ -1,120 +1,108 @@
 ---
 id: task-096
-title: Godot — Purpose-Level Annotation rendering (purpose, beacon, invariant)
+title: Godot — purpose annotation and invariant labels on Container nodes
 spec_ref: specs/core/visual-primitives.spec.md
 status: not-started
 phase: null
-deps: [task-009, task-095, task-067]
+deps: [task-095, task-010, task-067]
 round: 0
 branch: null
 pr: null
 ---
 
-Read purpose-level annotation fields from scene graph nodes and render them as floating
-labels and glyph indicators: purpose text at the Container level, beacon glyphs docked
-to nodes, and invariant text below nodes — each using a distinct perceptual channel
-that does not conflict with other primitives.
+Implement purpose annotation and invariant label rendering in the Godot application:
+read `purpose_annotation` and `invariants` from the scene graph JSON, and display
+them as `Label3D` elements anchored above Container (module and bounded_context) nodes,
+visible at medium and near LOD tiers.
 
 Covers `specs/core/visual-primitives.spec.md` — Requirement: Purpose-Level Annotation,
-Scenarios: LLM-generated purpose annotation ("attached at the cluster's Container level
-and distinct from the module names"), Beacon recognition ("a beacon annotation naming
-the recognised pattern, visible as a small indicator on the Node"), Invariant annotation
-("attached to the Aggregate or Container that the validations protect"):
-
-**Loading** — extend the scene graph loader autoload (task-008) to read `purpose`,
-`beacon`, and `invariant` from each node entry (absent → no annotation for that field
-on that node; no error).
+Scenarios: LLM-generated purpose annotation ("attached to the cluster's Container level
+AND it is distinct from the module names, which describe mechanism, not purpose") and
+Invariant annotation ("attached to the Aggregate or Container that the validations
+protect"):
 
 ---
 
-**Purpose annotation rendering:**
+**Loading** — extend the scene graph loader autoload (task-008) to read two new optional
+fields from each node entry:
 
-1. For each node with a non-empty `purpose` field: add a `Label3D` as a child of the
-   node's root `Node3D`, positioned above the node name label:
-   - Y-offset from node top: `node_size * 0.5 + 0.55` (above the name label, which
-     sits at `node_size * 0.5 + 0.25` from task-009).
-   - Text: `purpose` value. Enable `autowrap_mode = TextServer.AUTOWRAP_WORD_SMART`,
-     `width = 4.0` (world units).
-   - Font size: 10.
-   - Colour: `Color(0.75, 0.95, 0.80)` (soft green-white — semantic/intent colour).
-   - `billboard = BaseMaterial3D.BILLBOARD_ENABLED` so it faces the camera.
+1. `purpose_annotation` (string | null | absent) — a sentence describing what the node
+   is FOR.
+2. `invariants` (array | absent) — each entry has `rule` (string) and `enforced_by`
+   (array of node id strings).
 
-2. **LOD visibility** — purpose labels are hidden at far LOD (camera farther than
-   `FAR_THRESHOLD` from the node's parent context) and visible at medium and near.
-   Connect to task-067's LOD distance computation: add purpose `Label3D` nodes to the
-   same `medium_near_elements` group that task-067 manages, OR check distance in
-   `_process()` if task-067 uses a list-based approach. Duration for fade: 0.25 s
-   via `Tween` on `modulate.a`.
+Store them in two Dictionaries keyed by node id:
+- `purpose_annotations: Dictionary` → `{ node_id: String }`
+- `invariants: Dictionary` → `{ node_id: Array[Dictionary] }`
+
+Absent or null values are not stored (Dictionary miss = no annotation for that node).
 
 ---
 
-**Beacon glyph rendering:**
+**Purpose annotation label** — after the Container volume mesh is created (task-010),
+for each node with a non-null, non-absent `purpose_annotation`:
 
-1. For each node with a `beacon` field: add a `MeshInstance3D` child with a
-   `SphereMesh` (`radius = 0.09`) to the node's `Node3D`.
-   - Position: top-LEFT corner of the node mesh:
-     `Vector3(-(node_size * 0.5 + 0.14), node_size * 0.5 + 0.14, 0)`
-     (distinct from badge position at top-right, task-087).
-   - Apply `StandardMaterial3D` with the beacon's assigned colour (see below).
-   - `emission_enabled = true`, `emission_energy = 0.3` (subtle glow to draw the eye).
-
-2. Beacon colour and 2-char label:
-
-   | Beacon value  | Colour                          | Abbr |
-   |---------------|---------------------------------|------|
-   | `retry_loop`  | `Color(1.0, 0.55, 0.15)`        | `Rl` |
-   | `accumulator` | `Color(0.35, 0.80, 1.00)`       | `Ac` |
-   | `observer`    | `Color(0.90, 0.35, 0.90)`       | `Ob` |
-   | `pipeline`    | `Color(0.40, 1.00, 0.45)`       | `Pi` |
-   | `facade`      | `Color(0.95, 0.95, 0.30)`       | `Fa` |
-   | `singleton`   | `Color(0.65, 0.65, 0.65)`       | `Si` |
-
-3. Add a `Label3D` child of the sphere with the 2-char abbreviation:
-   - Font size: 9. Colour: white.
-   - Visible at near and medium LOD; hidden at far LOD (suppress `visible` in `_process()`
-     when LOD tier is far, same as badge label logic in task-087).
-
-4. **Hover tooltip** — when the mouse hovers over the beacon sphere, display a HUD
-   label (CanvasLayer `Label`) with the full beacon name, e.g. "retry_loop — contains
-   a retry-on-failure mechanism". Use the same tooltip mechanism as task-087 badge
-   hover; implement from scratch if it does not yet exist.
+1. Create a `Label3D` child of the node's root `Node3D`.
+2. Set `text` to the `purpose_annotation` string.
+3. Position it **above** the node mesh:
+   - `position = Vector3(0, node_height * 0.5 + ANNOTATION_OFFSET, 0)` where
+     `ANNOTATION_OFFSET = 0.6` (named constant).
+   - The label floats above the mesh so it does not overlap the node volume.
+4. Visual style:
+   - `font_size = 14`
+   - `modulate = Color(0.95, 0.95, 0.7, 0.9)` (warm off-white, slightly translucent)
+   - `outline_size = 4` (so it remains readable against any background)
+   - `billboard = BaseMaterial3D.BILLBOARD_ENABLED` (always faces the camera)
+   - `double_sided = true`
+5. Prefix the text with a `◈ ` glyph (or `[P] ` if the glyph is unavailable) so the
+   human can distinguish purpose labels from node name labels at a glance.
 
 ---
 
-**Invariant annotation rendering:**
+**Invariant labels** — for each node with one or more invariants, render each rule
+as a subordinate `Label3D` below the purpose annotation (or directly above the node
+if no purpose annotation is present):
 
-1. For each node with a non-empty `invariant` field: add a `Label3D` below the node:
-   - Y-offset from node bottom: `-(node_size * 0.5 + 0.30)`.
-   - Text: `"⟡ " + invariant` (diamond marker). If the Unicode diamond is unavailable
-     in the project font, use `"[I] " + invariant`.
-   - Font size: 9 (subordinate to purpose label).
-   - Colour: `Color(1.0, 0.88, 0.55)` (warm amber — business rule colour).
-   - `billboard = BaseMaterial3D.BILLBOARD_ENABLED`.
-
-2. **LOD visibility** — invariant labels are visible ONLY at near LOD tier (camera
-   within `NEAR_THRESHOLD` of the specific node). Hidden at medium and far. Use the
-   same `modulate.a` tween approach as purpose labels (0.25 s).
-
-3. **Conformance Mode integration** — when Conformance Mode is active (task-030), nodes
-   with both an `invariant` field AND a `spec_to_code` edge incoming to them have their
-   invariant `Label3D` given a slightly brighter modulate (`Color(1.1, 1.1, 1.1)`). This
-   signals that the invariant corresponds to a spec checkpoint. Implementation: in the
-   Conformance Mode script, after rendering spec_to_code lines (task-030), iterate nodes
-   that are `spec_to_code` targets and brighten their invariant label if present. No
-   mode logic changes; this is a cosmetic pass only.
+1. Stack invariant labels vertically below the purpose annotation label with
+   `INVARIANT_SPACING = 0.35` units between them (named constant).
+2. Visual style (distinct from purpose annotation):
+   - `font_size = 11` (smaller)
+   - `modulate = Color(0.8, 0.9, 1.0, 0.85)` (cool blue-white, slightly dimmer)
+   - `billboard = BaseMaterial3D.BILLBOARD_ENABLED`
+   - Prefix each invariant text with `⚖ ` (or `[I] ` fallback).
+3. If a node has more than 3 invariants, display the first 2 and append a condensed
+   `"… +N more invariants"` label to avoid visual overflow.
 
 ---
 
-**Fallback** — if all three annotation fields are absent on a node, no annotation nodes
-are created (no empty labels, no empty spheres). Scene graphs produced by the extractor
-pipeline have no annotation fields by default; the Godot application renders without
-annotations in that case.
+**LOD behaviour:**
 
-**Channel summary** (non-interference):
-- Purpose label: above-node Y position + green-white colour.
-- Beacon glyph: top-left corner + sphere shape (distinct from badge box at top-right,
-  task-087, and rail glyph at base, task-090).
-- Invariant label: below-node Y position + amber colour.
-- None of these use the fill colour, edge, or tint channels.
+- **Far tier** (task-067 far threshold): purpose annotation and invariant labels
+  are hidden (`visible = false`). Container nodes at far distance show only their
+  volume mesh and landmark treatment (task-086).
+- **Medium tier**: purpose annotation label is visible. Invariant labels are hidden
+  (they add detail appropriate only when closer).
+- **Near tier**: both purpose annotation and invariant labels are visible.
+
+Implement by connecting to the LOD visibility system:
+- When the LOD system hides a node's mesh (`modulate.a` tweens toward 0 or
+  `visible = false`), simultaneously hide the annotation Label3D(s) for that node.
+- When the LOD system brings a node to medium visibility, fade in the purpose
+  annotation label (`modulate.a` from 0 to `0.9`, 0.3 s Tween).
+- When the LOD system brings a node to near visibility, fade in the invariant
+  labels (`modulate.a` from 0 to `0.85`, 0.3 s Tween).
+
+---
+
+**Fallback** — if a node carries no `purpose_annotation` and no `invariants`, no
+Label3D is created for that node. The scene remains unchanged from task-010's output.
+No crash if the fields are absent from the JSON.
+
+**Mode compatibility** — purpose annotation and invariant labels occupy the glyph/text
+channel (Label3D) and do NOT interfere with fill colour (mode-specific materials on
+slot 0), badge glyphs (task-087), or Port glyphs (task-088). All can coexist.
+
+**No schema or extractor changes** — all required fields are defined in task-095 and
+populated by a future annotation agent. This task only reads and renders them.
 
 Use only GDScript and Godot 4.6 API. No external libraries.
