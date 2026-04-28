@@ -67,9 +67,10 @@ for cross-module name resolution.
        "type": "inherits"
      }
      ```
-   - If unresolved (base is in stdlib — `object`, `Exception`, `abc.ABC`, etc. —
-     or is a third-party class): skip. Do NOT emit an edge with a null target for
-     `inherits` (the schema forbids null targets on non-dynamic_call edges).
+   - If unresolved (base is in stdlib — `object`, `Exception`, `BaseException`,
+     `abc.ABC`, `abc.ABCMeta`, `enum.Enum`, `enum.IntEnum` — or is a third-party
+     class): skip. Do NOT emit an edge with a null target for `inherits` (the
+     schema forbids null targets on non-dynamic_call edges).
 
 **Composition edges (`has_a`):**
 
@@ -98,7 +99,7 @@ for cross-module name resolution.
    - If resolved: emit a `has_a` edge with the same format as step 3.
 
 **Deduplication** — if multiple bases, fields, or `__init__` parameters resolve
-to the same target class, emit only ONE edge of each type (inherits or has_a)
+to the same target class, emit only ONE edge of each type (`inherits` or `has_a`)
 between the same source/target pair.
 
 ---
@@ -106,18 +107,14 @@ between the same source/target pair.
 **Deduplication vs. task-079** — task-079 produces module-level topology edges
 (e.g. `"iam.domain" → "iam.domain"` — self-loop — or `"iam.domain" → "shared_kernel"`).
 This task produces class-level edges (e.g. `"iam.domain.PaymentProcessor" →
-"iam.domain.BaseProcessor"`). Both coexist in the edge list; they are NOT duplicates.
-Module-level edges are consumed at medium LOD; class-level edges are consumed at
-near LOD (task-109). No deduplication between the two sets.
-
-**stdlib base classes** — skip `object`, `Exception`, `BaseException`,
-`abc.ABC`, `abc.ABCMeta`, `enum.Enum`, `enum.IntEnum`, and any name whose
-resolution leads to a node not in the known application node list.
+`"iam.domain.BaseProcessor"`). Both coexist in the edge list; they are NOT
+duplicates. Module-level edges are consumed at medium LOD; class-level edges are
+consumed at near LOD (task-109). No deduplication between the two sets.
 
 **Generic types** — for annotations like `List[Order]` or `Optional[PaymentInfo]`,
 extract only the innermost concrete type name (`Order`, `PaymentInfo`) and resolve
 that. Use simple string parsing (`annotation_str.split("[")[0].strip()` after
-`ast.unparse()`), not full type-inference.
+`ast.unparse()`), not full type inference.
 
 **Files that fail to parse** — log a warning to stderr; skip without aborting.
 
@@ -130,8 +127,8 @@ defined in task-085) that skips both task-079 and this task.
 **Output writer integration** — this task produces a list of class-level edge
 dicts (`inherits` and `has_a` with class node IDs). The output writer pipeline
 (task-085) MUST be extended to call this function after task-079 and append its
-results to the edge list before serialisation. Add a new pipeline step: "Class-level
-type topology (task-112) — runs when `--scope-nesting` is active."
+results to the edge list before serialisation. Add a new pipeline step:
+"Class-level type topology (task-112) — runs when `--scope-nesting` is active."
 
 Use only Python standard library (`ast`, `pathlib`). No external dependencies.
 
