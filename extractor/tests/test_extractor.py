@@ -363,6 +363,50 @@ class TestDependencyExtraction:
             for key in ("source", "target", "type"):
                 assert key in e, f"Edge missing key '{key}': {e}"
 
+    def test_aggregate_edge_emitted(self, src: Path) -> None:
+        """The extractor emits at least one aggregate edge for cross-context deps."""
+        all_nodes: list[Node] = discover_bounded_contexts(src)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(src, bc["id"]))
+
+        edges = build_dependency_edges(src, all_nodes)
+        aggregate_edges = [e for e in edges if e["type"] == "aggregate"]
+        assert aggregate_edges, (
+            "Expected at least one aggregate edge — iam imports shared_kernel"
+        )
+
+    def test_aggregate_edge_has_weight(self, src: Path) -> None:
+        """Each aggregate edge carries a weight field (total import count)."""
+        all_nodes: list[Node] = discover_bounded_contexts(src)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(src, bc["id"]))
+
+        edges = build_dependency_edges(src, all_nodes)
+        for e in edges:
+            if e["type"] == "aggregate":
+                assert "weight" in e, f"Aggregate edge missing 'weight': {e}"
+                assert isinstance(e["weight"], int), (
+                    f"Aggregate edge 'weight' must be int, got {type(e['weight'])}: {e}"
+                )
+                assert e["weight"] >= 1, (
+                    f"Aggregate edge 'weight' must be ≥ 1, got {e['weight']}: {e}"
+                )
+                return
+        pytest.fail("Expected at least one aggregate edge with weight")
+
+    def test_aggregate_edge_source_target(self, src: Path) -> None:
+        """Aggregate edge for iam→shared_kernel has correct source and target."""
+        all_nodes: list[Node] = discover_bounded_contexts(src)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(src, bc["id"]))
+
+        edges = build_dependency_edges(src, all_nodes)
+        agg = {(e["source"], e["target"]) for e in edges if e["type"] == "aggregate"}
+        # iam.domain imports shared_kernel.auth → aggregate iam→shared_kernel
+        assert ("iam", "shared_kernel") in agg, (
+            f"Expected aggregate edge iam→shared_kernel, found aggregate pairs: {agg}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Requirement: Layout

@@ -393,8 +393,11 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
     """Build dependency edges by analysing imports in each node's Python files.
 
     Cross-context edges are created at the bounded-context level (e.g.
-    ``graph → shared_kernel``).  Internal edges are created at the module
-    level (e.g. ``iam.application → iam.domain``).
+    ``graph → shared_kernel``) with ``type="cross_context"``.  For each such
+    BC-pair an additional ``type="aggregate"`` edge is emitted carrying the
+    total count of unique module-level imports between the two contexts as
+    its ``weight``.  Internal edges are created at the module level (e.g.
+    ``iam.application → iam.domain``).
 
     Duplicate edges are deduplicated.
     """
@@ -402,6 +405,10 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
     context_ids = {n["id"] for n in all_nodes if n["type"] == "bounded_context"}
 
     raw_edges: set[tuple[str, str, EdgeType]] = set()
+
+    # Count unique module-level cross-context imports per BC pair.
+    # Keyed by (source_bc, target_bc) → import count.
+    bc_pair_weight: dict[tuple[str, str], int] = {}
 
     for node in all_nodes:
         node_path = src_path / Path(node["id"].replace(".", "/"))
@@ -434,6 +441,11 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
                 if edge_src not in context_ids or edge_tgt not in context_ids:
                     continue
                 raw_edges.add((edge_src, edge_tgt, "cross_context"))
+                # Count weight from module-level scans only to avoid
+                # double-counting the BC-level rglob that also sees module files.
+                if node["type"] == "module":
+                    bc_key = (edge_src, edge_tgt)
+                    bc_pair_weight[bc_key] = bc_pair_weight.get(bc_key, 0) + 1
             else:
                 # Internal: only emit from module-level nodes to avoid duplicating
                 # edges that would also be created by the bounded-context scan.
@@ -444,10 +456,25 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
                     continue
                 raw_edges.add((source_id, target_id, "internal"))
 
-    return [
+    # Individual cross-context and internal edges.
+    edges: list[Edge] = [
         {"source": src, "target": tgt, "type": etype}
         for src, tgt, etype in sorted(raw_edges)
     ]
+
+    # Aggregate edges: one per BC-pair, carrying the total import count as weight.
+    # Used for far-distance rendering where individual module-level edges are
+    # collapsed into a single weighted summary.
+    for (src_bc, tgt_bc), weight in sorted(bc_pair_weight.items()):
+        agg_edge: Edge = {
+            "source": src_bc,
+            "target": tgt_bc,
+            "type": "aggregate",
+            "weight": weight,
+        }
+        edges.append(agg_edge)
+
+    return edges
 
 
 # ---------------------------------------------------------------------------

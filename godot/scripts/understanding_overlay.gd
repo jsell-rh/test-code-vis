@@ -28,21 +28,21 @@ extends RefCounted
 ##     BFS-cascades from a failed target node, colouring and annotating
 ##     every transitively affected node AFFECTED_COLOR.
 
-## ── Alignment overlay colours (Conformance Mode) ──────────────────────────
+## ── Alignment overlay colours (spec alignment) ───────────────────────────
 const ALIGNED_COLOR: Color = Color(0.2, 0.8, 0.3, 1.0)      # green  — matches spec
 const DIVERGENT_COLOR: Color = Color(0.9, 0.2, 0.1, 1.0)    # red    — diverges from spec
 const UNSPECIFIED_COLOR: Color = Color(0.6, 0.6, 0.6, 1.0)  # grey   — absent from spec
 
-## ── Quality overlay colours (Evaluation Mode) ─────────────────────────────
+## ── Quality overlay colours (quality evaluation) ─────────────────────────
 const CRITICAL_COLOR: Color = Color(0.95, 0.15, 0.05, 1.0)  # deep red — SPOF risk
 const COUPLED_COLOR: Color = Color(0.95, 0.55, 0.05, 1.0)   # orange   — tight coupling
 
-## ── Impact overlay colour (Simulation Mode) ───────────────────────────────
+## ── Impact overlay colour (cascade injection) ────────────────────────────
 const AFFECTED_COLOR: Color = Color(0.85, 0.1, 0.55, 1.0)   # magenta  — affected by change
 
 
 # ---------------------------------------------------------------------------
-# Alignment overlay — Conformance Mode
+# Alignment overlay — spec alignment check
 # ---------------------------------------------------------------------------
 
 ## Apply alignment overlay: colour each node by its spec alignment status.
@@ -81,7 +81,7 @@ func apply_alignment_overlay(nodes_data: Array, anchors: Dictionary) -> void:
 
 
 # ---------------------------------------------------------------------------
-# Quality overlay — Evaluation Mode
+# Quality overlay — quality evaluation
 # ---------------------------------------------------------------------------
 
 ## Apply quality overlay: colour nodes by architectural quality metrics.
@@ -139,7 +139,7 @@ func apply_quality_overlay(nodes_data: Array, edges_data: Array, anchors: Dictio
 
 
 # ---------------------------------------------------------------------------
-# Impact overlay — Simulation Mode (splitting a service)
+# Impact overlay — split-impact analysis
 # ---------------------------------------------------------------------------
 
 ## Apply split impact overlay: show the consequences of splitting target_id.
@@ -173,7 +173,7 @@ func apply_split_overlay(
 
 
 # ---------------------------------------------------------------------------
-# Impact overlay — Simulation Mode (failure injection)
+# Impact overlay — failure cascade injection
 # ---------------------------------------------------------------------------
 
 ## Apply failure impact overlay: show the cascade from a failed component.
@@ -186,11 +186,17 @@ func apply_split_overlay(
 ##
 ## Only nodes that depend on target_id (directly or via a chain) are coloured;
 ## the failed node itself is not re-coloured so the origin is distinguishable.
+##
+## Returns a Dictionary mapping each affected node id to its cascade depth
+## (minimum hop distance from target_id).  Depth 1 = direct dependent,
+## depth 2 = depends on a depth-1 node, etc.  Depth values are written back
+## into the graph's node data so downstream visualization (gradient encoding,
+## wave animation) can read them without recomputing.
 func apply_failure_overlay(
 		target_id: String,
 		graph: Dictionary,
 		anchors: Dictionary,
-		scene_root: Node3D) -> void:
+		scene_root: Node3D) -> Dictionary:
 	var edges: Array = graph.get("edges", [])
 
 	# Build reverse-adjacency: for each node, the set of services that depend on it.
@@ -205,27 +211,47 @@ func apply_failure_overlay(
 				dependents_of[tgt] = []
 			dependents_of[tgt].append(src)
 
-	# BFS to find all transitively affected nodes.
-	var visited: Dictionary = {}
-	var queue: Array = [target_id]
-	visited[target_id] = true
+	# BFS to find all transitively affected nodes and their cascade depth.
+	# Each entry in the queue is [node_id, depth_from_origin].
+	var depth_map: Dictionary = {}   # {node_id: cascade_depth}
+	depth_map[target_id] = 0
+	var queue: Array = [[target_id, 0]]
 	while not queue.is_empty():
-		var current: String = queue.pop_front()
+		var item: Array = queue.pop_front()
+		var current: String = item[0]
+		var current_depth: int = item[1]
 		var affected: Array = dependents_of.get(current, [])
 		for dep: String in affected:
-			if not visited.has(dep):
-				visited[dep] = true
-				queue.append(dep)
+			if not depth_map.has(dep):
+				depth_map[dep] = current_depth + 1
+				queue.append([dep, current_depth + 1])
 
-	# Colour and annotate all affected nodes except the origin itself.
-	for node_id: String in visited.keys():
+	# Build the result: affected nodes only (exclude origin at depth 0).
+	var affected_depth_map: Dictionary = {}
+	for node_id: String in depth_map.keys():
 		if node_id == target_id:
 			continue
+		affected_depth_map[node_id] = depth_map[node_id]
+
+	# Colour and annotate all affected nodes.
+	for node_id: String in affected_depth_map.keys():
 		var anchor: Node3D = anchors.get(node_id) as Node3D
 		if anchor == null:
 			continue
 		_apply_node_color(anchor, AFFECTED_COLOR)
 		_add_scene_label(anchor, "AFFECTED", scene_root)
+
+	# Write cascade depth values into the graph's node data so that
+	# visualization (gradient encoding, wave animation) can read them
+	# without recomputing BFS.  Only nodes present in the graph dict
+	# are annotated; the depth field is absent on unaffected nodes.
+	var nodes_data: Array = graph.get("nodes", [])
+	for nd in nodes_data:
+		var nid: String = nd.get("id", "")
+		if affected_depth_map.has(nid):
+			nd["depth"] = affected_depth_map[nid]
+
+	return affected_depth_map
 
 
 # ---------------------------------------------------------------------------

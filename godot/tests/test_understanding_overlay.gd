@@ -36,6 +36,10 @@
 ##     → test_failure_cascade_effects_visible
 ##   AND  "components that would be affected are clearly identified"
 ##     → test_failure_affected_components_clearly_identified
+##   AND  "depth values are available to the visualization for gradient encoding
+##         and wave animation" (Cascade Depth in Simulation Output)
+##     → test_cascade_depth_values_correct
+##     → test_cascade_depth_written_to_node_data
 
 const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
 
@@ -550,3 +554,72 @@ func test_failure_label_has_billboard_and_pixel_size() -> void:
 			_check(lbl.pixel_size > 0.0, "failure label must have pixel_size > 0.0")
 			return
 	_check(false, "no Label3D found in scene root for failure overlay")
+
+
+## AND "depth values are available to the visualization for gradient encoding
+##      and wave animation" (Cascade Depth in Simulation Output requirement)
+## apply_failure_overlay() returns a depth dict with correct hop distances:
+##   svc_b directly depends on svc_a → depth 1
+##   svc_c transitively depends on svc_a via svc_b → depth 2
+func test_cascade_depth_values_correct() -> void:
+	_test_failed = false
+	var overlay := UnderstandingOverlay.new()
+	var scene_root := Node3D.new()
+
+	var svc_a := _make_anchor("svc_a", Vector3(0.0, 0.0, 0.0))
+	var svc_b := _make_anchor("svc_b", Vector3(5.0, 0.0, 0.0))
+	var svc_c := _make_anchor("svc_c", Vector3(10.0, 0.0, 0.0))
+	scene_root.add_child(svc_a)
+	scene_root.add_child(svc_b)
+	scene_root.add_child(svc_c)
+	var anchors: Dictionary = {"svc_a": svc_a, "svc_b": svc_b, "svc_c": svc_c}
+
+	# Chain: svc_b depends on svc_a (depth 1); svc_c depends on svc_b (depth 2).
+	var graph: Dictionary = {
+		"nodes": [{"id": "svc_a"}, {"id": "svc_b"}, {"id": "svc_c"}],
+		"edges": [
+			{"source": "svc_b", "target": "svc_a", "type": "cross_context"},
+			{"source": "svc_c", "target": "svc_b", "type": "cross_context"},
+		],
+	}
+
+	var depths: Dictionary = overlay.apply_failure_overlay("svc_a", graph, anchors, scene_root)
+
+	# svc_b directly depends on failed svc_a → depth 1
+	_check(depths.has("svc_b") and depths["svc_b"] == 1,
+		"svc_b must be at cascade depth 1 (direct dependent of failed svc_a)")
+
+	# svc_c transitively depends on svc_a via svc_b → depth 2
+	_check(depths.has("svc_c") and depths["svc_c"] == 2,
+		"svc_c must be at cascade depth 2 (transitive dependent via svc_b)")
+
+	# Origin itself must NOT appear in the depth dict
+	_check(not depths.has("svc_a"),
+		"failed node svc_a must not appear in the depth result")
+
+
+## AND depth values are written back into graph node data so downstream
+## visualization can read them without recomputing BFS.
+func test_cascade_depth_written_to_node_data() -> void:
+	_test_failed = false
+	var overlay := UnderstandingOverlay.new()
+	var scene_root := Node3D.new()
+
+	var svc_a := _make_anchor("svc_a", Vector3(0.0, 0.0, 0.0))
+	var svc_b := _make_anchor("svc_b", Vector3(5.0, 0.0, 0.0))
+	scene_root.add_child(svc_a)
+	scene_root.add_child(svc_b)
+	var anchors: Dictionary = {"svc_a": svc_a, "svc_b": svc_b}
+
+	var node_a: Dictionary = {"id": "svc_a"}
+	var node_b: Dictionary = {"id": "svc_b"}
+	var graph: Dictionary = {
+		"nodes": [node_a, node_b],
+		"edges": [{"source": "svc_b", "target": "svc_a", "type": "cross_context"}],
+	}
+
+	overlay.apply_failure_overlay("svc_a", graph, anchors, scene_root)
+
+	# After the overlay runs, svc_b's node dict must carry depth=1.
+	_check(node_b.has("depth") and node_b["depth"] == 1,
+		"svc_b node data must carry depth=1 after failure overlay (available for gradient encoding)")
