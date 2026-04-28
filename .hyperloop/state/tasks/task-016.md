@@ -3,7 +3,7 @@ id: task-016
 title: Godot — zoom toward mouse cursor (scroll wheel)
 spec_ref: specs/prototype/ux-polish.spec.md@3e5e297e216c7876224564ee099a38334e3dbd55
 status: in_progress
-phase: implement
+phase: verify
 deps:
 - task-014
 round: 7
