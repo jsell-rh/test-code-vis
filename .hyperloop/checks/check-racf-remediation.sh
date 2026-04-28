@@ -70,6 +70,14 @@ echo ""
 
 while IFS= read -r check_name; do
   [[ -z "$check_name" ]] && continue
+  # Skip self: if check-racf-remediation.sh appears in PRIOR_FAILS (because it
+  # failed in the prior cycle), re-running it here causes infinite self-recursion.
+  # The OS eventually kills the deepest processes, but not before exhausting the
+  # 90-second timeout and preventing run-all-checks.sh from producing a RESULT line.
+  [[ "$check_name" == "check-racf-remediation.sh" ]] && {
+    echo "  $(printf '%-55s' "$check_name") SKIP (self — cannot re-run RACF check from within RACF check)"
+    continue
+  }
   check_path="$CHECKS_DIR/$check_name"
   printf "  %-55s " "$check_name"
   if [[ ! -f "$check_path" ]]; then

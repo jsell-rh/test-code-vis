@@ -45,6 +45,7 @@ fi
 
 FAIL=0
 MISSING=()
+STALE=()
 
 while IFS= read -r check_name; do
     [[ -z "$check_name" ]] && continue
@@ -55,27 +56,58 @@ while IFS= read -r check_name; do
     if [[ ! -f "$check_path" ]]; then
         MISSING+=("$check_name")
         FAIL=1
+        continue
+    fi
+
+    # Also verify content matches main via git blob SHA.
+    # Presence alone is insufficient: a branch may have an older version of a
+    # script (e.g., check-not-in-scope.sh before a pre-existing-file filter was
+    # added) that passes a presence check but runs stale logic, producing incorrect
+    # results that cannot be resolved by the implementer.
+    main_blob=$(git ls-tree "main:.hyperloop/checks/" -- "$check_name" 2>/dev/null \
+        | awk '{print $3}')
+    if [[ -n "$main_blob" ]]; then
+        local_blob=$(git hash-object "$check_path" 2>/dev/null || true)
+        if [[ -n "$local_blob" && "$main_blob" != "$local_blob" ]]; then
+            STALE+=("$check_name")
+            FAIL=1
+        fi
     fi
 done <<< "$MAIN_CHECKS"
 
 if [[ $FAIL -eq 0 ]]; then
-    echo "OK: All check scripts from main are present in working tree ($(echo "$MAIN_CHECKS" | wc -l | tr -d ' ') checked)."
+    echo "OK: All check scripts from main are present and content-identical in working tree ($(echo "$MAIN_CHECKS" | wc -l | tr -d ' ') checked)."
     exit 0
 fi
 
-echo "FAIL: ${#MISSING[@]} check script(s) present on main are missing from this working tree:"
-for name in "${MISSING[@]}"; do
-    echo "  $name"
-done
-echo ""
-echo "  These checks were added to main after this branch was created."
-echo "  Without syncing, they cannot fire — their FAILs are invisible to run-all-checks.sh."
-echo ""
+if [[ ${#MISSING[@]} -gt 0 ]]; then
+    echo "FAIL: ${#MISSING[@]} check script(s) present on main are missing from this working tree:"
+    for name in "${MISSING[@]}"; do
+        echo "  $name"
+    done
+    echo ""
+    echo "  These checks were added to main after this branch was created."
+    echo "  Without syncing, they cannot fire — their FAILs are invisible to run-all-checks.sh."
+    echo ""
+fi
+
+if [[ ${#STALE[@]} -gt 0 ]]; then
+    echo "FAIL: ${#STALE[@]} check script(s) exist in working tree but have DIFFERENT CONTENT than main:"
+    for name in "${STALE[@]}"; do
+        echo "  $name"
+    done
+    echo ""
+    echo "  These scripts were updated on main after this branch was created."
+    echo "  Running the stale version produces incorrect results (e.g., missing a"
+    echo "  pre-existing-file filter that was added to fix a persistent deadlock)."
+    echo ""
+fi
+
 echo "  Fix: sync from main before re-running checks:"
 echo "    git checkout main -- .hyperloop/checks/"
 echo "    bash .hyperloop/checks/run-all-checks.sh"
 echo ""
 echo "  This is a process violation (implementer did not sync checks as required"
-echo "  by the re-attempt protocol, step 0). Every FAIL produced by the missing"
-echo "  checks is still blocking regardless of when the check was added."
+echo "  by the re-attempt protocol, step 0). Every FAIL produced by missing or"
+echo "  stale checks is still blocking regardless of when the change was made."
 exit 1
