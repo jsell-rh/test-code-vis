@@ -525,3 +525,96 @@ class TestValidateSceneGraph:
             assert False, "Expected ValueError"
         except ValueError as e:
             assert "aggregate_metrics" in str(e)
+
+
+# ---------------------------------------------------------------------------
+# Requirement: validate_scene_graph — optional depth field (Cascade Depth)
+# ---------------------------------------------------------------------------
+
+
+class TestValidateSceneGraphDepth:
+    """validate_scene_graph correctly validates the optional node depth field.
+
+    Per the schema contract (task-072):
+    - depth is absent in static scene graph output: validator must not require it.
+    - depth present with integer value >= 1: validator must accept it.
+    - depth present but not an integer or < 1: validator must raise ValueError.
+    """
+
+    def test_node_without_depth_passes_validation(self) -> None:
+        """Static graph nodes carry no depth — absence is valid."""
+        graph = make_scene_graph()
+        validate_scene_graph(graph)  # must not raise
+
+    def test_node_with_depth_1_passes_validation(self) -> None:
+        """A direct dependent node (depth=1) is a valid simulation output."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["depth"] = 1  # type: ignore[typeddict-unknown-key]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_node_with_depth_2_passes_validation(self) -> None:
+        """A second-order dependent node (depth=2) is a valid simulation output."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["depth"] = 2  # type: ignore[typeddict-unknown-key]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_depth_zero_raises(self) -> None:
+        """depth=0 violates the minimum-value-1 constraint."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["depth"] = 0  # type: ignore[typeddict-unknown-key]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for depth=0"
+        except ValueError as e:
+            assert "depth" in str(e)
+
+    def test_depth_negative_raises(self) -> None:
+        """Negative depth is invalid."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["depth"] = -1  # type: ignore[typeddict-unknown-key]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for depth=-1"
+        except ValueError as e:
+            assert "depth" in str(e)
+
+    def test_depth_string_raises(self) -> None:
+        """String depth value is not an integer and must be rejected."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["depth"] = "one"  # type: ignore[typeddict-unknown-key]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for depth='one'"
+        except ValueError as e:
+            assert "depth" in str(e)
+
+    def test_depth_float_raises(self) -> None:
+        """Float depth value is not an integer and must be rejected."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["depth"] = 1.5  # type: ignore[typeddict-unknown-key]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for depth=1.5"
+        except ValueError as e:
+            assert "depth" in str(e)
+
+    def test_depth_bool_raises(self) -> None:
+        """bool is a subtype of int in Python but must be rejected as depth.
+
+        True == 1 would pass integer and range checks, but a boolean is not
+        a meaningful cascade depth value.
+        """
+        graph = make_scene_graph()
+        graph["nodes"][0]["depth"] = True  # type: ignore[typeddict-unknown-key]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for depth=True"
+        except ValueError as e:
+            assert "depth" in str(e)
+
+    def test_multiple_nodes_mixed_depth_valid(self) -> None:
+        """Some nodes may carry depth (affected) while others do not (unaffected)."""
+        graph = make_scene_graph()
+        # First node: affected (depth=1), second node: not affected (no depth)
+        graph["nodes"][0]["depth"] = 1  # type: ignore[typeddict-unknown-key]
+        validate_scene_graph(graph)  # must not raise

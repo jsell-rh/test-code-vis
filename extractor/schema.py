@@ -234,6 +234,19 @@ def validate_scene_graph(graph: object) -> None:
                     f"got {type(pos[coord]).__name__!r}"
                 )
 
+        # Validate optional 'depth' field (cascade simulation output).
+        # When present: must be an integer >= 1.
+        # When absent: valid — static scene graph nodes do not carry depth.
+        depth = node.get("depth")
+        if depth is not None:
+            if isinstance(depth, bool) or not isinstance(depth, int):
+                raise ValueError(
+                    f"nodes[{i}]['depth'] must be an integer, "
+                    f"got {type(depth).__name__!r}"
+                )
+            if depth < 1:
+                raise ValueError(f"nodes[{i}]['depth'] must be >= 1, got {depth!r}")
+
     for i, edge in enumerate(graph["edges"]):
         if not isinstance(edge, dict):
             raise ValueError(f"edges[{i}] must be a dict, got {type(edge).__name__!r}")
