@@ -57,6 +57,11 @@ func _init() -> void:
 	# --- task-023: NFR spec — Desktop Platform ---
 	_run_suite(preload("res://tests/test_desktop_platform.gd").new())
 
+	# --- task-074: Visual Primitives spec (core/visual-primitives.spec.md) ---
+	# Landmark: hub nodes have distinctive visual treatment and LOD persistence.
+	# Power Rail: ubiquitous edges suppressed, indicator added to source node.
+	_run_suite(preload("res://tests/test_visual_primitives.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 

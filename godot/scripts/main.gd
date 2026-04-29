@@ -175,8 +175,18 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	anchor.position = Vector3(float(p["x"]), float(p["y"]), float(p["z"]))
 	parent_node.add_child(anchor)
 	_anchors[nd["id"]] = anchor
-	# Register with LOD manager so visibility can be toggled by camera distance.
-	_lod_node_entries.append({"anchor": anchor, "node_type": nd["type"]})
+
+	# ── Landmark check (visual-primitives.spec.md § Landmark Primitive) ──────
+	# Landmark nodes (is_hub=true) are always visible at every LOD level so
+	# the human can always use them as spatial orientation anchors.
+	# Spec: "it is visible at every zoom level, even when surrounding Nodes are
+	# hidden by LOD" — achieved by NOT registering them in _lod_node_entries.
+	var is_landmark: bool = bool(nd.get("is_hub", false))
+	if not is_landmark:
+		# Register with LOD manager so visibility can be toggled by camera distance.
+		_lod_node_entries.append({"anchor": anchor, "node_type": nd["type"]})
+	# Landmark nodes are omitted from _lod_node_entries: the LOD manager never
+	# hides them, so they remain visible at all zoom levels (FAR / MEDIUM / NEAR).
 
 	var sz: float = float(nd["size"])
 	var node_type: String = nd["type"]
@@ -188,7 +198,17 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	var box := BoxMesh.new()
 
 	var mat := StandardMaterial3D.new()
-	if is_spec:
+	if is_landmark:
+		# Landmark nodes (hubs): enlarged bright-white box so they stand out as
+		# spatial anchors at every zoom level.
+		# Spec: "distinctive visual treatment (larger, brighter, or marked with a glyph)"
+		var landmark_sz: float = sz * 1.5
+		box.size = Vector3(landmark_sz, landmark_sz * 0.6, landmark_sz)
+		mat.albedo_color = Color(1.0, 0.95, 0.30, 1.0)  # bright yellow-white
+		mat.emission_enabled = true
+		mat.emission = Color(0.8, 0.75, 0.0)
+		mat.emission_energy_multiplier = 0.4
+	elif is_spec:
 		# Spec nodes represent the *intended design* — rendered as thin gold slabs
 		# so the human can immediately distinguish them from the realized code nodes.
 		# Gold colour signals "intended / authoritative specification".
@@ -225,6 +245,38 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	anchor.add_child(label)
 
 
+## Add a Power Rail indicator glyph to an anchor node.
+##
+## The indicator is a small bright-magenta sphere positioned at the base of
+## the anchor so the human can see at a glance that this node has suppressed
+## ubiquitous dependencies.
+##
+## Spec: visual-primitives.spec.md § Power Rail Notation —
+## "each Node that imports [a ubiquitous dep] has a small, consistent
+## indicator (e.g. a tiny rail glyph at its base)"
+func _add_power_rail_indicator(anchor: Node3D, node_sz: float) -> void:
+	var sphere_mesh := SphereMesh.new()
+	sphere_mesh.radius = maxf(0.2, node_sz * 0.12)
+	sphere_mesh.height = sphere_mesh.radius * 2.0
+	sphere_mesh.radial_segments = 6
+	sphere_mesh.rings = 4
+
+	var rail_mat := StandardMaterial3D.new()
+	# Bright magenta rail glyph — visually consistent across all nodes.
+	rail_mat.albedo_color = Color(0.9, 0.1, 0.9, 1.0)
+	rail_mat.emission_enabled = true
+	rail_mat.emission = Color(0.6, 0.0, 0.6)
+	rail_mat.emission_energy_multiplier = 0.5
+
+	var rail_indicator := MeshInstance3D.new()
+	rail_indicator.name = "PowerRailIndicator"
+	rail_indicator.mesh = sphere_mesh
+	rail_indicator.material_override = rail_mat
+	# Position at the base of the anchor (slightly below the mesh centre).
+	rail_indicator.position = Vector3(0.0, -(node_sz * 0.35 + sphere_mesh.radius), 0.0)
+	anchor.add_child(rail_indicator)
+
+
 # ---------------------------------------------------------------------------
 # Edge creation
 # ---------------------------------------------------------------------------
@@ -232,6 +284,31 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 func _create_edge(ed: Dictionary) -> void:
 	var src: String = ed["source"]
 	var tgt: String = ed["target"]
+
+	# ── Power Rail notation (visual-primitives.spec.md § Power Rail Notation) ──
+	# Ubiquitous edges are suppressed from the default view to prevent clutter.
+	# Instead, a small glyph (Power Rail indicator) is added to the source node
+	# so the human knows the dependency exists without it cluttering the graph.
+	# Spec: "no edges to [ubiquitous module] are drawn AND each Node that imports
+	# [it] has a small, consistent indicator at its base."
+	if bool(ed.get("ubiquitous", false)):
+		var src_anchor: Node3D = _anchors.get(src)
+		if src_anchor != null:
+			# Only add the indicator if one doesn't already exist (deduplicate).
+			var already_has_indicator: bool = false
+			for child: Node in src_anchor.get_children():
+				if child.name == "PowerRailIndicator":
+					already_has_indicator = true
+					break
+			if not already_has_indicator:
+				var src_data: Dictionary = {}
+				for nd: Dictionary in _graph.get("nodes", []):
+					if nd["id"] == src:
+						src_data = nd
+						break
+				var nd_sz: float = float(src_data.get("size", 1.0))
+				_add_power_rail_indicator(src_anchor, nd_sz)
+		return  # Do NOT draw the edge line.
 
 	if not _world_positions.has(src) or not _world_positions.has(tgt):
 		push_warning("CodeVis: skipping edge '%s' → '%s' (node missing)." % [src, tgt])
