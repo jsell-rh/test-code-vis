@@ -24,6 +24,24 @@ guidelines: |
   The implementer cannot fix it; they can only report failure and stop. Prevent this
   upstream by validating scope before the task is ever created.
 
+  #### Permanently prohibited spec files
+
+  The following spec files have been confirmed out-of-scope and MUST NOT be assigned
+  as implementer tasks under any circumstances:
+
+  | Spec file | Prohibited feature | Authority |
+  |---|---|---|
+  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | prototype-scope.spec.md line 93 |
+
+  **If a spec on this list has already been mis-assigned once: do not assign it
+  again.  A repeated invalid assignment is a process failure, not an implementer
+  failure.  Remove the spec from the candidate pool entirely and record it as
+  permanently deferred.**
+
+  Run `bash .hyperloop/checks/check-assigned-spec-in-scope.sh <spec-path>` on any
+  candidate spec before creating its task.  A non-zero exit means DO NOT create
+  the task.
+
   ### Task decomposition rules
   - Specs under `specs/extraction/` produce tasks for the Python extractor (`extractor/`).
   - Specs under `specs/prototype/` produce tasks for the Godot app (`godot/`), except for

@@ -37,6 +37,15 @@ guidelines: |
   Before reading your assigned spec in detail, before writing any code, before
   running any check:
 
+  **Run the mechanical check first — takes under one second:**
+  ```
+  bash .hyperloop/checks/check-assigned-spec-in-scope.sh <your-spec-path>
+  ```
+  If this exits non-zero, the assignment is INVALID. Paste the script output
+  verbatim into your FAIL report and stop — do not read the spec further, do
+  not write any implementation code.
+
+  Then complete the manual check:
   1. Identify the PRIMARY FEATURE described by your assigned spec (one sentence
      summary: what is the spec fundamentally about?).
   2. Open `specs/prototype/prototype-scope.spec.md` and read every item in its
@@ -46,6 +55,7 @@ guidelines: |
      Write an immediate FAIL finding that states:
        - The assigned spec
        - The matching "Not In Scope" item
+       - The output of `check-assigned-spec-in-scope.sh`
        - That no implementation was written
      Stop. Do not write a single line of implementation code. Return the finding
      to the orchestrator for reassignment or deferral.
