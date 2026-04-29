@@ -53,10 +53,32 @@ guidelines: |
   - If the task changes the JSON schema, verify both components are updated.
   - This is a prototype — do not reject for code style nits. Focus on: does it work,
     does it match the spec, is it safe.
-  - Run `bash .hyperloop/checks/run-all-checks.sh` as your first verification action.
-    Include its complete output verbatim in your findings table.
   - Run `bash .hyperloop/checks/check-not-in-scope.sh` FIRST — before reading any
     implementation files. If it exits non-zero, issue a FAIL verdict immediately.
+
+  ## REPORT-BEFORE-CHECKS ORDERING RULE (mandatory — prevents false RACF propagation)
+
+  `check-report-scope-section.sh` reads `.hyperloop/worker-result.yaml` from the
+  **working tree**. If the file does not exist when that check runs, it falls back to
+  git history — and the most-recent git commit may contain an empty orchestrator-cleanup
+  version. This produces a false FAIL that propagates via `check-racf-prior-cycle.sh`
+  into the NEXT cycle, penalizing a future implementer for a verifier ordering mistake.
+
+  **Mandatory ordering:**
+  1. Run `bash .hyperloop/checks/check-not-in-scope.sh` and capture its output.
+  2. Immediately write a stub `.hyperloop/worker-result.yaml` that contains AT MINIMUM:
+     ```
+     ## Scope Check Output
+     <verbatim stdout of check-not-in-scope.sh pasted here>
+     ```
+  3. ONLY THEN run `bash .hyperloop/checks/run-all-checks.sh`.
+
+  The stub does not need to be a complete report — just the scope section.  You will
+  expand it into the full findings report before submitting.  Do NOT run
+  `run-all-checks.sh` before the file exists in the working tree.
+
+  - Run `bash .hyperloop/checks/run-all-checks.sh` after writing the stub.
+    Include its complete output verbatim in your findings table.
   - Audit every "Not In Scope" item explicitly before issuing a verdict.
   - Distinguish "untested" from "untestable by environment." When a THEN-clause describes
     a property that is physically impossible to verify in the available test environment

@@ -50,19 +50,29 @@ FAIL=0
 # When a spec is repeatedly mis-assigned, add its path here so future mis-
 # assignments are caught in under one second without any human reasoning.
 
+# Parallel arrays: path → (feature description, authority reference)
 declare -a PROHIBITED_SPECS=(
     "specs/interaction/moldable-views.spec.md"
+    "specs/core/understanding-modes.spec.md"
+)
+declare -a PROHIBITED_FEATURES=(
+    "moldable views (LLM-powered question-driven views)"
+    "conformance/evaluation/simulation modes (understanding modes overlay)"
+)
+declare -a PROHIBITED_AUTHORITIES=(
+    "specs/prototype/prototype-scope.spec.md line 93"
+    "specs/prototype/prototype-scope.spec.md lines 89-91"
 )
 
 MATCHED_PROHIBITED=0
-for prohibited in "${PROHIBITED_SPECS[@]}"; do
+for i in "${!PROHIBITED_SPECS[@]}"; do
     norm_input="${SPEC_FILE#./}"
-    norm_prohibited="${prohibited#./}"
+    norm_prohibited="${PROHIBITED_SPECS[$i]#./}"
     if [ "$norm_input" = "$norm_prohibited" ]; then
         echo "FAIL: INVALID ASSIGNMENT — '$SPEC_FILE' is a permanently prohibited spec."
         echo "  This spec describes a feature explicitly excluded from the prototype phase."
-        echo "  Prohibited feature: moldable views (LLM-powered question-driven views)"
-        echo "  Authority: specs/prototype/prototype-scope.spec.md line 93"
+        echo "  Prohibited feature: ${PROHIBITED_FEATURES[$i]}"
+        echo "  Authority: ${PROHIBITED_AUTHORITIES[$i]}"
         echo ""
         echo "  Do NOT read the spec further.  Do NOT write any implementation code."
         echo "  Write a FAIL report that quotes this output verbatim and stop."

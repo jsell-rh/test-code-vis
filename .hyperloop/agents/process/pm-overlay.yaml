@@ -32,6 +32,7 @@ guidelines: |
   | Spec file | Prohibited feature | Authority |
   |---|---|---|
   | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | prototype-scope.spec.md line 93 |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | prototype-scope.spec.md lines 89-91 |
 
   **If a spec on this list has already been mis-assigned once: do not assign it
   again.  A repeated invalid assignment is a process failure, not an implementer
