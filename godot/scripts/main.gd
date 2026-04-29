@@ -154,8 +154,15 @@ func _update_lod() -> void:
 	if at_far_lod != _was_at_far_lod:
 		var target_alpha: float = 1.0 if at_far_lod else 0.0
 		for agg_visual: Node3D in _aggregate_edge_visuals:
+			# Animate the material's albedo alpha — MeshInstance3D is a 3D node and
+			# does not have a 2D modulate property; opacity is controlled via material.
 			var tween := create_tween()
-			tween.tween_property(agg_visual, "modulate:a", target_alpha, 0.25)
+			tween.tween_property(
+				(agg_visual as MeshInstance3D).material_override,
+				"albedo_color:a",
+				target_alpha,
+				0.25
+			)
 		_was_at_far_lod = at_far_lod
 
 
@@ -464,19 +471,20 @@ func _build_aggregate_edges(edges: Array) -> void:
 			continue
 
 		# Bold orange line — visually distinct from individual edges (lighter orange).
+		# Start fully transparent (alpha=0); _update_lod() Tweens albedo_color:a to
+		# 1.0 when camera reaches FAR distance, producing a smooth fade-in.
 		# Weight is proportional to import_count, clamped to [0.5, 3.0].
-		var agg_color: Color = Color(1.0, 0.60, 0.15)
 		var imesh := ImmediateMesh.new()
 		imesh.surface_begin(Mesh.PRIMITIVE_LINES)
-		imesh.surface_set_color(agg_color)
 		imesh.surface_add_vertex(from_pos)
-		imesh.surface_set_color(agg_color)
 		imesh.surface_add_vertex(to_pos)
 		imesh.surface_end()
 
 		var agg_mat := StandardMaterial3D.new()
-		agg_mat.vertex_color_use_as_albedo = true
 		agg_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		# Transparency required so albedo_color:a can be animated from 0→1.
+		agg_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		agg_mat.albedo_color = Color(1.0, 0.60, 0.15, 0.0)  # bold orange, start transparent
 
 		var agg_visual := MeshInstance3D.new()
 		agg_visual.name = "AggregateEdge_" + context_pair.replace("|", "_")
@@ -485,8 +493,6 @@ func _build_aggregate_edges(edges: Array) -> void:
 		# Scale line proportional to import_count — weight indicates total import count.
 		var weight: float = clampf(float(import_count) * 0.4, 0.5, 3.0)
 		agg_visual.scale = Vector3(weight, 1.0, weight)
-		# Start transparent; _update_lod() will Tween modulate.a to 1.0 at FAR.
-		agg_visual.modulate.a = 0.0
 		add_child(agg_visual)
 		_aggregate_edge_visuals.append(agg_visual)
 
