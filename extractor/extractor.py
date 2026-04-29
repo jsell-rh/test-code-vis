@@ -710,6 +710,33 @@ def compute_cascade_depth(origin_id: str, edges: list[Edge]) -> dict[str, int]:
     return depth_map
 
 
+def annotate_cascade_depth(nodes: list[Node], depth_map: dict[str, int]) -> None:
+    """Apply cascade-depth annotations to *nodes* in-place (simulation output).
+
+    For every node whose ID appears in *depth_map*, sets its ``depth`` field
+    to the hop distance returned by :func:`compute_cascade_depth`.  Nodes not
+    present in *depth_map* (the origin node and unaffected nodes) are left
+    unchanged — their ``depth`` key is neither set nor removed.
+
+    This function makes depth values **available to the visualization** so that
+    the Godot application can read ``depth`` from the JSON scene graph and use
+    it for gradient encoding and wave animation in cascade-failure display.
+
+    Spec: scene-graph-schema.spec.md § "Cascade Depth in Simulation Output"
+    THEN node A is marked with depth 1 and node B with depth 2
+    AND the depth values are available to the visualization for gradient
+    encoding and wave animation.
+
+    Args:
+        nodes: All nodes in the scene graph (mutated in-place for affected nodes).
+        depth_map: Output of :func:`compute_cascade_depth` — maps each affected
+                   node ID to its minimum BFS hop distance from the origin.
+    """
+    for node in nodes:
+        if node["id"] in depth_map:
+            node["depth"] = depth_map[node["id"]]
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------

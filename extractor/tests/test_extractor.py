@@ -20,6 +20,7 @@ import math
 from extractor.extractor import (
     _order_by_coupling,
     _position_spec_nodes,
+    annotate_cascade_depth,
     build_dependency_edges,
     build_scene_graph,
     classify_edge_type,
@@ -1195,3 +1196,149 @@ class TestCascadeDepth:
         edges = self._make_edges([("A", "X"), ("C", "Z")])
         depths = compute_cascade_depth("X", edges)
         assert "C" not in depths
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Cascade Depth annotation on nodes (simulation output)
+# spec: scene-graph-schema.spec.md § "Cascade Depth in Simulation Output"
+# THEN node A is marked with depth 1 and node B with depth 2
+# AND the depth values are available to the visualization for gradient
+# encoding and wave animation.
+# ---------------------------------------------------------------------------
+
+
+def _make_node(node_id: str) -> Node:
+    """Return a minimal valid node with the given id."""
+    return {
+        "id": node_id,
+        "name": node_id.upper(),
+        "type": "module",
+        "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+        "size": 1.0,
+        "parent": "ctx",
+    }
+
+
+class TestAnnotateCascadeDepth:
+    """annotate_cascade_depth marks affected nodes with BFS depth in-place.
+
+    Spec: "each affected node MUST carry a depth value indicating its hop
+    distance from the failure origin" and "depth values are available to the
+    visualization for gradient encoding and wave animation."
+    """
+
+    def test_direct_dependent_marked_depth_1(self) -> None:
+        """Node A (direct dependent of X) receives depth=1 on its node dict."""
+        node_a = _make_node("A")
+        node_x = _make_node("X")
+        nodes = [node_a, node_x]
+        # depth_map from compute_cascade_depth: A depends on X → A at depth 1
+        depth_map = {"A": 1}
+        annotate_cascade_depth(nodes, depth_map)
+        assert node_a["depth"] == 1  # type: ignore[typeddict-item]
+
+    def test_transitive_dependent_marked_depth_2(self) -> None:
+        """Node B (transitive dependent via A) receives depth=2."""
+        node_a = _make_node("A")
+        node_b = _make_node("B")
+        nodes = [node_a, node_b]
+        depth_map = {"A": 1, "B": 2}
+        annotate_cascade_depth(nodes, depth_map)
+        assert node_a["depth"] == 1  # type: ignore[typeddict-item]
+        assert node_b["depth"] == 2  # type: ignore[typeddict-item]
+
+    def test_origin_node_not_marked(self) -> None:
+        """The origin node itself has no depth set (it is not in depth_map)."""
+        node_x = _make_node("X")
+        nodes = [node_x]
+        depth_map: dict[str, int] = {}  # origin is excluded by compute_cascade_depth
+        annotate_cascade_depth(nodes, depth_map)
+        assert "depth" not in node_x
+
+    def test_unaffected_nodes_unchanged(self) -> None:
+        """Nodes absent from depth_map are left unchanged (no depth key added)."""
+        node_c = _make_node("C")
+        nodes = [node_c]
+        depth_map = {"A": 1}  # C is not in the cascade
+        annotate_cascade_depth(nodes, depth_map)
+        assert "depth" not in node_c
+
+    def test_depth_is_integer_on_node(self) -> None:
+        """The depth value stored on the node must be an integer."""
+        node_a = _make_node("A")
+        annotate_cascade_depth([node_a], {"A": 3})
+        assert isinstance(node_a["depth"], int)  # type: ignore[typeddict-item]
+
+    def test_depth_available_in_json(self) -> None:
+        """After annotation the depth value survives JSON round-trip (viz can read it)."""
+        import json
+
+        node_a = _make_node("A")
+        annotate_cascade_depth([node_a], {"A": 1})
+        serialised = json.dumps(node_a)
+        restored = json.loads(serialised)
+        assert restored["depth"] == 1
+
+    def test_compute_then_annotate_pipeline(self) -> None:
+        """End-to-end: compute_cascade_depth + annotate_cascade_depth marks nodes correctly.
+
+        Spec scenario: node A directly depends on X; node B directly depends on A.
+        THEN node A is marked with depth 1 and node B with depth 2.
+        """
+        node_x = _make_node("X")
+        node_a = _make_node("A")
+        node_b = _make_node("B")
+        nodes = [node_x, node_a, node_b]
+
+        edges: list[Edge] = [
+            {"source": "A", "target": "X", "type": "internal"},
+            {"source": "B", "target": "A", "type": "internal"},
+        ]
+        depth_map = compute_cascade_depth("X", edges)
+        annotate_cascade_depth(nodes, depth_map)
+
+        # node A is marked with depth 1
+        assert node_a["depth"] == 1, (  # type: ignore[typeddict-item]
+            f"node A must be marked depth=1; got {node_a.get('depth')}"
+        )
+        # node B is marked with depth 2
+        assert node_b["depth"] == 2, (  # type: ignore[typeddict-item]
+            f"node B must be marked depth=2; got {node_b.get('depth')}"
+        )
+        # origin X has no depth
+        assert "depth" not in node_x
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Cluster does not prescribe collapsed position
+# spec: scene-graph-schema.spec.md § "Cluster Schema"
+# THEN the cluster entry does not prescribe the collapsed position —
+# Godot computes the supernode position as the centroid of member positions.
+# ---------------------------------------------------------------------------
+
+
+class TestClusterDoesNotPrescribePosition:
+    """Clusters produced by compute_clusters must not carry a position field.
+
+    Spec: "The cluster entry does not prescribe the collapsed position —
+    Godot computes the supernode position as the centroid of member positions."
+    """
+
+    def test_cluster_has_no_position_field(self, src_independence: Path) -> None:
+        """compute_clusters output must not include a position key."""
+        nodes: list[Node] = discover_bounded_contexts(src_independence)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_independence, bc["id"]))
+        edges = build_dependency_edges(src_independence, nodes)
+        compute_layout(nodes, edges)
+        clusters = compute_clusters(nodes, edges)
+
+        assert clusters, (
+            "Expected at least one cluster from coupled src_independence fixture"
+        )
+        for cluster in clusters:
+            assert "position" not in cluster, (
+                f"Cluster {cluster['id']!r} must not carry a 'position' field — "
+                "Godot computes the supernode position as the centroid of member "
+                "positions at render time."
+            )
