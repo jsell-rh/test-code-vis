@@ -2,13 +2,13 @@
 id: task-021
 title: Extractor — emit flow paths from import chains
 spec_ref: specs/visualization/data-flow.spec.md@a59dd85d5fa31f143541e4256ed6561908c7f2d2
-status: not-started
-phase: null
+status: in_progress
+phase: implement
 deps:
 - task-020
 - task-004
 round: 0
-branch: null
+branch: hyperloop/task-021
 pr: null
 pr_title: null
 pr_description: null
