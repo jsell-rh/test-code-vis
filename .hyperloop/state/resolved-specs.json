@@ -6,7 +6,7 @@
       "resolved_at": "2026-04-25",
       "last_commit": "e2cac130",
       "last_reviewed_at": "2026-04-29",
-      "last_reviewed_head": "922d8095",
+      "last_reviewed_head": "9673fc47",
       "reopen_condition": "new MUST/SHOULD/Scenario clause added to file"
     },
     {
@@ -15,7 +15,7 @@
       "resolved_at": "2026-04-28",
       "last_commit": "7a839cc3",
       "last_reviewed_at": "2026-04-29",
-      "last_reviewed_head": "922d8095",
+      "last_reviewed_head": "9673fc47",
       "reopen_condition": "prototype-scope.spec.md un-excludes at least one of: Conformance Mode, Evaluation Mode, Simulation Mode"
     },
     {
@@ -38,7 +38,7 @@
       "resolved_at": "2026-04-28",
       "last_commit": "67df14bc",
       "last_reviewed_at": "2026-04-29",
-      "last_reviewed_head": "922d8095",
+      "last_reviewed_head": "9673fc47",
       "reopen_condition": "new primitive added to Extraction or Composition layer, new Composition Principle added, or a primitive's MUST-level constraint changes materially"
     },
     {
@@ -47,7 +47,7 @@
       "resolved_at": "2026-04-28",
       "last_commit": "7a839cc3",
       "last_reviewed_at": "2026-04-29",
-      "last_reviewed_head": "922d8095",
+      "last_reviewed_head": "9673fc47",
       "reopen_condition": "new requirement added beyond the 7 currently present in the spec"
     },
     {
@@ -56,7 +56,7 @@
       "resolved_at": "2026-04-28",
       "last_commit": "7a839cc3",
       "last_reviewed_at": "2026-04-29",
-      "last_reviewed_head": "922d8095",
+      "last_reviewed_head": "9673fc47",
       "reopen_condition": "new requirement added beyond the 3 currently present in the spec"
     },
     {
@@ -65,7 +65,7 @@
       "resolved_at": "2026-04-28",
       "last_commit": "7a839cc3",
       "last_reviewed_at": "2026-04-29",
-      "last_reviewed_head": "922d8095",
+      "last_reviewed_head": "9673fc47",
       "reopen_condition": "new in-scope requirement added, or 3D first-person navigation is un-excluded from prototype"
     }
   ]
