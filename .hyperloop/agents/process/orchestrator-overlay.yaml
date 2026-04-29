@@ -63,6 +63,25 @@ guidelines: |
   and the second attempt of task-024 were both process errors caused by treating a
   scope-prohibition FAIL as an implementation FAIL.
 
+  ### PRE-RETRY GATE — mandatory before every re-attempt
+
+  Before creating a re-attempt task (same task ID OR a new task number for the
+  same spec), run the fail-report classification check:
+
+    bash .hyperloop/checks/check-fail-report-classification.sh <fail-report-path>
+
+  If this exits **non-zero**: STOP. The FAIL is a scope-prohibition FAIL.
+  Permanently close the original task. Do NOT create a re-attempt under any task
+  number, name, or framing. A scope-prohibition FAIL reports "INVALID ASSIGNMENT"
+  and quotes `check-assigned-spec-in-scope.sh` — nothing in it is fixable by
+  any implementer.
+
+  Only proceed with a re-attempt when this check exits 0 (implementation FAIL).
+
+  **This gate exists because task-028's scope-prohibition FAIL was retried as
+  task-031 — two wasted cycles, identical result. Running this script takes
+  under one second and makes the retry/close decision mechanical.**
+
   ### Invalid assignment protocol
 
   When an implementer returns a FAIL report whose only content is a
