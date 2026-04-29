@@ -32,10 +32,14 @@ guidelines: |
 
   | Spec file | Prohibited feature | First mis-assigned | Subsequent mis-assignments |
   |---|---|---|---|
-  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ task-024 (3rd attempt) ⚠⚠ task-024 (4th attempt) ⚠⚠⚠ FOURTH MIS-ASSIGNMENT |
-  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ task-028 (4th attempt) ⚠⚠⚠ task-028 (5th attempt) ⚠⚠⚠⚠ FIFTH MIS-ASSIGNMENT |
+  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ task-024 (3rd attempt) ⚠⚠ task-024 (4th attempt) ⚠⚠⚠ task-024 (5th attempt) ⚠⚠⚠⚠ **FIFTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ task-028 (4th attempt) ⚠⚠⚠ task-028 (5th attempt) ⚠⚠⚠⚠ task-028 (6th attempt) ⚠⚠⚠⚠⚠ task-031 (2nd run) ⚠⚠⚠⚠⚠⚠ **SEVENTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
 
-  **Both specs have now been mis-assigned multiple times (moldable-views: FOUR, understanding-modes: FIVE).**
+  **Both specs have now been mis-assigned a combined TWELVE times (moldable-views: FIVE,
+  understanding-modes: SEVEN).** Every attempt produces the identical outcome: exit-1 from
+  `check-assigned-spec-in-scope.sh`, zero implementation code written, "INVALID ASSIGNMENT"
+  in the FAIL report. The spec prohibition is deterministic — it will not change unless
+  `specs/prototype/prototype-scope.spec.md` is explicitly revised to permit these features.
   The table is the PRIMARY gate — see TABLE-FIRST RULE below.
   The re-attempt pattern (scope-prohibition FAIL treated as implementation FAIL and retried)
   is itself the upstream gap — see the FAIL classification section below.
@@ -45,6 +49,28 @@ guidelines: |
   all understanding-modes features — regardless of the `spec_ref` header value.
   The task is irresolvable without first removing understanding-modes content from its body.
   Do NOT re-assign task-028 in any form. Do NOT create a new task number for its content.
+
+  ### SCOPE-PROHIBITION FINDINGS — MANDATORY FIRST ACTION IN EVERY CYCLE
+
+  When the Findings section you receive at the start of a cycle contains a report
+  classified as SCOPE-PROHIBITION FAIL, your mandatory first action for that task
+  is permanent closure — before scheduling any re-attempt, before reading any spec,
+  before assigning any other task in the cycle.
+
+  1. Read the report's "Required Orchestrator Actions" / "Recommended Orchestrator
+     Action" section.  It is NOT a suggestion — it is the required set of orchestrator
+     actions for that task.
+  2. Permanently close the task.  Do NOT schedule a re-attempt under any task ID —
+     neither the original ID nor any new number describing the same spec or feature.
+  3. Verify the spec is listed in the prohibited-spec table above and in
+     `check-assigned-spec-in-scope.sh`.  If it is absent from either, add it.
+  4. Identify and close the upstream gap that put this spec back in the candidate
+     pool.  A scope-prohibition FAIL from a previous cycle means the spec is STILL
+     prohibited in this cycle — nothing between cycles makes a prohibited spec
+     implementable without first revising `specs/prototype/prototype-scope.spec.md`.
+
+  A scope-prohibition FAIL is NOT an implementation failure.  It is an assignment
+  error.  Retrying it is not a fix — it is another assignment error.
 
   ### FAIL classification — scope-prohibition FAILs are permanent, never retryable
 
@@ -64,9 +90,11 @@ guidelines: |
   **Before scheduling any retry or re-attempt:** Read the prior FAIL report first.
   If it contains "INVALID ASSIGNMENT" with scope-prohibition language, close the
   task permanently. Do not create a new task number for the same spec. Do not schedule
-  a second attempt of the same task. task-031 (re-attempt of task-028's scope FAIL)
-  and the second and third attempts of task-024/task-028 were all process errors caused
-  by treating a scope-prohibition FAIL as an implementation FAIL.
+  a second attempt of the same task. task-031 (re-attempt of task-028's scope FAIL),
+  the 6th attempt of task-028, the 5th attempt of task-024, and every prior
+  scope-prohibited re-attempt were all process errors caused by treating a
+  scope-prohibition FAIL as an implementation FAIL. Twelve total mis-assignments
+  have occurred for these two specs. Each one produced the identical outcome.
 
   ### TABLE-FIRST RULE — check the table before ANY script
 
