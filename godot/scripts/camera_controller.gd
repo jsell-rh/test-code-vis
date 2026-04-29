@@ -26,31 +26,10 @@ var _orbiting: bool = false
 var _panning: bool = false
 var _last_mouse: Vector2 = Vector2.ZERO
 
-## True while the complementary navigation mode (FPS) is active.
-## When true, this controller's _process() and _unhandled_input() are paused
-## so the two controllers do not fight over the Camera3D transform.
-var _fps_mode: bool = false
-
 
 func _ready() -> void:
 	_target_distance = _distance
 	_update_transform()
-	# Connect to CameraMode singleton if available.
-	# The singleton is absent in headless unit tests — guard with has_singleton().
-	if Engine.has_singleton("CameraMode"):
-		Engine.get_singleton("CameraMode").mode_changed.connect(_on_fps_mode_changed)
-
-
-## Called when CameraMode emits mode_changed.
-## Pauses or resumes the orbital controller depending on the new mode.
-func _on_fps_mode_changed(fp: bool) -> void:
-	_fps_mode = fp
-	if not fp and is_inside_tree():
-		# Returning to orbital: re-anchor the pivot in front of the camera so
-		# the view does not jump.  The camera may have moved during FPS navigation.
-		var look_dir: Vector3 = -global_transform.basis.z
-		var ahead: Vector3 = global_position + look_dir * _distance
-		_set_orbit_pivot(ahead)
 
 
 ## Reposition the pivot and distance so the whole graph fits in view.
@@ -69,9 +48,6 @@ func get_distance() -> float:
 
 ## Smooth zoom: lerp _distance toward _target_distance each frame.
 func _process(delta: float) -> void:
-	# Orbital processing is suspended while the FPS controller is active.
-	if _fps_mode:
-		return
 	if not is_equal_approx(_distance, _target_distance):
 		var t: float = min(zoom_smoothing * delta, 0.9)
 		_distance = lerp(_distance, _target_distance, t)
@@ -85,9 +61,6 @@ func _process(delta: float) -> void:
 # ---------------------------------------------------------------------------
 
 func _unhandled_input(event: InputEvent) -> void:
-	# Orbital input is suspended while the FPS controller is active.
-	if _fps_mode:
-		return
 	if event is InputEventMouseButton:
 		_handle_button(event as InputEventMouseButton)
 	elif event is InputEventMouseMotion:

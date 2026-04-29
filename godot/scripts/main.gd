@@ -23,6 +23,7 @@ extends Node3D
 const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
 const LodManager = preload("res://scripts/lod_manager.gd")
 const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
+const AggregateEdgeRenderer = preload("res://scripts/aggregate_edge_renderer.gd")
 const VisualPrimitives = preload("res://scripts/visual_primitives.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
@@ -64,6 +65,17 @@ var _was_at_far_lod: bool = false
 ## Understanding overlay controller — activates alignment, quality, and impact overlays.
 var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
 
+## Aggregate edge renderer — groups cross-context edges by context pair for FAR LOD.
+var _agg_renderer: AggregateEdgeRenderer = AggregateEdgeRenderer.new()
+
+## Aggregate edge entries: Array of {visual: MeshInstance3D, source_context, target_context, count}
+## Visible only at FAR LOD distance; hidden at MEDIUM and NEAR.
+var _aggregate_edge_entries: Array = []
+
+## Tracks the current LOD level (0=FAR, 1=MEDIUM, 2=NEAR, -1=unset).
+## Used to detect level changes so aggregate-edge transitions fire only once per crossing.
+var _last_lod_level: int = -1
+
 ## Visual primitives renderer — attaches badge, landmark, and power rail decorations.
 var _visual_primitives: VisualPrimitives = VisualPrimitives.new()
 
@@ -102,7 +114,6 @@ var _cluster_edge_reroutes: Dictionary = {}
 var _cluster_suggestions: Array = []
 
 @onready var _camera: Camera3D = $Camera3D
-@onready var _fp_controller: Node = $FirstPersonController
 
 
 # ---------------------------------------------------------------------------
@@ -110,9 +121,6 @@ var _cluster_suggestions: Array = []
 # ---------------------------------------------------------------------------
 
 func _ready() -> void:
-	# Wire the Camera3D reference into the FPS controller so it can move the camera.
-	if _fp_controller != null and _camera != null:
-		_fp_controller._camera = _camera
 	if FileAccess.file_exists(scene_graph_path):
 		var file := FileAccess.open(scene_graph_path, FileAccess.READ)
 		if file == null:
@@ -192,8 +200,11 @@ func build_from_graph(graph: Dictionary) -> void:
 	for ed: Dictionary in edges:
 		_create_edge(ed)
 
-	# Build aggregate edges (one line per context pair, shown at FAR LOD).
-	_build_aggregate_edges(edges)
+	# Build aggregate edges: one weighted gold line per cross-context context pair.
+	# These are displayed at FAR LOD in place of individual cross-context edges.
+	_aggregate_edge_entries = _agg_renderer.build_aggregate_edges(
+		edges, nodes, _world_positions, self
+	)
 
 	# Load cluster suggestions (pre-computed by extractor) and apply visual hints.
 	# Spec: spatial-structure.spec.md § Pre-computed cluster suggestions —
@@ -271,6 +282,33 @@ func _update_lod() -> void:
 				0.25
 			)
 		_was_at_far_lod = at_far_lod
+
+	# Compute the current LOD level from the same thresholds as LodManager.
+	# 0 = FAR, 1 = MEDIUM, 2 = NEAR.
+	var new_lod_level: int
+	if dist > LodManager.FAR_THRESHOLD:
+		new_lod_level = 0  # FAR
+	elif dist > LodManager.NEAR_THRESHOLD:
+		new_lod_level = 1  # MEDIUM
+	else:
+		new_lod_level = 2  # NEAR
+
+	# Only transition aggregate edges when the level actually changes.
+	# Avoids creating a new Tween on every _process() frame.
+	if new_lod_level != _last_lod_level:
+		_last_lod_level = new_lod_level
+		_update_aggregate_visibility(new_lod_level)
+
+
+## Show aggregate edges at FAR; hide them at MEDIUM and NEAR.
+## Transitions use animated modulate.a (Tween in-tree, direct in headless tests).
+func _update_aggregate_visibility(lod_level: int) -> void:
+	if lod_level == 0:
+		# FAR: aggregate edges fade in; individual cross-context edges are hidden by LodManager
+		_agg_renderer.show_edges(_aggregate_edge_entries, self)
+	else:
+		# MEDIUM / NEAR: aggregate edges fade out; individual edges visible via LodManager
+		_agg_renderer.hide_edges(_aggregate_edge_entries, self)
 
 
 # ---------------------------------------------------------------------------

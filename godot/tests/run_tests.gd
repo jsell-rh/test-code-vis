@@ -65,8 +65,8 @@ func _init() -> void:
 	# Power Rail: ubiquitous edges suppressed, indicator added to source node.
 	_run_suite(preload("res://tests/test_visual_primitives.gd").new())
 
-	# --- task-108: Spatial Structure spec — first-person navigation ---
-	_run_suite(preload("res://tests/test_first_person_navigation.gd").new())
+	# --- task-108: Spatial Structure spec — aggregate edges (FAR LOD) ---
+	# (aggregate edge tests are in test_spatial_structure.gd, already included above)
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
