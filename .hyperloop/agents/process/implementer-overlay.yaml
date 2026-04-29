@@ -26,6 +26,19 @@ guidelines: |
   - Direction/sign derivation arrows must be inline `#` comments INSIDE the function body, not `##` docstrings above it
   - "Relative to parent" positions require tests where parent is at NON-ZERO world position AND the assertion is a direct equality check (`child["position"]["x"] == local_offset`), NOT a proximity check (`dist < radius`) — proximity passes for both absolute and relative storage
 
+  ## CHECK SYNC — ABSOLUTE FIRST ACTION (BEFORE EVERYTHING ELSE)
+
+  Before reading the assigned spec, before running any check, before writing
+  any code: sync check scripts from main.
+
+    git checkout main -- .hyperloop/checks/
+
+  This ensures check scripts added to main after your branch was created are
+  present and content-identical. Missing or stale scripts cause
+  `check-checks-in-sync.sh` to exit 1 and block submission — even when all
+  substantive implementation work is correct. Apply this on BOTH first attempts
+  AND re-attempts.
+
   ## SCOPE COMPLIANCE
 
   `specs/prototype/prototype-scope.spec.md` is the PROTOTYPE-SCOPE AUTHORITY.
@@ -35,7 +48,7 @@ guidelines: |
   ### Step 0 — Spec-level prohibition check (absolute first action)
 
   Before reading your assigned spec in detail, before writing any code, before
-  running any check:
+  running any check (but AFTER syncing checks from main per the section above):
 
   **Run the mechanical check first — takes under one second:**
   ```
