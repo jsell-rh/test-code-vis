@@ -32,18 +32,43 @@ guidelines: |
 
   | Spec file | Prohibited feature | First mis-assigned | Subsequent mis-assignments |
   |---|---|---|---|
-  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | — |
+  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ SECOND MIS-ASSIGNMENT |
   | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ SECOND MIS-ASSIGNMENT |
 
-  **`specs/core/understanding-modes.spec.md` has now been mis-assigned TWICE.**
-  Before assigning any future task, investigate: how did this spec re-enter the
+  **Both specs have now been mis-assigned TWICE.**
+  Before assigning any future task, investigate: how did these specs re-enter the
   candidate pool after being prohibited? Close that upstream gap immediately.
+  The re-attempt pattern (scope-prohibition FAIL treated as implementation FAIL and retried)
+  is itself the upstream gap — see the FAIL classification section below.
+
+  ### FAIL classification — scope-prohibition FAILs are permanent, never retryable
+
+  There are two distinct FAIL types. Confusing them causes repeated mis-assignments.
+
+  | FAIL type              | Identifying text in report                        | Response                          |
+  |------------------------|---------------------------------------------------|-----------------------------------|
+  | Scope-prohibition FAIL | "INVALID ASSIGNMENT" + scope check exit-1 output  | PERMANENTLY CLOSE — no re-attempt |
+  | Implementation FAIL    | Failing checks, missing coverage, broken tests    | Schedule re-attempt               |
+
+  A scope-prohibition FAIL report contains "INVALID ASSIGNMENT", quotes
+  `check-assigned-spec-in-scope.sh` exit-1 output verbatim, and states that no
+  implementation code was written. Nothing in this report is fixable. The spec itself
+  is prohibited — a different implementer, a re-worded task, or a new task number for
+  the same spec will reach the identical conclusion.
+
+  **Before scheduling any retry or re-attempt:** Read the prior FAIL report first.
+  If it contains "INVALID ASSIGNMENT" with scope-prohibition language, close the
+  task permanently. Do not create a new task number for the same spec. Do not schedule
+  a second attempt of the same task. task-031 (re-attempt of task-028's scope FAIL)
+  and the second attempt of task-024 were both process errors caused by treating a
+  scope-prohibition FAIL as an implementation FAIL.
 
   ### Invalid assignment protocol
 
   When an implementer returns a FAIL report whose only content is a
   `check-assigned-spec-in-scope.sh` exit-1 output:
   - Do NOT re-assign the same spec under any name or framing.
+  - Do NOT schedule a re-attempt (same task ID or new task number) for this task.
   - Mark the task permanently deferred.
   - Add the spec to the prohibited-spec table above (with task reference) and
     in `pm-overlay.yaml` if not already listed.
