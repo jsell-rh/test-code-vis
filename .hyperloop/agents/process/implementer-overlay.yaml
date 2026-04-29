@@ -267,3 +267,24 @@ guidelines: |
 
   If you cannot write a failing test for a THEN-clause, escalate — it may be
   untestable in the current environment and requires PASS-WITH-NOTE treatment.
+
+  ## SPEC-REF TRAILER — COMMIT HASH, NOT BLOB HASH
+
+  The `Spec-Ref` trailer MUST contain a **commit hash**, not a blob hash.
+  These are two different git object types and they are NOT interchangeable.
+
+  WRONG (blob hash — sha of file content, fails `hash^{commit}` check):
+    $ git rev-parse HEAD:specs/foo/bar.spec.md   # → blob hash ← DO NOT USE
+
+  RIGHT (commit hash — sha of the commit that last touched the file):
+    $ git log --format=%H -1 -- specs/foo/bar.spec.md   # → commit hash ✓
+
+  Correct trailer form:
+    Spec-Ref: specs/foo/bar.spec.md@$(git log --format=%H -1 -- specs/foo/bar.spec.md)
+
+  Self-validate before every commit — this command MUST exit 0:
+    git cat-file -e <hash>^{commit}
+
+  If it exits non-zero the hash is not a commit. Re-run the `git log` command above
+  and use its output instead. `check-spec-ref-valid.sh` enforces this mechanically
+  and will FAIL your submission if a blob hash is present.
