@@ -49,12 +49,37 @@ for script in "${STALE_SCRIPTS[@]}"; do
   fi
   chmod +x "$main_path"
 
+  main_out="$TMPDIR_ROOT/main_out_$script"
+
+  # Special case: script exists on main but is ABSENT from the branch entirely.
+  # This happens when a check is added to main after the branch was created (race
+  # condition).  The branch never ran this script — it cannot be "stale", it was
+  # never there.  Impact depends solely on whether the main version would FAIL for
+  # the current working tree; the branch output ("file not found") is irrelevant.
+  if [[ ! -f "$branch_path" ]]; then
+    main_exit=0
+    bash "$main_path" > "$main_out" 2>&1 || main_exit=$?
+    if [[ $main_exit -eq 0 ]]; then
+      echo "OK (absent on branch, main exits 0 — benign race condition): $script"
+      echo "  Main: $(cat "$main_out")"
+    else
+      echo "DIVERGENT (absent on branch, main exits non-zero — SUBSTANTIVE): $script"
+      echo "  This missing script conceals a real FAIL.  Main output:"
+      sed 's/^/    /' "$main_out"
+      DIVERGENT=1
+    fi
+    echo ""
+    continue
+  fi
+
+  # Normal case: script is present on branch but has different content (stale).
+  # Compare text output — identical means the stale version is a harmless race.
+
   # Run branch (stale) version — capture output, ignore exit code
   branch_out="$TMPDIR_ROOT/branch_out_$script"
   bash "$branch_path" > "$branch_out" 2>&1 || true
 
   # Run main (current) version — capture output, ignore exit code
-  main_out="$TMPDIR_ROOT/main_out_$script"
   bash "$main_path" > "$main_out" 2>&1 || true
 
   if diff -q "$branch_out" "$main_out" > /dev/null 2>&1; then

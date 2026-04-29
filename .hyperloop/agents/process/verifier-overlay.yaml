@@ -96,21 +96,31 @@ guidelines: |
   Run the impact assessment script:
     bash .hyperloop/checks/check-sync-divergence-impact.sh
 
-  This script runs each stale check (branch version) and the current main version
-  side-by-side and reports whether outputs differ.
+  The script handles two sub-cases automatically:
 
-  - If the script exits 0 (all stale checks produce identical output): classify
+  **Absent on branch** (script in main, missing from branch — the task-072 pattern):
+    The script runs the main version against the current working tree and checks
+    its exit code only — it does NOT compare text output, because the branch never
+    ran the script at all.
+    - Main exits 0 → reported as "benign race condition" (OK line), does not set DIVERGENT.
+    - Main exits non-zero → DIVERGENT (missing script conceals a real FAIL).
+
+  **Stale on branch** (script present in both, but content differs):
+    The script compares text output of the branch version vs. the main version.
+    - Identical output → OK (identical output), does not set DIVERGENT.
+    - Different output → DIVERGENT.
+
+  - If the script exits 0 (no DIVERGENT cases): classify
     the FAIL as **FAST-FIX** in your report. State explicitly:
-    - Which scripts are stale and which main commit updated them.
-    - That the stale versions produce identical output for this review.
+    - Which scripts are absent/stale and which main commit added/updated them.
+    - That the versions produce benign results for this review.
     - That no implementation changes are needed — the fix is one command:
         `git checkout main -- .hyperloop/checks/`
     - Provide the exact commit message template the implementer should use.
 
-  - If the script exits non-zero (at least one stale check produces different
-    output): the race condition has substantive impact. Issue a standard FAIL.
-    Quote the divergent output in your report so the implementer knows what
-    they missed.
+  - If the script exits non-zero (at least one DIVERGENT case): the race condition
+    has substantive impact. Issue a standard FAIL. Quote the divergent output in
+    your report so the implementer knows what they missed.
 
   **Regardless of FAST-FIX or standard FAIL:** the verdict is FAIL and a sync
   commit is required. FAST-FIX is a diagnostic label, not a waiver. It tells
