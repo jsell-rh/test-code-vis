@@ -85,6 +85,37 @@ guidelines: |
     (e.g., FPS measurement in headless Godot), verify the implementation is architecturally
     correct and mark it PASS-WITH-NOTE.
 
+  ## CHECK-SYNC RACE CONDITION — FAST-FIX CLASSIFICATION
+
+  When `check-checks-in-sync.sh` exits non-zero, the cause may be a post-sync race
+  condition: main updated a check script AFTER the implementer ran their final sync
+  (Sync Point 2), but BEFORE your review. The implementer cannot prevent this.
+
+  **Before issuing FAIL, diagnose the impact:**
+
+  Run the impact assessment script:
+    bash .hyperloop/checks/check-sync-divergence-impact.sh
+
+  This script runs each stale check (branch version) and the current main version
+  side-by-side and reports whether outputs differ.
+
+  - If the script exits 0 (all stale checks produce identical output): classify
+    the FAIL as **FAST-FIX** in your report. State explicitly:
+    - Which scripts are stale and which main commit updated them.
+    - That the stale versions produce identical output for this review.
+    - That no implementation changes are needed — the fix is one command:
+        `git checkout main -- .hyperloop/checks/`
+    - Provide the exact commit message template the implementer should use.
+
+  - If the script exits non-zero (at least one stale check produces different
+    output): the race condition has substantive impact. Issue a standard FAIL.
+    Quote the divergent output in your report so the implementer knows what
+    they missed.
+
+  **Regardless of FAST-FIX or standard FAIL:** the verdict is FAIL and a sync
+  commit is required. FAST-FIX is a diagnostic label, not a waiver. It tells
+  the implementer the re-attempt is trivial and no implementation work is needed.
+
   ## Pipeline Integration — Compute Functions Must Be Called
 
   For every `compute_*()` function defined in the extractor:

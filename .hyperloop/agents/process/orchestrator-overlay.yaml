@@ -6,31 +6,43 @@ guidelines: |
   ## SCOPE GATE — MANDATORY BEFORE EVERY TASK ASSIGNMENT
 
   `specs/prototype/prototype-scope.spec.md` has VETO POWER over all other specs.
-  Before assigning ANY spec to an implementer, run the mechanical scope check:
+
+  **Step 1 — Run the mechanical check first (takes under one second):**
 
     bash .hyperloop/checks/check-assigned-spec-in-scope.sh <spec-path>
 
-  If this exits non-zero: do NOT create or assign the task. Close it as permanently
-  deferred. A non-zero exit means the spec is prohibited for the prototype phase and
-  no implementer action can resolve it — only an orchestrator decision can.
+  If this exits non-zero: STOP. Do NOT create or assign the task. Close it as
+  permanently deferred. A non-zero exit means the spec is prohibited for the
+  prototype phase — no implementer action can resolve it, only an orchestrator
+  decision can. Consulting the prohibited-spec table below is NOT a substitute
+  for running this command; run the command every time regardless of the table.
+
+  **Step 2 — Cross-check the prohibited-spec table:**
+
+  Even if Step 1 exits 0, check whether the spec appears in the table below.
+  The table records prior mis-assignments; a previously prohibited spec whose
+  prohibition was encoded after the script was last updated may not be caught
+  by the script alone.
 
   ### Permanently prohibited spec files (never assign under any circumstances)
 
   These specs have been confirmed out-of-scope and mis-assigned at least once.
-  A second mis-assignment of the same spec is a process failure, not an implementer
-  failure. Do not assign them again.
+  A second mis-assignment of the same spec is a **process failure**, not an
+  implementer failure. The table is append-only — never remove entries.
 
-  | Spec file | Prohibited feature |
-  |---|---|
-  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) |
-  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes |
+  | Spec file | Prohibited feature | First mis-assigned |
+  |---|---|---|
+  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 |
 
   ### Invalid assignment protocol
 
-  When an implementer returns a FAIL report whose only content is an
+  When an implementer returns a FAIL report whose only content is a
   `check-assigned-spec-in-scope.sh` exit-1 output:
-  - Do NOT re-assign the same spec.
+  - Do NOT re-assign the same spec under any name or framing.
   - Mark the task permanently deferred.
-  - Update the prohibited-spec table above and in `pm-overlay.yaml` if the spec
-    is not already listed.
+  - Add the spec to the prohibited-spec table above (with task reference) and
+    in `pm-overlay.yaml` if not already listed.
   - Investigate why the spec entered the candidate pool and close that upstream gap.
+  - Update `check-assigned-spec-in-scope.sh` if the prohibited spec is not already
+    detected by the script (the script may lag behind the table).
