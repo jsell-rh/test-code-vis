@@ -380,6 +380,38 @@ guidelines: |
   file that was also on main should show ZERO diff for the scene file, or only
   the intentional new changes — never a dangling `[ext_resource]` reference.
 
+  ## MUST-REQUIREMENT ENUMERATION — COMPLETE BEFORE ANY IMPLEMENTATION
+
+  Before writing a single line of implementation code, enumerate EVERY requirement
+  in the assigned spec that starts with MUST, SHALL, or "The system MUST/SHALL".
+  Create a coverage table in your working notes:
+
+    | # | Requirement (one sentence) | Impl file/function | Test name |
+    |---|---|---|---|
+    | 1 | ... | | |
+
+  Do NOT start coding until this table exists.  Do NOT submit until every row has
+  BOTH an implementation location AND at least one test name.  A row missing either
+  column is MISSING — not COVERED.  A spec with 13 MUST requirements needs 13
+  implementations AND 13+ tests; submitting with 3 COVERED and 13 MISSING is always
+  a FAIL.  Include the completed table verbatim in your submission report.
+
+  ## CHECK SCRIPT AUTHORING CONVENTION
+
+  When writing a new check script that requires a positional argument, the empty-arg
+  path MUST exit 0 (SKIP) — NEVER exit 2 or exit 1.  run-all-checks.sh calls every
+  *.sh with no arguments; a non-zero exit on empty args breaks every task branch.
+
+  Correct pattern (copy from check-fail-report-classification.sh):
+    ARG="${1:-}"
+    if [ -z "$ARG" ]; then
+        echo "SKIP: no <arg> provided — run manually: $0 <arg>"
+        exit 0
+    fi
+
+  The check-script-skip-on-no-args.sh script enforces this mechanically and will
+  FAIL your submission if any new check script violates the convention.
+
   ## SPEC-FIRST TEST STUBS BEFORE IMPLEMENTATION
 
   For every spec scenario assigned to this task, enumerate each THEN-clause as a

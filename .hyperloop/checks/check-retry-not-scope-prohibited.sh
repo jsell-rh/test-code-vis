@@ -56,10 +56,10 @@ CLASSIFY_SCRIPT=".hyperloop/checks/check-fail-report-classification.sh"
 
 # ── Argument validation ───────────────────────────────────────────────────────
 if [ -z "$TASK_ID" ]; then
-    echo "ERROR: No task ID provided."
-    echo "  Usage: $0 <task-id>"
-    echo "  Example: $0 task-028"
-    exit 2
+    echo "SKIP: No task ID provided — this is an orchestrator tool, not a per-branch check."
+    echo "  Run manually before scheduling any retry:"
+    echo "  bash .hyperloop/checks/check-retry-not-scope-prohibited.sh <task-id>"
+    exit 0
 fi
 
 TASK_FILE="${TASKS_DIR}/${TASK_ID}.md"
