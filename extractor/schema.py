@@ -452,6 +452,28 @@ def validate_scene_graph(graph: object) -> None:
             if depth < 1:
                 raise ValueError(f"nodes[{i}]['depth'] must be >= 1, got {depth!r}")
 
+        # Validate the optional metrics object.
+        # Rule 9: if present, metrics must be a dict.
+        # Rule 10: if metrics.loc is present, it must be a non-negative integer.
+        if "metrics" in node:
+            metrics = node["metrics"]
+            if not isinstance(metrics, dict):
+                raise ValueError(
+                    f"nodes[{i}]['metrics'] must be a dict, "
+                    f"got {type(metrics).__name__!r}"
+                )
+            if "loc" in metrics:
+                loc = metrics["loc"]
+                if not isinstance(loc, int) or isinstance(loc, bool):
+                    raise ValueError(
+                        f"nodes[{i}]['metrics']['loc'] must be an integer, "
+                        f"got {type(loc).__name__!r}"
+                    )
+                if loc < 0:
+                    raise ValueError(
+                        f"nodes[{i}]['metrics']['loc'] must be >= 0, got {loc!r}"
+                    )
+
     for i, edge in enumerate(graph["edges"]):
         if not isinstance(edge, dict):
             raise ValueError(f"edges[{i}] must be a dict, got {type(edge).__name__!r}")
