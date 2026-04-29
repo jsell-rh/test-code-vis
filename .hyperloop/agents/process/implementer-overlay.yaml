@@ -232,6 +232,28 @@ guidelines: |
   edges with weight". The aggregate structure is a separate rendered data set —
   see the AGGREGATE EDGES section above for its required form.
 
+  ## SCENE FILE HYGIENE WHEN DELETING GDSCRIPT FILES
+
+  When you delete a `.gd` file for any reason (removing out-of-scope code,
+  applying a fix, refactoring), you MUST also update every `.tscn` scene file
+  that references it. Failure to do so leaves a dangling `[ext_resource]` that
+  causes a parse error on scene load — even though `godot --headless --quit`
+  exits 0 and tests pass (the test runner bypasses scene loading entirely).
+
+  Deletion checklist (run before committing any `.gd` deletion):
+  1. `grep -rn "path=\"res://$(basename <deleted_file>)\"" godot/scenes/`
+     — for every matching `.tscn` file, perform the following edits in one commit:
+     a. Remove the `[ext_resource … path="res://<deleted_file>" …]` line.
+     b. Remove every `[node]` block that has `script = ExtResource("<id>")` for
+        that resource id.
+     c. Decrement `load_steps` on line 1 by 1 for each removed `[ext_resource]`.
+  2. Run `bash .hyperloop/checks/check-tscn-no-dangling-references.sh` — exit 0.
+  3. Run `bash .hyperloop/checks/godot-compile.sh` — exit 0 with no parse errors.
+
+  After a deletion fix, `git diff main..HEAD -- godot/scenes/main.tscn` for any
+  file that was also on main should show ZERO diff for the scene file, or only
+  the intentional new changes — never a dangling `[ext_resource]` reference.
+
   ## SPEC-FIRST TEST STUBS BEFORE IMPLEMENTATION
 
   For every spec scenario assigned to this task, enumerate each THEN-clause as a

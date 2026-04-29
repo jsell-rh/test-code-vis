@@ -197,6 +197,28 @@ guidelines: |
     count; a uniform-weight aggregate edge is PARTIAL if the spec says "weight
     indicating total import count".
 
+  ## SCENE FILE INTEGRITY — DANGLING RESOURCE REFERENCES
+
+  Run `bash .hyperloop/checks/check-tscn-no-dangling-references.sh` and include
+  its complete output verbatim in your findings.
+
+  When a branch deletes any `.gd` file, verify the corresponding `.tscn` scene
+  files were also updated:
+  - `godot --headless --quit` exits 0 even when a scene file references a deleted
+    script — compile success does NOT confirm scene integrity.
+  - The GDScript test runner instantiates scripts directly and never loads
+    `main.tscn`, so test-suite success also does NOT confirm scene integrity.
+  - A dangling `[ext_resource]` in a `.tscn` file is a FAIL even if all 41
+    automated checks pass — the app cannot launch without a parse error.
+
+  Verification steps:
+  1. Run `check-tscn-no-dangling-references.sh` — must exit 0.
+  2. Run `godot-compile.sh` and grep its output for "Parse Error" or
+     "File not found" — any such line is a FAIL regardless of exit code.
+  3. For each deleted `.gd` file, confirm `git diff main..HEAD -- godot/scenes/`
+     shows the corresponding scene edits (removed `[ext_resource]` declaration,
+     removed referencing `[node]`, decremented `load_steps`).
+
   ## LOD COMPLETENESS AUDIT (ALL LEVELS)
 
   Run `bash .hyperloop/checks/check-lod-level-tests.sh` and include its complete
