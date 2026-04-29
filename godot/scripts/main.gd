@@ -19,6 +19,7 @@ extends Node3D
 const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
 const LodManager = preload("res://scripts/lod_manager.gd")
 const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
+const VisualPrimitives = preload("res://scripts/visual_primitives.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -58,6 +59,9 @@ var _was_at_far_lod: bool = false
 
 ## Understanding overlay controller — activates alignment, quality, and impact overlays.
 var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
+
+## Visual primitives renderer — attaches badge, landmark, and power rail decorations.
+var _visual_primitives: VisualPrimitives = VisualPrimitives.new()
 
 @onready var _camera: Camera3D = $Camera3D
 
@@ -288,6 +292,11 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	# Draw on top so labels remain visible through geometry.
 	label.no_depth_test = true
 	anchor.add_child(label)
+
+	# Visual primitives — badge glyphs, landmark ring, power rail disc.
+	# Spec: visual-primitives.spec.md §Badge Primitive, §Landmark Primitive,
+	# §Power Rail Notation.
+	_visual_primitives.attach_primitives(nd, anchor, sz)
 
 
 ## Add a Power Rail indicator glyph to an anchor node.

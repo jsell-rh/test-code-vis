@@ -1,24 +1,20 @@
-## Behavioral tests: Visual Primitives (Landmark and Power Rail)
+## Behavioral tests for specs/core/visual-primitives.spec.md
 ##
-## Implements THEN clauses from specs/core/visual-primitives.spec.md:
+## Spec: Visual Primitives Specification
+## Purpose: Verify that the VisualPrimitives renderer correctly attaches
+##   Badge, Landmark, and Power Rail visual elements to scene nodes.
+##   Also tests Landmark LOD persistence and Power Rail suppression via Main/LodManager.
 ##
-##   Landmark Primitive:
-##     GIVEN a module with is_hub=true (highest in-degree)
-##     WHEN it is identified as a Landmark
-##     THEN it is visible at every zoom level (even at FAR)
-##     AND it has a distinctive visual treatment (larger, brighter)
-##
-##   Power Rail Notation:
-##     GIVEN an edge with ubiquitous=true (target is a ubiquitous dependency)
-##     WHEN the default view is rendered
-##     THEN the edge is NOT drawn
-##     AND a small indicator on the source node acknowledges the dependency
+## Tests instantiate real Node3D trees and assert scene-tree properties —
+## NOT just dict key existence.
 
 extends RefCounted
 
 const Main = preload("res://scripts/main.gd")
 const LodManager = preload("res://scripts/lod_manager.gd")
+const VisualPrimitives = preload("res://scripts/visual_primitives.gd")
 
+var _vp: VisualPrimitives = VisualPrimitives.new()
 var _runner: Object = null
 var _test_failed: bool = false
 
@@ -545,3 +541,545 @@ func test_regular_node_still_in_lod_entries() -> void:
 	)
 
 	root.free()
+
+
+# ---------------------------------------------------------------------------
+# task-075 additions: Badge, Landmark, Power Rail via VisualPrimitives
+# ---------------------------------------------------------------------------
+
+## Minimal node_data dict for a module node with badges.
+func _make_badge_node_data(badge_list: Array) -> Dictionary:
+	return {
+		"id": "test.module",
+		"name": "TestModule",
+		"type": "module",
+		"parent": "test",
+		"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+		"size": 2.0,
+		"badges": badge_list,
+		"is_landmark": false,
+		"has_ubiquitous_dep": false,
+	}
+
+
+## Minimal node_data dict for a landmark node.
+func _make_landmark_node_data() -> Dictionary:
+	return {
+		"id": "hub.module",
+		"name": "HubModule",
+		"type": "bounded_context",
+		"parent": null,
+		"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+		"size": 3.0,
+		"badges": [],
+		"is_landmark": true,
+		"has_ubiquitous_dep": false,
+	}
+
+
+## Minimal node_data dict for a power rail node.
+func _make_power_rail_node_data() -> Dictionary:
+	return {
+		"id": "consumer.module",
+		"name": "ConsumerModule",
+		"type": "module",
+		"parent": "consumer",
+		"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+		"size": 2.0,
+		"badges": [],
+		"is_landmark": false,
+		"has_ubiquitous_dep": true,
+	}
+
+
+## Create a fresh Node3D anchor for attaching primitives.
+func _make_anchor() -> Node3D:
+	return Node3D.new()
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Badge Primitive
+# Spec: visual-primitives.spec.md § Requirement: Badge Primitive
+# THEN the Node displays a small glyph indicating the aspect
+# AND the Badge is positioned consistently across all Nodes
+# AND all Badges are visible, arranged in a consistent order
+# ---------------------------------------------------------------------------
+
+
+func test_single_badge_creates_mesh_child() -> void:
+	## GIVEN a node with one badge
+	## WHEN attach_primitives is called
+	## THEN a MeshInstance3D child is added to the anchor
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_badge_node_data(["pure"])
+
+	_vp.attach_primitives(node_data, anchor, 2.0)
+
+	# Find any MeshInstance3D child (the badge sphere).
+	var found_badge: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and (child as MeshInstance3D).name.begins_with("Badge_"):
+			found_badge = true
+			break
+
+	_check(found_badge, "Single badge must add a MeshInstance3D child named 'Badge_pure'")
+
+
+func test_multiple_badges_all_rendered() -> void:
+	## GIVEN a node with three badges (io, async, error_handling)
+	## WHEN attach_primitives is called
+	## THEN three MeshInstance3D badge children are added
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var badges: Array = ["io", "async", "error_handling"]
+	var node_data: Dictionary = _make_badge_node_data(badges)
+
+	_vp.attach_primitives(node_data, anchor, 2.0)
+
+	var badge_count: int = 0
+	for child in anchor.get_children():
+		if child is MeshInstance3D and (child as MeshInstance3D).name.begins_with("Badge_"):
+			badge_count += 1
+
+	_check(
+		badge_count == 3,
+		"Three badges must produce three Badge_ children; got %d" % badge_count
+	)
+
+
+func test_badge_positions_are_distinct() -> void:
+	## GIVEN two badges
+	## WHEN attach_primitives is called
+	## THEN the two badge children have different X positions (consistent order)
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_badge_node_data(["pure", "io"])
+
+	_vp.attach_primitives(node_data, anchor, 2.0)
+
+	var badge_positions: Array = []
+	for child in anchor.get_children():
+		if child is MeshInstance3D and (child as MeshInstance3D).name.begins_with("Badge_"):
+			badge_positions.append((child as MeshInstance3D).position)
+
+	_check(badge_positions.size() == 2, "Expected 2 badge positions; got %d" % badge_positions.size())
+	if badge_positions.size() == 2:
+		var p0: Vector3 = badge_positions[0]
+		var p1: Vector3 = badge_positions[1]
+		_check(
+			abs(p0.x - p1.x) > 0.01,
+			"Two badges must have distinct X positions; both at x=%.3f" % p0.x
+		)
+
+
+func test_badge_y_position_above_node() -> void:
+	## GIVEN a node with size=2.0 and a 'pure' badge
+	## WHEN attach_primitives is called
+	## THEN the badge mesh is positioned above Y=0 (above the node base)
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_badge_node_data(["pure"])
+
+	_vp.attach_primitives(node_data, anchor, 2.0)
+
+	var badge_y: float = 0.0
+	var found: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and (child as MeshInstance3D).name.begins_with("Badge_"):
+			badge_y = (child as MeshInstance3D).position.y
+			found = true
+			break
+
+	_check(found, "Badge child must exist")
+	if found:
+		_check(
+			badge_y > 0.0,
+			"Badge Y position must be above 0.0 (above node base); got %.3f" % badge_y
+		)
+
+
+func test_badge_mesh_is_sphere() -> void:
+	## GIVEN a node with a badge
+	## WHEN attach_primitives is called
+	## THEN the badge MeshInstance3D uses a SphereMesh
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_badge_node_data(["io"])
+
+	_vp.attach_primitives(node_data, anchor, 2.0)
+
+	var found_sphere: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and (child as MeshInstance3D).name.begins_with("Badge_"):
+			var mi: MeshInstance3D = child as MeshInstance3D
+			found_sphere = mi.mesh is SphereMesh
+			break
+
+	_check(found_sphere, "Badge mesh must be a SphereMesh")
+
+
+func test_no_badges_no_badge_children() -> void:
+	## GIVEN a node with empty badges array
+	## WHEN attach_primitives is called
+	## THEN no Badge_ children are added
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_badge_node_data([])
+
+	_vp.attach_primitives(node_data, anchor, 2.0)
+
+	for child in anchor.get_children():
+		if child is MeshInstance3D and (child as MeshInstance3D).name.begins_with("Badge_"):
+			_check(false, "No badges → no Badge_ children expected")
+			return
+
+
+func test_badge_vocabulary_pure() -> void:
+	## The 'pure' badge type must render without error.
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	_vp.attach_primitives(_make_badge_node_data(["pure"]), anchor, 1.5)
+	var found: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "Badge_pure":
+			found = true
+	_check(found, "'pure' badge must create a Badge_pure child")
+
+
+func test_badge_vocabulary_io() -> void:
+	## The 'io' badge type must render without error.
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	_vp.attach_primitives(_make_badge_node_data(["io"]), anchor, 1.5)
+	var found: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "Badge_io":
+			found = true
+	_check(found, "'io' badge must create a Badge_io child")
+
+
+func test_badge_vocabulary_async() -> void:
+	## The 'async' badge type must render without error.
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	_vp.attach_primitives(_make_badge_node_data(["async"]), anchor, 1.5)
+	var found: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "Badge_async":
+			found = true
+	_check(found, "'async' badge must create a Badge_async child")
+
+
+func test_badge_vocabulary_test() -> void:
+	## The 'test' badge type must render without error.
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	_vp.attach_primitives(_make_badge_node_data(["test"]), anchor, 1.5)
+	var found: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "Badge_test":
+			found = true
+	_check(found, "'test' badge must create a Badge_test child")
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Landmark Primitive
+# Spec: visual-primitives.spec.md § Requirement: Landmark Primitive
+# THEN it is visible at every zoom level, even when surrounding Nodes are hidden
+# AND it has a distinctive visual treatment (larger, brighter, or marked with a glyph)
+# ---------------------------------------------------------------------------
+
+
+func test_landmark_applies_scale_to_anchor() -> void:
+	## GIVEN a node with is_landmark=True
+	## WHEN attach_primitives is called
+	## THEN the anchor scale is greater than Vector3.ONE (larger visual treatment)
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_landmark_node_data()
+
+	_vp.attach_primitives(node_data, anchor, 3.0)
+
+	_check(
+		anchor.scale.x > 1.0,
+		"Landmark anchor scale.x must be > 1.0; got %.3f" % anchor.scale.x
+	)
+	_check(
+		anchor.scale.y > 1.0,
+		"Landmark anchor scale.y must be > 1.0; got %.3f" % anchor.scale.y
+	)
+	_check(
+		anchor.scale.z > 1.0,
+		"Landmark anchor scale.z must be > 1.0; got %.3f" % anchor.scale.z
+	)
+
+
+func test_landmark_adds_ring_child() -> void:
+	## GIVEN a landmark node
+	## WHEN attach_primitives is called
+	## THEN a 'LandmarkRing' MeshInstance3D child is added
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_landmark_node_data()
+
+	_vp.attach_primitives(node_data, anchor, 3.0)
+
+	var found_ring: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "LandmarkRing":
+			found_ring = true
+			break
+
+	_check(found_ring, "Landmark node must have a 'LandmarkRing' MeshInstance3D child")
+
+
+func test_landmark_ring_uses_torus_mesh() -> void:
+	## GIVEN a landmark node
+	## WHEN attach_primitives is called
+	## THEN the LandmarkRing uses a TorusMesh
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_landmark_node_data()
+
+	_vp.attach_primitives(node_data, anchor, 3.0)
+
+	var found_torus: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "LandmarkRing":
+			found_torus = (child as MeshInstance3D).mesh is TorusMesh
+			break
+
+	_check(found_torus, "LandmarkRing must use a TorusMesh")
+
+
+func test_non_landmark_has_no_scale_boost() -> void:
+	## GIVEN a node with is_landmark=False
+	## WHEN attach_primitives is called
+	## THEN the anchor scale remains Vector3.ONE
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_badge_node_data([])  # no landmark flag
+
+	_vp.attach_primitives(node_data, anchor, 2.0)
+
+	_check(
+		anchor.scale.is_equal_approx(Vector3.ONE),
+		"Non-landmark anchor must remain scale=Vector3.ONE; got %s" % str(anchor.scale)
+	)
+
+
+func test_non_landmark_has_no_ring() -> void:
+	## GIVEN a node without is_landmark flag
+	## WHEN attach_primitives is called
+	## THEN no LandmarkRing child is added
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_badge_node_data([])
+
+	_vp.attach_primitives(node_data, anchor, 2.0)
+
+	for child in anchor.get_children():
+		if str(child.name) == "LandmarkRing":
+			_check(false, "Non-landmark node must not have a LandmarkRing child")
+			return
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Power Rail Notation
+# Spec: visual-primitives.spec.md § Requirement: Power Rail Notation
+# THEN each Node that imports logging has a small, consistent indicator
+# (e.g. a tiny rail glyph at its base)
+# ---------------------------------------------------------------------------
+
+
+func test_power_rail_disc_added_for_ubiquitous_dep() -> void:
+	## GIVEN a node with has_ubiquitous_dep=True
+	## WHEN attach_primitives is called
+	## THEN a 'PowerRailDisc' MeshInstance3D child is added
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_power_rail_node_data()
+
+	_vp.attach_primitives(node_data, anchor, 2.0)
+
+	var found_rail: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "PowerRailDisc":
+			found_rail = true
+			break
+
+	_check(
+		found_rail,
+		"Node with has_ubiquitous_dep must have a 'PowerRailDisc' MeshInstance3D child"
+	)
+
+
+func test_power_rail_disc_is_cylinder_mesh() -> void:
+	## GIVEN a node with has_ubiquitous_dep=True
+	## WHEN attach_primitives is called
+	## THEN the PowerRailDisc uses a CylinderMesh (flat disc shape)
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_power_rail_node_data()
+
+	_vp.attach_primitives(node_data, anchor, 2.0)
+
+	var found_cylinder: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "PowerRailDisc":
+			found_cylinder = (child as MeshInstance3D).mesh is CylinderMesh
+			break
+
+	_check(found_cylinder, "PowerRailDisc must use a CylinderMesh")
+
+
+func test_power_rail_disc_position_below_or_at_base() -> void:
+	## GIVEN a power rail node
+	## WHEN attach_primitives is called
+	## THEN the disc is at Y ≤ 0 (at or below the node base)
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_power_rail_node_data()
+
+	_vp.attach_primitives(node_data, anchor, 2.0)
+
+	var disc_y: float = 999.0
+	var found: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "PowerRailDisc":
+			disc_y = (child as MeshInstance3D).position.y
+			found = true
+			break
+
+	_check(found, "PowerRailDisc child must exist")
+	if found:
+		_check(
+			disc_y <= 0.0,
+			"PowerRailDisc must be at Y ≤ 0 (at node base); got y=%.3f" % disc_y
+		)
+
+
+func test_no_power_rail_when_flag_absent() -> void:
+	## GIVEN a node without has_ubiquitous_dep
+	## WHEN attach_primitives is called
+	## THEN no PowerRailDisc child is added
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_badge_node_data([])  # no ubiquitous dep
+
+	_vp.attach_primitives(node_data, anchor, 2.0)
+
+	for child in anchor.get_children():
+		if str(child.name) == "PowerRailDisc":
+			_check(false, "Node without has_ubiquitous_dep must not have PowerRailDisc")
+			return
+
+
+func test_multiple_nodes_consistent_rail_position() -> void:
+	## Spec §Scenario: Multiple power rails — indicators are visually consistent.
+	## GIVEN two nodes both with has_ubiquitous_dep=True
+	## WHEN attach_primitives is called on both
+	## THEN both PowerRailDisc children are at the same Y position
+	_test_failed = false
+	var anchor_a: Node3D = _make_anchor()
+	var anchor_b: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_power_rail_node_data()
+
+	_vp.attach_primitives(node_data, anchor_a, 2.0)
+	_vp.attach_primitives(node_data, anchor_b, 2.0)
+
+	var y_a: float = 999.0
+	var y_b: float = 998.0
+	for child in anchor_a.get_children():
+		if str(child.name) == "PowerRailDisc":
+			y_a = (child as MeshInstance3D).position.y
+	for child in anchor_b.get_children():
+		if str(child.name) == "PowerRailDisc":
+			y_b = (child as MeshInstance3D).position.y
+
+	_check(
+		abs(y_a - y_b) < 0.001,
+		"Power rail discs must be at the same Y on all nodes; got %.3f vs %.3f" % [y_a, y_b]
+	)
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Landmark + Badge Composability
+# Spec: visual-primitives.spec.md § Requirement: Primitives Compose, Not Interfere
+# Simultaneous primitives are independently readable.
+# ---------------------------------------------------------------------------
+
+
+func test_landmark_and_badges_compose() -> void:
+	## GIVEN a node that is both a landmark and has badges
+	## WHEN attach_primitives is called
+	## THEN both the LandmarkRing and Badge_ children are present
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = {
+		"id": "hub.module",
+		"name": "HubModule",
+		"type": "bounded_context",
+		"parent": null,
+		"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+		"size": 3.0,
+		"badges": ["entry_point"],
+		"is_landmark": true,
+		"has_ubiquitous_dep": false,
+	}
+
+	_vp.attach_primitives(node_data, anchor, 3.0)
+
+	var found_ring: bool = false
+	var found_badge: bool = false
+	for child in anchor.get_children():
+		if str(child.name) == "LandmarkRing":
+			found_ring = true
+		if str(child.name).begins_with("Badge_"):
+			found_badge = true
+
+	_check(found_ring, "Landmark+Badge node must have LandmarkRing")
+	_check(found_badge, "Landmark+Badge node must have a Badge_ child")
+
+
+func test_all_three_primitives_compose() -> void:
+	## GIVEN a node with all three: landmark, badges, power rail
+	## WHEN attach_primitives is called
+	## THEN all three decorations are present independently
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = {
+		"id": "super.hub",
+		"name": "SuperHub",
+		"type": "bounded_context",
+		"parent": null,
+		"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+		"size": 4.0,
+		"badges": ["io", "async"],
+		"is_landmark": true,
+		"has_ubiquitous_dep": true,
+	}
+
+	_vp.attach_primitives(node_data, anchor, 4.0)
+
+	var found_ring: bool = false
+	var badge_count: int = 0
+	var found_rail: bool = false
+
+	for child in anchor.get_children():
+		var child_name: String = str(child.name)
+		if child_name == "LandmarkRing":
+			found_ring = true
+		if child_name.begins_with("Badge_"):
+			badge_count += 1
+		if child_name == "PowerRailDisc":
+			found_rail = true
+
+	_check(found_ring, "All-three node must have LandmarkRing")
+	_check(badge_count == 2, "All-three node must have 2 badge children; got %d" % badge_count)
+	_check(found_rail, "All-three node must have PowerRailDisc")
+	_check(
+		anchor.scale.x > 1.0,
+		"All-three node landmark scale must be > 1.0; got %.3f" % anchor.scale.x
+	)
