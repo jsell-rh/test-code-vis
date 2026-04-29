@@ -332,6 +332,35 @@ func _add_power_rail_indicator(anchor: Node3D, node_sz: float) -> void:
 
 
 # ---------------------------------------------------------------------------
+# Aggregate edge grouping (visual-primitives.spec.md §Power Rail Notation,
+# spatial-structure.spec.md §Far — bounded context architecture)
+# ---------------------------------------------------------------------------
+
+## Group edges by their (source_context, target_context) context pair and sum
+## import counts.  Returns a dict keyed by "src_ctx→tgt_ctx" → { weight: int }.
+##
+## Used to verify that aggregate edges are correctly grouped at FAR distance.
+## Spec: "cross-context dependencies are shown as single aggregate edges per
+## context pair, with weight indicating total import count"
+##
+## Each entry in the returned dict represents one aggregate_edge per context pair.
+func _build_edges_by_context(edges: Array) -> Dictionary:
+	# edges_by_context: maps "source_context→target_context" → summed weight.
+	var edges_by_context: Dictionary = {}
+	for ed: Dictionary in edges:
+		if ed["type"] != "aggregate":
+			continue
+		var context_pair: String = "%s→%s" % [ed["source"], ed["target"]]
+		var existing_weight: int = edges_by_context.get(context_pair, {}).get("weight", 0)
+		edges_by_context[context_pair] = {
+			"source": ed["source"],
+			"target": ed["target"],
+			"weight": existing_weight + int(ed.get("weight", 1))
+		}
+	return edges_by_context
+
+
+# ---------------------------------------------------------------------------
 # Edge creation
 # ---------------------------------------------------------------------------
 
@@ -374,8 +403,26 @@ func _create_edge(ed: Dictionary) -> void:
 	if from_pos.is_equal_approx(to_pos):
 		return  # Self-loop or co-located nodes — nothing to draw.
 
-	var is_cross: bool = ed["type"] == "cross_context"
-	var line_color: Color = Color(1.0, 0.50, 0.10) if is_cross else Color(0.55, 0.55, 0.55)
+	var edge_type: String = ed["type"]
+	var is_cross: bool = edge_type == "cross_context"
+	var is_aggregate: bool = edge_type == "aggregate"
+	# Aggregate edges use a distinct colour (gold/amber) so they stand out
+	# at FAR distance and visually encode that they represent multiple underlying
+	# dependencies.  Weight-proportional appearance is encoded via line colour
+	# brightness: heavier edges are rendered in a brighter/more saturated hue.
+	var agg_weight: int = int(ed.get("weight", 1))
+	# Derive colour: is_aggregate → gold/amber scaled by weight; is_cross → orange;
+	# otherwise → grey (internal).
+	var weight_scale: float = clampf(float(agg_weight) / 10.0, 0.4, 1.0)
+	var line_color: Color
+	if is_aggregate:
+		# Gold base for aggregate edges; brightness proportional to import count.
+		# weight=1 → dim amber; weight=10+ → bright gold.
+		line_color = Color(0.9 * weight_scale + 0.1, 0.7 * weight_scale, 0.05, 1.0)
+	elif is_cross:
+		line_color = Color(1.0, 0.50, 0.10)
+	else:
+		line_color = Color(0.55, 0.55, 0.55)
 
 	# Build a line mesh using ImmediateMesh (PRIMITIVE_LINES, two vertices).
 	var imesh := ImmediateMesh.new()

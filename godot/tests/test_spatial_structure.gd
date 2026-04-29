@@ -308,9 +308,11 @@ func test_far_distance_shows_only_bounded_contexts() -> void:
 		(e["visual"] as Node3D).free()
 
 
-## WHEN the human is far away, all edges are hidden.
+## WHEN the human is far away, individual cross-context and internal edges are hidden.
+## Aggregate edges (one per context pair, weight = total import count) remain VISIBLE.
 ## Implemented by: lod_manager.gd → _apply_far()
-##   `(entry["visual"] as Node3D).visible = false`
+##   cross_context:  `vis_node.visible = (etype == "aggregate")` → false (cross_context)
+##   internal:       `vis_node.visible = (etype == "aggregate")` → false (internal)
 func test_far_distance_hides_all_edges() -> void:
 	var lod := LodManager.new()
 	var node_entries := _make_lod_node_entries()
@@ -319,7 +321,7 @@ func test_far_distance_hides_all_edges() -> void:
 	lod.update_lod(node_entries, edge_entries, LodManager.FAR_THRESHOLD + 10.0)
 
 	_check(not (edge_entries[0]["visual"] as Node3D).visible,
-		"Cross-context edge must be hidden at far distance")
+		"Cross-context edge must be hidden at far distance (aggregate edge takes its place)")
 	_check(not (edge_entries[1]["visual"] as Node3D).visible,
 		"Internal edge must be hidden at far distance")
 
@@ -327,6 +329,44 @@ func test_far_distance_hides_all_edges() -> void:
 		(e["anchor"] as Node3D).free()
 	for e in edge_entries:
 		(e["visual"] as Node3D).free()
+
+
+## FAR: aggregate edges (one per context pair, with weight) are visible.
+## Cross-context individual edges and internal edges are hidden.
+## Spec: spatial-structure.spec.md §Far — bounded context architecture:
+##   "cross-context dependencies are shown as single aggregate edges per
+##    context pair, with weight indicating total import count"
+## Spec: visual-primitives.spec.md §Power Rail Notation — aggregate_edges at FAR.
+## Implemented by: lod_manager.gd → _apply_far()
+##   aggregate:     `vis_node.visible = (etype == "aggregate")` → true
+##   cross_context: `vis_node.visible = (etype == "aggregate")` → false
+func test_far_distance_shows_aggregate_edges() -> void:
+	var lod := LodManager.new()
+	var node_entries := _make_lod_node_entries()
+	# Include one aggregate, one cross_context, and one internal edge.
+	var agg_edge := MeshInstance3D.new()
+	var cross_edge := MeshInstance3D.new()
+	var internal_edge := MeshInstance3D.new()
+	var edge_entries: Array = [
+		{"visual": agg_edge,      "edge_type": "aggregate"},
+		{"visual": cross_edge,    "edge_type": "cross_context"},
+		{"visual": internal_edge, "edge_type": "internal"},
+	]
+
+	lod.update_lod(node_entries, edge_entries, LodManager.FAR_THRESHOLD + 10.0)
+
+	_check(agg_edge.visible,
+		"Aggregate edge must be VISIBLE at FAR distance (one per context pair with weight)")
+	_check(not cross_edge.visible,
+		"Individual cross-context edge must be HIDDEN at FAR distance (aggregate supersedes it)")
+	_check(not internal_edge.visible,
+		"Internal edge must be HIDDEN at FAR distance")
+
+	for e in node_entries:
+		(e["anchor"] as Node3D).free()
+	agg_edge.free()
+	cross_edge.free()
+	internal_edge.free()
 
 
 ## AND when the human moves closer to a service, internal modules become visible.
