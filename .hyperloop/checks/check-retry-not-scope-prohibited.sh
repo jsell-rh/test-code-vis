@@ -114,10 +114,12 @@ echo "=== CHECK B: Task body keyword scan ==="
 declare -a PROHIBITED_SPEC_PATHS=(
     "specs/interaction/moldable-views.spec.md"
     "specs/core/understanding-modes.spec.md"
+    "specs/visualization/data-flow.spec.md"
 )
 declare -a PROHIBITED_SPEC_LABELS=(
     "moldable views"
     "conformance/evaluation/simulation modes (understanding modes)"
+    "data flow visualization"
 )
 
 for i in "${!PROHIBITED_SPEC_PATHS[@]}"; do

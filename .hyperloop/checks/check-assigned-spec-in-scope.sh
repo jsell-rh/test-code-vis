@@ -23,6 +23,13 @@
 #   Each time the implementer had to manually reason through Step 0 before
 #   discovering the assignment was invalid.  This script makes that detection
 #   instantaneous and mechanical.
+#
+# Observed failure (task-021, New):
+#   specs/visualization/data-flow.spec.md passed the content keyword check
+#   (EXIT 0) because the spec describes "rendering data flow as paths" rather
+#   than using the exact phrase "data flow visualization".  The implementer
+#   caught it via manual Step 0 review, but a path-based entry is the correct
+#   fix so the detection is mechanical rather than requiring human reasoning.
 
 set -uo pipefail
 
@@ -54,14 +61,17 @@ FAIL=0
 declare -a PROHIBITED_SPECS=(
     "specs/interaction/moldable-views.spec.md"
     "specs/core/understanding-modes.spec.md"
+    "specs/visualization/data-flow.spec.md"
 )
 declare -a PROHIBITED_FEATURES=(
     "moldable views (LLM-powered question-driven views)"
     "conformance/evaluation/simulation modes (understanding modes overlay)"
+    "data flow visualization (rendering data flow as paths through 3D structure)"
 )
 declare -a PROHIBITED_AUTHORITIES=(
     "specs/prototype/prototype-scope.spec.md line 93"
     "specs/prototype/prototype-scope.spec.md lines 89-91"
+    "specs/prototype/prototype-scope.spec.md line 92"
 )
 
 MATCHED_PROHIBITED=0
