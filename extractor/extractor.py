@@ -13,7 +13,16 @@ import math
 from datetime import datetime, timezone
 from pathlib import Path
 
-from extractor.schema import Edge, EdgeType, Metadata, Node, NodeMetrics, SceneGraph
+from extractor.schema import (
+    AggregateMetrics,
+    Cluster,
+    Edge,
+    EdgeType,
+    Metadata,
+    Node,
+    NodeMetrics,
+    SceneGraph,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -384,8 +393,11 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
     """Build dependency edges by analysing imports in each node's Python files.
 
     Cross-context edges are created at the bounded-context level (e.g.
-    ``graph → shared_kernel``).  Internal edges are created at the module
-    level (e.g. ``iam.application → iam.domain``).
+    ``graph → shared_kernel``) with ``type="cross_context"``.  For each such
+    BC-pair an additional ``type="aggregate"`` edge is emitted carrying the
+    total count of unique module-level imports between the two contexts as
+    its ``weight``.  Internal edges are created at the module level (e.g.
+    ``iam.application → iam.domain``).
 
     Duplicate edges are deduplicated.
     """
@@ -393,6 +405,10 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
     context_ids = {n["id"] for n in all_nodes if n["type"] == "bounded_context"}
 
     raw_edges: set[tuple[str, str, EdgeType]] = set()
+
+    # Count unique module-level cross-context imports per BC pair.
+    # Keyed by (source_bc, target_bc) → import count.
+    bc_pair_weight: dict[tuple[str, str], int] = {}
 
     for node in all_nodes:
         node_path = src_path / Path(node["id"].replace(".", "/"))
@@ -425,6 +441,11 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
                 if edge_src not in context_ids or edge_tgt not in context_ids:
                     continue
                 raw_edges.add((edge_src, edge_tgt, "cross_context"))
+                # Count weight from module-level scans only to avoid
+                # double-counting the BC-level rglob that also sees module files.
+                if node["type"] == "module":
+                    bc_key = (edge_src, edge_tgt)
+                    bc_pair_weight[bc_key] = bc_pair_weight.get(bc_key, 0) + 1
             else:
                 # Internal: only emit from module-level nodes to avoid duplicating
                 # edges that would also be created by the bounded-context scan.
@@ -435,10 +456,258 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
                     continue
                 raw_edges.add((source_id, target_id, "internal"))
 
-    return [
+    # Individual cross-context and internal edges.
+    edges: list[Edge] = [
         {"source": src, "target": tgt, "type": etype}
         for src, tgt, etype in sorted(raw_edges)
     ]
+
+    # Aggregate edges: one per BC-pair, carrying the total import count as weight.
+    # Used for far-distance rendering where individual module-level edges are
+    # collapsed into a single weighted summary.
+    for (src_bc, tgt_bc), weight in sorted(bc_pair_weight.items()):
+        agg_edge: Edge = {
+            "source": src_bc,
+            "target": tgt_bc,
+            "type": "aggregate",
+            "weight": weight,
+        }
+        edges.append(agg_edge)
+
+    return edges
+
+
+# ---------------------------------------------------------------------------
+# Independence groups
+# ---------------------------------------------------------------------------
+
+
+def compute_independence_groups(nodes: list[Node], edges: list[Edge]) -> None:
+    """Assign an ``independence_group`` identifier to every module node (in-place).
+
+    Modules within the same bounded context that are connected by internal
+    dependency edges (directly or transitively) share the same group identifier.
+    Modules with no internal dependencies to any peer each form their own group.
+
+    Group IDs follow the format ``"<context_id>:<group_index>"`` where the index
+    is assigned in discovery order (first connected component = 0, etc.).
+
+    Args:
+        nodes: All nodes in the scene graph (mutated in-place).
+        edges: All edges in the scene graph (used to determine connectivity).
+    """
+    # Group module nodes by their parent bounded context.
+    by_context: dict[str, list[Node]] = {}
+    for node in nodes:
+        if node["type"] == "module" and node["parent"]:
+            by_context.setdefault(node["parent"], []).append(node)
+
+    # Build adjacency sets for internal edges among modules within each context.
+    for context_id, module_nodes in by_context.items():
+        mod_ids = {n["id"] for n in module_nodes}
+
+        # Adjacency: undirected (A→B or B→A means they share a group).
+        adjacency: dict[str, set[str]] = {mod_id: set() for mod_id in mod_ids}
+        for edge in edges:
+            if edge["type"] != "internal":
+                continue
+            src, tgt = edge["source"], edge["target"]
+            if src in mod_ids and tgt in mod_ids:
+                adjacency[src].add(tgt)
+                adjacency[tgt].add(src)
+
+        # Union-Find to identify connected components.
+        parent_map: dict[str, str] = {mod_id: mod_id for mod_id in mod_ids}
+
+        def _find(x: str) -> str:
+            while parent_map[x] != x:
+                parent_map[x] = parent_map[parent_map[x]]  # path compression
+                x = parent_map[x]
+            return x
+
+        def _union(a: str, b: str) -> None:
+            ra, rb = _find(a), _find(b)
+            if ra != rb:
+                parent_map[ra] = rb
+
+        for mod_id, neighbours in adjacency.items():
+            for neighbour in neighbours:
+                _union(mod_id, neighbour)
+
+        # Map each root to a sequential group index (in node discovery order).
+        root_to_index: dict[str, int] = {}
+        for node in module_nodes:
+            root = _find(node["id"])
+            if root not in root_to_index:
+                root_to_index[root] = len(root_to_index)
+            node["independence_group"] = f"{context_id}:{root_to_index[root]}"
+
+
+# ---------------------------------------------------------------------------
+# Cluster computation
+# ---------------------------------------------------------------------------
+
+# Minimum coupling score (number of directed edges in either direction between
+# two modules) required for them to be included in the same cluster.
+_COUPLING_THRESHOLD: int = 1
+
+
+def compute_clusters(nodes: list[Node], edges: list[Edge]) -> list[Cluster]:
+    """Compute cluster suggestions for tightly-coupled module groups.
+
+    For each bounded context, modules that share internal dependency edges
+    (coupling score ≥ ``_COUPLING_THRESHOLD``) are grouped into clusters via
+    connected-components analysis.  Groups of fewer than two modules are not
+    emitted as clusters.
+
+    The cluster entry does NOT prescribe a collapsed position — the Godot
+    application computes the supernode position as the centroid of the member
+    positions at render time.
+
+    Args:
+        nodes: All nodes in the scene graph.
+        edges: All edges in the scene graph.
+
+    Returns:
+        A list of :class:`Cluster` entries, one per coupled module group found.
+    """
+    # Index nodes for fast lookup.
+    node_by_id: dict[str, Node] = {n["id"]: n for n in nodes}
+
+    # Group module nodes by their parent bounded context.
+    by_context: dict[str, list[Node]] = {}
+    for node in nodes:
+        if node["type"] == "module" and node["parent"]:
+            by_context.setdefault(node["parent"], []).append(node)
+
+    clusters: list[Cluster] = []
+
+    for context_id, module_nodes in by_context.items():
+        mod_ids = {n["id"] for n in module_nodes}
+
+        # Count coupling score (directed edges in either direction) per pair.
+        coupling: dict[str, dict[str, int]] = {mid: {} for mid in mod_ids}
+        for edge in edges:
+            if edge["type"] != "internal":
+                continue
+            src, tgt = edge["source"], edge["target"]
+            if src in mod_ids and tgt in mod_ids:
+                coupling[src][tgt] = coupling[src].get(tgt, 0) + 1
+                coupling[tgt][src] = coupling[tgt].get(src, 0) + 1
+
+        # Union-Find on pairs that meet the coupling threshold.
+        parent_map: dict[str, str] = {mid: mid for mid in mod_ids}
+
+        def _find(x: str) -> str:
+            while parent_map[x] != x:
+                parent_map[x] = parent_map[parent_map[x]]
+                x = parent_map[x]
+            return x
+
+        def _union(a: str, b: str) -> None:
+            ra, rb = _find(a), _find(b)
+            if ra != rb:
+                parent_map[ra] = rb
+
+        for mid, neighbours in coupling.items():
+            for neighbour, score in neighbours.items():
+                if score >= _COUPLING_THRESHOLD:
+                    _union(mid, neighbour)
+
+        # Group by root.
+        groups: dict[str, list[str]] = {}
+        for node in module_nodes:
+            root = _find(node["id"])
+            groups.setdefault(root, []).append(node["id"])
+
+        # Emit clusters only for groups with ≥ 2 members.
+        cluster_index = 0
+        for root, members in sorted(groups.items()):
+            if len(members) < 2:
+                continue
+
+            # Compute aggregate metrics for this cluster.
+            member_set = set(members)
+            total_loc = sum(
+                node_by_id[mid].get("metrics", {}).get("loc", 0)  # type: ignore[union-attr]
+                for mid in members
+                if mid in node_by_id
+            )
+
+            # Count edges that cross the cluster boundary.
+            in_degree = 0
+            out_degree = 0
+            for edge in edges:
+                src, tgt = edge["source"], edge["target"]
+                src_inside = src in member_set
+                tgt_inside = tgt in member_set
+                if tgt_inside and not src_inside:
+                    in_degree += 1
+                elif src_inside and not tgt_inside:
+                    out_degree += 1
+
+            agg: AggregateMetrics = {
+                "total_loc": total_loc,
+                "in_degree": in_degree,
+                "out_degree": out_degree,
+            }
+            cluster: Cluster = {
+                "id": f"{context_id}:cluster_{cluster_index}",
+                "members": sorted(members),
+                "context": context_id,
+                "aggregate_metrics": agg,
+            }
+            clusters.append(cluster)
+            cluster_index += 1
+
+    return clusters
+
+
+# ---------------------------------------------------------------------------
+# Cascade depth (simulation output)
+# ---------------------------------------------------------------------------
+
+
+def compute_cascade_depth(origin_id: str, edges: list[Edge]) -> dict[str, int]:
+    """Compute the cascade depth of each node affected by failure of *origin_id*.
+
+    A node that directly depends on the origin is at depth 1; a node that
+    depends on a depth-1 node is at depth 2; and so on.
+
+    "Depends on" means there is a directed edge ``source → target`` where
+    ``target`` is the origin (or an already-affected node).  BFS is used so
+    every node receives its *minimum* hop distance.
+
+    Args:
+        origin_id: The ID of the node that has failed.
+        edges: All edges in the scene graph (only source/target are used).
+
+    Returns:
+        A dict mapping affected node IDs to their cascade depth (≥ 1).
+        The origin node itself is NOT included in the output.
+    """
+    # Build a reverse adjacency map: for each node, which other nodes depend on it.
+    dependents: dict[str, list[str]] = {}
+    for edge in edges:
+        # edge["source"] depends on edge["target"]
+        # so if target fails, source is affected
+        dependents.setdefault(edge["target"], []).append(edge["source"])
+
+    depth_map: dict[str, int] = {}
+    frontier = [origin_id]
+    current_depth = 0
+
+    while frontier:
+        current_depth += 1
+        next_frontier: list[str] = []
+        for node_id in frontier:
+            for dependent in dependents.get(node_id, []):
+                if dependent not in depth_map and dependent != origin_id:
+                    depth_map[dependent] = current_depth
+                    next_frontier.append(dependent)
+        frontier = next_frontier
+
+    return depth_map
 
 
 # ---------------------------------------------------------------------------
@@ -480,10 +749,16 @@ def build_scene_graph(src_path: Path) -> SceneGraph:
     #    Spec nodes are positioned beyond the code circle by compute_layout().
     compute_layout(nodes, edges)
 
-    # 6. Assemble metadata.
+    # 6. Assign independence groups to module nodes (mutates nodes in-place).
+    compute_independence_groups(nodes, edges)
+
+    # 7. Compute cluster suggestions for tightly-coupled module groups.
+    clusters = compute_clusters(nodes, edges)
+
+    # 8. Assemble metadata.
     metadata: Metadata = {
         "source_path": str(src_path),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
-    return {"nodes": nodes, "edges": edges, "metadata": metadata}
+    return {"nodes": nodes, "edges": edges, "metadata": metadata, "clusters": clusters}
