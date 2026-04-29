@@ -122,7 +122,14 @@ fi
 # attributed to their originating task, not to the current implementer. Flagging
 # them would create an unresolvable deadlock.
 # Pre-existing violations are reported as NOTEs (informational) but do NOT set FAIL.
-_DF_KW_PATTERN="data\.flow\|dataflow\|flow_overlay\|FlowOverlay\|show_path\b\|show_aggregate\b\|flow\.path\|flow_path\|clear_path\b\|is_path_active\b\|FlowPath\b"
+#
+# Pattern design note: target RENDERING VERBS only — not schema type names.
+# `FlowPath` as a TypedDict class name and `flow_paths` as a JSON field name are
+# schema-layer definitions, not visualization code. Broad token matches on those
+# names produce false positives on any task that extends the scene-graph schema
+# with flow-path data structures. Use function-level rendering verb patterns
+# (show_flow_path, render_flow_path, draw_flow_path, clear_flow_path) instead.
+_DF_KW_PATTERN="data\.flow\|dataflow\|flow_overlay\|FlowOverlay\|show_path\b\|show_aggregate\b\|flow\.path\|clear_path\b\|is_path_active\b\|show_flow_path\b\|render_flow_path\b\|draw_flow_path\b\|clear_flow_path\b\|highlight_flow\b"
 _DF_KW_MATCHES=$(grep -rl "$_DF_KW_PATTERN" godot/scripts/ godot/tests/ extractor/ 2>/dev/null || true)
 _DF_SPEC_MATCHES=$(grep -rl "data-flow\.spec\|data_flow\.spec\|visualization/data.flow" godot/ extractor/ 2>/dev/null || true)
 _DF_ALL=$(printf '%s\n%s\n' "$_DF_KW_MATCHES" "$_DF_SPEC_MATCHES" | sort -u | grep -v '^$' || true)
