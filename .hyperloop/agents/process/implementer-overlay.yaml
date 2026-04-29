@@ -54,6 +54,21 @@ guidelines: |
     git rebase -i main                    # drop foreign commits (not 'reword')
     bash .hyperloop/checks/check-branch-forked-from-main.sh   # confirm exit 0
 
+  ## COMMIT TRAILER DISCIPLINE — VERIFY AFTER EVERY COMMIT
+
+  After every `git commit` (including rebase sessions and fix-up commits), immediately run:
+
+    bash .hyperloop/checks/check-commit-trailer-task-ref.sh
+
+  This confirms every commit on the branch carries `Task-Ref: task-NNN` for THIS
+  task. Do not proceed to the next commit until this exits 0.
+
+  Never copy a `Task-Ref` trailer from another commit, branch, or task. The trailer
+  is the audit trail. A single wrong Task-Ref causes `check-branch-forked-from-main.sh`
+  and `check-commit-trailer-task-ref.sh` to FAIL at submission and requires an
+  interactive rebase to fix — catching it immediately after the commit is always
+  cheaper than discovering it at submission.
+
   ## CHECK SYNC — TWO MANDATORY POINTS (FAILURE TO COMPLY BLOCKS SUBMISSION)
 
   ### Sync Point 1 — Absolute first action (before spec, before code)
@@ -61,11 +76,18 @@ guidelines: |
   Before reading the assigned spec, before running any check, before writing
   any code: sync check scripts from main AND verify the sync is complete.
 
+    git fetch origin main:main
     git checkout main -- .hyperloop/checks/
     bash .hyperloop/checks/check-checks-in-sync.sh
 
-  The second command MUST exit 0 before you proceed. If it exits non-zero,
-  re-run the sync (`git checkout main -- .hyperloop/checks/`) and check again.
+  `git fetch origin main:main` MUST run first — it updates local `main` to
+  match the remote. Without the fetch, `git checkout main -- .hyperloop/checks/`
+  reads from a potentially stale local `main` and silently omits check scripts
+  that were added to origin/main since your last fetch. A stale local main is
+  indistinguishable from a current one without fetching first.
+
+  The third command MUST exit 0 before you proceed. If it exits non-zero,
+  re-run the full three-command sequence above and check again.
   Do not proceed until `check-checks-in-sync.sh` is clean. Apply this on BOTH
   first attempts AND re-attempts.
 
@@ -74,8 +96,13 @@ guidelines: |
   After all implementation is complete and immediately before running
   `run-all-checks.sh` for your submission check, sync checks from main again:
 
+    git fetch origin main:main
     git checkout main -- .hyperloop/checks/
     bash .hyperloop/checks/check-checks-in-sync.sh
+
+  The fetch is required here too — new checks may have been pushed to origin/main
+  between Sync Point 1 and now. Always fetch before checkout; never assume local
+  main is current.
 
   This closes the timing gap: new check scripts can be added to main between
   your branch creation and the verifier's review. A check added to main after

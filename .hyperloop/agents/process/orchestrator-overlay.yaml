@@ -32,10 +32,10 @@ guidelines: |
 
   | Spec file | Prohibited feature | First mis-assigned | Subsequent mis-assignments |
   |---|---|---|---|
-  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ task-024 (3rd attempt) ⚠⚠ THIRD MIS-ASSIGNMENT |
-  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ task-028 (4th attempt) ⚠⚠⚠ FOURTH MIS-ASSIGNMENT |
+  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ task-024 (3rd attempt) ⚠⚠ task-024 (4th attempt) ⚠⚠⚠ FOURTH MIS-ASSIGNMENT |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ task-028 (4th attempt) ⚠⚠⚠ task-028 (5th attempt) ⚠⚠⚠⚠ FIFTH MIS-ASSIGNMENT |
 
-  **Both specs have now been mis-assigned multiple times (understanding-modes: FOUR).**
+  **Both specs have now been mis-assigned multiple times (moldable-views: FOUR, understanding-modes: FIVE).**
   The table is the PRIMARY gate — see TABLE-FIRST RULE below.
   The re-attempt pattern (scope-prohibition FAIL treated as implementation FAIL and retried)
   is itself the upstream gap — see the FAIL classification section below.
