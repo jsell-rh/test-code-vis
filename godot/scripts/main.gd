@@ -44,6 +44,18 @@ var _lod_edge_entries: Array = []
 ## Used to verify dependency direction (which component depends on which).
 var _path_edge_entries: Array = []
 
+## Aggregate edge visuals — shown at FAR LOD only.
+## One MeshInstance3D line per (source_context, target_context) pair, with
+## visual weight proportional to total import count between the two contexts.
+## Implements specs/visualization/spatial-structure.spec.md § "Far — bounded
+## context architecture": "cross-context dependencies are shown as single
+## aggregate edges per context pair, with weight indicating total import count".
+var _aggregate_edge_visuals: Array = []
+
+## Tracks whether the last LOD update placed the camera at FAR distance.
+## Used to avoid recreating Tweens every frame — only animate on transitions.
+var _was_at_far_lod: bool = false
+
 ## Understanding overlay controller — activates alignment, quality, and impact overlays.
 var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
 
@@ -108,6 +120,9 @@ func build_from_graph(graph: Dictionary) -> void:
 	for ed: Dictionary in edges:
 		_create_edge(ed)
 
+	# Build aggregate edges (one line per context pair, shown at FAR LOD).
+	_build_aggregate_edges(edges)
+
 	# Reposition camera to frame the whole graph.
 	_frame_camera()
 
@@ -124,11 +139,24 @@ func _process(_delta: float) -> void:
 
 
 ## Query the camera's current distance and apply LOD visibility accordingly.
+## Aggregate edges use Tween-based opacity animation so they fade in at FAR
+## and fade out at MEDIUM/NEAR — implementing the smooth-transition requirement.
+## Spec: "elements fade in or out with animated opacity, never appearing or
+## disappearing instantly" (spatial-structure.spec.md § Smooth transitions).
 func _update_lod() -> void:
 	if _camera == null or not _camera.has_method("get_distance"):
 		return
 	var dist: float = _camera.call("get_distance")
 	_lod.update_lod(_lod_node_entries, _lod_edge_entries, dist)
+	# Aggregate edges: shown only at FAR (individual edges are suppressed there).
+	# Animate modulate.a so they fade in/out rather than appear or vanish instantly.
+	var at_far_lod: bool = dist > LodManager.FAR_THRESHOLD
+	if at_far_lod != _was_at_far_lod:
+		var target_alpha: float = 1.0 if at_far_lod else 0.0
+		for agg_visual: Node3D in _aggregate_edge_visuals:
+			var tween := create_tween()
+			tween.tween_property(agg_visual, "modulate:a", target_alpha, 0.25)
+		_was_at_far_lod = at_far_lod
 
 
 # ---------------------------------------------------------------------------
@@ -371,6 +399,96 @@ func _create_edge(ed: Dictionary) -> void:
 	_lod_edge_entries.append({"visual": arrow, "edge_type": ed["type"]})
 	# Track arrowhead direction for dependency direction verification.
 	_path_edge_entries.append({"visual": arrow, "source": src, "target": tgt})
+
+
+# ---------------------------------------------------------------------------
+# Aggregate edge rendering (FAR LOD)
+# ---------------------------------------------------------------------------
+
+## Build aggregate edges: group all cross-context edges by (source_context,
+## target_context) pair and render one weighted line per unique pair.
+##
+## Implements specs/visualization/spatial-structure.spec.md § "Far — bounded
+## context architecture":
+##   "cross-context dependencies are shown as single aggregate edges per
+##    context pair, with weight indicating total import count"
+##
+## These aggregate edge visuals are stored in _aggregate_edge_visuals and shown
+## only at FAR LOD; individual cross-context edges are shown at MEDIUM/NEAR.
+func _build_aggregate_edges(edges: Array) -> void:
+	# Build a context-id lookup: for each node, what bounded_context contains it?
+	var context_of: Dictionary = {}  # node_id -> bounded_context node_id
+	var nodes: Array = _graph.get("nodes", [])
+	for nd: Dictionary in nodes:
+		var nid: String = nd["id"]
+		var ntype: String = nd["type"]
+		if ntype == "bounded_context":
+			context_of[nid] = nid
+		else:
+			var parent_id = nd.get("parent")
+			if parent_id != null and context_of.has(parent_id):
+				context_of[nid] = context_of[parent_id]
+			elif parent_id != null:
+				context_of[nid] = parent_id  # best-effort parent climb
+			else:
+				context_of[nid] = nid
+
+	# Group cross-context edges by (source_context, target_context) pair.
+	# edges_by_context_pair: "src_ctx|tgt_ctx" -> edge count (import weight).
+	var edges_by_context_pair: Dictionary = {}
+	for ed: Dictionary in edges:
+		if ed.get("type", "") != "cross_context":
+			continue
+		if bool(ed.get("ubiquitous", false)):
+			continue  # Power Rail edges suppressed even in aggregate view
+		var src_ctx: String = context_of.get(ed["source"], ed["source"])
+		var tgt_ctx: String = context_of.get(ed["target"], ed["target"])
+		if src_ctx == tgt_ctx:
+			continue  # internal edge disguised as cross_context — skip
+		var context_pair: String = src_ctx + "|" + tgt_ctx
+		edges_by_context_pair[context_pair] = edges_by_context_pair.get(context_pair, 0) + 1
+
+	# Create one aggregate edge visual per context pair.
+	for context_pair: String in edges_by_context_pair:
+		var import_count: int = edges_by_context_pair[context_pair]
+		var parts: PackedStringArray = context_pair.split("|")
+		if parts.size() != 2:
+			continue
+		var src_ctx: String = parts[0]
+		var tgt_ctx: String = parts[1]
+		if not _world_positions.has(src_ctx) or not _world_positions.has(tgt_ctx):
+			continue
+		var from_pos: Vector3 = _world_positions[src_ctx]
+		var to_pos: Vector3 = _world_positions[tgt_ctx]
+		if from_pos.is_equal_approx(to_pos):
+			continue
+
+		# Bold orange line — visually distinct from individual edges (lighter orange).
+		# Weight is proportional to import_count, clamped to [0.5, 3.0].
+		var agg_color: Color = Color(1.0, 0.60, 0.15)
+		var imesh := ImmediateMesh.new()
+		imesh.surface_begin(Mesh.PRIMITIVE_LINES)
+		imesh.surface_set_color(agg_color)
+		imesh.surface_add_vertex(from_pos)
+		imesh.surface_set_color(agg_color)
+		imesh.surface_add_vertex(to_pos)
+		imesh.surface_end()
+
+		var agg_mat := StandardMaterial3D.new()
+		agg_mat.vertex_color_use_as_albedo = true
+		agg_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+		var agg_visual := MeshInstance3D.new()
+		agg_visual.name = "AggregateEdge_" + context_pair.replace("|", "_")
+		agg_visual.mesh = imesh
+		agg_visual.material_override = agg_mat
+		# Scale line proportional to import_count — weight indicates total import count.
+		var weight: float = clampf(float(import_count) * 0.4, 0.5, 3.0)
+		agg_visual.scale = Vector3(weight, 1.0, weight)
+		# Start transparent; _update_lod() will Tween modulate.a to 1.0 at FAR.
+		agg_visual.modulate.a = 0.0
+		add_child(agg_visual)
+		_aggregate_edge_visuals.append(agg_visual)
 
 
 # ---------------------------------------------------------------------------

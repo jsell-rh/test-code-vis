@@ -299,21 +299,22 @@ func test_ubiquitous_edge_produces_no_line_mesh() -> void:
 	var root := Main.new()
 	root.build_from_graph(_make_power_rail_fixture())
 
-	# Count ImmediateMesh lines in the scene root's children.
+	# Count individual (non-aggregate) ImmediateMesh edge lines in the scene root.
 	# The fixture has 2 edges: svc_a→svc_b (normal) and svc_a→ubiq_dep (ubiquitous).
-	# Only the normal edge should produce a line.
+	# Only the normal edge should produce an individual line; aggregate edges (named
+	# "AggregateEdge_*") are a separate FAR-LOD construct and not counted here.
 	var line_count: int = 0
 	for child: Node in root.get_children():
 		if child is MeshInstance3D:
 			var mi := child as MeshInstance3D
-			if mi.mesh is ImmediateMesh:
+			if mi.mesh is ImmediateMesh and not (child.name as String).begins_with("AggregateEdge"):
 				line_count += 1
 
-	# Exactly 1 line should exist (for the normal cross_context edge).
-	# The ubiquitous edge should NOT create a line.
+	# Exactly 1 individual line should exist (for the normal cross_context edge).
+	# The ubiquitous edge should NOT create an individual line.
 	_check(
 		line_count == 1,
-		"Only 1 edge line should be drawn (ubiquitous edge is suppressed); got %d" % line_count
+		"Only 1 individual edge line should be drawn (ubiquitous edge is suppressed); got %d" % line_count
 	)
 
 	root.free()
@@ -352,12 +353,12 @@ func test_non_ubiquitous_edge_still_drawn() -> void:
 	var root := Main.new()
 	root.build_from_graph(_make_power_rail_fixture())
 
-	# At least one ImmediateMesh line must exist (from the normal edge).
+	# At least one individual (non-aggregate) ImmediateMesh line must exist (from the normal edge).
 	var has_line: bool = false
 	for child: Node in root.get_children():
 		if child is MeshInstance3D:
 			var mi := child as MeshInstance3D
-			if mi.mesh is ImmediateMesh:
+			if mi.mesh is ImmediateMesh and not (child.name as String).begins_with("AggregateEdge"):
 				has_line = true
 				break
 
