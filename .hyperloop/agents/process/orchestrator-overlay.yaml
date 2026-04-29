@@ -1,0 +1,36 @@
+apiVersion: hyperloop.io/v1
+kind: Agent
+metadata:
+  name: orchestrator
+guidelines: |
+  ## SCOPE GATE — MANDATORY BEFORE EVERY TASK ASSIGNMENT
+
+  `specs/prototype/prototype-scope.spec.md` has VETO POWER over all other specs.
+  Before assigning ANY spec to an implementer, run the mechanical scope check:
+
+    bash .hyperloop/checks/check-assigned-spec-in-scope.sh <spec-path>
+
+  If this exits non-zero: do NOT create or assign the task. Close it as permanently
+  deferred. A non-zero exit means the spec is prohibited for the prototype phase and
+  no implementer action can resolve it — only an orchestrator decision can.
+
+  ### Permanently prohibited spec files (never assign under any circumstances)
+
+  These specs have been confirmed out-of-scope and mis-assigned at least once.
+  A second mis-assignment of the same spec is a process failure, not an implementer
+  failure. Do not assign them again.
+
+  | Spec file | Prohibited feature |
+  |---|---|
+  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes |
+
+  ### Invalid assignment protocol
+
+  When an implementer returns a FAIL report whose only content is an
+  `check-assigned-spec-in-scope.sh` exit-1 output:
+  - Do NOT re-assign the same spec.
+  - Mark the task permanently deferred.
+  - Update the prohibited-spec table above and in `pm-overlay.yaml` if the spec
+    is not already listed.
+  - Investigate why the spec entered the candidate pool and close that upstream gap.

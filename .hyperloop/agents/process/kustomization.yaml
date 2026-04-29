@@ -10,3 +10,5 @@ patches:
     target: { kind: Agent, name: spec-reviewer }
   - path: pm-overlay.yaml
     target: { kind: Agent, name: pm }
+  - path: orchestrator-overlay.yaml
+    target: { kind: Agent, name: orchestrator }
