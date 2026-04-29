@@ -140,3 +140,47 @@ func test_zoom_clamped_at_minimum() -> bool:
 	for _i: int in range(200):
 		cam._handle_button(event)
 	return cam._distance >= cam.min_distance and cam._target_distance >= cam.min_distance
+
+
+## AND orientation remains intuitive (up stays up) — north-pole clamp:
+## Extreme DOWNWARD drag (large positive delta.y) tries to drive _theta below 0.01
+## (theta = 0 = camera directly above; going below 0 would flip through the north pole).
+## drag down 10 000 px → delta.y = +10000 → _theta -= +10000 * orbit_speed → clamp to 0.01 ✓
+func test_theta_clamped_at_floor_prevents_north_pole_flip() -> bool:
+	var cam = CameraScript.new()
+
+	# Begin orbiting via right-mouse press.
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_RIGHT
+	press.pressed = true
+	press.position = Vector2(100.0, 100.0)
+	cam._handle_button(press)
+
+	# drag down 10 000 px → delta.y = +10000 → _theta -= 10000 * 0.005 = −50 → clamped to 0.01
+	var down_motion := InputEventMouseMotion.new()
+	down_motion.position = Vector2(100.0, 10100.0)
+	cam._handle_motion(down_motion)
+
+	return cam._theta >= 0.01
+
+
+## AND orientation remains intuitive (up stays up) — south-pole clamp:
+## Extreme UPWARD drag (large negative delta.y) tries to drive _theta above PI − 0.01
+## (theta = PI = camera directly below; going past PI would flip through the south pole).
+## drag up 10 000 px → delta.y = −10000 → _theta -= (−10000 * orbit_speed) = +50 → clamp to PI − 0.01 ✓
+func test_theta_clamped_at_ceiling_prevents_south_pole_flip() -> bool:
+	var cam = CameraScript.new()
+
+	# Begin orbiting via right-mouse press.
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_RIGHT
+	press.pressed = true
+	press.position = Vector2(100.0, 10100.0)
+	cam._handle_button(press)
+
+	# drag up 10 000 px → delta.y = −10000 → _theta -= (−10000 * 0.005) = +50 → clamped to PI − 0.01
+	var up_motion := InputEventMouseMotion.new()
+	up_motion.position = Vector2(100.0, 100.0)
+	cam._handle_motion(up_motion)
+
+	return cam._theta <= PI - 0.01
