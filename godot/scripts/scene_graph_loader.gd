@@ -7,17 +7,20 @@ extends RefCounted
 ##   {
 ##     "nodes": [ {id, name, type, parent, position, size, metrics}, ... ],
 ##     "edges": [ {source, target, type}, ... ],
-##     "metadata": {source_path, timestamp}
+##     "metadata": {source_path, timestamp},
+##     "flow_paths": [ {id, name, steps}, ... ]   # optional
 ##   }
 ##
 ## load_from_dict() returns that same structure with all fields preserved so
 ## the Godot visualiser can consume them without any extra transformation.
+## The flow_paths field is optional — absent or empty means no flow overlays.
 
 static func load_from_dict(data: Dictionary) -> Dictionary:
 	return {
 		"nodes": _parse_nodes(data.get("nodes", [])),
 		"edges": _parse_edges(data.get("edges", [])),
 		"metadata": data.get("metadata", {}),
+		"flow_paths": _parse_flow_paths(data.get("flow_paths", [])),
 	}
 
 
@@ -47,5 +50,18 @@ static func _parse_edges(raw_edges: Array) -> Array:
 			"source": raw.get("source", ""),
 			"target": raw.get("target", ""),
 			"type": raw.get("type", ""),
+		})
+	return result
+
+
+static func _parse_flow_paths(raw_paths: Array) -> Array:
+	var result: Array = []
+	for raw in raw_paths:
+		if not raw is Dictionary:
+			continue
+		result.append({
+			"id": raw.get("id", ""),
+			"name": raw.get("name", ""),
+			"steps": raw.get("steps", []),
 		})
 	return result

@@ -137,18 +137,43 @@ class Cluster(TypedDict):
     """Rolled-up complexity and connectivity metrics for the cluster."""
 
 
+class FlowPath(TypedDict):
+    """A named path through the structural graph.
+
+    Represents a sequence of node IDs that form a traversal path through
+    the system, e.g. an order submission flow or an authentication path.
+    Used to describe data or control flow for on-demand overlay display.
+    """
+
+    id: str
+    """Unique identifier for this path, e.g. 'order-submission'."""
+
+    name: str
+    """Human-readable display name, e.g. 'Order Submission Path'."""
+
+    steps: list[str]
+    """Ordered list of node IDs from entry point to terminus."""
+
+
 class SceneGraph(TypedDict):
     """Root of the JSON scene graph file.
 
     This is the complete contract between the Python extractor and the
-    Godot application.  The JSON file MUST contain exactly these four
-    top-level fields.
+    Godot application.  The JSON file MUST contain exactly the four
+    required top-level fields (nodes, edges, metadata, clusters).
+    The optional field flow_paths MAY be present.
     """
 
     nodes: list[Node]
     edges: list[Edge]
     metadata: Metadata
     clusters: list[Cluster]
+    flow_paths: NotRequired[list[FlowPath]]
+    """Optional list of named traversal paths for on-demand overlay.
+
+    Absent or empty list means no flow path overlays are requested.
+    The Godot application treats a missing field as equivalent to [].
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -164,12 +189,14 @@ _REQUIRED_METADATA_KEYS: frozenset[str] = frozenset({"source_path", "timestamp"}
 _REQUIRED_GRAPH_KEYS: frozenset[str] = frozenset(
     {"nodes", "edges", "metadata", "clusters"}
 )
+_OPTIONAL_GRAPH_KEYS: frozenset[str] = frozenset({"flow_paths"})
 _REQUIRED_CLUSTER_KEYS: frozenset[str] = frozenset(
     {"id", "members", "context", "aggregate_metrics"}
 )
 _REQUIRED_AGGREGATE_METRICS_KEYS: frozenset[str] = frozenset(
     {"total_loc", "in_degree", "out_degree"}
 )
+_REQUIRED_FLOW_PATH_KEYS: frozenset[str] = frozenset({"id", "name", "steps"})
 
 
 def validate_scene_graph(graph: object) -> None:
@@ -181,8 +208,9 @@ def validate_scene_graph(graph: object) -> None:
 
     Args:
         graph: The object to validate — must be a dict with the four
-               top-level keys ``nodes``, ``edges``, ``metadata``, and
-               ``clusters``.
+               required top-level keys ``nodes``, ``edges``, ``metadata``,
+               and ``clusters``.  The optional key ``flow_paths`` is also
+               permitted.
 
     Raises:
         ValueError: If any required field is missing or has the wrong type.
@@ -194,7 +222,8 @@ def validate_scene_graph(graph: object) -> None:
     if missing:
         raise ValueError(f"Scene graph missing top-level key(s): {sorted(missing)}")
 
-    extra = set(graph.keys()) - _REQUIRED_GRAPH_KEYS
+    _valid_keys = _REQUIRED_GRAPH_KEYS | _OPTIONAL_GRAPH_KEYS
+    extra = set(graph.keys()) - _valid_keys
     if extra:
         raise ValueError(
             f"Scene graph has unexpected top-level key(s): {sorted(extra)}"
@@ -271,3 +300,31 @@ def validate_scene_graph(graph: object) -> None:
             raise ValueError(
                 f"clusters[{i}]['aggregate_metrics'] missing key(s): {sorted(missing_am)}"
             )
+
+    if "flow_paths" in graph:
+        if not isinstance(graph["flow_paths"], list):
+            raise ValueError("'flow_paths' must be a list")
+        for i, fp in enumerate(graph["flow_paths"]):
+            if not isinstance(fp, dict):
+                raise ValueError(
+                    f"flow_paths[{i}] must be a dict, got {type(fp).__name__!r}"
+                )
+            missing_fp = _REQUIRED_FLOW_PATH_KEYS - fp.keys()
+            if missing_fp:
+                raise ValueError(
+                    f"flow_paths[{i}] missing required key(s): {sorted(missing_fp)}"
+                )
+            if not isinstance(fp["id"], str):
+                raise ValueError(
+                    f"flow_paths[{i}]['id'] must be a str, got {type(fp['id']).__name__!r}"
+                )
+            if not isinstance(fp["name"], str):
+                raise ValueError(
+                    f"flow_paths[{i}]['name'] must be a str, "
+                    f"got {type(fp['name']).__name__!r}"
+                )
+            if not isinstance(fp["steps"], list):
+                raise ValueError(
+                    f"flow_paths[{i}]['steps'] must be a list, "
+                    f"got {type(fp['steps']).__name__!r}"
+                )
