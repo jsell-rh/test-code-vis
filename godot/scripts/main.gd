@@ -212,11 +212,21 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	_anchors[nd["id"]] = anchor
 
 	# ── Landmark check (visual-primitives.spec.md § Landmark Primitive) ──────
-	# Landmark nodes (is_hub=true) are always visible at every LOD level so
-	# the human can always use them as spatial orientation anchors.
-	# Spec: "it is visible at every zoom level, even when surrounding Nodes are
-	# hidden by LOD" — achieved by NOT registering them in _lod_node_entries.
-	var is_landmark: bool = bool(nd.get("is_hub", false))
+	# Landmark nodes are always visible at every LOD level so the human can
+	# always use them as spatial orientation anchors.
+	# Spec § Landmark sources: "Landmarks are derived from:
+	#   hubs (high in-degree),
+	#   bridges (high betweenness centrality),
+	#   entry points (no in-edges from application code)"
+	# Achieved by NOT registering landmarks in _lod_node_entries so the LOD
+	# manager never hides them.
+	var is_hub: bool = bool(nd.get("is_hub", false))
+	# is_bridge=true → graph articulation point (bridge) → → landmark
+	var is_bridge: bool = bool(nd.get("is_bridge", false))
+	# in_degree=0 AND parent=null → no application code imports this BC → entry point → landmark
+	var in_deg: int = int(nd.get("in_degree", -1))
+	var is_entry_point: bool = (in_deg == 0 and nd.get("parent") == null)
+	var is_landmark: bool = is_hub or is_bridge or is_entry_point
 	if not is_landmark:
 		# Register with LOD manager so visibility can be toggled by camera distance.
 		_lod_node_entries.append({"anchor": anchor, "node_type": nd["type"]})

@@ -388,3 +388,160 @@ func test_non_ubiquitous_source_has_no_rail_indicator() -> void:
 	)
 
 	root.free()
+
+
+# ---------------------------------------------------------------------------
+# Scenario: Landmark Sources — bridge and entry-point
+# Spec: visual-primitives.spec.md § Landmark Primitive / Landmark sources
+# "Landmarks are derived from: hubs (high in-degree), bridges (high
+#  betweenness centrality), entry points (no in-edges from application code)"
+# ---------------------------------------------------------------------------
+
+## A fixture with one bridge node (is_bridge=true) and two regular bounded contexts.
+## The bridge node connects them structurally and must be treated as a Landmark.
+func _make_bridge_fixture() -> Dictionary:
+	return {
+		"nodes": [
+			{
+				"id": "ctx_a",
+				"name": "ContextA",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": -10.0, "y": 0.0, "z": 0.0},
+				"size": 2.0,
+				"is_bridge": true,
+				"is_hub": false,
+				"in_degree": 1,
+			},
+			{
+				"id": "ctx_b",
+				"name": "ContextB",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 10.0, "y": 0.0, "z": 0.0},
+				"size": 2.0,
+				"is_bridge": false,
+				"is_hub": false,
+				"in_degree": 1,
+			},
+		],
+		"edges": [],
+		"metadata": {},
+	}
+
+
+## A fixture with one entry-point node (in_degree=0, no parent) and a regular node.
+## Entry points have no in-edges from application code; they are Landmarks.
+func _make_entry_point_fixture() -> Dictionary:
+	return {
+		"nodes": [
+			{
+				"id": "main_api",
+				"name": "MainAPI",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 2.5,
+				"is_bridge": false,
+				"is_hub": false,
+				"in_degree": 0,
+			},
+			{
+				"id": "downstream",
+				"name": "Downstream",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 15.0, "y": 0.0, "z": 0.0},
+				"size": 2.0,
+				"is_bridge": false,
+				"is_hub": false,
+				"in_degree": 1,
+			},
+		],
+		"edges": [],
+		"metadata": {},
+	}
+
+
+## THEN bridge node is NOT in LOD entries — it persists at all zoom levels.
+## Spec: bridge → high betweenness centrality → Landmark → always visible.
+## Implemented by: main.gd → _create_volume() when is_bridge=true
+func test_bridge_node_not_registered_in_lod_entries() -> void:
+	var root := Main.new()
+	root.build_from_graph(_make_bridge_fixture())
+	var lod_entries: Array = root.get("_lod_node_entries")
+	var anchors: Dictionary = root.get("_anchors")
+
+	var bridge_anchor: Node3D = anchors.get("ctx_a")
+	_check(bridge_anchor != null, "ctx_a (bridge) anchor must exist after build_from_graph")
+	if bridge_anchor == null:
+		root.free()
+		return
+
+	var bridge_in_lod: bool = false
+	for entry: Dictionary in lod_entries:
+		if (entry["anchor"] as Node3D) == bridge_anchor:
+			bridge_in_lod = true
+			break
+	_check(
+		not bridge_in_lod,
+		"Bridge node (is_bridge=true) must NOT be in LOD entries — it is a Landmark (always visible)"
+	)
+
+	root.free()
+
+
+## THEN entry-point node is NOT in LOD entries — it persists at all zoom levels.
+## Spec: entry point (no in-edges from application code) → Landmark → always visible.
+## Implemented by: main.gd → _create_volume() when in_degree=0 AND parent=null
+func test_entry_point_node_not_registered_in_lod_entries() -> void:
+	var root := Main.new()
+	root.build_from_graph(_make_entry_point_fixture())
+	var lod_entries: Array = root.get("_lod_node_entries")
+	var anchors: Dictionary = root.get("_anchors")
+
+	var ep_anchor: Node3D = anchors.get("main_api")
+	_check(ep_anchor != null, "main_api (entry point) anchor must exist after build_from_graph")
+	if ep_anchor == null:
+		root.free()
+		return
+
+	var ep_in_lod: bool = false
+	for entry: Dictionary in lod_entries:
+		if (entry["anchor"] as Node3D) == ep_anchor:
+			ep_in_lod = true
+			break
+	_check(
+		not ep_in_lod,
+		"Entry-point node (in_degree=0, no parent) must NOT be in LOD entries — it is a Landmark"
+	)
+
+	root.free()
+
+
+## Non-bridge, non-hub, non-entry-point nodes remain in LOD entries (can be hidden).
+## Ensures the Landmark promotion doesn't inadvertently affect all nodes.
+func test_regular_node_still_in_lod_entries() -> void:
+	var root := Main.new()
+	root.build_from_graph(_make_bridge_fixture())
+	var lod_entries: Array = root.get("_lod_node_entries")
+	var anchors: Dictionary = root.get("_anchors")
+
+	# ctx_b: is_bridge=false, is_hub=false, in_degree=1 → NOT a landmark → in LOD
+	var regular_anchor: Node3D = anchors.get("ctx_b")
+	_check(regular_anchor != null, "ctx_b (regular node) anchor must exist")
+	if regular_anchor == null:
+		root.free()
+		return
+
+	var regular_in_lod: bool = false
+	for entry: Dictionary in lod_entries:
+		if (entry["anchor"] as Node3D) == regular_anchor:
+			regular_in_lod = true
+			break
+	_check(
+		regular_in_lod,
+		"Regular node (not bridge/hub/entry-point) MUST be in LOD entries (can be hidden by LOD)"
+	)
+
+	root.free()
