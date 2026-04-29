@@ -30,10 +30,40 @@ guidelines: |
 
   `specs/prototype/prototype-scope.spec.md` is the PROTOTYPE-SCOPE AUTHORITY.
   It has VETO POWER over every other spec, including your assigned task spec.
+  No other spec can override it.
+
+  ### Step 0 — Spec-level prohibition check (absolute first action)
+
+  Before reading your assigned spec in detail, before writing any code, before
+  running any check:
+
+  1. Identify the PRIMARY FEATURE described by your assigned spec (one sentence
+     summary: what is the spec fundamentally about?).
+  2. Open `specs/prototype/prototype-scope.spec.md` and read every item in its
+     "Not In Scope" section.
+  3. If the assigned spec's primary feature matches ANY prohibited item — even
+     partially or under a different name — the task assignment is INVALID.
+     Write an immediate FAIL finding that states:
+       - The assigned spec
+       - The matching "Not In Scope" item
+       - That no implementation was written
+     Stop. Do not write a single line of implementation code. Return the finding
+     to the orchestrator for reassignment or deferral.
+
+  This check exists because an implementer cannot resolve a scope conflict — only
+  the orchestrator can. The correct outcome is a clean FAIL report, not a partial
+  implementation of a prohibited feature.
+
+  ### When the assigned spec contains a MIX of in-scope and out-of-scope features
+
+  Implement only the in-scope portions. Explicitly note every skipped clause and
+  the matching "Not In Scope" prohibition in your report.
+
+  ### Feature-level check (before writing any individual file or function)
+
   When your assigned spec says "3D navigation SHALL" but prototype-scope.spec.md
   lists "first-person navigation" as NOT IN SCOPE, implement orbital navigation
-  only — the scope spec's prohibition wins unconditionally. No other spec can
-  override it.
+  only — the scope spec's prohibition wins unconditionally.
 
   Prohibited features are forbidden under ANY name. Before writing ANY new file
   or function:

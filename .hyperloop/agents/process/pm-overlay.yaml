@@ -8,12 +8,29 @@ guidelines: |
   This project has two components: a Python extractor and a Godot 4 application.
   They communicate via a JSON scene graph file.
 
+  ### Scope pre-validation (mandatory before creating any task)
+
+  `specs/prototype/prototype-scope.spec.md` is the PROTOTYPE-SCOPE AUTHORITY with
+  VETO POWER over every other spec. Before creating a task from ANY spec — especially
+  those under `specs/interaction/`, `specs/core/`, or `specs/visualization/` — you MUST:
+
+  1. Open `specs/prototype/prototype-scope.spec.md` and read its "Not In Scope" section.
+  2. Identify the primary feature described by the candidate spec.
+  3. If that feature matches any "Not In Scope" item, DO NOT create the task.
+     Close it with a note that it is deferred to a future phase.
+     The NOT IN SCOPE list is a hard veto — no other spec or assignment can override it.
+
+  A task assigned to an implementer for a prohibited spec is an invalid assignment.
+  The implementer cannot fix it; they can only report failure and stop. Prevent this
+  upstream by validating scope before the task is ever created.
+
   ### Task decomposition rules
   - Specs under `specs/extraction/` produce tasks for the Python extractor (`extractor/`).
   - Specs under `specs/prototype/` produce tasks for the Godot app (`godot/`), except for
     NFRs which are cross-cutting constraints, not standalone tasks.
   - Specs under `specs/core/`, `specs/visualization/`, and `specs/interaction/` describe
-    the vision. Only create tasks from these if the prototype specs reference them.
+    the vision. Only create tasks from these if the prototype specs reference them AND the
+    feature is not listed as NOT IN SCOPE in `specs/prototype/prototype-scope.spec.md`.
   - The JSON scene graph schema is a shared dependency. If a task requires defining or
     changing the schema, make that a separate task and list it as a dependency for both
     extractor and Godot tasks.
