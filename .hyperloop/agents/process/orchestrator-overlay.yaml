@@ -33,12 +33,18 @@ guidelines: |
   | Spec file | Prohibited feature | First mis-assigned | Subsequent mis-assignments |
   |---|---|---|---|
   | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ task-024 (3rd attempt) ⚠⚠ THIRD MIS-ASSIGNMENT |
-  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ THIRD MIS-ASSIGNMENT |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ task-028 (4th attempt) ⚠⚠⚠ FOURTH MIS-ASSIGNMENT |
 
-  **Both specs have now been mis-assigned THREE TIMES.**
+  **Both specs have now been mis-assigned multiple times (understanding-modes: FOUR).**
   The table is the PRIMARY gate — see TABLE-FIRST RULE below.
   The re-attempt pattern (scope-prohibition FAIL treated as implementation FAIL and retried)
   is itself the upstream gap — see the FAIL classification section below.
+
+  **task-028 is additionally prohibited at the task-body level.**
+  Its body describes `conformance comparison`, `spec_to_code` edges, and `spec_item` nodes —
+  all understanding-modes features — regardless of the `spec_ref` header value.
+  The task is irresolvable without first removing understanding-modes content from its body.
+  Do NOT re-assign task-028 in any form. Do NOT create a new task number for its content.
 
   ### FAIL classification — scope-prohibition FAILs are permanent, never retryable
 
@@ -79,21 +85,27 @@ guidelines: |
   ### PRE-RETRY GATE — mandatory before every re-attempt
 
   Before creating a re-attempt task (same task ID OR a new task number for the
-  same spec), run the fail-report classification check:
+  same spec or feature), run the unified pre-retry gate:
 
+    bash .hyperloop/checks/check-retry-not-scope-prohibited.sh <task-id>
+
+  This script requires only the task ID — no file path lookup needed.  It runs
+  three independent checks: (A) spec_ref scope, (B) task body keyword scan for
+  prohibited feature language, (C) review file classification.  Any check failing
+  exits 1.
+
+  If this exits **non-zero**: STOP. Permanently close the task. Do NOT create a
+  re-attempt under any task number, name, or framing.
+
+  Only proceed with a re-attempt when this check exits 0.
+
+  **This gate exists because task-028's scope-prohibition FAIL was retried FOUR
+  times.  The previous gate required a file path (friction that was skipped).
+  The new gate takes only a task ID — one command, one second, binary result.**
+
+  If you want to classify a specific FAIL report by file path, the lower-level
+  script is still available:
     bash .hyperloop/checks/check-fail-report-classification.sh <fail-report-path>
-
-  If this exits **non-zero**: STOP. The FAIL is a scope-prohibition FAIL.
-  Permanently close the original task. Do NOT create a re-attempt under any task
-  number, name, or framing. A scope-prohibition FAIL reports "INVALID ASSIGNMENT"
-  and quotes `check-assigned-spec-in-scope.sh` — nothing in it is fixable by
-  any implementer.
-
-  Only proceed with a re-attempt when this check exits 0 (implementation FAIL).
-
-  **This gate exists because task-028's scope-prohibition FAIL was retried as
-  task-031 — two wasted cycles, identical result. Running this script takes
-  under one second and makes the retry/close decision mechanical.**
 
   ### Invalid assignment protocol
 

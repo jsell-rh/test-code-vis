@@ -32,12 +32,16 @@ guidelines: |
   | Spec file | Prohibited feature | Authority | Mis-assignment count |
   |---|---|---|---|
   | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | prototype-scope.spec.md line 93 | 3 (task-024 × 3 attempts) ⚠⚠ |
-  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | prototype-scope.spec.md lines 89-91 | 3 (task-028 × 2, task-031) ⚠⚠ |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | prototype-scope.spec.md lines 89-91 | 4 (task-028 × 3, task-031) ⚠⚠⚠ |
 
-  **Both specs have been mis-assigned THREE TIMES.**
-  Do not assign either under any name or framing.  Remove them from the candidate
-  pool entirely.  These are permanently deferred specs — they require a revision
-  of `specs/prototype/prototype-scope.spec.md` before they can be reconsidered.
+  **understanding-modes.spec.md has been mis-assigned FOUR TIMES.**
+  Do not assign either spec under any name or framing.  Remove them from the
+  candidate pool entirely.  These are permanently deferred specs — they require a
+  revision of `specs/prototype/prototype-scope.spec.md` before they can be reconsidered.
+
+  **task-028 specifically** is doubly prohibited: its body describes conformance-comparison
+  and spec_to_code features — understanding-modes content — regardless of the spec_ref
+  header.  Do NOT re-assign task-028 in any form or create a new task number for its content.
 
   **If a spec on this list has already been mis-assigned once: do not assign it
   again.  A repeated invalid assignment is a process failure, not an implementer
