@@ -29,6 +29,12 @@ extends RefCounted
 const FAR_THRESHOLD: float = 80.0
 const NEAR_THRESHOLD: float = 20.0
 
+## Fade duration in seconds for LOD transitions.
+## Spec (spatial-structure.spec.md § "Smooth transitions between levels"):
+##   "elements fade in or out with animated opacity, never appearing or
+##    disappearing instantly"
+const LOD_FADE_DURATION: float = 0.25
+
 
 ## Apply LOD visibility to all tracked nodes and edges.
 ##
@@ -46,6 +52,23 @@ func update_lod(
 		_apply_medium(node_entries, edge_entries)
 	else:
 		_apply_near(node_entries, edge_entries)
+
+
+## Transition a node's visibility with smooth animated opacity.
+##
+## Sets node.visible immediately (so synchronous callers such as unit tests
+## see the correct value right away). When the node is inside the scene tree
+## the transition is additionally animated via Tween on modulate.a so that
+## elements fade in or out rather than appearing or disappearing instantly,
+## as required by spatial-structure.spec.md § "Smooth transitions between levels".
+##
+## Spec: "elements fade in or out with animated opacity, never appearing or
+##        disappearing instantly."
+func _transition_visible(node: Node3D, show: bool) -> void:
+	node.visible = show
+	if node.is_inside_tree():
+		var target_alpha: float = 1.0 if show else 0.0
+		node.create_tween().tween_property(node, "modulate:a", target_alpha, LOD_FADE_DURATION)
 
 
 ## FAR: only bounded_context and spec anchors visible.
@@ -67,12 +90,12 @@ func _apply_far(node_entries: Array, edge_entries: Array) -> void:
 	for entry: Dictionary in node_entries:
 		var anchor: Node3D = entry["anchor"]
 		var ntype: String = entry["node_type"]
-		anchor.visible = (ntype == "bounded_context" or ntype == "spec")
+		_transition_visible(anchor, ntype == "bounded_context" or ntype == "spec")
 	for entry: Dictionary in edge_entries:
 		var vis_node: Node3D = entry["visual"]
 		var etype: String = entry["edge_type"]
 		# Show only aggregate edges at FAR; hide individual cross-context and internal.
-		vis_node.visible = (etype == "aggregate")
+		_transition_visible(vis_node, etype == "aggregate")
 
 
 ## MEDIUM: bounded_context, module, and spec visible; cross_context edges visible;
@@ -83,12 +106,12 @@ func _apply_medium(node_entries: Array, edge_entries: Array) -> void:
 	for entry: Dictionary in node_entries:
 		var anchor: Node3D = entry["anchor"]
 		var ntype: String = entry["node_type"]
-		anchor.visible = (ntype == "bounded_context" or ntype == "module" or ntype == "spec")
+		_transition_visible(anchor, ntype == "bounded_context" or ntype == "module" or ntype == "spec")
 	for entry: Dictionary in edge_entries:
 		var vis_node: Node3D = entry["visual"]
 		var etype: String = entry["edge_type"]
 		# Individual cross-context edges visible; aggregate and internal hidden.
-		vis_node.visible = (etype == "cross_context")
+		_transition_visible(vis_node, etype == "cross_context")
 
 
 ## NEAR: all nodes and non-aggregate edges visible — finest detail level.
@@ -97,9 +120,9 @@ func _apply_medium(node_entries: Array, edge_entries: Array) -> void:
 ## Aggregate edges are hidden at NEAR because individual edges provide full detail.
 func _apply_near(node_entries: Array, edge_entries: Array) -> void:
 	for entry: Dictionary in node_entries:
-		(entry["anchor"] as Node3D).visible = true
+		_transition_visible(entry["anchor"] as Node3D, true)
 	for entry: Dictionary in edge_entries:
 		var vis_node: Node3D = entry["visual"]
 		var etype: String = entry["edge_type"]
 		# All edges visible at near; aggregate edges hidden (individual edges shown).
-		vis_node.visible = (etype != "aggregate")
+		_transition_visible(vis_node, etype != "aggregate")
