@@ -26,9 +26,10 @@ set -uo pipefail
 FAIL_REPORT="${1:-}"
 
 if [ -z "$FAIL_REPORT" ]; then
-    echo "Usage: $0 <fail-report-path>"
-    echo "  Provide the path to the FAIL report file to classify."
-    exit 2
+    echo "SKIP: no fail-report path provided — nothing to classify."
+    echo "  This script is invoked by the orchestrator with a specific report path."
+    echo "  Usage: $0 <fail-report-path>"
+    exit 0
 fi
 
 if [ ! -f "$FAIL_REPORT" ]; then

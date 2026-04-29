@@ -32,12 +32,11 @@ guidelines: |
 
   | Spec file | Prohibited feature | First mis-assigned | Subsequent mis-assignments |
   |---|---|---|---|
-  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ SECOND MIS-ASSIGNMENT |
-  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ SECOND MIS-ASSIGNMENT |
+  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ task-024 (3rd attempt) ⚠⚠ THIRD MIS-ASSIGNMENT |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ THIRD MIS-ASSIGNMENT |
 
-  **Both specs have now been mis-assigned TWICE.**
-  Before assigning any future task, investigate: how did these specs re-enter the
-  candidate pool after being prohibited? Close that upstream gap immediately.
+  **Both specs have now been mis-assigned THREE TIMES.**
+  The table is the PRIMARY gate — see TABLE-FIRST RULE below.
   The re-attempt pattern (scope-prohibition FAIL treated as implementation FAIL and retried)
   is itself the upstream gap — see the FAIL classification section below.
 
@@ -60,8 +59,22 @@ guidelines: |
   If it contains "INVALID ASSIGNMENT" with scope-prohibition language, close the
   task permanently. Do not create a new task number for the same spec. Do not schedule
   a second attempt of the same task. task-031 (re-attempt of task-028's scope FAIL)
-  and the second attempt of task-024 were both process errors caused by treating a
-  scope-prohibition FAIL as an implementation FAIL.
+  and the second and third attempts of task-024/task-028 were all process errors caused
+  by treating a scope-prohibition FAIL as an implementation FAIL.
+
+  ### TABLE-FIRST RULE — check the table before ANY script
+
+  The prohibited-spec table above is the AUTHORITATIVE source of truth. It does not
+  require file I/O or a fail-report path to query — scan it with your eyes.
+
+  **Before assigning or re-assigning ANY task:** look up the candidate spec path in
+  the table. If it appears there, the decision is already made: PERMANENTLY CLOSED.
+  Do NOT run a script, do NOT re-read the spec, do NOT create a new task number for
+  it. The table entry supersedes all other considerations.
+
+  The script checks (`check-assigned-spec-in-scope.sh`, `check-fail-report-classification.sh`)
+  are supplementary — they catch specs NOT yet recorded in the table. They do not
+  override the table for specs already listed.
 
   ### PRE-RETRY GATE — mandatory before every re-attempt
 
