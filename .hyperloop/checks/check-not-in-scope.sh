@@ -161,10 +161,43 @@ if [ -n "$_DF_ALL" ]; then
   fi
 fi
 
-# First-person navigation: WASD or fly-cam bindings
-if grep -qi "KEY_W\|KEY_A\|KEY_S\|KEY_D\|fly.cam\|first.person" godot/scripts/camera_controller.gd 2>/dev/null; then
-  echo "FAIL: Prohibited first-person navigation code detected in camera_controller.gd"
-  FAIL=1
+# ── 5. First-person navigation ────────────────────────────────────────────────
+# Search ALL scripts and autoload files — not just camera_controller.gd — because
+# the prohibited feature can be introduced under any filename (e.g.,
+# first_person_camera_controller.gd, camera_mode.gd).
+# Use branch-attribution: only FAIL for files introduced by this branch.
+_FP_PATTERN="KEY_W\b\|KEY_A\b\|KEY_S\b\|KEY_D\b\|fly.cam\|first.person\|FirstPerson\|first_person"
+_FP_ALL=$(grep -rli "$_FP_PATTERN" godot/scripts/ godot/autoload/ 2>/dev/null || true)
+
+if [ -n "$_FP_ALL" ]; then
+  _FP_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+  _FP_NEW=""
+  _FP_OLD=""
+  for _f in $_FP_ALL; do
+    if [[ "$_FP_BRANCH" == "main" || "$_FP_BRANCH" == "HEAD" ]]; then
+      _FP_NEW="$_FP_NEW $_f"
+    elif git log main..HEAD --oneline -- "$_f" 2>/dev/null | grep -q .; then
+      _FP_NEW="$_FP_NEW $_f"
+    else
+      _FP_OLD="$_FP_OLD $_f"
+    fi
+  done
+  if [ -n "$_FP_NEW" ]; then
+    echo "FAIL: Prohibited first-person navigation code detected (introduced by this branch)."
+    echo "  First-person navigation is explicitly excluded in prototype-scope.spec.md."
+    echo "  Matched files:"
+    for _f in $_FP_NEW; do echo "  $_f"; done
+    FAIL=1
+  fi
+  if [ -n "$_FP_OLD" ]; then
+    echo "NOTE: Pre-existing first-person navigation patterns in files from main"
+    echo "  (NOT introduced by this branch — attributed to their originating task):"
+    for _f in $_FP_OLD; do
+      _origin=$(git log --oneline -1 -- "$_f" 2>/dev/null || echo "unknown")
+      echo "  $_f  (origin: $_origin)"
+    done
+    echo "  These are informational only and do NOT count as a FAIL for this branch."
+  fi
 fi
 
 # ── Result ────────────────────────────────────────────────────────────────────

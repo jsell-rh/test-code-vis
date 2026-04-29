@@ -164,3 +164,35 @@ guidelines: |
   5; implementer correctly satisfies all 5; 2 requirements exist only in the
   assignment text → verdict: PASS. The Spec-Drift Summary tells the orchestrator
   to update the spec file and re-assign for the 2 missing requirements.
+
+  ## LOD TRANSITION VERIFICATION
+
+  Run `bash .hyperloop/checks/check-lod-opacity-animation.sh` and include its
+  complete output verbatim in your findings.
+
+  When a spec THEN-clause uses the words "fade", "smoothly", "animated opacity",
+  "dissolve", or "morph" for a LOD transition:
+  - Confirm the implementation uses `Tween.tween_property(…, "modulate:a", …)`
+    or a `_process`-based `lerp` on `modulate.a`.
+  - Binary `.visible = true/false` for that transition is a FAIL, regardless of
+    whether the final steady-state visibility is correct.
+  - A test that only asserts `.visible == true/false` does NOT cover an animated
+    transition THEN-clause — mark that clause PARTIAL at best.
+  - A LOD manager that exclusively uses `.visible` assignments with no Tween or
+    modulate.a anywhere is implementing instant pops, not animated transitions —
+    FAIL every THEN-clause that mentions animation or smooth fading.
+
+  ## AGGREGATE EDGE VERIFICATION
+
+  Run `bash .hyperloop/checks/check-aggregate-edge-impl.sh` and include its
+  complete output verbatim in your findings.
+
+  When a spec LOD scenario requires "aggregate edges per [group] pair":
+  - Confirm a distinct data structure groups individual edges by context pair.
+  - Confirm one rendered mesh/line exists per unique (src_context, dst_context) pair.
+  - Hiding all individual edges is NOT equivalent — it satisfies "individual edges
+    not visible" but NOT "aggregate edges with weight are visible". Mark as MISSING
+    if only hiding occurs and no per-pair aggregate rendering exists.
+  - The weight/thickness of the aggregate edge must be proportional to total import
+    count; a uniform-weight aggregate edge is PARTIAL if the spec says "weight
+    indicating total import count".

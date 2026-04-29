@@ -159,3 +159,57 @@ guidelines: |
 
   Before committing: grep the test file for every `.` member access on the object
   under test, then grep the implementation file to confirm each name exists.
+
+  ## LOD TRANSITIONS MUST USE ANIMATED OPACITY
+
+  When a spec THEN-clause uses the words "fade", "smoothly", "animated opacity",
+  "dissolve", or "morph", the transition MUST be implemented via
+  `Tween.tween_property(node, "modulate:a", target, duration)` (or equivalent
+  `_process`-based lerp on `modulate.a`). Binary `.visible = true/false` is
+  FORBIDDEN for any transition the spec describes as animated or smooth — it
+  produces an instant pop/snap that directly contradicts the spec.
+
+  Mapping of spec language to required GDScript technique:
+  - "fade in / fade out" → Tween modulate.a from 0.0 → 1.0 (or reverse)
+  - "animated opacity transition" → Tween.tween_property on modulate.a
+  - "smoothly dissolve" → Tween fading out one set while fading in another
+  - "morph smoothly" → simultaneous opacity crossfade between two edge sets
+  - "continuous — no elements pop in" → modulate.a animation, not .visible toggle
+
+  Nodes hidden via modulate.a=0.0 are still in the scene tree; nodes hidden via
+  .visible=false are culled. Use modulate.a for spec-required animated transitions
+  and .visible only for permanently out-of-LOD-band culling.
+
+  Run `bash .hyperloop/checks/check-lod-opacity-animation.sh` before submitting.
+
+  ## AGGREGATE EDGES ARE A SEPARATE RENDERED SET
+
+  When a spec LOD scenario requires "aggregate edges per [group] pair" (e.g.
+  "single aggregate edges per context pair, with weight indicating total import
+  count"), this is a DISTINCT rendered data structure — NOT the same individual
+  edges with `.visible=false`. The implementation must:
+  1. Build a separate array/dict grouping edges by (source_context, target_context)
+     pair and summing their import counts.
+  2. Render one aggregate MeshInstance3D (or ImmediateMesh line) per pair,
+     with visual weight (e.g., line width or opacity) proportional to total count.
+  3. Show aggregate edges at the LOD level the spec specifies (e.g., FAR);
+     hide individual edges at that same level.
+
+  Hiding all individual edges at FAR distance does NOT satisfy the requirement for
+  "aggregate edges with weight". It satisfies only "individual edges not visible".
+
+  Run `bash .hyperloop/checks/check-aggregate-edge-impl.sh` before submitting.
+
+  ## SPEC-FIRST TEST STUBS BEFORE IMPLEMENTATION
+
+  For every spec scenario assigned to this task, enumerate each THEN-clause as a
+  failing test stub BEFORE writing implementation code. The test stub should
+  assert exactly what the spec's language says — not what your planned
+  implementation does. Examples:
+  - Spec says "fade in smoothly" → stub asserts a Tween was created on modulate.a
+  - Spec says "aggregate edges per context pair" → stub asserts one rendered edge
+    exists per unique (src_ctx, dst_ctx) pair in fixture data
+  - Spec says "no elements pop in" → stub asserts no direct .visible assignments
+
+  If you cannot write a failing test for a THEN-clause, escalate — it may be
+  untestable in the current environment and requires PASS-WITH-NOTE treatment.
