@@ -2,12 +2,12 @@
 id: task-028
 title: Extend scene graph schema with spec-reference annotations
 spec_ref: specs/core/understanding-modes.spec.md@1b8307fdc9a651c51a0b9aa1e18a6141404f3a6a
-status: not_started
-phase: null
+status: in_progress
+phase: implement
 deps:
 - task-001
 round: 0
-branch: null
+branch: hyperloop/task-028
 pr: null
 pr_title: null
 pr_description: null
