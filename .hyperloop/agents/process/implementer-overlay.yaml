@@ -28,10 +28,22 @@ guidelines: |
 
   ## SCOPE COMPLIANCE
 
-  Prohibited features are forbidden under ANY name. Before writing ANY code:
-  1. Read every item in the spec's "Not In Scope" section
-  2. Run `bash .hyperloop/checks/check-not-in-scope.sh` — confirm exit 0
-  3. Re-run after every logical code chunk
+  `specs/prototype/prototype-scope.spec.md` is the PROTOTYPE-SCOPE AUTHORITY.
+  It has VETO POWER over every other spec, including your assigned task spec.
+  When your assigned spec says "3D navigation SHALL" but prototype-scope.spec.md
+  lists "first-person navigation" as NOT IN SCOPE, implement orbital navigation
+  only — the scope spec's prohibition wins unconditionally. No other spec can
+  override it.
+
+  Prohibited features are forbidden under ANY name. Before writing ANY new file
+  or function:
+  1. Open `specs/prototype/prototype-scope.spec.md` and read every item in its
+     "Not In Scope" section. If your planned feature matches any item, STOP — do
+     not write a single line of that code.
+  2. Run `bash .hyperloop/checks/check-not-in-scope.sh` — confirm exit 0.
+  3. Re-run after every logical code chunk.
+  4. If `check-not-in-scope.sh` exits non-zero, DELETE the prohibited code before
+     doing anything else. Do not attempt to submit with a failing scope check.
 
   ## SHADOW-REPLACEMENT IS FORBIDDEN
 
@@ -199,6 +211,26 @@ guidelines: |
   "aggregate edges with weight". It satisfies only "individual edges not visible".
 
   Run `bash .hyperloop/checks/check-aggregate-edge-impl.sh` before submitting.
+
+  ## LOD COMPLETENESS — ALL LEVELS, NOT JUST SOME
+
+  When your task spec defines multiple LOD distance levels (Near / Medium / Far),
+  you MUST implement AND write behavioral tests for ALL levels before submitting.
+  Implementing "Medium" LOD changes while leaving "Far" unaddressed is a blocking
+  gap, even if the gap existed before your branch.
+
+  Before touching any LOD/visualization code:
+  1. List every LOD level defined in the spec (Near / Medium / Far).
+  2. For each level, identify the THEN-clauses that apply (e.g., "aggregate edges
+     with weight" for Far).
+  3. Implement each level fully — including a test that asserts the THEN-clause
+     behavior with fixture data — before moving to the next level.
+  4. Run `bash .hyperloop/checks/check-lod-level-tests.sh` — confirm exit 0.
+  5. Run `bash .hyperloop/checks/check-aggregate-edge-impl.sh` — confirm exit 0.
+
+  "Hiding individual edges" at Far distance is NOT equivalent to "showing aggregate
+  edges with weight". The aggregate structure is a separate rendered data set —
+  see the AGGREGATE EDGES section above for its required form.
 
   ## SPEC-FIRST TEST STUBS BEFORE IMPLEMENTATION
 

@@ -196,3 +196,23 @@ guidelines: |
   - The weight/thickness of the aggregate edge must be proportional to total import
     count; a uniform-weight aggregate edge is PARTIAL if the spec says "weight
     indicating total import count".
+
+  ## LOD COMPLETENESS AUDIT (ALL LEVELS)
+
+  Run `bash .hyperloop/checks/check-lod-level-tests.sh` and include its complete
+  output verbatim in your findings.
+
+  When the branch modifies ANY LOD or visualization code:
+  1. List ALL LOD levels defined in the assigned spec (Near / Medium / Far).
+  2. For EACH level, independently verify: (a) implementation code exists, AND
+     (b) a behavioral GDScript test exercises it with fixture data.
+  3. Do NOT limit your review to the LOD levels that have obvious code changes.
+     A branch that adds "Medium" code while silently leaving "Far" unimplemented
+     is FAIL — even if the verifier didn't notice the Far gap in their initial read.
+  4. An LOD level with implementation but no behavioral test is PARTIAL, not COVERED.
+  5. An LOD level with neither implementation nor test is MISSING.
+
+  Scope note: if a particular LOD level's requirement existed before this branch and
+  the branch did not touch it, apply the standard "pre-existing gap / not this
+  task's remit" rule — but only when the branch made ZERO changes to that level's
+  code path. If the branch touches shared LOD infrastructure, all levels are in scope.
