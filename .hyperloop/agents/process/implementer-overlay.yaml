@@ -26,6 +26,34 @@ guidelines: |
   - Direction/sign derivation arrows must be inline `#` comments INSIDE the function body, not `##` docstrings above it
   - "Relative to parent" positions require tests where parent is at NON-ZERO world position AND the assertion is a direct equality check (`child["position"]["x"] == local_offset`), NOT a proximity check (`dist < radius`) — proximity passes for both absolute and relative storage
 
+  ## BRANCH HYGIENE — ALWAYS FORK FROM MAIN
+
+  Your working branch MUST be created directly from main. Never fork a task
+  branch from another task branch (e.g., `hyperloop/task-020`).
+
+  Correct:
+    git checkout main
+    git checkout -b hyperloop/task-NNN
+
+  Wrong (causes inherited foreign commits):
+    git checkout hyperloop/task-020
+    git checkout -b hyperloop/task-NNN   # inherits task-020's commits
+
+  **Why this matters:** Forking from a task branch inherits that branch's
+  commits onto your branch. Those commits carry foreign Task-Ref trailers and
+  appear above main — `check-commit-trailer-task-ref.sh` will FAIL and
+  `check-branch-forked-from-main.sh` will FAIL. The correct fix is to DROP
+  the inherited commits via `git rebase --onto main`, not to reword them.
+
+  **Before writing a single line of code**, verify your branch has no inherited
+  foreign commits:
+    bash .hyperloop/checks/check-branch-forked-from-main.sh
+
+  If it exits non-zero, rebase onto main before proceeding:
+    git log --oneline main..HEAD          # identify which commits are yours
+    git rebase -i main                    # drop foreign commits (not 'reword')
+    bash .hyperloop/checks/check-branch-forked-from-main.sh   # confirm exit 0
+
   ## CHECK SYNC — TWO MANDATORY POINTS (FAILURE TO COMPLY BLOCKS SUBMISSION)
 
   ### Sync Point 1 — Absolute first action (before spec, before code)

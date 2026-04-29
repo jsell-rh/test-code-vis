@@ -29,10 +29,14 @@ guidelines: |
   The following spec files have been confirmed out-of-scope and MUST NOT be assigned
   as implementer tasks under any circumstances:
 
-  | Spec file | Prohibited feature | Authority |
-  |---|---|---|
-  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | prototype-scope.spec.md line 93 |
-  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | prototype-scope.spec.md lines 89-91 |
+  | Spec file | Prohibited feature | Authority | Mis-assignment count |
+  |---|---|---|---|
+  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | prototype-scope.spec.md line 93 | 1 (task-024) |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | prototype-scope.spec.md lines 89-91 | 2 (task-028, task-031) ⚠ |
+
+  **`specs/core/understanding-modes.spec.md` has been mis-assigned TWICE.**
+  Do not assign it again under any name or framing.  Investigate how it
+  re-entered the candidate pool after task-028 and close that gap.
 
   **If a spec on this list has already been mis-assigned once: do not assign it
   again.  A repeated invalid assignment is a process failure, not an implementer

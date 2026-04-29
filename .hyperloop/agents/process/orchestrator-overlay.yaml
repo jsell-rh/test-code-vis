@@ -30,10 +30,14 @@ guidelines: |
   A second mis-assignment of the same spec is a **process failure**, not an
   implementer failure. The table is append-only — never remove entries.
 
-  | Spec file | Prohibited feature | First mis-assigned |
-  |---|---|---|
-  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 |
-  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 |
+  | Spec file | Prohibited feature | First mis-assigned | Subsequent mis-assignments |
+  |---|---|---|---|
+  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | — |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ SECOND MIS-ASSIGNMENT |
+
+  **`specs/core/understanding-modes.spec.md` has now been mis-assigned TWICE.**
+  Before assigning any future task, investigate: how did this spec re-enter the
+  candidate pool after being prohibited? Close that upstream gap immediately.
 
   ### Invalid assignment protocol
 
