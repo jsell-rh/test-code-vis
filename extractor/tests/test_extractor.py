@@ -10,7 +10,9 @@ so they remain hermetic and fast.
 
 from __future__ import annotations
 
+import ast
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -1703,3 +1705,85 @@ class TestUbiquitousFlags:
         ubiq_edges = [e for e in graph["edges"] if e.get("ubiquitous") is True]
         # In the standard test fixture, nothing should be ubiquitous
         assert isinstance(ubiq_edges, list)  # just confirm no crash
+
+
+# ---------------------------------------------------------------------------
+# Requirement: CLI entry point
+# ---------------------------------------------------------------------------
+
+
+class TestCLI:
+    def test_main_exits_zero_and_writes_json(self, src: Path, tmp_path: Path) -> None:
+        """CLI entry point MUST exit 0 and write valid JSON."""
+        from extractor.__main__ import main
+
+        out = tmp_path / "output.json"
+        rc = main([str(src), "--output", str(out)])
+        assert rc == 0
+        assert out.exists(), "Output file must be created"
+        content = json.loads(out.read_text())
+        assert "nodes" in content
+        assert "edges" in content
+        assert "metadata" in content
+        assert "clusters" in content
+
+    def test_main_returns_1_on_nonexistent_path(self, tmp_path: Path) -> None:
+        """CLI MUST return exit code 1 when src_path does not exist."""
+        from extractor.__main__ import main
+
+        rc = main([str(tmp_path / "does_not_exist")])
+        assert rc == 1
+
+    def test_main_returns_1_on_file_not_dir(self, tmp_path: Path) -> None:
+        """CLI MUST return exit code 1 when src_path is a file."""
+        from extractor.__main__ import main
+
+        f = tmp_path / "file.py"
+        f.write_text("")
+        rc = main([str(f)])
+        assert rc == 1
+
+
+# ---------------------------------------------------------------------------
+# Requirement: stdlib-only constraint
+# ---------------------------------------------------------------------------
+
+
+class TestStdlibOnly:
+    def test_extractor_uses_only_stdlib_imports(self) -> None:
+        """The extractor MUST NOT depend on any third-party library.
+
+        Parse all .py files in the extractor package and assert every top-level
+        import resolves to a standard library module or the extractor package
+        itself.
+        """
+        extractor_root = Path(__file__).parent.parent
+        third_party: list[str] = []
+
+        for py_file in extractor_root.rglob("*.py"):
+            if "tests" in py_file.parts:
+                continue  # only check production code
+            try:
+                source = py_file.read_text(encoding="utf-8", errors="replace")
+                tree = ast.parse(source, filename=str(py_file))
+            except SyntaxError:
+                continue
+
+            for node in ast.walk(tree):
+                top_name: str | None = None
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        top_name = alias.name.split(".")[0]
+                elif isinstance(node, ast.ImportFrom):
+                    if node.level == 0 and node.module:
+                        top_name = node.module.split(".")[0]
+
+                if top_name and top_name not in sys.stdlib_module_names:
+                    # Allow the extractor package itself.
+                    if top_name != "extractor":
+                        third_party.append(f"{py_file.name}: {top_name}")
+
+        assert third_party == [], (
+            "Extractor must use only stdlib imports. "
+            "Third-party imports found:\n" + "\n".join(third_party)
+        )

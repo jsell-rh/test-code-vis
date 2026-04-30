@@ -1,6 +1,6 @@
 ## Behavioral tests for SceneGraphLoader.
 ##
-## Validates every THEN clause from specs/extraction/code-extraction.spec.md
+## Validates every THEN clause from specs/extraction/scene-graph-schema.spec.md
 ## that describes the JSON format consumed by the Godot visualiser.
 ##
 ## Each test_* method is discovered and run by tests/run_tests.gd.
@@ -41,9 +41,10 @@ func _make_fixture() -> Dictionary:
 				"name": "Domain",
 				"type": "module",
 				"parent": "iam",
-				"position": {"x": 0.5, "y": 1.0, "z": 0.0},
+				"position": {"x": 0.5, "y": 0.0, "z": 0.0},
 				"size": 1.2,
 				"metrics": {"loc": 80},
+				"independence_group": "iam:0",
 			},
 			{
 				"id": "shared_kernel",
@@ -57,12 +58,25 @@ func _make_fixture() -> Dictionary:
 		],
 		"edges": [
 			{"source": "iam", "target": "shared_kernel", "type": "cross_context"},
+			{"source": "iam", "target": "shared_kernel", "type": "aggregate", "weight": 3},
 			{"source": "iam.application", "target": "iam.domain", "type": "internal"},
 		],
 		"metadata": {
 			"source_path": "/tmp/kartograph",
 			"timestamp": "2026-04-22T00:00:00Z",
 		},
+		"clusters": [
+			{
+				"id": "iam:cluster_0",
+				"members": ["iam.domain", "iam.application"],
+				"context": "iam",
+				"aggregate_metrics": {
+					"total_loc": 160,
+					"in_degree": 0,
+					"out_degree": 1,
+				},
+			}
+		],
 	}
 
 
@@ -146,6 +160,28 @@ func test_node_has_size_field() -> void:
 
 
 # ---------------------------------------------------------------------------
+# Scenario: Module node with independence_group
+# THEN each module has an independence_group field
+# ---------------------------------------------------------------------------
+
+func test_module_node_has_independence_group() -> void:
+	# THEN: module node carries an independence_group identifier
+	var result = SceneGraphLoader.load_from_dict(_make_fixture())
+	var module_node: Dictionary = result["nodes"][1]  # iam.domain
+	_check("independence_group" in module_node, "Module node must have 'independence_group' field")
+	_check(module_node["independence_group"] == "iam:0", "independence_group should be 'iam:0'")
+
+
+func test_bc_node_has_no_independence_group() -> void:
+	# THEN: bounded context nodes do NOT carry independence_group (only modules do)
+	var result = SceneGraphLoader.load_from_dict(_make_fixture())
+	var bc_node: Dictionary = result["nodes"][0]  # iam (bounded context)
+	# BC has no independence_group in fixture — confirm it's not spuriously added
+	_check(not ("independence_group" in bc_node) or bc_node.get("independence_group", "") == "",
+		"BC node should not have independence_group")
+
+
+# ---------------------------------------------------------------------------
 # Scenario: Output format — the JSON contains a list of edges
 # THEN the JSON contains a list of edges (source, target, type)
 # ---------------------------------------------------------------------------
@@ -158,7 +194,7 @@ func test_edges_list_is_returned() -> void:
 
 func test_edge_count_matches_input() -> void:
 	var result = SceneGraphLoader.load_from_dict(_make_fixture())
-	_check(result["edges"].size() == 2, "Expected 2 edges, got %d" % result["edges"].size())
+	_check(result["edges"].size() == 3, "Expected 3 edges, got %d" % result["edges"].size())
 
 
 func test_edge_has_source_field() -> void:
@@ -179,6 +215,27 @@ func test_edge_has_type_field() -> void:
 	var result = SceneGraphLoader.load_from_dict(_make_fixture())
 	var edge: Dictionary = result["edges"][0]
 	_check("type" in edge, "Edge must have 'type' field")
+
+
+# ---------------------------------------------------------------------------
+# Scenario: Weighted edge (aggregate)
+# THEN aggregate edges carry a weight field
+# ---------------------------------------------------------------------------
+
+func test_aggregate_edge_has_weight() -> void:
+	# THEN: aggregate edges carry a 'weight' indicating total import count
+	var result = SceneGraphLoader.load_from_dict(_make_fixture())
+	var agg_edge: Dictionary = result["edges"][1]  # aggregate edge in fixture
+	_check(agg_edge["type"] == "aggregate", "Second edge should be type 'aggregate'")
+	_check("weight" in agg_edge, "Aggregate edge must have 'weight' field")
+	_check(agg_edge["weight"] == 3, "Aggregate edge weight should be 3")
+
+
+func test_non_aggregate_edge_type_preserved() -> void:
+	# THEN: cross_context edges are distinguishable from aggregate edges
+	var result = SceneGraphLoader.load_from_dict(_make_fixture())
+	var cross_edge: Dictionary = result["edges"][0]
+	_check(cross_edge["type"] == "cross_context", "First edge should be 'cross_context'")
 
 
 # ---------------------------------------------------------------------------
@@ -209,14 +266,14 @@ func test_cross_context_edge_type_is_cross_context() -> void:
 
 func test_internal_edge_type_is_internal() -> void:
 	var result = SceneGraphLoader.load_from_dict(_make_fixture())
-	var internal_edge: Dictionary = result["edges"][1]
+	var internal_edge: Dictionary = result["edges"][2]
 	_check(internal_edge["type"] == "internal", "Internal edge type should be 'internal'")
 
 
 func test_edge_types_are_distinguishable() -> void:
 	var result = SceneGraphLoader.load_from_dict(_make_fixture())
 	var cross_type: String = result["edges"][0]["type"]
-	var internal_type: String = result["edges"][1]["type"]
+	var internal_type: String = result["edges"][2]["type"]
 	_check(cross_type != internal_type, "cross_context and internal edge types must differ")
 
 
@@ -233,41 +290,95 @@ func test_metadata_is_returned() -> void:
 
 
 func test_empty_graph_is_handled_gracefully() -> void:
-	var data: Dictionary = {"nodes": [], "edges": [], "metadata": {}}
+	var data: Dictionary = {"nodes": [], "edges": [], "metadata": {}, "clusters": []}
 	var result = SceneGraphLoader.load_from_dict(data)
 	_check(result["nodes"].size() == 0, "Empty graph should have 0 nodes")
 	_check(result["edges"].size() == 0, "Empty graph should have 0 edges")
+	_check(result["clusters"].size() == 0, "Empty graph should have 0 clusters")
 
 
 func test_missing_top_level_keys_default_to_empty() -> void:
 	var result = SceneGraphLoader.load_from_dict({})
 	_check(result["nodes"].size() == 0, "Missing nodes key should default to empty")
 	_check(result["edges"].size() == 0, "Missing edges key should default to empty")
+	_check(result["clusters"].size() == 0, "Missing clusters key should default to empty")
 
 
 # ---------------------------------------------------------------------------
-# Scenario: Spec nodes are distinguishable from code nodes
-# AND spec nodes are distinguishable from code-derived nodes
+# Scenario: Cluster schema — clusters array contains supernode suggestions
+# THEN clusters contains an entry with id, members, context, aggregate_metrics
 # ---------------------------------------------------------------------------
 
-func test_spec_node_type_is_preserved() -> void:
+func test_clusters_list_is_returned() -> void:
+	var result = SceneGraphLoader.load_from_dict(_make_fixture())
+	_check("clusters" in result, "Result must contain 'clusters' key")
+	_check(result["clusters"] is Array, "'clusters' must be an Array")
+
+
+func test_cluster_count_matches_input() -> void:
+	var result = SceneGraphLoader.load_from_dict(_make_fixture())
+	_check(result["clusters"].size() == 1, "Expected 1 cluster, got %d" % result["clusters"].size())
+
+
+func test_cluster_has_id_field() -> void:
+	var result = SceneGraphLoader.load_from_dict(_make_fixture())
+	var cluster: Dictionary = result["clusters"][0]
+	_check("id" in cluster, "Cluster must have 'id' field")
+	_check(cluster["id"] == "iam:cluster_0", "Cluster id should be 'iam:cluster_0'")
+
+
+func test_cluster_has_members_field() -> void:
+	var result = SceneGraphLoader.load_from_dict(_make_fixture())
+	var cluster: Dictionary = result["clusters"][0]
+	_check("members" in cluster, "Cluster must have 'members' field")
+	_check(cluster["members"] is Array, "'members' must be an Array")
+	_check(cluster["members"].size() == 2, "Cluster should have 2 members")
+
+
+func test_cluster_has_context_field() -> void:
+	var result = SceneGraphLoader.load_from_dict(_make_fixture())
+	var cluster: Dictionary = result["clusters"][0]
+	_check("context" in cluster, "Cluster must have 'context' field")
+	_check(cluster["context"] == "iam", "Cluster context should be 'iam'")
+
+
+func test_cluster_has_aggregate_metrics() -> void:
+	var result = SceneGraphLoader.load_from_dict(_make_fixture())
+	var cluster: Dictionary = result["clusters"][0]
+	_check("aggregate_metrics" in cluster, "Cluster must have 'aggregate_metrics' field")
+	var agg = cluster["aggregate_metrics"]
+	_check("total_loc" in agg, "aggregate_metrics must have 'total_loc'")
+	_check("in_degree" in agg, "aggregate_metrics must have 'in_degree'")
+	_check("out_degree" in agg, "aggregate_metrics must have 'out_degree'")
+
+
+func test_cluster_does_not_prescribe_position() -> void:
+	# THEN: the cluster entry does NOT prescribe the collapsed position —
+	# Godot computes the supernode position as the centroid of member positions
+	var result = SceneGraphLoader.load_from_dict(_make_fixture())
+	var cluster: Dictionary = result["clusters"][0]
+	_check(not ("position" in cluster), "Cluster must NOT prescribe a position — Godot computes it as centroid")
+
+
+func test_empty_clusters_array_is_valid() -> void:
+	# THEN: a bounded context with no coupling above threshold → empty clusters
 	var data: Dictionary = {
 		"nodes": [
 			{
-				"id": "spec.iam",
-				"name": "IAM",
-				"type": "spec",
+				"id": "alpha",
+				"name": "Alpha",
+				"type": "bounded_context",
 				"parent": null,
-				"position": {"x": 0.0, "y": 5.0, "z": 0.0},
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
 				"size": 1.0,
 			}
 		],
 		"edges": [],
 		"metadata": {},
+		"clusters": [],
 	}
 	var result = SceneGraphLoader.load_from_dict(data)
-	_check(result["nodes"].size() == 1, "Should have 1 spec node")
-	_check(result["nodes"][0]["type"] == "spec", "Spec node type must be 'spec'")
+	_check(result["clusters"].size() == 0, "No coupling → empty clusters array")
 
 
 func test_spec_nodes_have_id_prefixed_with_spec() -> void:
@@ -284,8 +395,8 @@ func test_spec_nodes_have_id_prefixed_with_spec() -> void:
 		],
 		"edges": [],
 		"metadata": {},
+		"clusters": [],
 	}
 	var result = SceneGraphLoader.load_from_dict(data)
 	var node: Dictionary = result["nodes"][0]
 	_check(node["id"].begins_with("spec."), "Spec node id should begin with 'spec.'")
-

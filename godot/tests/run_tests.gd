@@ -24,6 +24,7 @@ func _init() -> void:
 	# --- Existing test suites (from completed prior tasks) ---
 	_run_suite(preload("res://tests/test_scene_graph_loader.gd").new())
 	_run_suite(preload("res://tests/test_node_renderer.gd").new())
+	_run_suite(preload("res://tests/test_nfr.gd").new())
 
 	# --- task-009: Godot Application spec ---
 	_run_suite(preload("res://tests/test_scene_graph_loading.gd").new())
