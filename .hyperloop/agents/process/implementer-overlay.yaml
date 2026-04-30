@@ -168,8 +168,24 @@ guidelines: |
      not write a single line of that code.
   2. Run `bash .hyperloop/checks/check-not-in-scope.sh` — confirm exit 0.
   3. Re-run after every logical code chunk.
-  4. If `check-not-in-scope.sh` exits non-zero, DELETE the prohibited code before
-     doing anything else. Do not attempt to submit with a failing scope check.
+  4. If `check-not-in-scope.sh` exits non-zero, identify the failing file(s) first,
+     then choose the correct fix:
+
+     **Case A — File has commits from YOUR branch** (`git log main..HEAD -- <file>`
+     returns output): You introduced the violation. Delete or rewrite the prohibited
+     code in-place.
+
+     **Case B — File has NO commits from your branch** (`git log main..HEAD -- <file>`
+     returns nothing): You did NOT introduce this violation — it was inherited from
+     the fork point, and main has likely already fixed it. Do NOT hand-edit.
+     Sync from main instead:
+       git checkout main -- <failing-file>
+     Then re-run `bash .hyperloop/checks/check-not-in-scope.sh` — confirm exit 0.
+     Also sync any companion test file if one exists (e.g., `godot/tests/test_*.gd`
+     with a matching name).
+
+     Do not attempt to submit with a failing scope check regardless of which case
+     applies.
 
   ## SHADOW-REPLACEMENT IS FORBIDDEN
 

@@ -4,6 +4,19 @@ Records cases where specs were reviewed but no tasks were created, with rational
 
 ---
 
+## 2026-04-30 — Full batch of 6 modified specs
+
+| Spec | Decision | Rationale |
+|---|---|---|
+| `specs/core/system-purpose.spec.md` | **No tasks. Permanently resolved.** | Vision-only document. Three requirements (Understanding Without Writing Code, Spec-Driven Context, Architecture Feedback Loop) describe long-term outcomes, not prototype implementation work. Per guidelines, core specs only generate tasks when prototype specs reference their requirements for implementation. None do. |
+| `specs/core/understanding-modes.spec.md` | **No tasks. Permanently resolved. Prohibited.** | Defines Conformance Mode, Evaluation Mode, Simulation Mode (all explicitly excluded from prototype by `prototype-scope.spec.md` lines 89–91). Permanently prohibited per check-assigned-spec-in-scope.sh. |
+| `specs/core/visual-primitives.spec.md` | **task-125 created.** | All Extraction Layer and Composition Layer requirements covered by tasks 074–124 except the Landmark Primitive. Task-086 (former Landmark task) is permanently closed; no open task replaced it. The Landmark primitive is a MUST requirement not listed in the prototype NOT IN SCOPE list. Task-125 implements Godot Landmark rendering derived from task-082's structural significance output. |
+| `specs/extraction/scene-graph-schema.spec.md` | **task-126 created.** | Six of seven requirements covered by existing tasks. Cluster Schema requires a Godot loader extension so task-068 (collapse mechanic) can access cluster data — task-068 explicitly references "task-069's loader extension", but task-069 is permanently closed. Task-126 provides the loader extension, suggestion ring indicator, and UI trigger. |
+| `specs/visualization/orthogonal-independence.spec.md` | **No tasks. Permanently resolved.** | All 3 requirements fully covered: Independence Detection → task-062; Spatial Separation → task-065, task-070, task-106; Queryable Property → task-071. Spec contents unchanged since last review. |
+| `specs/visualization/spatial-structure.spec.md` | **No tasks (task-126 covers cluster suggestion).** | Structure as Persistent Geography, Scale Through Zoom, and smooth transitions covered by tasks 008, 009, 019, 067, 107, 121. Cluster Collapsing (collapse/expand/nested) covered by task-068. Pre-computed cluster suggestions indicator now covered by task-126 (same task serves both this spec and scene-graph-schema). First-person navigation excluded from prototype per prototype-scope.spec.md line 95. |
+
+---
+
 ## 2026-04-27 — specs/core/system-purpose.spec.md & specs/core/understanding-modes.spec.md
 
 **Decision:** No tasks created.
