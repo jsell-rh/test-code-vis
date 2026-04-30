@@ -26,8 +26,8 @@ guidelines: |
   **These two steps are not optional and cannot be satisfied by reasoning.**
   Run the scripts. Then — and only then — read the Findings content.
 
-  Combined mis-assignment count (all three prohibited specs): SIXTEEN
-  (moldable-views: SIX, understanding-modes: NINE, data-flow: ONE).
+  Combined mis-assignment count (all three prohibited specs): EIGHTEEN
+  (moldable-views: SEVEN, understanding-modes: TEN, data-flow: ONE).
   Every single one was preventable by running these two steps first.
 
   ---
@@ -61,12 +61,12 @@ guidelines: |
 
   | Spec file | Prohibited feature | First mis-assigned | Subsequent mis-assignments |
   |---|---|---|---|
-  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ task-024 (3rd attempt) ⚠⚠ task-024 (4th attempt) ⚠⚠⚠ task-024 (5th attempt) ⚠⚠⚠⚠ task-024 (6th attempt) ⚠⚠⚠⚠⚠ **SIXTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
-  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ task-028 (4th attempt) ⚠⚠⚠ task-028 (5th attempt) ⚠⚠⚠⚠ task-028 (6th attempt) ⚠⚠⚠⚠⚠ task-031 (2nd run) ⚠⚠⚠⚠⚠⚠ task-028 (7th attempt) ⚠⚠⚠⚠⚠⚠⚠ task-031 (3rd run) ⚠⚠⚠⚠⚠⚠⚠⚠ **NINTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
+  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ task-024 (3rd attempt) ⚠⚠ task-024 (4th attempt) ⚠⚠⚠ task-024 (5th attempt) ⚠⚠⚠⚠ task-024 (6th attempt) ⚠⚠⚠⚠⚠ task-024 (7th attempt) ⚠⚠⚠⚠⚠⚠ **SEVENTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ task-028 (4th attempt) ⚠⚠⚠ task-028 (5th attempt) ⚠⚠⚠⚠ task-028 (6th attempt) ⚠⚠⚠⚠⚠ task-031 (2nd run) ⚠⚠⚠⚠⚠⚠ task-028 (7th attempt) ⚠⚠⚠⚠⚠⚠⚠ task-031 (3rd run) ⚠⚠⚠⚠⚠⚠⚠⚠ task-031 (4th run) ⚠⚠⚠⚠⚠⚠⚠⚠⚠ **TENTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
   | `specs/visualization/data-flow.spec.md` | Data flow visualization (rendering data flow as paths through 3D structure) | task-021 | **FIRST MIS-ASSIGNMENT — PERMANENTLY CLOSED** — mechanical check returned EXIT 0 (false pass); caught by implementer manual review; spec content uses "rendering data flow as paths" rather than exact keyword "data flow visualization" — path now added to check-assigned-spec-in-scope.sh |
 
-  **All three specs are now permanently closed. Combined mis-assignment count: SIXTEEN
-  (moldable-views: SIX, understanding-modes: NINE, data-flow: ONE).** Every attempt
+  **All three specs are now permanently closed. Combined mis-assignment count: EIGHTEEN
+  (moldable-views: SEVEN, understanding-modes: TEN, data-flow: ONE).** Every attempt
   produces the identical outcome: scope-prohibition FAIL, zero implementation code written.
   The spec prohibition is deterministic — it will not change unless
   `specs/prototype/prototype-scope.spec.md` is explicitly revised to permit these features.
@@ -123,10 +123,10 @@ guidelines: |
   **Before scheduling any retry or re-attempt:** Read the prior FAIL report first.
   If it contains "INVALID ASSIGNMENT" with scope-prohibition language, close the
   task permanently. Do not create a new task number for the same spec. Do not schedule
-  a second attempt of the same task. task-031 (re-attempt of task-028's scope FAIL),
-  the 6th attempt of task-028, the 6th attempt of task-024, task-021 (data-flow spec),
+  a second attempt of the same task. task-031 (now 4 runs for understanding-modes),
+  the 7th attempt of task-024 (moldable-views), task-021 (data-flow spec),
   and every prior scope-prohibited re-attempt were all process errors caused by treating a
-  scope-prohibition FAIL as an implementation FAIL. Sixteen total mis-assignments
+  scope-prohibition FAIL as an implementation FAIL. Eighteen total mis-assignments
   have occurred for these three specs. Each one produced the identical outcome.
 
   ### TABLE-FIRST RULE — check the table before ANY script

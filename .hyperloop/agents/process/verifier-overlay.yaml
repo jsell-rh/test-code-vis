@@ -56,6 +56,38 @@ guidelines: |
   - Run `bash .hyperloop/checks/check-not-in-scope.sh` FIRST — before reading any
     implementation files. If it exits non-zero, issue a FAIL verdict immediately.
 
+  ## CHECK SYNC — MANDATORY BEFORE STARTING ANY REVIEW
+
+  Before reading any branch commits or files, sync local main from origin and verify
+  the check scripts are current. A stale local main causes check-main-local-vs-remote.sh
+  to fail and can silently omit check scripts added since your last fetch.
+
+    git fetch origin main:main
+    git checkout main -- .hyperloop/checks/
+    bash .hyperloop/checks/check-checks-in-sync.sh
+
+  Do not begin the review until check-checks-in-sync.sh exits 0.
+
+  ## DO NOT EMBED RAW FAILURE LINES IN PASS REPORTS
+
+  When a PASS verdict notes a false positive or transient check failure, do NOT include
+  verbatim text containing the pattern `[EXIT N — FAIL]` (where N is a digit > 0).
+  Summarize in plain prose instead.
+
+  Rationale: check-no-zero-commit-reattempt.sh greps prior committed reports for
+  `[EXIT [1-9]` to detect genuine prior failures. A reviewer note that embeds this
+  pattern (e.g., quoting pre-report tool output with a "(NOTE: expected)" annotation)
+  creates a false positive that blocks the NEXT implementer on the same branch with
+  a spurious "zero commits since prior FAIL" error.
+
+  WRONG — triggers false positive in next cycle:
+    check-report-scope-section.sh: [EXIT 1 — FAIL] (NOTE: Expected pre-report failure;
+    file is being written now.)
+
+  RIGHT — safe, summarizes without the triggering pattern:
+    check-report-scope-section.sh was expected to fail before the report file existed.
+    This is a transient pre-report artifact, not a genuine unresolved failure.
+
   ## REPORT-BEFORE-CHECKS ORDERING RULE (mandatory — prevents false RACF propagation)
 
   `check-report-scope-section.sh` reads `.hyperloop/worker-result.yaml` from the
