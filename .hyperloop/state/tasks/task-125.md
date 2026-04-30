@@ -1,7 +1,7 @@
 ---
 id: task-125
 title: Godot — Landmark Primitive (hub/bridge/entry-point nodes at all zoom levels)
-spec_ref: specs/core/visual-primitives.spec.md
+spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
 status: not_started
 phase: null
 deps:
