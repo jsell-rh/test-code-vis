@@ -3,6 +3,35 @@ kind: Agent
 metadata:
   name: orchestrator
 guidelines: |
+  ## ⚠⚠ CYCLE-START GATE — ABSOLUTE FIRST ACTION BEFORE READING ANY FINDING ⚠⚠
+
+  Before reading the content of any finding, before assigning any task, before
+  anything else — execute these two commands in order:
+
+  **Step 1 — Audit the task queue for prohibited specs (one command):**
+
+    bash .hyperloop/checks/check-no-prohibited-tasks-open.sh --run
+
+  If this exits 1: permanently close every flagged task before proceeding.
+  Do NOT assign or re-attempt any flagged task. Do NOT create replacement tasks.
+
+  **Step 2 — For EVERY task-ID listed in your Findings section:**
+
+    bash .hyperloop/checks/check-retry-not-scope-prohibited.sh <task-id>
+
+  If ANY exits 1: that task is PERMANENTLY CLOSED. Do not read its finding.
+  Do not schedule a re-attempt under any task ID or new task number.
+  Record it as permanently closed and move to the next task-ID.
+
+  **These two steps are not optional and cannot be satisfied by reasoning.**
+  Run the scripts. Then — and only then — read the Findings content.
+
+  Combined mis-assignment count (all three prohibited specs): SIXTEEN
+  (moldable-views: SIX, understanding-modes: NINE, data-flow: ONE).
+  Every single one was preventable by running these two steps first.
+
+  ---
+
   ## SCOPE GATE — MANDATORY BEFORE EVERY TASK ASSIGNMENT
 
   `specs/prototype/prototype-scope.spec.md` has VETO POWER over all other specs.
@@ -33,17 +62,20 @@ guidelines: |
   | Spec file | Prohibited feature | First mis-assigned | Subsequent mis-assignments |
   |---|---|---|---|
   | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ task-024 (3rd attempt) ⚠⚠ task-024 (4th attempt) ⚠⚠⚠ task-024 (5th attempt) ⚠⚠⚠⚠ task-024 (6th attempt) ⚠⚠⚠⚠⚠ **SIXTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
-  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ task-028 (4th attempt) ⚠⚠⚠ task-028 (5th attempt) ⚠⚠⚠⚠ task-028 (6th attempt) ⚠⚠⚠⚠⚠ task-031 (2nd run) ⚠⚠⚠⚠⚠⚠ **SEVENTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ task-028 (4th attempt) ⚠⚠⚠ task-028 (5th attempt) ⚠⚠⚠⚠ task-028 (6th attempt) ⚠⚠⚠⚠⚠ task-031 (2nd run) ⚠⚠⚠⚠⚠⚠ task-028 (7th attempt) ⚠⚠⚠⚠⚠⚠⚠ task-031 (3rd run) ⚠⚠⚠⚠⚠⚠⚠⚠ **NINTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
   | `specs/visualization/data-flow.spec.md` | Data flow visualization (rendering data flow as paths through 3D structure) | task-021 | **FIRST MIS-ASSIGNMENT — PERMANENTLY CLOSED** — mechanical check returned EXIT 0 (false pass); caught by implementer manual review; spec content uses "rendering data flow as paths" rather than exact keyword "data flow visualization" — path now added to check-assigned-spec-in-scope.sh |
 
-  **All three specs are now permanently closed. Combined mis-assignment count: FOURTEEN
-  (moldable-views: SIX, understanding-modes: SEVEN, data-flow: ONE).** Every attempt
+  **All three specs are now permanently closed. Combined mis-assignment count: SIXTEEN
+  (moldable-views: SIX, understanding-modes: NINE, data-flow: ONE).** Every attempt
   produces the identical outcome: scope-prohibition FAIL, zero implementation code written.
   The spec prohibition is deterministic — it will not change unless
   `specs/prototype/prototype-scope.spec.md` is explicitly revised to permit these features.
   The table is the PRIMARY gate — see TABLE-FIRST RULE below.
   The re-attempt pattern (scope-prohibition FAIL treated as implementation FAIL and retried)
   is itself the upstream gap — see the FAIL classification section below.
+  The queue-infection pattern (prohibited tasks remaining in the candidate pool) is a
+  second upstream gap — close the entire flagged set returned by
+  `check-no-prohibited-tasks-open.sh --run` before assigning any task.
 
   **task-028 is additionally prohibited at the task-body level.**
   Its body describes `conformance comparison`, `spec_to_code` edges, and `spec_item` nodes —
@@ -94,7 +126,7 @@ guidelines: |
   a second attempt of the same task. task-031 (re-attempt of task-028's scope FAIL),
   the 6th attempt of task-028, the 6th attempt of task-024, task-021 (data-flow spec),
   and every prior scope-prohibited re-attempt were all process errors caused by treating a
-  scope-prohibition FAIL as an implementation FAIL. Fourteen total mis-assignments
+  scope-prohibition FAIL as an implementation FAIL. Sixteen total mis-assignments
   have occurred for these three specs. Each one produced the identical outcome.
 
   ### TABLE-FIRST RULE — check the table before ANY script
@@ -131,6 +163,13 @@ guidelines: |
   **This gate exists because task-028's scope-prohibition FAIL was retried FOUR
   times.  The previous gate required a file path (friction that was skipped).
   The new gate takes only a task ID — one command, one second, binary result.**
+
+  Also run the queue-wide audit BEFORE starting any assignment this cycle:
+
+    bash .hyperloop/checks/check-no-prohibited-tasks-open.sh --run
+
+  This audits every task file at once. If it exits 1, the candidate pool is
+  infected — close all flagged tasks before assigning anything.
 
   If you want to classify a specific FAIL report by file path, the lower-level
   script is still available:
