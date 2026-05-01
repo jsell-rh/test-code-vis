@@ -92,9 +92,10 @@ func test_file_access_get_as_text_returns_non_empty_string() -> void:
 
 
 ## AND all scripts use GDScript (iteration predicate) —
-## Iterates res://scripts/ via DirAccess and asserts every file ends with ".gd".
+## Iterates res://scripts/ via DirAccess and asserts every script file ends with ".gd".
 ## Satisfies the "all scripts use GDScript" THEN-clause which demands iteration over
 ## the full set — not a single-file or config-string check.
+## Skips Godot-generated metadata files (*.uid, *.import) which are not scripts.
 func test_scripts_dir_contains_only_gdscript() -> void:
 	var dir := DirAccess.open("res://scripts")
 	_check(dir != null, "DirAccess.open('res://scripts') must succeed")
@@ -105,9 +106,12 @@ func test_scripts_dir_contains_only_gdscript() -> void:
 	var found_any := false
 	while file_name != "":
 		if not dir.current_is_dir():
-			found_any = true
-			_check(file_name.ends_with(".gd"),
-				"All files in res://scripts/ must be GDScript (.gd); found: " + file_name)
+			# Skip Godot-generated metadata files (*.uid, *.import) — not scripts.
+			var is_metadata: bool = file_name.ends_with(".uid") or file_name.ends_with(".import")
+			if not is_metadata:
+				found_any = true
+				_check(file_name.ends_with(".gd"),
+					"All files in res://scripts/ must be GDScript (.gd); found: " + file_name)
 		file_name = dir.get_next()
 	dir.list_dir_end()
-	_check(found_any, "res://scripts/ must contain at least one file")
+	_check(found_any, "res://scripts/ must contain at least one .gd file")
