@@ -1,8 +1,8 @@
 ---
 id: task-039
 title: Godot — persistent mode-status HUD
-spec_ref: specs/core/understanding-modes.spec.md@1b8307fdc9a651c51a0b9aa1e18a6141404f3a6a
-status: not_started
+spec_ref: null
+status: closed
 phase: null
 deps:
 - task-038

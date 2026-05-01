@@ -1,8 +1,8 @@
 ---
 id: task-025
 title: Godot — view spec interpreter
-spec_ref: specs/interaction/moldable-views.spec.md@a59dd85d5fa31f143541e4256ed6561908c7f2d2
-status: not-started
+spec_ref: null
+status: closed
 phase: null
 deps:
 - task-024

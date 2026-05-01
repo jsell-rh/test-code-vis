@@ -1,8 +1,8 @@
 ---
 id: task-029
 title: Extractor — spec ingestion and spec-to-code mapping
-spec_ref: specs/core/understanding-modes.spec.md@1b8307fdc9a651c51a0b9aa1e18a6141404f3a6a
-status: not_started
+spec_ref: null
+status: closed
 phase: null
 deps:
 - task-028

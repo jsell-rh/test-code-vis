@@ -1,8 +1,8 @@
 ---
 id: task-023
 title: Godot — aggregate flow pattern overlay (hot paths)
-spec_ref: specs/visualization/data-flow.spec.md@a59dd85d5fa31f143541e4256ed6561908c7f2d2
-status: not-started
+spec_ref: null
+status: closed
 phase: null
 deps:
 - task-022
