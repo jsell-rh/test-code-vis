@@ -6,14 +6,18 @@ extends RefCounted
 ## The JSON produced by the Python extractor has the form:
 ##   {
 ##     "nodes": [ {id, name, type, parent, position, size, metrics,
-##                 independence_group?}, ... ],
-##     "edges": [ {source, target, type, weight?}, ... ],
+##                 independence_group?, is_hub, is_bridge, in_degree,
+##                 out_degree, ubiquitous, ...}, ... ],
+##     "edges": [ {source, target, type, ubiquitous, weight?, ...}, ... ],
 ##     "metadata": {source_path, timestamp},
 ##     "clusters": [ {id, members, context, aggregate_metrics}, ... ]
 ##   }
 ##
 ## load_from_dict() returns that same structure with all fields preserved so
 ## the Godot visualiser can consume them without any extra transformation.
+## Structural significance fields (is_hub, is_bridge, in_degree, is_peripheral,
+## community_id, community_drift, out_degree) and edge flags (ubiquitous) are
+## passed through verbatim from the raw JSON — they must not be stripped.
 
 static func load_from_dict(data: Dictionary) -> Dictionary:
 	return {
@@ -24,40 +28,46 @@ static func load_from_dict(data: Dictionary) -> Dictionary:
 	}
 
 
+## Normalise a raw node dict from the JSON.
+## Required fields are defaulted if absent; ALL other fields from the raw dict
+## are passed through verbatim so structural significance annotations
+## (is_hub, is_bridge, in_degree, community_id, independence_group, etc.)
+## reach the renderer.
 static func _parse_nodes(raw_nodes: Array) -> Array:
 	var result: Array = []
 	for raw in raw_nodes:
 		if not raw is Dictionary:
 			continue
-		var node: Dictionary = {
-			"id": raw.get("id", ""),
-			"name": raw.get("name", ""),
-			"type": raw.get("type", ""),
-			"parent": raw.get("parent", null),
-			"position": raw.get("position", {"x": 0.0, "y": 0.0, "z": 0.0}),
-			"size": raw.get("size", 1.0),
-			"metrics": raw.get("metrics", {}),
-		}
-		# Optional independence_group field (present only for module nodes).
-		if raw.has("independence_group"):
-			node["independence_group"] = raw["independence_group"]
+		# Start with a copy of the raw dict so every field is preserved.
+		var node: Dictionary = raw.duplicate()
+		# Normalise required fields to ensure stable types and defaults.
+		node["id"] = raw.get("id", "")
+		node["name"] = raw.get("name", "")
+		node["type"] = raw.get("type", "")
+		node["parent"] = raw.get("parent", null)
+		node["position"] = raw.get("position", {"x": 0.0, "y": 0.0, "z": 0.0})
+		node["size"] = raw.get("size", 1.0)
+		node["metrics"] = raw.get("metrics", {})
 		result.append(node)
 	return result
 
 
+## Normalise a raw edge dict from the JSON.
+## Required fields are defaulted if absent; ALL other fields (including the
+## 'ubiquitous' flag set by compute_ubiquitous_flags() and 'weight' on
+## aggregate edges) are passed through verbatim so the Power Rail renderer
+## can suppress ubiquitous edges and aggregate edges carry import counts.
 static func _parse_edges(raw_edges: Array) -> Array:
 	var result: Array = []
 	for raw in raw_edges:
 		if not raw is Dictionary:
 			continue
-		var edge: Dictionary = {
-			"source": raw.get("source", ""),
-			"target": raw.get("target", ""),
-			"type": raw.get("type", ""),
-		}
-		# Optional weight field — aggregate edges carry total import count.
-		if raw.has("weight"):
-			edge["weight"] = raw["weight"]
+		# Start with a copy of the raw dict so every field is preserved.
+		var edge: Dictionary = raw.duplicate()
+		# Normalise required fields.
+		edge["source"] = raw.get("source", "")
+		edge["target"] = raw.get("target", "")
+		edge["type"] = raw.get("type", "")
 		result.append(edge)
 	return result
 
