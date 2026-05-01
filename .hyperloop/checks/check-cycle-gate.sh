@@ -43,6 +43,7 @@ set -uo pipefail
 
 QUEUE_AUDIT=".hyperloop/checks/check-no-prohibited-tasks-open.sh"
 BAN_CHECK=".hyperloop/checks/check-banned-task-ids-closed.sh"
+STATE_SCAN=".hyperloop/checks/check-state-branch-prohibited-tasks.sh"
 RETRY_GATE=".hyperloop/checks/check-retry-not-scope-prohibited.sh"
 MAIN_SYNC=".hyperloop/checks/check-main-local-vs-remote.sh"
 
@@ -55,6 +56,9 @@ if [ ! -f "$BAN_CHECK" ]; then
     echo "ERROR: Banned task ID check not found: $BAN_CHECK"
     exit 2
 fi
+
+# STATE_SCAN is optional — log a warning if absent, don't fail.
+# It is new and may not be present in older worktrees.
 
 if [ ! -f "$RETRY_GATE" ]; then
     echo "ERROR: Retry gate script not found: $RETRY_GATE"
@@ -115,6 +119,32 @@ if ! bash "$BAN_CHECK" --run; then
     GATE_FAILED=1
 else
     echo "  Banned task check passed — all banned IDs are closed on both branches."
+fi
+
+echo ""
+echo "========================================================================"
+echo "CYCLE-START GATE — Step 1c: State-branch prohibited-spec scan"
+echo "========================================================================"
+echo ""
+echo "  Scans ALL open tasks on hyperloop/state for prohibited spec_refs."
+echo "  This catches the gap: tasks closed on main but open on hyperloop/state."
+echo "  Root cause of task-021 (2nd mis-assignment) and 30+ other infected tasks."
+echo ""
+
+if [ -f "$STATE_SCAN" ]; then
+    if ! bash "$STATE_SCAN" --run; then
+        echo ""
+        echo "  STATE SCAN FAILED — prohibited tasks open on hyperloop/state."
+        echo "  Close every PROHIBITED task on hyperloop/state before assigning."
+        echo "  (WARN items are advisory — review before assigning those tasks.)"
+        GATE_FAILED=1
+    else
+        echo "  State-branch scan passed — no prohibited spec_refs open on hyperloop/state."
+        echo "  (WARN items above need orchestrator review before those tasks are assigned.)"
+    fi
+else
+    echo "  SKIP: check-state-branch-prohibited-tasks.sh not found — sync checks from main."
+    echo "    git fetch origin main:main && git checkout main -- .hyperloop/checks/"
 fi
 
 echo ""

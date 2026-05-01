@@ -158,7 +158,7 @@ guidelines: |
   | task-024 | moldable-views.spec.md (scope-prohibited) | 8 |
   | task-028 | understanding-modes.spec.md (scope-prohibited + body prohibition) | 9 |
   | task-031 | understanding-modes.spec.md (scope-prohibited) | 6 |
-  | task-021 | data-flow.spec.md (scope-prohibited) | 1 |
+  | task-021 | data-flow.spec.md (scope-prohibited) | 2 |
 
   These numbers appear in `check-retry-not-scope-prohibited.sh` as permanent blocks
   AND in `check-banned-task-ids-closed.sh` which verifies both the main branch AND
@@ -182,6 +182,7 @@ guidelines: |
   This single script runs ALL mandatory checks:
     • Queue audit (check-no-prohibited-tasks-open.sh --run)
     • Banned task ID check — BOTH branches (check-banned-task-ids-closed.sh --run)
+    • State-branch full scan (check-state-branch-prohibited-tasks.sh --run)
     • Per-task retry gate (check-retry-not-scope-prohibited.sh) for each ID
     • Branch cleanup audit (check-prohibited-branches-deleted.sh --run)
 
@@ -199,9 +200,46 @@ guidelines: |
   **This command is not optional and cannot be satisfied by reasoning.**
   Run it. Then — and only then — read the Findings content.
 
-  Combined mis-assignment count (all three prohibited specs): TWENTY-THREE
-  (moldable-views: EIGHT, understanding-modes: FOURTEEN, data-flow: ONE).
+  Combined mis-assignment count (all three prohibited specs): TWENTY-FOUR
+  (moldable-views: EIGHT, understanding-modes: FOURTEEN, data-flow: TWO).
   Every single one was preventable by running this gate first.
+
+  ---
+
+  ## PROCESS-IMPROVEMENT SESSION — HYPERLOOP/STATE CLOSURE REQUIREMENT
+
+  When a process-improvement session receives findings that contain "INVALID ASSIGNMENT"
+  or scope-prohibition FAIL reports, that session MUST close the task on the
+  hyperloop/state branch — not just note it for the orchestrator.
+
+  The root cause of task-021 (2nd mis-assignment) and task-024 (8th mis-assignment)
+  was that they were closed on main but remained in_progress on hyperloop/state.
+  31 additional prohibited-spec tasks were found open on hyperloop/state in the same
+  cycle — all were batch-closed by the process-improvement session.
+
+  **Mandatory actions when process-improvement session receives INVALID ASSIGNMENT finding:**
+
+  Step 1 — Run the state-branch scan immediately:
+    bash .hyperloop/checks/check-state-branch-prohibited-tasks.sh --run
+
+  Step 2 — Close every PROHIBITED task on hyperloop/state:
+    git checkout hyperloop/state
+    sed -i 's/^status:.*/status: closed/' .hyperloop/state/tasks/<task-id>.md
+    sed -i 's/^spec_ref:.*/spec_ref: null/' .hyperloop/state/tasks/<task-id>.md
+    git add .hyperloop/state/tasks/<task-id>.md
+    git commit -m "chore(tasks): close prohibited task <task-id> on state branch"
+    git push origin hyperloop/state
+    git checkout main
+
+  Step 3 — Re-run to confirm clean:
+    bash .hyperloop/checks/check-state-branch-prohibited-tasks.sh --run
+    # Must exit 0 (WARN items are advisory, not blocking)
+
+  Step 4 — Then proceed with overlay and check script improvements.
+
+  **Do not delegate hyperloop/state closure to the orchestrator** — the orchestrator
+  is the entity that failed to close on hyperloop/state in the first place.  The
+  process-improvement session is the correct agent to perform this closure.
 
   ---
 
@@ -236,10 +274,10 @@ guidelines: |
   |---|---|---|---|
   | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ task-024 (3rd attempt) ⚠⚠ task-024 (4th attempt) ⚠⚠⚠ task-024 (5th attempt) ⚠⚠⚠⚠ task-024 (6th attempt) ⚠⚠⚠⚠⚠ task-024 (7th attempt) ⚠⚠⚠⚠⚠⚠ task-024 (8th attempt) ⚠⚠⚠⚠⚠⚠⚠ **EIGHTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
   | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ task-028 (4th attempt) ⚠⚠⚠ task-028 (5th attempt) ⚠⚠⚠⚠ task-028 (6th attempt) ⚠⚠⚠⚠⚠ task-031 (2nd run) ⚠⚠⚠⚠⚠⚠ task-028 (7th attempt) ⚠⚠⚠⚠⚠⚠⚠ task-031 (3rd run) ⚠⚠⚠⚠⚠⚠⚠⚠ task-031 (4th run) ⚠⚠⚠⚠⚠⚠⚠⚠⚠ task-028 (8th attempt) ⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠ task-031 (5th run) ⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠ task-028 (9th attempt) ⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠ task-031 (6th run) ⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠ **FOURTEENTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
-  | `specs/visualization/data-flow.spec.md` | Data flow visualization (rendering data flow as paths through 3D structure) | task-021 | **FIRST MIS-ASSIGNMENT — PERMANENTLY CLOSED** — mechanical check returned EXIT 0 (false pass); caught by implementer manual review; spec content uses "rendering data flow as paths" rather than exact keyword "data flow visualization" — path now added to check-assigned-spec-in-scope.sh |
+  | `specs/visualization/data-flow.spec.md` | Data flow visualization (rendering data flow as paths through 3D structure) | task-021 | **FIRST MIS-ASSIGNMENT — PERMANENTLY CLOSED** — mechanical check returned EXIT 0 (false pass); caught by implementer manual review; spec content uses "rendering data flow as paths" rather than exact keyword "data flow visualization" — path now added to check-assigned-spec-in-scope.sh | task-021 (2nd attempt) ⚠ **SECOND MIS-ASSIGNMENT** — root cause: task-021 was closed on main but remained in_progress on hyperloop/state; orchestrator read from hyperloop/state and re-assigned; 31 additional prohibited-spec tasks were also open on hyperloop/state and have now been batch-closed |
 
-  **All three specs are now permanently closed. Combined mis-assignment count: TWENTY-THREE
-  (moldable-views: EIGHT, understanding-modes: FOURTEEN, data-flow: ONE).** Every attempt
+  **All three specs are now permanently closed. Combined mis-assignment count: TWENTY-FOUR
+  (moldable-views: EIGHT, understanding-modes: FOURTEEN, data-flow: TWO).** Every attempt
   produces the identical outcome: scope-prohibition FAIL, zero implementation code written.
   The spec prohibition is deterministic — it will not change unless
   `specs/prototype/prototype-scope.spec.md` is explicitly revised to permit these features.

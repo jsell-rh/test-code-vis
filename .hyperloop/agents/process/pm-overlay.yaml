@@ -33,12 +33,13 @@ guidelines: |
   |---|---|---|---|
   | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | prototype-scope.spec.md line 93 | 8 (task-024 × 8 attempts) ⚠⚠⚠⚠⚠⚠⚠ |
   | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | prototype-scope.spec.md lines 89-91 | 14 (task-028 × 9, task-031 × 6) ⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠ |
-  | `specs/visualization/data-flow.spec.md` | Data flow visualization | prototype-scope.spec.md line 92 | 1 (task-021 × 1) — check returned false EXIT 0; caught by manual review ⚠ |
+  | `specs/visualization/data-flow.spec.md` | Data flow visualization | prototype-scope.spec.md line 92 | 2 (task-021 × 2) ⚠⚠ — 2nd mis-assignment: task was closed on main but remained in_progress on hyperloop/state; orchestrator re-assigned from hyperloop/state |
 
   **understanding-modes.spec.md has been mis-assigned FOURTEEN TIMES.
   moldable-views.spec.md has been mis-assigned EIGHT TIMES.
-  data-flow.spec.md has been mis-assigned ONCE (check-assigned-spec-in-scope.sh
-  returned false EXIT 0 — keyword mismatch fixed; path now in prohibited list).**
+  data-flow.spec.md has been mis-assigned TWICE (first: check returned false EXIT 0;
+  second: task closed on main but left open on hyperloop/state — 31 additional
+  prohibited-spec tasks on hyperloop/state were batch-closed in this cycle).**
   Do not assign any of these specs under any name or framing.  Remove them from the
   candidate pool entirely.  These are permanently deferred specs — they require a
   revision of `specs/prototype/prototype-scope.spec.md` before they can be reconsidered.

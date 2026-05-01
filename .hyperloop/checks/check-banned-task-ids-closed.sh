@@ -48,7 +48,7 @@ declare -a BANNED_IDS=(
     "task-031"
 )
 declare -a BANNED_REASONS=(
-    "data-flow.spec.md (scope-prohibited; 1 mis-assignment)"
+    "data-flow.spec.md (scope-prohibited; 2 mis-assignments)"
     "moldable-views.spec.md (scope-prohibited; 8 mis-assignments)"
     "understanding-modes.spec.md (scope-prohibited; 9 mis-assignments as task-028)"
     "understanding-modes.spec.md (scope-prohibited; 6 mis-assignments as task-031)"
