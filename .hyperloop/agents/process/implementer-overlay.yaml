@@ -230,6 +230,31 @@ guidelines: |
      Do not attempt to submit with a failing scope check regardless of which case
      applies.
 
+  ## INVALID ASSIGNMENT — COMPLETE STOP PROTOCOL
+
+  When `check-assigned-spec-in-scope.sh` exits non-zero, you have an INVALID
+  ASSIGNMENT. Execute this STOP PROTOCOL exactly — no deviation:
+
+  1. Paste the script's stdout verbatim into your FAIL report.
+  2. State that no implementation code was written.
+  3. Stop. Submit the FAIL report and nothing else.
+
+  **Do NOT commit anything to the task branch.** This means no implementation
+  code, no process improvements, no overlay updates, no check scripts.  The
+  task branch MUST contain zero commits above main when you submit an INVALID
+  ASSIGNMENT FAIL report.
+
+  Why: any commit you make to the task branch will cause
+  `check-spec-ref-valid.sh` to scan it for a Spec-Ref trailer and fail on
+  the missing or malformed value.  `check-branch-has-impl-files.sh` will
+  flag the branch for having commits but no implementation files.  Your
+  process-improvement work will trigger cascading check failures that obscure
+  the real issue (the invalid assignment itself) and force an additional
+  review cycle.
+
+  If you have process improvements to record: do so on the main branch or in
+  a separate process-improvement commit stream — NEVER on the task branch.
+
   ## SHADOW-REPLACEMENT IS FORBIDDEN
 
   When you create a new Python file to fix or replace a function defined in an

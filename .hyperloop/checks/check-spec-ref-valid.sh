@@ -19,11 +19,20 @@ FAIL=0
 CHECKED=0
 MISSING=0
 
-# Collect unique Spec-Ref values from all commits above main
+# Collect unique Spec-Ref values from all commits above main,
+# EXCLUDING commits tagged Task-Ref: process-improvement.
+# Process-improvement commits reference process docs (.hyperloop/agents/process),
+# not spec files — checking them against the path@hash format produces false failures.
 mapfile -t SPEC_REFS < <(
-    git log "$MAIN_BRANCH"..HEAD --format="%B" 2>/dev/null \
-        | grep -oP '(?<=Spec-Ref: )\S+' \
-        | sort -u
+    while IFS= read -r commit_hash; do
+        body=$(git log -1 --format="%B" "$commit_hash" 2>/dev/null)
+        # Skip process-improvement commits — they legitimately have no spec file reference
+        if echo "$body" | grep -qE '^Task-Ref:[[:space:]]*process-improvement'; then
+            continue
+        fi
+        echo "$body" | grep -oP '(?<=Spec-Ref: )\S+'
+    done < <(git log "$MAIN_BRANCH"..HEAD --format="%H" 2>/dev/null) \
+    | sort -u
 )
 
 if [ ${#SPEC_REFS[@]} -eq 0 ]; then
