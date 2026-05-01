@@ -281,9 +281,7 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
             # # sub_r occupies ~35 % of available radius (modules stay within group).
             sub_r = min(max(0.4, mod_radius * 0.3), mod_radius * 0.35)
             # group_orbit_r pushes groups apart to create a visible gap.
-            group_orbit_r = min(
-                max(sub_r + 0.3, mod_radius * 0.55), mod_radius - sub_r
-            )
+            group_orbit_r = min(max(sub_r + 0.3, mod_radius * 0.55), mod_radius - sub_r)
             group_ids = sorted(children_by_group.keys())  # deterministic ordering
             group_centers = _circular_positions(n_groups, group_orbit_r, y=0.0)
             for gid, (gcx, gcy, gcz) in zip(group_ids, group_centers):

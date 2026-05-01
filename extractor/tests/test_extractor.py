@@ -1099,9 +1099,7 @@ class TestIndependenceGroups:
         compute_independence_groups(nodes, edges)
 
         groups = {
-            n["id"]: n.get("independence_group")
-            for n in nodes
-            if n["type"] == "module"
+            n["id"]: n.get("independence_group") for n in nodes if n["type"] == "module"
         }
         # {A,B} must share a group
         assert groups["ctx.a"] == groups["ctx.b"], (
@@ -1142,9 +1140,7 @@ class TestIndependenceGroups:
         compute_independence_groups(nodes, edges)
 
         groups = {
-            n["id"]: n.get("independence_group")
-            for n in nodes
-            if n["type"] == "module"
+            n["id"]: n.get("independence_group") for n in nodes if n["type"] == "module"
         }
         # All modules must share the same group identifier
         unique_groups = set(groups.values())
