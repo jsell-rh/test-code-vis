@@ -1665,6 +1665,25 @@ class TestCallGraphExtraction:
             "At least one 'dynamic_call' edge must be emitted for parameter callees"
         )
 
+    def test_dynamic_call_edge_carries_param_name(self, src_calls: Path) -> None:
+        """spec: 'the call site carries the parameter name and any type hints'
+        The dynamic_call edge must include a non-empty param_name field.
+        """
+        nodes: list[Node] = discover_bounded_contexts(src_calls)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_calls, bc["id"]))
+
+        edges = extract_call_graph(src_calls, nodes)
+        dynamic_edges = [e for e in edges if e["type"] == "dynamic_call"]
+
+        assert dynamic_edges, "At least one 'dynamic_call' edge must be emitted"
+        for edge in dynamic_edges:
+            param_name = edge.get("param_name", "")
+            assert param_name != "", (
+                f"'dynamic_call' edge from '{edge['source']}' must carry a non-empty "
+                f"'param_name' field; got {edge!r}"
+            )
+
 
 # ---------------------------------------------------------------------------
 # Requirement: Structural Significance Extraction
@@ -2196,6 +2215,55 @@ class TestStructuralSignificanceExtraction:
 
         assert hub.get("is_landmark") is True, (
             "Hub node must be marked is_landmark=True"
+        )
+
+    def test_bridge_is_marked_landmark(self) -> None:
+        """Bridge nodes (is_bridge=True) must also be marked is_landmark=True.
+        spec: visual-primitives.spec.md §Scenario: Landmark sources —
+          'bridges (high betweenness centrality)'
+        """
+        a = _make_bc_node("a")
+        bridge = _make_bc_node("bridge")
+        b = _make_bc_node("b")
+        nodes: list[Node] = [a, bridge, b]
+        # A → bridge → B: bridge is the only path, giving it high betweenness.
+        edges = [_edge("a", "bridge"), _edge("bridge", "b")]
+
+        compute_structural_significance(nodes, edges)
+
+        # Verify bridge detection first.
+        sig = bridge.get("structural_significance", {})
+        assert sig.get("is_bridge") is True, (
+            f"bridge node must have is_bridge=True (betweenness={sig.get('betweenness_centrality', 0):.3f})"
+        )
+        # Then verify landmark assignment.
+        assert bridge.get("is_landmark") is True, (
+            "Bridge node must be marked is_landmark=True"
+        )
+
+    def test_entry_point_is_marked_landmark(self) -> None:
+        """Entry-point nodes (in_degree=0, out_degree>1) must be marked is_landmark=True.
+        spec: visual-primitives.spec.md §Scenario: Landmark sources —
+          'entry points (no in-edges from application code)'
+        """
+        entry = _make_bc_node("entry")
+        svc_a = _make_bc_node("svc_a")
+        svc_b = _make_bc_node("svc_b")
+        nodes: list[Node] = [entry, svc_a, svc_b]
+        # entry has in_degree=0, out_degree=2 → entry point
+        edges = [_edge("entry", "svc_a"), _edge("entry", "svc_b")]
+
+        compute_structural_significance(nodes, edges)
+
+        sig = entry.get("structural_significance", {})
+        assert sig.get("in_degree") == 0, (
+            f"entry node must have in_degree=0; got {sig.get('in_degree')}"
+        )
+        assert sig.get("out_degree") == 2, (
+            f"entry node must have out_degree=2; got {sig.get('out_degree')}"
+        )
+        assert entry.get("is_landmark") is True, (
+            "Entry-point node (in_degree=0, out_degree>1) must be marked is_landmark=True"
         )
 
     def test_structural_significance_field_present(self) -> None:

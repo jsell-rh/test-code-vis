@@ -1204,7 +1204,10 @@ def extract_call_graph(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
     # Accumulate call counts per (source_module, target_module) pair.
     call_counts: dict[tuple[str, str], int] = {}
     # Track which source modules have dynamic dispatch sites.
-    has_dynamic: set[str] = set()
+    # Maps source_id → the callee parameter name (first encountered) so the
+    # edge can carry param_name as required by the spec:
+    #   "the call site carries the parameter name and any type hints"
+    has_dynamic: dict[str, str] = {}
 
     for node in all_nodes:
         if node["type"] != "module":
@@ -1248,7 +1251,11 @@ def extract_call_graph(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
 
                     if callee_name in param_names:
                         # Dynamic call: callee is a parameter.
-                        has_dynamic.add(source_id)
+                        # Record first-encountered param name per source module so
+                        # the edge carries param_name (spec: "the call site carries
+                        # the parameter name and any type hints").
+                        if source_id not in has_dynamic:
+                            has_dynamic[source_id] = callee_name
                     else:
                         target_id = fn_to_module.get(callee_name)
                         if (
@@ -1264,8 +1271,16 @@ def extract_call_graph(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
         edges.append(
             {"source": src, "target": tgt, "type": "direct_call", "weight": weight}
         )
-    for src in sorted(has_dynamic):
-        edges.append({"source": src, "target": "dynamic", "type": "dynamic_call"})
+    for src in sorted(has_dynamic.keys()):
+        edges.append(
+            {
+                "source": src,
+                "target": "dynamic",
+                "type": "dynamic_call",
+                # spec: "the call site carries the parameter name and any type hints"
+                "param_name": has_dynamic[src],
+            }
+        )
 
     return edges
 
@@ -1497,10 +1512,16 @@ def compute_structural_significance(nodes: list[Node], edges: list[Edge]) -> Non
         # community_drift from structural_significance if present, else False.
         node["community_drift"] = bool(sig.get("community_drift", False))
 
-        # Entry-point detection: no incoming edges but has outgoing (is a source node).
+        # Landmark: hub, bridge, or entry-point nodes persist at all zoom levels.
+        # Entry point: no in-edges from application code (in_degree == 0) but
+        # has multiple out-edges (out_degree > 1) — it is a dependency source,
+        # not a peripheral leaf.
+        # spec: visual-primitives.spec.md §Scenario: Landmark sources —
+        #   "hubs (high in-degree), bridges (high betweenness centrality),
+        #    entry points (no in-edges from application code)"
         is_entry_point = ind == 0 and outd > 1
 
-        # Landmark: hub or bridge nodes persist at all zoom levels.
+        # Landmark: hub, bridge or entry points persist at all zoom levels.
         # Also flag entry points as landmarks (they are navigation anchors).
         if is_hub or is_bridge or is_entry_point:
             node["is_landmark"] = True

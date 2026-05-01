@@ -783,6 +783,32 @@ func test_badge_vocabulary_test() -> void:
 	_check(found, "'test' badge must create a Badge_test child")
 
 
+func test_badge_vocabulary_stateful() -> void:
+	## The 'stateful' badge type must render without error and create a Badge_stateful child.
+	## spec §Scenario: Badge vocabulary — "at minimum: ... stateful ..."
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	_vp.attach_primitives(_make_badge_node_data(["stateful"]), anchor, 1.5)
+	var found: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "Badge_stateful":
+			found = true
+	_check(found, "'stateful' badge must create a Badge_stateful child")
+
+
+func test_badge_vocabulary_deprecated() -> void:
+	## The 'deprecated' badge type must render without error and create a Badge_deprecated child.
+	## spec §Scenario: Badge vocabulary — "at minimum: ... deprecated"
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	_vp.attach_primitives(_make_badge_node_data(["deprecated"]), anchor, 1.5)
+	var found: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "Badge_deprecated":
+			found = true
+	_check(found, "'deprecated' badge must create a Badge_deprecated child")
+
+
 # ---------------------------------------------------------------------------
 # Requirement: Landmark Primitive
 # Spec: visual-primitives.spec.md § Requirement: Landmark Primitive
