@@ -45,6 +45,70 @@ if [[ "$COMMIT_COUNT" -le 1 ]]; then
     exit 0
 fi
 
+# ── Skip if the current branch's task file references a permanently prohibited spec ─
+# Belt-and-suspenders path: checks the task file directly, independent of
+# worker-result.yaml content and write order.  This resolves the task-021
+# deadlock: a prior verifier PASS report embedded verbatim [EXIT 1 — FAIL]
+# text from a pre-report artifact, which caused this check to find a "prior
+# FAIL" and demand implementation commits.  For a permanently prohibited spec,
+# no implementation commits can ever be made — the deadlock is structural.
+#
+# This check fires BEFORE the worker-result.yaml check so the exemption is
+# timing-independent: it works whether run-all-checks.sh is invoked before or
+# after worker-result.yaml is written.
+BRANCH_TASK_ID="${CURRENT_BRANCH#hyperloop/}"
+if [[ "$BRANCH_TASK_ID" =~ ^task-[0-9]+$ ]]; then
+    TASK_FILE=".hyperloop/state/tasks/${BRANCH_TASK_ID}.md"
+    if [[ -f "$TASK_FILE" ]]; then
+        BRANCH_SPEC_REF=$(grep -m1 '^spec_ref:' "$TASK_FILE" 2>/dev/null \
+            | sed 's/^spec_ref:[[:space:]]*//' | tr -d '\r' \
+            | cut -d'@' -f1 | sed 's|^\./||')
+        declare -a _PROHIBITED_SPECS=(
+            "specs/interaction/moldable-views.spec.md"
+            "specs/core/understanding-modes.spec.md"
+            "specs/visualization/data-flow.spec.md"
+        )
+        for _pspec in "${_PROHIBITED_SPECS[@]}"; do
+            if [[ "${BRANCH_SPEC_REF}" == "${_pspec}" ]]; then
+                echo "SKIP: Branch task (${BRANCH_TASK_ID}) references permanently prohibited spec."
+                echo "  spec_ref: ${BRANCH_SPEC_REF}"
+                echo "  No implementation commits are possible for a scope-prohibited task."
+                echo "  The orchestrator must permanently close this task and delete its branch."
+                exit 0
+            fi
+        done
+    fi
+fi
+
+# ── Skip if the current submission is a scope-prohibition FAIL ───────────────
+# When a spec is permanently prohibited, no implementation commits can ever be
+# made on the branch.  A prior verifier report may have embedded [EXIT N — FAIL]
+# lines from a pre-report artifact (e.g. check-report-scope-section.sh failing
+# before worker-result.yaml existed), causing this check to find a "prior FAIL"
+# and require implementation commits that are structurally impossible.
+#
+# Observed deadlock (task-021 / data-flow.spec.md):
+#   Prior verifier wrote a PASS report that quoted pre-report check output
+#   containing "[EXIT 1 — FAIL]".  That verbatim text triggered this check's
+#   FAIL-finder.  The current branch is prohibited, so no implementation commits
+#   can be added.  The deadlock is unresolvable at the worker level; the
+#   orchestrator must permanently close the task and delete the branch.
+#
+# Detection: if the working-tree worker-result.yaml (the report being written
+# NOW) contains "INVALID ASSIGNMENT", the task will be permanently closed by
+# the orchestrator.  Requiring implementation commits would produce an impossible
+# condition — skip instead.
+if [[ -f "$RESULT_FILE" ]]; then
+    CURRENT_RESULT=$(cat "$RESULT_FILE" 2>/dev/null || true)
+    if echo "$CURRENT_RESULT" | grep -q "INVALID ASSIGNMENT"; then
+        echo "SKIP: Current submission is a scope-prohibition FAIL (INVALID ASSIGNMENT"
+        echo "  detected in working-tree worker-result.yaml).  The orchestrator will"
+        echo "  permanently close this task — zero-commit check is not applicable"
+        echo "  to scope-prohibition FAILs and cannot be resolved by the implementer."
+        exit 0
+    fi
+fi
+
 # ── Walk ALL branch commits to find the most recent one WITH FAIL lines ───────
 # The orchestrator cleanup commit may have blanked the file; using head-1 would
 # read the blank version and emit a false SKIP.  Walking all commits finds the

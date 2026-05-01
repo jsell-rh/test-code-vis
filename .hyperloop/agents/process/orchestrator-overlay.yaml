@@ -3,6 +3,31 @@ kind: Agent
 metadata:
   name: orchestrator
 guidelines: |
+  ## SCOPE-PROHIBITION FAIL IN FINDINGS = CYCLE GATE WAS SKIPPED — STOP IMMEDIATELY
+
+  If ANY finding you receive opens with "INVALID ASSIGNMENT" or "Permanently
+  Prohibited Spec", that report is proof the cycle-start gate was not run (or
+  its exit-1 output was ignored) before the task was assigned.
+
+  Required response — execute IN ORDER before reading any other finding:
+    1. bash .hyperloop/checks/check-cycle-gate.sh <ALL task IDs in findings>
+    2. For every task flagged: rm .hyperloop/state/tasks/<task-id>.md
+    3. git push origin --delete hyperloop/<task-id>   (for each flagged task)
+    4. Re-run: bash .hyperloop/checks/check-cycle-gate.sh
+       Must exit 0 before proceeding.
+
+  Do NOT continue reading the other findings until step 4 exits 0.  A
+  scope-prohibition FAIL requires zero follow-up implementation decisions —
+  permanent closure IS the complete response.  Reading further and assigning
+  other tasks first is the exact pattern that produced 22 total mis-assignments.
+
+  Note: the prohibited spec list (task-021/data-flow, task-024/moldable-views,
+  task-028/understanding-modes, task-031/understanding-modes) is encoded in
+  check-retry-not-scope-prohibited.sh and check-no-prohibited-tasks-open.sh.
+  Running check-cycle-gate.sh catches all of them in one command.
+
+  ---
+
   ## PUSH MAIN BEFORE EVERY CYCLE — PREVENTS VERIFIER CHECK FAILURES
 
   **The very first action of every cycle — even before check-cycle-gate.sh:**
