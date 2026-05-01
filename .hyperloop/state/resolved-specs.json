@@ -5,8 +5,8 @@
       "reason": "vision-only, no prototype spec references its requirements for implementation",
       "resolved_at": "2026-04-25",
       "last_commit": "e2cac130",
-      "last_reviewed_at": "2026-04-30",
-      "last_reviewed_head": "1b7647c7",
+      "last_reviewed_at": "2026-05-01",
+      "last_reviewed_head": "22005077",
       "reopen_condition": "new MUST/SHOULD/Scenario clause added to file"
     },
     {
@@ -14,8 +14,8 @@
       "reason": "Re-reviewed 2026-04-28. Spec now contains five requirements: Conformance Mode, Evaluation Mode, Simulation Mode (all three explicitly excluded by prototype-scope.spec.md), plus two new requirements: Cascade Depth (part of Simulation Mode, still excluded) and Mode Composition (depends on all three modes, all still excluded). No requirement is referenced by any prototype spec for implementation. The Cascade Depth schema field is addressed by task-072 via scene-graph-schema.spec.md, which is an extraction spec that independently mandates the field. PERMANENTLY PROHIBITED: also blocked by check-assigned-spec-in-scope.sh (prohibited path list). Do not assign tasks from this spec.",
       "resolved_at": "2026-04-28",
       "last_commit": "7a839cc3",
-      "last_reviewed_at": "2026-04-30",
-      "last_reviewed_head": "1b7647c7",
+      "last_reviewed_at": "2026-05-01",
+      "last_reviewed_head": "22005077",
       "reopen_condition": "prototype-scope.spec.md un-excludes at least one of: Conformance Mode, Evaluation Mode, Simulation Mode"
     },
     {
@@ -34,38 +34,38 @@
     },
     {
       "spec": "specs/core/visual-primitives.spec.md",
-      "reason": "All 8 Extraction Layer requirements, 10 Composition Layer primitives, 3 Composition Principles, and 2 Primitive Interaction constraints covered by tasks 074–125. Landmark Primitive gap (task-086 was permanently closed) resolved by task-125. Overlay/Facet Composition (LLM-driven selection) excluded from prototype. Confirmed fully covered 2026-04-30.",
+      "reason": "All 8 Extraction Layer requirements, 10 Composition Layer primitives, 3 Composition Principles, and 2 Primitive Interaction constraints covered by tasks 074\u2013125. Landmark Primitive gap (task-086 was permanently closed) resolved by task-125. Overlay/Facet Composition (LLM-driven selection) excluded from prototype. Confirmed fully covered 2026-04-30.",
       "resolved_at": "2026-04-28",
       "last_commit": "67df14bc",
-      "last_reviewed_at": "2026-04-30",
-      "last_reviewed_head": "1b7647c7",
+      "last_reviewed_at": "2026-05-01",
+      "last_reviewed_head": "22005077",
       "reopen_condition": "new primitive added to Extraction or Composition layer, new Composition Principle added, or a primitive's MUST-level constraint changes materially"
     },
     {
       "spec": "specs/extraction/scene-graph-schema.spec.md",
-      "reason": "All 7 requirements covered by tasks 001, 005, 061–066, 072, 102, 103, 126. Cluster Schema loader extension and pre-collapse suggestion indicator covered by task-126 (task-069 was permanently closed, task-126 is the replacement). Schema Structure, Node Schema (incl. independence_group, class/function types), Edge Schema (incl. weight and aggregate), Metadata, Pre-Computed Layout, Cluster Schema, and Cascade Depth in Simulation Output all covered. Confirmed fully covered 2026-04-30.",
+      "reason": "All 7 requirements covered by tasks 001, 005, 061\u2013066, 072, 102, 103, 126. Cluster Schema loader extension and pre-collapse suggestion indicator covered by task-126 (task-069 was permanently closed, task-126 is the replacement). Schema Structure, Node Schema (incl. independence_group, class/function types), Edge Schema (incl. weight and aggregate), Metadata, Pre-Computed Layout, Cluster Schema, and Cascade Depth in Simulation Output all covered. Confirmed fully covered 2026-04-30.",
       "resolved_at": "2026-04-28",
       "last_commit": "7a839cc3",
-      "last_reviewed_at": "2026-04-30",
-      "last_reviewed_head": "1b7647c7",
+      "last_reviewed_at": "2026-05-01",
+      "last_reviewed_head": "22005077",
       "reopen_condition": "new requirement added beyond the 7 currently present in the spec"
     },
     {
       "spec": "specs/visualization/orthogonal-independence.spec.md",
-      "reason": "All 3 requirements covered: Independence Detection → task-062; Spatial Separation of Independent Groups → task-065 (extractor layout), task-070 (Godot animation), task-106 (hot-reload trigger); Queryable Property → task-071. Confirmed fully covered 2026-04-30.",
+      "reason": "All 3 requirements covered: Independence Detection \u2192 task-062; Spatial Separation of Independent Groups \u2192 task-065 (extractor layout), task-070 (Godot animation), task-106 (hot-reload trigger); Queryable Property \u2192 task-071. Confirmed fully covered 2026-04-30.",
       "resolved_at": "2026-04-28",
       "last_commit": "7a839cc3",
-      "last_reviewed_at": "2026-04-30",
-      "last_reviewed_head": "1b7647c7",
+      "last_reviewed_at": "2026-05-01",
+      "last_reviewed_head": "22005077",
       "reopen_condition": "new requirement added beyond the 3 requirements currently present in the spec"
     },
     {
       "spec": "specs/visualization/spatial-structure.spec.md",
-      "reason": "All in-scope requirements covered: Structure as Persistent Geography → task-008, task-009; Scale Through Zoom (semantic contract, LOD) → task-019, task-067, task-107, task-121; Cluster Collapsing (collapse/expand/nested) → task-068; Cluster Collapsing (pre-computed suggestion indicator + loader + UI trigger) → task-126 (replaces closed task-069). 3D Interactive Navigation (first-person) excluded from prototype per prototype-scope.spec.md line 95. Confirmed fully covered 2026-04-30.",
+      "reason": "All in-scope requirements covered: Structure as Persistent Geography \u2192 task-008, task-009; Scale Through Zoom (semantic contract, LOD) \u2192 task-019, task-067, task-107, task-121; Cluster Collapsing (collapse/expand/nested) \u2192 task-068; Cluster Collapsing (pre-computed suggestion indicator + loader + UI trigger) \u2192 task-126 (replaces closed task-069). 3D Interactive Navigation (first-person) excluded from prototype per prototype-scope.spec.md line 95. Confirmed fully covered 2026-04-30.",
       "resolved_at": "2026-04-28",
       "last_commit": "7a839cc3",
-      "last_reviewed_at": "2026-04-30",
-      "last_reviewed_head": "1b7647c7",
+      "last_reviewed_at": "2026-05-01",
+      "last_reviewed_head": "22005077",
       "reopen_condition": "new in-scope requirement added, or 3D first-person navigation is un-excluded from prototype"
     }
   ]
