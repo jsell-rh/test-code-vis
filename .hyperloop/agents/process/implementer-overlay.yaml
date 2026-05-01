@@ -235,6 +235,18 @@ guidelines: |
   When `check-assigned-spec-in-scope.sh` exits non-zero, you have an INVALID
   ASSIGNMENT. Execute this STOP PROTOCOL exactly — no deviation:
 
+  0. IMMEDIATELY reset the branch to origin/main tip before writing anything:
+
+       git reset --hard origin/main
+       git log --oneline origin/main..HEAD   # MUST print nothing
+
+     Rationale: the branch may have commits from prior implementer attempts that
+     count as "commits above main" even though you did not write them.  Simply
+     avoiding new commits leaves inherited commits in place — this triggers false
+     failures in check-branch-has-impl-files.sh and confuses the verifier into
+     treating prior-attempt code as current-attempt code.  The reset removes
+     ALL commits above main regardless of who wrote them.
+
   1. Paste the script's stdout verbatim into your FAIL report.
   2. State that no implementation code was written.
   3. Stop. Submit the FAIL report and nothing else.

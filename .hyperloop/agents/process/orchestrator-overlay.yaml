@@ -88,6 +88,28 @@ guidelines: |
   If check-main-local-vs-remote.sh exits 1 at the end of a process-improvement
   session, the session is NOT complete. Push and verify before closing.
 
+  ## UNPUSHED CHECK SCRIPTS = IMPLEMENTER BLIND SPOTS
+
+  Every check script committed to local main but not pushed to origin/main is
+  INVISIBLE to implementers — their run-all-checks.sh cannot run scripts absent
+  from origin/main, so their submission passes a check that does not exist for them.
+
+  Concrete impact (task-075): check-rebased-onto-main.sh was committed to local
+  main but not pushed. The implementer submitted a branch 3 commits behind
+  origin/main. They correctly ran Sync Point 1 and Sync Point 2 and run-all-checks.sh
+  — all passed, because check-rebased-onto-main.sh was absent from origin/main.
+  The verifier (running from local main) found the rebase failure. The entire extra
+  review cycle was caused solely by the missed push.
+
+  Concrete impact (task-031): four check scripts (including check-rebased-onto-main.sh
+  and check-run-tests-suite-count.sh) were not pushed. Implementers could not detect
+  that the branch was 1262 commits behind main or that a test suite had been dropped.
+
+  Rule: never treat an unpushed check script as "active." A script not on origin/main
+  does not exist from the implementer's perspective. If a failure is found by a script
+  that was not on origin/main at submission time, the implementer is not at fault — the
+  missed push is the root cause. Fix the push; do not penalize the implementer.
+
   ---
 
   ## PERMANENTLY BANNED TASK NUMBERS
