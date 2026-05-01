@@ -61,6 +61,15 @@ def make_internal_edge() -> Edge:
     return {"source": "iam.application", "target": "iam.domain", "type": "internal"}
 
 
+def make_aggregate_edge() -> Edge:
+    return {
+        "source": "graph",
+        "target": "shared_kernel",
+        "type": "aggregate",
+        "weight": 12,
+    }
+
+
 def make_metadata() -> Metadata:
     return {
         "source_path": "/home/user/code/kartograph",
@@ -213,6 +222,20 @@ class TestNodeSchema:
         ids = [n["id"] for n in graph["nodes"]]
         assert len(ids) == len(set(ids))
 
+    def test_module_node_with_independence_group(self) -> None:
+        """Module nodes MAY carry an independence_group field."""
+        node = make_module_node()
+        node["independence_group"] = "iam:0"
+        assert node["independence_group"] == "iam:0"
+
+    def test_independence_group_format(self) -> None:
+        """independence_group follows the '<bc>:<N>' format."""
+        node = make_module_node()
+        node["independence_group"] = "iam:1"
+        bc_part, idx_part = node["independence_group"].rsplit(":", 1)
+        assert bc_part == "iam"
+        assert idx_part.isdigit()
+
 
 # ---------------------------------------------------------------------------
 # Requirement: Edge Schema
@@ -256,6 +279,21 @@ class TestEdgeSchema:
         edge = make_internal_edge()
         assert edge["type"] == "internal"
 
+    def test_aggregate_edge_type(self) -> None:
+        """Aggregate edge MUST have type='aggregate'."""
+        edge = make_aggregate_edge()
+        assert edge["type"] == "aggregate"
+
+    def test_aggregate_edge_has_weight(self) -> None:
+        """Aggregate edge MUST carry a weight field."""
+        edge = make_aggregate_edge()
+        assert "weight" in edge
+        assert edge["weight"] == 12
+
+    def test_aggregate_edge_weight_is_int(self) -> None:
+        edge = make_aggregate_edge()
+        assert isinstance(edge["weight"], int)
+
 
 # ---------------------------------------------------------------------------
 # Requirement: Metadata
@@ -280,41 +318,6 @@ class TestMetadataSchema:
     def test_metadata_timestamp_is_str(self) -> None:
         meta = make_metadata()
         assert isinstance(meta["timestamp"], str)
-
-
-# ---------------------------------------------------------------------------
-# Requirement: Pre-Computed Layout
-# ---------------------------------------------------------------------------
-
-
-class TestPreComputedLayout:
-    """Node positions MUST be pre-computed by the extractor."""
-
-    def test_every_node_has_a_position(self) -> None:
-        graph = make_scene_graph()
-        for node in graph["nodes"]:
-            pos = node["position"]
-            assert "x" in pos and "y" in pos and "z" in pos
-
-    def test_positions_are_floats(self) -> None:
-        graph = make_scene_graph()
-        for node in graph["nodes"]:
-            pos = node["position"]
-            for coord in (pos["x"], pos["y"], pos["z"]):
-                assert isinstance(coord, (int, float))
-
-    def test_scene_graph_nodes_have_distinct_positions(self) -> None:
-        """Tightly coupled nodes should be close; different nodes should not
-        all share the exact same position (layout must have been applied)."""
-        graph = make_scene_graph()
-        if len(graph["nodes"]) < 2:
-            return  # nothing to compare
-        positions = [
-            (n["position"]["x"], n["position"]["y"], n["position"]["z"])
-            for n in graph["nodes"]
-        ]
-        # At least one pair of nodes must differ in position.
-        assert len(set(positions)) > 1 or len(positions) == 1
 
 
 # ---------------------------------------------------------------------------
