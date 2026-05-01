@@ -193,6 +193,18 @@ class Node(TypedDict):
     Spec: visual-primitives.spec.md § Structural Significance Extraction / Bridge detection.
     """
 
+    betweenness_centrality: NotRequired[float]
+    """Normalised betweenness centrality score in [0.0, 1.0].
+
+    The fraction of shortest paths between all pairs of nodes that pass
+    through this node.  Computed by Brandes algorithm over the undirected
+    module graph.  A score > 0 means the node sits on at least one shortest
+    path between two other nodes.
+
+    Set by compute_structural_significance().
+    Spec: visual-primitives.spec.md § Structural Significance Extraction / Bridge detection.
+    """
+
     is_peripheral: NotRequired[bool]
     """True when in_degree == 0 and out_degree <= 1 (leaf utility node).
 
@@ -451,6 +463,16 @@ def validate_scene_graph(graph: object) -> None:
                 )
             if depth < 1:
                 raise ValueError(f"nodes[{i}]['depth'] must be >= 1, got {depth!r}")
+
+        # Validate optional betweenness_centrality field.
+        # Rule 11: if present, betweenness_centrality must be a float or int (not bool).
+        if "betweenness_centrality" in node:
+            bc_val = node["betweenness_centrality"]
+            if isinstance(bc_val, bool) or not isinstance(bc_val, (int, float)):
+                raise ValueError(
+                    f"nodes[{i}]['betweenness_centrality'] must be a float, "
+                    f"got {type(bc_val).__name__!r}"
+                )
 
         # Validate the optional metrics object.
         # Rule 9: if present, metrics must be a dict.

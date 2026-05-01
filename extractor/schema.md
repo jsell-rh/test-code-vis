@@ -24,17 +24,19 @@ All four keys are **required**.  No other top-level keys are permitted.
 
 ## Node fields
 
-| Field              | Type               | Required | Description |
-|--------------------|--------------------|----------|-------------|
-| `id`               | string             | yes      | Unique identifier, e.g. `"iam"` or `"iam.domain"`. |
-| `name`             | string             | yes      | Human-readable display name, e.g. `"IAM"` or `"Domain"`. |
-| `type`             | string (enum)      | yes      | Level of the node.  One of `"bounded_context"`, `"module"`, `"spec"`. |
-| `position`         | Position object    | yes      | Pre-computed 3D position.  Coordinates are relative to the parent node. |
-| `size`             | number             | yes      | Normalised visual scale factor derived from `metrics.loc`.  Computed as `max(0.5, log1p(loc) / log(10))`.  Dimensionless; used by Godot to set the MeshInstance3D scale.  **Do NOT use `size` for display of raw line counts** — use `metrics.loc` instead. |
-| `parent`           | string \| null     | yes      | ID of the containing node, or `null` for top-level nodes. |
-| `metrics`          | Metrics object     | no       | Raw complexity metrics.  Present for code-derived nodes where line counting has run.  Absent on nodes where it has not (e.g. spec nodes). |
-| `independence_group` | string           | no       | Structural independence group identifier, e.g. `"iam:0"`.  Present only on module nodes after independence-group computation. |
-| `depth`            | integer            | no       | Cascade depth from a failure-simulation origin node.  Present only in simulation output. |
+| Field                    | Type               | Required | Description |
+|--------------------------|--------------------|----------|-------------|
+| `id`                     | string             | yes      | Unique identifier, e.g. `"iam"` or `"iam.domain"`. |
+| `name`                   | string             | yes      | Human-readable display name, e.g. `"IAM"` or `"Domain"`. |
+| `type`                   | string (enum)      | yes      | Level of the node.  One of `"bounded_context"`, `"module"`, `"spec"`. |
+| `position`               | Position object    | yes      | Pre-computed 3D position.  Coordinates are relative to the parent node. |
+| `size`                   | number             | yes      | Normalised visual scale factor derived from `metrics.loc`.  Computed as `max(0.5, log1p(loc) / log(10))`.  Dimensionless; used by Godot to set the MeshInstance3D scale.  **Do NOT use `size` for display of raw line counts** — use `metrics.loc` instead. |
+| `parent`                 | string \| null     | yes      | ID of the containing node, or `null` for top-level nodes. |
+| `metrics`                | Metrics object     | no       | Raw complexity metrics.  Present for code-derived nodes where line counting has run.  Absent on nodes where it has not (e.g. spec nodes). |
+| `independence_group`     | string             | no       | Structural independence group identifier, e.g. `"iam:0"`.  Present only on module nodes after independence-group computation. |
+| `depth`                  | integer            | no       | Cascade depth from a failure-simulation origin node.  Present only in simulation output. |
+| `betweenness_centrality` | number (float)     | no       | Normalised betweenness centrality score in [0.0, 1.0].  Fraction of shortest paths between all pairs of nodes that pass through this node.  Computed by Brandes algorithm over the undirected module graph.  Set by `compute_structural_significance()`.  A score > 0 indicates this node lies on at least one shortest path between two other nodes. |
+| `is_bridge`              | boolean            | no       | True when this node is an articulation point (its removal disconnects the undirected module graph).  Set by `compute_structural_significance()`. |
 
 ### Position object
 
@@ -145,3 +147,4 @@ at runtime (raises `ValueError` on any violation):
 8. Every cluster's `aggregate_metrics` must contain: `total_loc`, `in_degree`, `out_degree`.
 9. If a node's `metrics` field is present, it must be a `dict`.
 10. If `metrics` is present and contains `loc`, that value must be a non-negative integer (`>= 0`).
+11. If a node's `betweenness_centrality` field is present, it must be a numeric float or int (not a bool).

@@ -20,6 +20,7 @@ import pytest
 import math
 
 from extractor.extractor import (
+    _compute_betweenness_centrality,
     _order_by_coupling,
     _position_spec_nodes,
     annotate_cascade_depth,
@@ -1923,6 +1924,74 @@ class TestStructuralSignificance:
             assert "is_bridge" in node, f"Node {node['id']} missing is_bridge"
             assert "is_peripheral" in node, f"Node {node['id']} missing is_peripheral"
             assert "community_id" in node, f"Node {node['id']} missing community_id"
+
+    def test_betweenness_centrality_computed_for_bridge_node(self) -> None:
+        """GIVEN a graph where node B sits on shortest paths between A and C
+        WHEN structural significance is computed
+        THEN B['betweenness_centrality'] is a float > 0.
+
+        Graph: A — B — C
+        B is the sole connector between A and C, so all shortest paths from A
+        to C (and C to A) pass through B.  B must receive a betweenness
+        centrality score strictly greater than zero.
+
+        Spec: visual-primitives.spec.md § Structural Significance Extraction /
+              Bridge detection — "the module is annotated with its betweenness
+              centrality score AND it is flagged as a bridge".
+        """
+        nodes = [_make_node_id("A"), _make_node_id("B"), _make_node_id("C")]
+        edges = [_make_edge("A", "B"), _make_edge("B", "C")]
+        compute_structural_significance(nodes, edges)
+        b_node = next(n for n in nodes if n["id"] == "B")
+        assert "betweenness_centrality" in b_node, (
+            "B must have a betweenness_centrality field after significance computation"
+        )
+        bc = b_node["betweenness_centrality"]
+        assert isinstance(bc, float), (
+            f"betweenness_centrality must be a float; got {type(bc).__name__!r}"
+        )
+        assert bc > 0.0, (
+            f"B sits on all shortest paths between A and C and must have "
+            f"betweenness_centrality > 0; got {bc}"
+        )
+
+    def test_betweenness_centrality_zero_for_non_bridge_in_cycle(self) -> None:
+        """Nodes in a cycle have zero betweenness centrality (alternative paths exist)."""
+        nodes = [_make_node_id("A"), _make_node_id("B"), _make_node_id("C")]
+        # Cycle: A→B→C→A — every node has an alternative path for any pair.
+        edges = [_make_edge("A", "B"), _make_edge("B", "C"), _make_edge("C", "A")]
+        compute_structural_significance(nodes, edges)
+        for node in nodes:
+            bc = node.get("betweenness_centrality", None)
+            assert bc is not None, (
+                f"Node {node['id']} must have a betweenness_centrality field"
+            )
+            assert isinstance(bc, float), (
+                f"betweenness_centrality must be float; got {type(bc).__name__!r}"
+            )
+            assert bc == 0.0, (
+                f"Node {node['id']} is in a cycle; all pairs have equal-length "
+                f"paths so betweenness_centrality should be 0.0; got {bc}"
+            )
+
+    def test_compute_betweenness_centrality_direct(self) -> None:
+        """Unit-test _compute_betweenness_centrality on the A-B-C chain directly.
+
+        GIVEN adj = {A: [B], B: [A, C], C: [B]}
+        WHEN _compute_betweenness_centrality is called
+        THEN B's score is > 0 and A's and C's scores are 0.0.
+        """
+        adj = {"A": ["B"], "B": ["A", "C"], "C": ["B"]}
+        scores = _compute_betweenness_centrality(adj)
+        assert scores["B"] > 0.0, (
+            f"B sits on all A↔C shortest paths; expected score > 0, got {scores['B']}"
+        )
+        assert scores["A"] == 0.0, (
+            f"A is a leaf; expected score == 0.0, got {scores['A']}"
+        )
+        assert scores["C"] == 0.0, (
+            f"C is a leaf; expected score == 0.0, got {scores['C']}"
+        )
 
 
 # ---------------------------------------------------------------------------
