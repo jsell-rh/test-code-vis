@@ -3,6 +3,42 @@ kind: Agent
 metadata:
   name: orchestrator
 guidelines: |
+  ## ⚠⚠ DUAL-BRANCH CLOSURE — CRITICAL: closing on main alone is INSUFFICIENT ⚠⚠
+
+  Task state is tracked on the `hyperloop/state` branch, NOT on main.
+  This is why `check-no-prohibited-tasks-open.sh` passed for 23 mis-assignments:
+  it read from main (status: closed) while you assigned from hyperloop/state
+  (status: in_progress).
+
+  task-028 and task-031 have been confirmed in_progress on hyperloop/state
+  while closed on main.  Every cycle gate check passed — every assignment failed.
+
+  **When permanently closing ANY task (especially banned ones), you MUST close
+  it on BOTH branches:**
+
+    # On main:
+    sed -i 's/^status:.*/status: closed/' .hyperloop/state/tasks/<task-id>.md
+    sed -i 's/^spec_ref:.*/spec_ref: null/' .hyperloop/state/tasks/<task-id>.md
+    git add .hyperloop/state/tasks/<task-id>.md
+    git commit -m "chore(tasks): permanently close banned task <task-id>"
+    git push origin main
+
+    # On hyperloop/state:
+    git checkout hyperloop/state
+    sed -i 's/^status:.*/status: closed/' .hyperloop/state/tasks/<task-id>.md
+    sed -i 's/^spec_ref:.*/spec_ref: null/' .hyperloop/state/tasks/<task-id>.md
+    git add .hyperloop/state/tasks/<task-id>.md
+    git commit -m "chore(tasks): permanently close banned task <task-id>"
+    git push origin hyperloop/state
+    git checkout main
+
+  **The cycle-start gate (`check-cycle-gate.sh`) now runs Step 1b which calls
+  `check-banned-task-ids-closed.sh --run`.** This script checks BOTH branches
+  and will exit 1 if any banned task ID is open on either.  Run it; fix any
+  failures; only assign tasks after it exits 0.
+
+  ---
+
   ## SCOPE-PROHIBITION FAIL IN FINDINGS = CYCLE GATE WAS SKIPPED — STOP IMMEDIATELY
 
   If ANY finding you receive opens with "INVALID ASSIGNMENT" or "Permanently
@@ -124,8 +160,12 @@ guidelines: |
   | task-031 | understanding-modes.spec.md (scope-prohibited) | 6 |
   | task-021 | data-flow.spec.md (scope-prohibited) | 1 |
 
-  These numbers appear in `check-retry-not-scope-prohibited.sh` as permanent blocks.
+  These numbers appear in `check-retry-not-scope-prohibited.sh` as permanent blocks
+  AND in `check-banned-task-ids-closed.sh` which verifies both the main branch AND
+  the `hyperloop/state` branch show status: closed for each banned ID.
   Do NOT create new tasks with these numbers. Do NOT re-open closed task files.
+  Closing on main alone is insufficient — you MUST also close on `hyperloop/state`
+  (see DUAL-BRANCH CLOSURE section above).
 
   ---
 
@@ -139,10 +179,14 @@ guidelines: |
   Example (findings contain task-024, task-028, task-031):
     bash .hyperloop/checks/check-cycle-gate.sh task-024 task-028 task-031
 
-  This single script runs ALL THREE mandatory checks:
+  This single script runs ALL mandatory checks:
     • Queue audit (check-no-prohibited-tasks-open.sh --run)
+    • Banned task ID check — BOTH branches (check-banned-task-ids-closed.sh --run)
     • Per-task retry gate (check-retry-not-scope-prohibited.sh) for each ID
     • Branch cleanup audit (check-prohibited-branches-deleted.sh --run)
+
+  Step 1b (`check-banned-task-ids-closed.sh`) is the fix for the 23-mis-assignment
+  root cause: banned tasks closed on main but still in_progress on hyperloop/state.
 
   If it exits 1: permanently close every flagged task before proceeding.
   Permanent closure requires ALL THREE of these actions:

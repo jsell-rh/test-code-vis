@@ -42,11 +42,17 @@
 set -uo pipefail
 
 QUEUE_AUDIT=".hyperloop/checks/check-no-prohibited-tasks-open.sh"
+BAN_CHECK=".hyperloop/checks/check-banned-task-ids-closed.sh"
 RETRY_GATE=".hyperloop/checks/check-retry-not-scope-prohibited.sh"
 MAIN_SYNC=".hyperloop/checks/check-main-local-vs-remote.sh"
 
 if [ ! -f "$QUEUE_AUDIT" ]; then
     echo "ERROR: Queue audit script not found: $QUEUE_AUDIT"
+    exit 2
+fi
+
+if [ ! -f "$BAN_CHECK" ]; then
+    echo "ERROR: Banned task ID check not found: $BAN_CHECK"
     exit 2
 fi
 
@@ -90,6 +96,25 @@ if ! bash "$QUEUE_AUDIT" --run; then
     GATE_FAILED=1
 else
     echo "  Queue audit passed — no prohibited specs in task queue."
+fi
+
+echo ""
+echo "========================================================================"
+echo "CYCLE-START GATE — Step 1b: Banned task ID check (both branches)"
+echo "========================================================================"
+echo ""
+echo "  Checks hyperloop/state branch AND working tree for banned task IDs."
+echo "  Root cause: tasks closed on main but left open on hyperloop/state"
+echo "  remain assignable — the orchestrator reads from hyperloop/state."
+echo ""
+
+if ! bash "$BAN_CHECK" --run; then
+    echo ""
+    echo "  BANNED TASK CHECK FAILED — permanently banned tasks are still open."
+    echo "  Close them on the hyperloop/state branch (see fix commands above)."
+    GATE_FAILED=1
+else
+    echo "  Banned task check passed — all banned IDs are closed on both branches."
 fi
 
 echo ""
