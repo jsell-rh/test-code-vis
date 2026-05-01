@@ -47,6 +47,35 @@ guidelines: |
     `pixel_size > 0.0` on any Label3D nodes).
   - Verify containment is visually represented (child volumes inside parent volumes).
 
+  ### Onready Null-Guard Coverage (Godot headless tests)
+
+  `@onready` variables resolve to null in headless tests — the node is never added
+  to a scene tree, so `@onready var _camera: Node = $Camera` remains null. A function
+  that guards on this variable (e.g., `if _camera == null: return`) will ALWAYS take
+  the early-return path in tests, making the function silently inert.
+
+  Observed failure (task-010): `_frame_camera()` guarded `if _camera == null: return`.
+  Every `build_from_graph()` call in tests hit the guard — the "showing the entire
+  system" THEN-clause was never exercised. The implementer did not notice; the verifier
+  must catch this.
+
+  For every Godot THEN-clause that involves `@onready` dependencies (camera, viewport,
+  scene root, etc.):
+  1. Locate the implementation function responsible for that THEN-clause.
+  2. Search for null-guards on @onready variables:
+       grep -n "== null\|is_empty()" godot/scripts/<file>.gd
+  3. If a null-guard on an @onready variable is present, find the corresponding test and
+     check whether the dependency is injected before the function is called:
+       grep -n "set.*_camera\|set.*_viewport\|_camera =\|_viewport =" godot/tests/*.gd
+  4. If NO injection is found, the THEN-clause is PARTIAL — the guard short-circuits all
+     test paths and the clause was never exercised.
+  5. If injection IS found, verify the test asserts the expected post-call state on the
+     injected object (pivot position, distance, etc.) — not just that no error occurred.
+
+  Mark any THEN-clause PARTIAL (not COVERED) when:
+  - Its implementation path is gated by an @onready null-guard, AND
+  - No test injects the @onready dependency AND asserts the guarded behavior.
+
   ### General
   - Verify the implementation matches the referenced spec. Read the spec carefully.
   - Verify commit trailers (Spec-Ref, Task-Ref) are present.
@@ -157,6 +186,28 @@ guidelines: |
   **Regardless of FAST-FIX or standard FAIL:** the verdict is FAIL and a sync
   commit is required. FAST-FIX is a diagnostic label, not a waiver. It tells
   the implementer the re-attempt is trivial and no implementation work is needed.
+
+  ## REBASE AND TEST-SUITE REGRESSION CHECK (run after check sync)
+
+  Run `bash .hyperloop/checks/check-rebased-onto-main.sh` and include its
+  complete output verbatim in your report.
+
+  If it exits non-zero, issue FAIL immediately — do not review implementation
+  quality until the rebase issue is resolved. A non-rebased branch REVERTS
+  all commits main added after the fork point; the apparent test pass count
+  is unreliable because deleted test files simply never execute.
+
+  Run `bash .hyperloop/checks/check-run-tests-suite-count.sh` and include
+  its complete output verbatim in your report.
+
+  If the _run_suite() count on the branch is less than on origin/main, issue
+  FAIL. The implementation quality review is irrelevant — silent test omission
+  means coverage claims cannot be trusted.
+
+  **Observed failure (task-108, round 8):** branch had 17 _run_suite() calls
+  vs 18 on main. 161 tests passed. The missing suite (test_visual_primitives.gd)
+  covered task-074 requirements that the branch had silently reverted. These
+  two new mechanical checks catch this pattern before any manual review.
 
   ## Pipeline Integration — Compute Functions Must Be Called
 
@@ -313,6 +364,80 @@ guidelines: |
   3. For each deleted `.gd` file, confirm `git diff main..HEAD -- godot/scenes/`
      shows the corresponding scene edits (removed `[ext_resource]` declaration,
      removed referencing `[node]`, decremented `load_steps`).
+
+  ## GDSCRIPT COMPILE VERIFICATION — MANDATORY WHEN ANY .gd FILE IS MODIFIED
+
+  Run `bash .hyperloop/checks/check-no-gdscript-duplicate-functions.sh` and
+  include its complete output verbatim in your findings.
+
+  If it exits non-zero, issue FAIL immediately.  A duplicate `func` definition
+  causes a parse error that silently inerts ALL test files that preload the
+  affected script — the test runner reports zero tests (or skips) rather than
+  a failure, creating systematic false confidence.
+
+  Observed failure (task-062): a fix commit added `_build_aggregate_edges()` to
+  main.gd which already contained that function.  The commit message claimed
+  "All 51 checks pass; 170 pytest + 164 Godot tests green" — this was false;
+  the duplicate function blocked all 164 Godot tests.
+
+  **Commit message claims about check pass counts are NOT evidence.** For every
+  branch where any `.gd` file was touched, independently verify:
+
+  1. `bash .hyperloop/checks/godot-compile.sh` exits 0.
+  2. `bash .hyperloop/checks/godot-tests.sh` produces the expected test count.
+  3. The test count is ≥ the count on origin/main (regression guard).
+
+  Do NOT issue a PASS verdict based on a commit message asserting "all checks
+  pass" or "N tests green" unless you have run those checks yourself on the
+  current branch state.
+
+  ## IMPLEMENTATION FILE VERIFICATION (run before reading any code)
+
+  Run `bash .hyperloop/checks/check-branch-has-impl-files.sh` and include its
+  complete output verbatim in your report.
+
+  If this check exits non-zero, issue an immediate FAIL — the worker report's
+  claimed test counts, file counts, and insertion numbers are fabricated. Do NOT
+  review claimed tests or coverage tables; the files they reference do not exist.
+
+  Even when this check exits 0, verify that the non-.hyperloop/ files on the
+  branch correspond to the spec being implemented (not unrelated files).
+
+  ## PERCEPTUAL CHANNEL VERIFICATION
+
+  When a spec THEN-clause names a specific perceptual channel for a visual property,
+  verify the implementation uses THAT channel — not a different one that produces
+  a superficially similar effect.
+
+  Common substitution errors to check for:
+
+  | Spec says              | Invalid substitute     | What to grep/check                |
+  |------------------------|------------------------|-----------------------------------|
+  | "visual thickness"     | color channel scaling  | search for mesh width or geometry thickness; reject color-only changes |
+  | "line style (dashed)"  | color encoding         | search for gap-geometry or dashed pattern; reject color-only encoding |
+  | "opacity proportional" | visibility toggle      | check alpha is computed from ratio, not .visible flip |
+  | "size proportional"    | color brightness       | check scale is applied to geometry |
+
+  For each THEN-clause with a named perceptual channel:
+  1. Identify the channel name in the spec text.
+  2. Grep the implementation for that channel (e.g., `width`, `line_style`, `modulate.a`).
+  3. If only a different channel is used, mark the requirement FAIL.
+  4. Verify the test asserts the correct channel's value — not a substitute.
+
+  ## SUPPRESSION GUARD VERIFICATION
+
+  When a spec says an element is "NOT drawn", "suppressed", "hidden", or "not rendered",
+  verify the rendering function contains an explicit guard condition (early return or
+  conditional skip) keyed on the suppression flag.
+
+  Steps:
+  1. Identify the suppression clause (e.g., "the Edge is NOT drawn" for ubiquitous modules).
+  2. Locate the rendering function responsible for that element.
+  3. Search for the guard: `if ed.get("ubiquitous")`, `if node["suppressed"]`, etc.
+  4. If no guard exists, mark the requirement FAIL — unconditional rendering violates the spec.
+  5. Verify a test constructs a fixture with the suppression flag set and asserts no rendered
+     node/mesh was created. A test that only checks the rendered output of non-suppressed
+     elements does NOT cover the suppression requirement.
 
   ## LOD COMPLETENESS AUDIT (ALL LEVELS)
 

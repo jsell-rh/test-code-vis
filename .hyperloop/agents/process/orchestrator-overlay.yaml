@@ -28,16 +28,27 @@ guidelines: |
 
   ---
 
-  ## PUSH MAIN BEFORE EVERY CYCLE — PREVENTS VERIFIER CHECK FAILURES
+  ## PUSH MAIN AFTER EVERY COMMIT — NOT JUST AT CYCLE START
 
-  **The very first action of every cycle — even before check-cycle-gate.sh:**
+  **Rule: every git commit to local main MUST be followed immediately by:**
 
     git push origin main
 
-  If local main is ahead of origin/main (e.g., after committing a new check script or
-  overlay update without pushing), `check-main-local-vs-remote.sh` exits 1 in EVERY
-  verifier worktree. Implementers cannot fix this — `git fetch origin main:main` cannot
-  rewind local main. The result: multiple FAIL rounds on correct implementations.
+  This applies to ALL commits on main: process improvements, check script updates,
+  overlay changes, documentation fixes — anything. Never let local main be ahead of
+  origin/main for more than one command.
+
+  **The very first action of every new cycle — even before check-cycle-gate.sh:**
+
+    git push origin main
+
+  If local main is ahead of origin/main, `check-main-local-vs-remote.sh` exits 1 in
+  EVERY verifier worktree. Implementers cannot fix this — `git fetch origin main:main`
+  cannot rewind local main. The result: correct implementations receive spurious FAILs.
+
+  Observed pattern (task-012, task-021 — same cycle): orchestrator committed 2 check
+  script updates to local main during process improvement but did not push. Both tasks
+  failed check-main-local-vs-remote.sh despite having correct implementations.
 
   Observed pattern (task-108, rounds 7–9): orchestrator committed
   `fix(process): add mechanical check for FAIL lines in PASS reports` to local main
@@ -48,6 +59,10 @@ guidelines: |
     1. git push origin main                                              # push FIRST
     2. bash .hyperloop/checks/check-cycle-gate.sh <task-ids from findings>  # gate check
     3. Only assign tasks after both steps succeed.
+
+  **Checklist after any mid-cycle commit to main:**
+    1. git push origin main                                              # push IMMEDIATELY
+    2. Do not spawn any new task until the push completes.
 
   ---
 

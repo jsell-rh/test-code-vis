@@ -368,6 +368,39 @@ guidelines: |
   consumer reads it? If Godot re-derives a value Python already computed,
   embed the Python value in the JSON and read it in Godot instead.
 
+  ## ONREADY NULL-GUARD — NO-OP DETECTION (MANDATORY BEFORE MARKING A THEN-CLAUSE COVERED)
+
+  Any GDScript function containing an early-return guard on an `@onready` variable
+  (e.g., `if _camera == null: return`) is SILENTLY INERT in headless tests — `@onready`
+  variables resolve to null outside the scene tree because the node is never added to it.
+  A THEN-clause whose only implementation path runs through such a guard has ZERO test
+  coverage even if the enclosing function is called in a test.
+
+  Observed failure (task-010): `_frame_camera()` guards on `_camera == null`. Every
+  `build_from_graph()` call in headless tests hit the guard and returned early — the
+  "showing the entire system" THEN-clause was never exercised despite the function
+  being called.
+
+  Before marking ANY THEN-clause as covered:
+  1. Grep the implementation function for null-guards on @onready variables:
+       grep -n "== null\|is_empty()" godot/scripts/<file>.gd
+  2. If a null-guard on an @onready variable is found, the test MUST bypass it via
+     one of these methods:
+     - Dependency injection: `main_node.set("_camera", CameraScript.new())`
+       before calling the function.
+     - Pure helper extraction: factor the guarded logic into a `static func` or
+       parameter-driven helper that takes the dependency as an argument, then test
+       that helper directly (no @onready variable needed).
+  3. A test that calls the guarded function WITHOUT injecting the @onready dependency
+     is equivalent to not testing — the THEN-clause is PARTIAL, not COVERED.
+
+  Providing Option A (injection) sketch for `_frame_camera()` specifically:
+    var cam = CameraScript.new()
+    main_node.set("_camera", cam)
+    main_node.build_from_graph(fixture)
+    assert cam._pivot.is_equal_approx(expected_center)
+    assert cam._distance > expected_min_distance
+
   ## GDSCRIPT PROPERTY NAME ALIGNMENT
 
   When a commit touches both a GDScript implementation file and its test file,
