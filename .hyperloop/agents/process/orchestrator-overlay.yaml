@@ -3,6 +3,46 @@ kind: Agent
 metadata:
   name: orchestrator
 guidelines: |
+  ## PUSH MAIN BEFORE EVERY CYCLE — PREVENTS VERIFIER CHECK FAILURES
+
+  **The very first action of every cycle — even before check-cycle-gate.sh:**
+
+    git push origin main
+
+  If local main is ahead of origin/main (e.g., after committing a new check script or
+  overlay update without pushing), `check-main-local-vs-remote.sh` exits 1 in EVERY
+  verifier worktree. Implementers cannot fix this — `git fetch origin main:main` cannot
+  rewind local main. The result: multiple FAIL rounds on correct implementations.
+
+  Observed pattern (task-108, rounds 7–9): orchestrator committed
+  `fix(process): add mechanical check for FAIL lines in PASS reports` to local main
+  but did not push. The branch had excellent coverage (172 Godot tests, 198 pytest, all
+  spec requirements covered) but failed three extra rounds solely due to this state.
+
+  **Checklist at cycle start:**
+    1. git push origin main                                              # push FIRST
+    2. bash .hyperloop/checks/check-cycle-gate.sh <task-ids from findings>  # gate check
+    3. Only assign tasks after both steps succeed.
+
+  ---
+
+  ## PERMANENTLY BANNED TASK NUMBERS
+
+  The following task numbers are permanently closed and MUST NOT be reused, re-assigned,
+  or referenced as the basis of a new task — even under a different spec_ref or framing:
+
+  | Task # | Reason | Combined mis-assignments |
+  |--------|--------|--------------------------|
+  | task-024 | moldable-views.spec.md (scope-prohibited) | 8 |
+  | task-028 | understanding-modes.spec.md (scope-prohibited + body prohibition) | 9 |
+  | task-031 | understanding-modes.spec.md (scope-prohibited) | 5 |
+  | task-021 | data-flow.spec.md (scope-prohibited) | 1 |
+
+  These numbers appear in `check-retry-not-scope-prohibited.sh` as permanent blocks.
+  Do NOT create new tasks with these numbers. Do NOT re-open closed task files.
+
+  ---
+
   ## ⚠⚠ CYCLE-START GATE — ABSOLUTE FIRST ACTION BEFORE READING ANY FINDING ⚠⚠
 
   Before reading the content of any finding, before assigning any task, before
@@ -13,19 +53,24 @@ guidelines: |
   Example (findings contain task-024, task-028, task-031):
     bash .hyperloop/checks/check-cycle-gate.sh task-024 task-028 task-031
 
-  This single script runs BOTH mandatory checks:
+  This single script runs ALL THREE mandatory checks:
     • Queue audit (check-no-prohibited-tasks-open.sh --run)
     • Per-task retry gate (check-retry-not-scope-prohibited.sh) for each ID
+    • Branch cleanup audit (check-prohibited-branches-deleted.sh --run)
 
   If it exits 1: permanently close every flagged task before proceeding.
+  Permanent closure requires ALL THREE of these actions:
+    1. Delete the task file:   rm .hyperloop/state/tasks/<task-id>.md
+    2. Delete the remote branch: git push origin --delete hyperloop/<task-id>
+    3. Record the closure in the prohibited-spec table below.
   Do NOT assign or re-attempt any flagged task. Do NOT create replacement tasks
   or new task numbers for prohibited specs.
 
   **This command is not optional and cannot be satisfied by reasoning.**
   Run it. Then — and only then — read the Findings content.
 
-  Combined mis-assignment count (all three prohibited specs): TWENTY
-  (moldable-views: SEVEN, understanding-modes: TWELVE, data-flow: ONE).
+  Combined mis-assignment count (all three prohibited specs): TWENTY-TWO
+  (moldable-views: EIGHT, understanding-modes: THIRTEEN, data-flow: ONE).
   Every single one was preventable by running this gate first.
 
   ---
@@ -59,12 +104,12 @@ guidelines: |
 
   | Spec file | Prohibited feature | First mis-assigned | Subsequent mis-assignments |
   |---|---|---|---|
-  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ task-024 (3rd attempt) ⚠⚠ task-024 (4th attempt) ⚠⚠⚠ task-024 (5th attempt) ⚠⚠⚠⚠ task-024 (6th attempt) ⚠⚠⚠⚠⚠ task-024 (7th attempt) ⚠⚠⚠⚠⚠⚠ **SEVENTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
-  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ task-028 (4th attempt) ⚠⚠⚠ task-028 (5th attempt) ⚠⚠⚠⚠ task-028 (6th attempt) ⚠⚠⚠⚠⚠ task-031 (2nd run) ⚠⚠⚠⚠⚠⚠ task-028 (7th attempt) ⚠⚠⚠⚠⚠⚠⚠ task-031 (3rd run) ⚠⚠⚠⚠⚠⚠⚠⚠ task-031 (4th run) ⚠⚠⚠⚠⚠⚠⚠⚠⚠ task-028 (8th attempt) ⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠ task-031 (5th run) ⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠ **TWELFTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
+  | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | task-024 | task-024 (re-attempt) ⚠ task-024 (3rd attempt) ⚠⚠ task-024 (4th attempt) ⚠⚠⚠ task-024 (5th attempt) ⚠⚠⚠⚠ task-024 (6th attempt) ⚠⚠⚠⚠⚠ task-024 (7th attempt) ⚠⚠⚠⚠⚠⚠ task-024 (8th attempt) ⚠⚠⚠⚠⚠⚠⚠ **EIGHTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | task-028 | task-031 ⚠ task-028 (3rd attempt) ⚠⚠ task-028 (4th attempt) ⚠⚠⚠ task-028 (5th attempt) ⚠⚠⚠⚠ task-028 (6th attempt) ⚠⚠⚠⚠⚠ task-031 (2nd run) ⚠⚠⚠⚠⚠⚠ task-028 (7th attempt) ⚠⚠⚠⚠⚠⚠⚠ task-031 (3rd run) ⚠⚠⚠⚠⚠⚠⚠⚠ task-031 (4th run) ⚠⚠⚠⚠⚠⚠⚠⚠⚠ task-028 (8th attempt) ⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠ task-031 (5th run) ⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠ task-028 (9th attempt) ⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠ **THIRTEENTH MIS-ASSIGNMENT — PERMANENTLY CLOSED** |
   | `specs/visualization/data-flow.spec.md` | Data flow visualization (rendering data flow as paths through 3D structure) | task-021 | **FIRST MIS-ASSIGNMENT — PERMANENTLY CLOSED** — mechanical check returned EXIT 0 (false pass); caught by implementer manual review; spec content uses "rendering data flow as paths" rather than exact keyword "data flow visualization" — path now added to check-assigned-spec-in-scope.sh |
 
-  **All three specs are now permanently closed. Combined mis-assignment count: TWENTY
-  (moldable-views: SEVEN, understanding-modes: TWELVE, data-flow: ONE).** Every attempt
+  **All three specs are now permanently closed. Combined mis-assignment count: TWENTY-TWO
+  (moldable-views: EIGHT, understanding-modes: THIRTEEN, data-flow: ONE).** Every attempt
   produces the identical outcome: scope-prohibition FAIL, zero implementation code written.
   The spec prohibition is deterministic — it will not change unless
   `specs/prototype/prototype-scope.spec.md` is explicitly revised to permit these features.
@@ -99,6 +144,9 @@ guidelines: |
      pool.  A scope-prohibition FAIL from a previous cycle means the spec is STILL
      prohibited in this cycle — nothing between cycles makes a prohibited spec
      implementable without first revising `specs/prototype/prototype-scope.spec.md`.
+  5. Delete the task's working branch immediately after closing (see BRANCH CLEANUP
+     below).  Prohibited branches accumulate rebase conflicts against main; implementers
+     cannot resolve them without doing prohibited implementation work.
 
   A scope-prohibition FAIL is NOT an implementation failure.  It is an assignment
   error.  Retrying it is not a fix — it is another assignment error.
@@ -122,10 +170,10 @@ guidelines: |
   If it contains "INVALID ASSIGNMENT" with scope-prohibition language, close the
   task permanently. Do not create a new task number for the same spec. Do not schedule
   a second attempt of the same task. task-031 (5 runs for understanding-modes),
-  task-028 (8 attempts), the 7th attempt of task-024 (moldable-views), task-021
+  task-028 (8 attempts), the 8th attempt of task-024 (moldable-views), task-021
   (data-flow spec), and every prior scope-prohibited re-attempt were all process
   errors caused by treating a scope-prohibition FAIL as an implementation FAIL.
-  Twenty total mis-assignments have occurred for these three specs. Each one
+  Twenty-one total mis-assignments have occurred for these three specs. Each one
   produced the identical outcome.
 
   ### TABLE-FIRST RULE — check the table before ANY script
@@ -159,7 +207,7 @@ guidelines: |
 
   Only proceed with a re-attempt when this check exits 0.
 
-  **This gate exists because task-028's scope-prohibition FAIL was retried EIGHT
+  **This gate exists because task-028's scope-prohibition FAIL was retried NINE
   times and task-031 was re-named and retried FIVE more times — THIRTEEN combined
   understanding-modes mis-assignments, all preventable by running the gate first.**
 
@@ -187,3 +235,58 @@ guidelines: |
   - Investigate why the spec entered the candidate pool and close that upstream gap.
   - Update `check-assigned-spec-in-scope.sh` if the prohibited spec is not already
     detected by the script (the script may lag behind the table).
+  - Delete the task's working branch (see BRANCH CLEANUP below).
+
+  ### TASK-021 DEADLOCK — requires immediate branch abandonment
+
+  The hyperloop/task-021 branch has a structural deadlock caused by a prior
+  verifier PASS report that embedded verbatim `[EXIT 1 — FAIL]` text from a
+  pre-report artifact (check-report-scope-section.sh failing before
+  worker-result.yaml existed).  check-no-zero-commit-reattempt.sh treats that
+  embedded text as a genuine prior FAIL and requires implementation commits —
+  but data-flow.spec.md is permanently prohibited, so no implementation commits
+  can ever be made.
+
+  This deadlock CANNOT be resolved by any implementer action.  The only
+  resolution is to abandon the branch entirely.
+
+  Required actions (ONE TIME, immediate):
+  1. Delete the remote branch:
+       git push origin --delete hyperloop/task-021
+  2. Delete the task file (if it still exists):
+       rm -f .hyperloop/state/tasks/task-021.md
+     Or move to closed: mv .hyperloop/state/tasks/task-021.md .hyperloop/state/closed/
+  3. Verify cleanup:
+       bash .hyperloop/checks/check-cycle-gate.sh
+     Must exit 0 with no reference to task-021 or data-flow.spec.md.
+
+  Do NOT re-assign task-021 or create a new task number for data-flow.spec.md.
+
+  ### BRANCH CLEANUP — mandatory when permanently closing a scope-prohibited task
+
+  Prohibited task branches accumulate rebase conflicts against main because no
+  implementation commits are ever made on them.  When the same task is re-assigned
+  (same or different ID) the new branch inherits these conflicts and produces
+  merge-conflict noise in files the implementer is not allowed to touch.
+
+  Observed pattern (task-028 and task-031): both FAIL reports noted unresolvable
+  rebase conflicts in godot/ files.  The implementers correctly refused to resolve
+  them ("doing so would constitute implementation work on a prohibited task").
+  Only the orchestrator can clean this up — by deleting the branch.
+
+  When you permanently close a scope-prohibited task:
+  1. Identify its working branch. Convention: `hyperloop/<task-id>`
+     (e.g. `hyperloop/task-024`, `hyperloop/task-028`, `hyperloop/task-031`).
+  2. Delete the remote branch immediately:
+       git push origin --delete hyperloop/<task-id>
+     If the branch does not exist remotely, skip silently.
+  3. Do NOT merge, cherry-pick, or rebase the branch.  It contains only a
+     scope-prohibition FAIL report — there is no implementation work to preserve.
+  4. Delete the task file from the task queue:
+       rm .hyperloop/state/tasks/<task-id>.md
+     A task file that survives closure re-enters the candidate pool every cycle.
+     Deleting the file is the only reliable way to prevent queue re-infection.
+     If task history must be preserved, move it to `.hyperloop/state/closed/`.
+  5. Confirm cleanup:
+       bash .hyperloop/checks/check-cycle-gate.sh
+     Exit 0 = queue is clean AND no prohibited branches remain.  Exit 1 lists survivors.

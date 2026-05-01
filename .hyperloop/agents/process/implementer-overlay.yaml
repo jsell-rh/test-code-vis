@@ -54,6 +54,42 @@ guidelines: |
     git rebase -i main                    # drop foreign commits (not 'reword')
     bash .hyperloop/checks/check-branch-forked-from-main.sh   # confirm exit 0
 
+  ## REBASE HYGIENE — STAY CURRENT WITH MAIN BEFORE SUBMITTING
+
+  When multiple tasks run concurrently, main can advance after your branch was
+  created. A branch that is not rebased onto current main will SILENTLY DELETE
+  everything main added — the diff against main shows `-lines` for code you
+  never wrote, and tests appear clean only because the deleted test files are
+  never executed.
+
+  **Observed failure (task-108):** branch forked from db76c822; main advanced
+  one commit (task-074 work). Branch was never rebased. Merging would have
+  reverted compute_structural_significance(), schema TypedDict fields, and
+  test_visual_primitives.gd. 161 tests passed because the unregistered test
+  file simply never ran.
+
+  **Before every submission**, verify your branch is current:
+
+    bash .hyperloop/checks/check-rebased-onto-main.sh
+
+  If it exits non-zero, rebase immediately:
+
+    git fetch origin main:main
+    git rebase origin/main
+
+  **During conflict resolution — critical rules:**
+  - NEVER choose "ours" (branch side) to resolve an entire file when main
+    added new functions, TypedDict fields, or test registrations.
+  - After resolving each file, verify functions that existed in main are
+    still present: `grep "def compute_" extractor/extractor.py`
+  - For `godot/tests/run_tests.gd` specifically: count the `_run_suite()`
+    lines after resolution — the count MUST be >= the count on main.
+
+  After rebase, run the regression guard before `run-all-checks.sh`:
+
+    bash .hyperloop/checks/check-run-tests-suite-count.sh
+    bash .hyperloop/checks/run-all-checks.sh
+
   ## COMMIT TRAILER DISCIPLINE — VERIFY AFTER EVERY COMMIT
 
   After every `git commit` (including rebase sessions and fix-up commits), immediately run:
@@ -70,6 +106,13 @@ guidelines: |
   cheaper than discovering it at submission.
 
   ## CHECK SYNC — TWO MANDATORY POINTS (FAILURE TO COMPLY BLOCKS SUBMISSION)
+
+  `check-checks-in-sync.sh` now fetches `origin/main` silently before comparing,
+  so a stale local `main` no longer produces false-OK results. If the script exits 0,
+  your working tree is confirmed to match the actual remote state. This closes the
+  task-075 gap: implementer ran `git checkout main -- .hyperloop/checks/` without
+  fetching first; local main was 3 commits stale; the sync and the verification both
+  agreed on 52 checks while origin/main had 54 — concealing the rebase failure.
 
   ### Sync Point 1 — Absolute first action (before spec, before code)
 
@@ -441,6 +484,126 @@ guidelines: |
 
   If you cannot write a failing test for a THEN-clause, escalate — it may be
   untestable in the current environment and requires PASS-WITH-NOTE treatment.
+
+  ## PERCEPTUAL CHANNEL FIDELITY
+
+  When the spec names a specific perceptual channel for a visual property, use
+  that EXACT channel — substituting a different one is always a FAIL.
+
+  Common substitution errors to avoid:
+
+  | Spec says              | Wrong substitute       | Right implementation              |
+  |------------------------|------------------------|-----------------------------------|
+  | "visual thickness"     | color channel scaling  | mesh width / geometry proportional to value |
+  | "line style (dashed)"  | color encoding         | separate geometry pattern (gaps, dots) |
+  | "opacity proportional" | visibility toggle      | alpha value computed from ratio   |
+  | "size proportional"    | color brightness       | scale applied to geometry         |
+
+  Before implementing any visual property: identify its spec-named channel.
+  Write a failing test that asserts THAT channel (not a substitute).
+
+  Example — spec says "visual thickness is proportional to weight":
+    WRONG test: `assert edge_color.r == expected_r`
+    RIGHT test:  `assert edge_mesh.get_width() > thin_ref_width` (thickness, not color)
+
+  ## SUPPRESSION GUARD CONDITIONS
+
+  When a spec THEN-clause says an element is "NOT drawn", "suppressed",
+  "hidden", "excluded", or "not rendered", the rendering function MUST contain
+  an explicit early-return or conditional skip keyed on the suppression flag.
+  Unconditional rendering is a FAIL regardless of surrounding logic.
+
+  Required pattern:
+    func _create_edge(ed: Dictionary) -> void:
+        if ed.get("ubiquitous", false):
+            return  # suppressed — spec says NOT drawn
+        # ... rest of rendering ...
+
+  Before committing any rendering function:
+  1. Search the spec for "NOT drawn", "suppressed", "hidden", "no edges", "excluded".
+  2. For each such clause, confirm a guard condition exists in the matching function.
+  3. Write a test that provides a suppressed element as fixture data and asserts
+     no rendered node/mesh was created for it.
+
+  ## CONTINUOUS VISUAL PROPERTIES — COMPUTE, DON'T HARDCODE
+
+  When the spec says a visual property is "proportional to", "reflects",
+  "continuous", or "varies with" a data value, compute it dynamically from
+  that value. A hardcoded constant is FAIL regardless of whether the constant
+  falls within an acceptable range.
+
+  Example — spec says membrane opacity reflects the public/private symbol ratio:
+    WRONG: Color(0.25, 0.45, 0.85, 0.18)  # fixed alpha — always FAIL
+    RIGHT: var alpha = clampf(public_count / max(total_count, 1.0), 0.05, 0.40)
+           Color(0.25, 0.45, 0.85, alpha)  # computed from data — PASS
+
+  Test requirement: provide two fixtures with different data values and assert
+  the resulting visual property DIFFERS between them.
+
+  ## ENUMERATED SOURCES — IMPLEMENT ALL LISTED ITEMS
+
+  When a spec lists multiple sources, types, or cases using "and" or a comma
+  enumeration (e.g., "derived from: hubs, bridges, entry points"), EVERY
+  listed item must be implemented. A partial subset is PARTIAL/FAIL.
+
+  Before writing any code for a multi-source requirement:
+  1. Extract the full list from the spec text.
+  2. Create a coverage stub for each item:
+       | Source      | Implemented | Test name |
+       |-------------|-------------|-----------|
+       | hubs        |             |           |
+       | bridges     |             |           |
+       | entry points|             |           |
+  3. Do not close the requirement until every row has both columns filled.
+
+  Omitting one source because it "seemed less common" or "was not in the
+  examples" is always a FAIL — the spec enumeration is exhaustive.
+
+  ## TEST VALUE ASSERTIONS — ASSERT FIELD VALUES, NOT JUST PRESENCE
+
+  Tests for spec-required data fields must assert the field's VALUE (or that
+  it is non-empty / matches a pattern), not merely that the key exists.
+
+  WRONG — passes even when field is empty or wrong:
+    assert "param_name" in edge
+    assert edge.has("type")
+
+  RIGHT — fails when field is absent, empty, or wrong:
+    assert edge["param_name"] == expected_param   # Python
+    assert edge.get("param_name", "") != ""       # Python (non-empty)
+    assert_eq(edge["param_name"], expected_param)  # GDScript
+
+  Spec scenario: "the call site carries the parameter name and any type hints"
+    WRONG test: checks edge type only, not param_name payload
+    RIGHT test: asserts `edge["param_name"]` is non-empty and matches the
+                parameter variable name from the fixture source code
+
+  ## GDSCRIPT FUNCTION UNIQUENESS — CHECK BEFORE EVERY COMMIT
+
+  GDScript does NOT support function overloading.  A second `func` definition
+  with the same name causes a parse error that blocks ALL test files that preload
+  the affected script — the test runner silently reports zero tests instead of a
+  failure, giving false confidence.
+
+  Observed failure (task-062): a fix commit added `_build_aggregate_edges()` to
+  main.gd, which already defined that function.  godot-compile.sh failed; all 164
+  Godot tests were silently inert.
+
+  **Before committing any GDScript file change that adds or renames a function:**
+
+  1. Identify the name of every function you are adding.
+  2. Search the target file for existing definitions of the same name:
+       grep -n "^func <function_name>(" <gd_file>
+  3. If a match is found, resolve the conflict BEFORE committing:
+       - If your definition replaces the existing one: delete the old definition.
+       - If both are needed: use different names (GDScript has no overloading).
+  4. Run `bash .hyperloop/checks/check-no-gdscript-duplicate-functions.sh` and
+     confirm exit 0.
+  5. Run `bash .hyperloop/checks/godot-compile.sh` immediately after any GDScript
+     commit and confirm exit 0 before running any other check.
+
+  A commit message claiming "all checks pass" is INVALID if godot-compile.sh was
+  not confirmed to pass AFTER the commit was applied.
 
   ## SPEC-REF TRAILER — COMMIT HASH, NOT BLOB HASH
 

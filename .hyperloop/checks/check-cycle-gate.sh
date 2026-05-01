@@ -3,7 +3,14 @@
 #
 # ORCHESTRATOR CYCLE-START GATE — ONE COMMAND to run before reading any findings.
 #
-# Consolidates the two-step mandatory cycle-start sequence into a single call:
+# Consolidates the mandatory cycle-start sequence into a single call:
+#
+#   Step 0 — Main/origin sync check (only when task IDs are supplied):
+#     check-main-local-vs-remote.sh
+#     Verifies local main == origin/main. An orchestrator with unpushed commits
+#     causes check-main-local-vs-remote.sh to fail in every verifier worktree,
+#     penalizing implementers for an orchestrator error they cannot observe.
+#     Fix: git push origin main  (run before this script, not after).
 #
 #   Step 1 — Queue audit (all task files):
 #     check-no-prohibited-tasks-open.sh --run
@@ -14,37 +21,29 @@
 # Usage:
 #   bash .hyperloop/checks/check-cycle-gate.sh <task-id> [task-id ...]
 #
-#   Example (findings contain task-024, task-028, task-031):
-#     bash .hyperloop/checks/check-cycle-gate.sh task-024 task-028 task-031
+#   Example (findings contain task-011, task-031, task-108):
+#     bash .hyperloop/checks/check-cycle-gate.sh task-011 task-031 task-108
 #
 #   If no task IDs are supplied, only the queue audit (Step 1) runs.
+#   Step 0 is skipped when no task IDs are supplied (run-all-checks.sh compat).
 #
 # Exit codes:
 #   0 — Gate passed. Queue is clean; no finding tasks are scope-prohibited.
 #       Proceed with reading findings and assigning work.
-#   1 — Gate FAILED. Prohibited specs detected. Permanently close every
-#       flagged task. Do NOT assign or retry any flagged task. Re-run after
-#       closing to confirm exit 0.
+#   1 — Gate FAILED. Fix all reported issues before assigning any task.
 #   2 — Usage error (missing required subscript).
 #
 # Rationale:
-#   The prior two-step gate (separate commands for queue audit and per-task
-#   retry check) was skipped repeatedly because of the friction of running
-#   two commands with different arguments. 20 mis-assignments across three
-#   prohibited specs have occurred since the gate was introduced. A single
-#   command with all task IDs removes that friction while preserving all
-#   mechanical checks.
-#
-# No-arg SKIP (run-all-checks.sh compatibility):
-#   Called with no args from run-all-checks.sh: runs Step 1 only (queue audit).
-#   This is intentional — the queue audit is always safe to run without task IDs.
-#   The per-task retry gate (Step 2) requires IDs from the cycle's findings and
-#   is meaningful only at cycle start, not per-branch.
+#   The prior two-step gate was skipped repeatedly. 20+ mis-assignments across
+#   three prohibited specs occurred since it was introduced. Step 0 (main sync)
+#   was added after task-108 rounds 7–9: orchestrator had unpushed local-main
+#   commits that caused 3 extra FAIL rounds on an excellent implementation.
 
 set -uo pipefail
 
 QUEUE_AUDIT=".hyperloop/checks/check-no-prohibited-tasks-open.sh"
 RETRY_GATE=".hyperloop/checks/check-retry-not-scope-prohibited.sh"
+MAIN_SYNC=".hyperloop/checks/check-main-local-vs-remote.sh"
 
 if [ ! -f "$QUEUE_AUDIT" ]; then
     echo "ERROR: Queue audit script not found: $QUEUE_AUDIT"
@@ -57,6 +56,27 @@ if [ ! -f "$RETRY_GATE" ]; then
 fi
 
 GATE_FAILED=0
+
+# ── Step 0: Main/origin sync check (orchestrator only — when task IDs supplied) ─
+# Run-all-checks.sh calls this with no args (queue audit only). Checking main sync
+# here is only meaningful for the orchestrator who is about to assign tasks.
+# Implementers and verifiers already run check-main-local-vs-remote.sh directly.
+if [ "$#" -gt 0 ] && [ -f "$MAIN_SYNC" ]; then
+    echo "========================================================================"
+    echo "CYCLE-START GATE — Step 0: Main/origin sync (push-before-assign check)"
+    echo "========================================================================"
+    echo ""
+    if ! bash "$MAIN_SYNC"; then
+        echo ""
+        echo "  MAIN SYNC FAILED — run 'git push origin main' before assigning tasks."
+        echo "  An unpushed local-main commit causes check-main-local-vs-remote.sh to"
+        echo "  fail in EVERY verifier worktree, penalizing implementers for an orchestrator error."
+        GATE_FAILED=1
+    else
+        echo "  Main/origin sync OK — safe to assign tasks."
+    fi
+    echo ""
+fi
 
 # ── Step 1: Full queue audit ──────────────────────────────────────────────────
 echo "========================================================================"

@@ -3,21 +3,27 @@
 #
 # Verifies that local 'main' matches the cached origin/main ref.
 #
-# A stale local 'main' causes:
-#   git checkout main -- .hyperloop/checks/
-# to pull an outdated set of check scripts, silently omitting new ones
-# that were added to origin/main since the last fetch.
+# Two distinct failure modes with different root causes and fixes:
 #
-# Root cause observed: task-108 round-6 missed check-branch-forked-from-main.sh
-# which was on origin/main before the sync but absent from local main.
+#   AHEAD  — local main has commits not on origin/main.
+#            Root cause: orchestrator committed to local main without pushing.
+#            Fix (ORCHESTRATOR): git push origin main
+#            Implementers cannot resolve this — git fetch cannot rewind local main.
 #
-# Run this BEFORE both sync points:
-#   git fetch origin main:main          # update local main from remote
-#   git checkout main -- .hyperloop/checks/
-#   bash .hyperloop/checks/check-checks-in-sync.sh
+#   BEHIND — local main is missing commits that are on origin/main.
+#            Root cause: implementer/verifier has a stale local main.
+#            Fix (IMPLEMENTER/VERIFIER): git fetch origin main:main
+#
+#   DIVERGED — local and origin/main have different histories (force-push or rebase).
+#              Fix: investigate carefully before taking action.
+#
+# Historical pattern:
+#   task-108 rounds 7–9: orchestrator committed check-pass-report-no-raw-fail-lines.sh
+#   to local main without pushing → every verifier worktree saw FAIL here → 3
+#   extra rounds of FAST-FIX FAIL on an excellent implementation.
 #
 # Exit 0 — local main matches origin/main (or remote ref unavailable: SKIP)
-# Exit 1 — local main is behind or diverged from origin/main
+# Exit 1 — local main is ahead, behind, or diverged from origin/main
 
 set -euo pipefail
 
@@ -40,12 +46,50 @@ if [ "$LOCAL" = "$ORIGIN" ]; then
   exit 0
 fi
 
-echo "FAIL: local main ($LOCAL) does not match origin/main ($ORIGIN)."
-echo "  Running 'git checkout main -- .hyperloop/checks/' with a stale local main"
-echo "  silently omits check scripts added to origin/main since your last fetch."
+# Diagnose: ahead, behind, or diverged?
+AHEAD=false
+BEHIND=false
+
+if git merge-base --is-ancestor "$ORIGIN" "$LOCAL" 2>/dev/null; then
+  AHEAD=true
+fi
+if git merge-base --is-ancestor "$LOCAL" "$ORIGIN" 2>/dev/null; then
+  BEHIND=true
+fi
+
+if $AHEAD && ! $BEHIND; then
+  echo "FAIL (ORCHESTRATOR): local main ($LOCAL) is AHEAD of origin/main ($ORIGIN)."
+  echo "  An orchestrator committed to local main without pushing. Implementers cannot"
+  echo "  resolve this — 'git fetch origin main:main' cannot rewind local main."
+  echo "  check-sync failures caused by this are ORCHESTRATOR errors, not implementer errors."
+  echo ""
+  echo "  Fix (ORCHESTRATOR — run on the main worktree, not a task worktree):"
+  echo "    git push origin main"
+  echo ""
+  echo "  Verifiers: classify this failure as ORCHESTRATOR CONFIGURATION in findings."
+  echo "  If this is the ONLY check failure and the branch is otherwise correct, apply"
+  echo "  FAST-FIX classification — the required fix is 'git push origin main', not"
+  echo "  an implementer sync commit."
+  exit 1
+fi
+
+if $BEHIND && ! $AHEAD; then
+  echo "FAIL (SYNC): local main ($LOCAL) is BEHIND origin/main ($ORIGIN)."
+  echo "  Running 'git checkout main -- .hyperloop/checks/' with a stale local main"
+  echo "  silently omits check scripts added to origin/main since your last fetch."
+  echo ""
+  echo "  Fix (run before every sync point):"
+  echo "    git fetch origin main:main"
+  echo "    git checkout main -- .hyperloop/checks/"
+  echo "    bash .hyperloop/checks/check-checks-in-sync.sh"
+  exit 1
+fi
+
+# Diverged — neither is ancestor of the other
+echo "FAIL (DIVERGED): local main ($LOCAL) has diverged from origin/main ($ORIGIN)."
+echo "  Local main and origin/main have different histories — possible force-push or rebase."
 echo ""
-echo "  Fix (run before every sync point):"
-echo "    git fetch origin main:main"
-echo "    git checkout main -- .hyperloop/checks/"
-echo "    bash .hyperloop/checks/check-checks-in-sync.sh"
+echo "  Diagnose before acting (do NOT discard either side without understanding the diff):"
+echo "    git log --oneline origin/main..main   # commits only on local main"
+echo "    git log --oneline main..origin/main   # commits only on origin/main"
 exit 1
