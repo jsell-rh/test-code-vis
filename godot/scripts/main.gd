@@ -641,7 +641,9 @@ func _create_edge(ed: Dictionary) -> void:
 						break
 				var nd_sz: float = float(src_data.get("size", 1.0))
 				_add_power_rail_indicator(src_anchor, nd_sz)
-		return  # Do NOT draw the edge line.
+		# Do NOT return — continue to create a hidden body tracked in
+		# _ubiquitous_edge_visuals so it can be toggled on/off by the human.
+		# spec §Power Rail Toggle: "all suppressed ubiquitous edges fade in"
 
 	if not _world_positions.has(src) or not _world_positions.has(tgt):
 		push_warning("CodeVis: skipping edge '%s' → '%s' (node missing)." % [src, tgt])
