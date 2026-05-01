@@ -32,10 +32,10 @@ guidelines: |
   | Spec file | Prohibited feature | Authority | Mis-assignment count |
   |---|---|---|---|
   | `specs/interaction/moldable-views.spec.md` | Moldable views (LLM-powered question-driven views) | prototype-scope.spec.md line 93 | 7 (task-024 × 7 attempts) ⚠⚠⚠⚠⚠⚠ |
-  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | prototype-scope.spec.md lines 89-91 | 10 (task-028 × 7, task-031 × 4) ⚠⚠⚠⚠⚠⚠⚠⚠⚠ |
+  | `specs/core/understanding-modes.spec.md` | Conformance/evaluation/simulation modes | prototype-scope.spec.md lines 89-91 | 12 (task-028 × 8, task-031 × 5) ⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠ |
   | `specs/visualization/data-flow.spec.md` | Data flow visualization | prototype-scope.spec.md line 92 | 1 (task-021 × 1) — check returned false EXIT 0; caught by manual review ⚠ |
 
-  **understanding-modes.spec.md has been mis-assigned TEN TIMES.
+  **understanding-modes.spec.md has been mis-assigned TWELVE TIMES.
   moldable-views.spec.md has been mis-assigned SEVEN TIMES.
   data-flow.spec.md has been mis-assigned ONCE (check-assigned-spec-in-scope.sh
   returned false EXIT 0 — keyword mismatch fixed; path now in prohibited list).**
