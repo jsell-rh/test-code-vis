@@ -1,8 +1,8 @@
 ---
 id: task-118
 title: Godot — Conformance Mode invariant annotation checkpoint styling
-spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
-status: not_started
+spec_ref: null
+status: closed
 phase: null
 deps:
 - task-096
