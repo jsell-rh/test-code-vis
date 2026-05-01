@@ -111,6 +111,7 @@ func build_aggregate_edges(
 		mat.albedo_color = agg_color  # alpha=0.0: hidden until show_edges() is called
 
 		var mesh_instance := MeshInstance3D.new()
+		mesh_instance.name = "AggregateEdge_" + src_ctx.replace("/", "_") + "_" + tgt_ctx.replace("/", "_")
 		mesh_instance.mesh = imesh
 		mesh_instance.material_override = mat
 		# Start hidden: shown at FAR LOD via show_edges().
