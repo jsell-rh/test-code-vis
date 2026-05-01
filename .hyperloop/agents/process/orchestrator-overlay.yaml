@@ -55,6 +55,13 @@ guidelines: |
   but did not push. The branch had excellent coverage (172 Godot tests, 198 pytest, all
   spec requirements covered) but failed three extra rounds solely due to this state.
 
+  Observed pattern (task-011, task-108 round 10 — same cycle): A process-improvement
+  session committed 3 commits to local main (chore(intake), process: fix spec-ref
+  check, feat(tasks): intake) without pushing. Both task-011 and task-108 (round 10)
+  had correct implementations and passed all other checks — they failed ONLY due to
+  this unpushed state. Combined across all three incidents: 7 tasks penalized across
+  3 separate sessions that closed without pushing local main to origin.
+
   **Checklist at cycle start:**
     1. git push origin main                                              # push FIRST
     2. bash .hyperloop/checks/check-cycle-gate.sh <task-ids from findings>  # gate check
@@ -63,6 +70,23 @@ guidelines: |
   **Checklist after any mid-cycle commit to main:**
     1. git push origin main                                              # push IMMEDIATELY
     2. Do not spawn any new task until the push completes.
+
+  **PROCESS-IMPROVEMENT SESSIONS — MANDATORY FINAL ACTION:**
+
+  Process-improvement work (overlay edits, new check scripts, kustomization updates)
+  ALWAYS produces commits on local main. These commits MUST be pushed before the
+  session ends — not deferred to "the start of the next cycle".
+
+  The 3 unpushed commits causing task-011/task-108-round-10 failures included
+  `process: fix spec-ref check for process commits` — a process-improvement commit
+  itself. The session that wrote it did not push before closing.
+
+  Last action of every process-improvement session, without exception:
+    git push origin main
+    bash .hyperloop/checks/check-main-local-vs-remote.sh   # must exit 0
+
+  If check-main-local-vs-remote.sh exits 1 at the end of a process-improvement
+  session, the session is NOT complete. Push and verify before closing.
 
   ---
 

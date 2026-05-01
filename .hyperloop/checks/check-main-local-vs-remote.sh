@@ -22,6 +22,12 @@
 #   to local main without pushing → every verifier worktree saw FAIL here → 3
 #   extra rounds of FAST-FIX FAIL on an excellent implementation.
 #
+#   task-011, task-108 round 10 (same cycle): a process-improvement session committed
+#   3 commits (chore(intake), process: fix spec-ref check, feat(tasks): intake) to
+#   local main without pushing → both tasks failed here despite correct implementations.
+#   The process-improvement commit itself (`process: fix spec-ref check`) was one of
+#   the unpushed commits — the session that produced it did not push before closing.
+#
 # Exit 0 — local main matches origin/main (or remote ref unavailable: SKIP)
 # Exit 1 — local main is ahead, behind, or diverged from origin/main
 
