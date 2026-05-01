@@ -472,61 +472,6 @@ func _create_edge(ed: Dictionary) -> void:
 	_path_edge_entries.append({"visual": arrow, "source": src, "target": tgt})
 
 
-## Group cross-context edges by bounded-context pair and return a summary Array.
-##
-## spec (spatial-structure.spec.md § "Far — bounded context architecture"):
-##   "cross-context dependencies are shown as single aggregate edges per context
-##    pair, with weight indicating total import count"
-##
-## Returns an Array of Dictionaries, one per unique (source_context, target_context)
-## pair, with fields:
-##   - "source_context": String — the originating bounded-context id
-##   - "target_context": String — the destination bounded-context id
-##   - "weight":         int    — total count of individual cross-context edges
-##                                for this pair (proxy for import count)
-##
-## Consumed by the LOD-far rendering pass to draw a single weighted line per pair
-## instead of one line per individual cross-context dependency.
-func _build_aggregate_edges(edges: Array, nodes: Array) -> Array:
-	# Index module → parent bounded context.
-	var module_to_context: Dictionary = {}
-	for nd: Dictionary in nodes:
-		var ntype: String = nd.get("type", "")
-		var nid: String = nd.get("id", "")
-		var parent = nd.get("parent")
-		if ntype == "module" and parent != null:
-			module_to_context[nid] = parent as String
-		elif ntype == "bounded_context":
-			module_to_context[nid] = nid  # contexts map to themselves
-
-	# Accumulate weight per context_pair key "src_ctx→tgt_ctx".
-	var edges_by_context: Dictionary = {}  # context_pair → weight
-	for ed: Dictionary in edges:
-		if ed.get("type", "") != "cross_context":
-			continue
-		var src: String = ed.get("source", "")
-		var tgt: String = ed.get("target", "")
-		if src.is_empty() or tgt.is_empty():
-			continue
-		var src_ctx: String = module_to_context.get(src, src)
-		var tgt_ctx: String = module_to_context.get(tgt, tgt)
-		if src_ctx == tgt_ctx:
-			continue  # Same context — not a cross-context aggregate edge.
-		var context_pair: String = src_ctx + "→" + tgt_ctx
-		edges_by_context[context_pair] = edges_by_context.get(context_pair, 0) + 1
-
-	# Convert map to result array.
-	var aggregate_edges: Array = []
-	for context_pair: String in edges_by_context.keys():
-		var parts: PackedStringArray = context_pair.split("→")
-		aggregate_edges.append({
-			"source_context": parts[0],
-			"target_context": parts[1] if parts.size() > 1 else "",
-			"weight":         edges_by_context[context_pair],
-		})
-	return aggregate_edges
-
-
 # ---------------------------------------------------------------------------
 # Aggregate edge rendering (FAR LOD)
 # ---------------------------------------------------------------------------
