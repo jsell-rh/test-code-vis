@@ -663,6 +663,26 @@ guidelines: |
   A commit message claiming "all checks pass" is INVALID if godot-compile.sh was
   not confirmed to pass AFTER the commit was applied.
 
+  ## SPEC-NAMED ALGORITHMS AND METRICS — NO SUBSTITUTION WITHOUT AMENDMENT
+
+  When a spec THEN-clause names a specific algorithm, data structure, or metric
+  by name (e.g., "betweenness centrality score", "Louvain community detection",
+  "in-degree count"), implement that EXACT item — not a proxy or approximation.
+
+  Observed failure (task-119): spec said "the module is annotated with its
+  betweenness centrality score AND it is flagged as a bridge".  The implementer
+  substituted `is_bridge: bool` (articulation-point detection).  A boolean flag
+  is not a score.  The THEN-clause requires a numeric float field on the node.
+
+  If you believe a different algorithm is adequate, you MUST:
+  1. Document the deviation explicitly in your report — name the spec requirement,
+     name what you implemented instead, and explain why you believe it is adequate.
+  2. Request a spec amendment from the orchestrator BEFORE submitting.
+  3. Do NOT assume the verifier will accept the substitution as equivalent.
+
+  Without a spec amendment, a different algorithm or proxy value is always
+  PARTIAL/FAIL regardless of how well it approximates the spec's requirement.
+
   ## SPEC-REF TRAILER — COMMIT HASH, NOT BLOB HASH
 
   The `Spec-Ref` trailer MUST contain a **commit hash**, not a blob hash.

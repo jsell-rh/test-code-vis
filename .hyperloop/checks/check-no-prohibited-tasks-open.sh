@@ -24,7 +24,9 @@
 # Rules:
 #   - Checks spec_ref field against the known prohibited spec file list.
 #   - Checks task body for prohibited spec file names and feature keywords.
-#   - Matches tasks regardless of status field value.
+#   - Skips tasks with status: closed — closed tasks cannot be re-assigned,
+#     and their bodies may legitimately describe prohibited features as
+#     documentation of WHY those features are excluded from scope.
 #   - If it exits 1: permanently close every flagged task before assigning
 #     any work.  Do NOT create replacement tasks for prohibited specs.
 
@@ -77,6 +79,14 @@ for TASK_FILE in "${TASK_FILES[@]}"; do
     TASK_ID=$(basename "$TASK_FILE" .md)
     TASK_BODY=$(cat "$TASK_FILE")
     TASK_COUNT=$((TASK_COUNT + 1))
+
+    # Skip closed tasks — they cannot be re-assigned.  Closed documentation
+    # records may legitimately describe prohibited features to explain scope
+    # exclusions; scanning them for prohibited keywords produces false positives.
+    TASK_STATUS=$(echo "$TASK_BODY" | grep -m1 '^status:' | sed 's/^status:[[:space:]]*//' | tr -d '\r')
+    if [ "$TASK_STATUS" = "closed" ]; then
+        continue
+    fi
 
     # Extract spec_ref, stripping any @hash suffix (Spec-Ref format)
     SPEC_REF=$(echo "$TASK_BODY" | grep -m1 '^spec_ref:' \
