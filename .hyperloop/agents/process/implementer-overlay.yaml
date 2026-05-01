@@ -84,6 +84,33 @@ guidelines: |
     still present: `grep "def compute_" extractor/extractor.py`
   - For `godot/tests/run_tests.gd` specifically: count the `_run_suite()`
     lines after resolution — the count MUST be >= the count on main.
+  - **`.hyperloop/checks/` conflicts — take ALL of origin/main in one command:**
+    When the rebase produces conflicts in `.hyperloop/checks/` (both sides added
+    or modified the same check script), resolve the entire directory by taking
+    origin/main's version unconditionally:
+
+      git checkout origin/main -- .hyperloop/checks/
+      bash .hyperloop/checks/check-checks-in-sync.sh   # must exit 0
+
+    Never hand-edit check scripts to resolve conflicts — take origin/main wholesale.
+    Observed failure (task-010): both branch and origin/main added check-rebased-onto-main.sh
+    and check-run-tests-suite-count.sh; conflict resolution left stale versions on the
+    branch, causing both scripts to fail at review.
+
+  **After rebase, if `check-run-tests-suite-count.sh` exits non-zero:**
+  The diagnostic diff identifies which `_run_suite()` registrations are missing.
+  For each missing suite, also restore the test file itself from origin/main —
+  not just the registration line:
+
+    # Identify missing suite(s) from the diff output, e.g. test_nfr.gd:
+    git show origin/main:godot/tests/test_nfr.gd > godot/tests/test_nfr.gd
+    # Then confirm the _run_suite() registration is present in run_tests.gd:
+    grep "test_nfr" godot/tests/run_tests.gd
+
+  Observed failure (task-010): origin/main added test_nfr.gd (67 lines) in commit
+  a1ebeffa; the branch was not rebased so the file was never incorporated. After
+  rebase, a missing test file is NOT automatically restored when the conflict was
+  in a different file — explicitly restore it from origin/main.
 
   After rebase, run the regression guard before `run-all-checks.sh`:
 

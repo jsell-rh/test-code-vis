@@ -19,7 +19,6 @@ extends Node3D
 const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
 const LodManager = preload("res://scripts/lod_manager.gd")
 const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
-const IndependenceController = preload("res://scripts/independence_controller.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -60,9 +59,6 @@ var _was_at_far_lod: bool = false
 ## Understanding overlay controller — activates alignment, quality, and impact overlays.
 var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
 
-## Independence controller — highlights orthogonal independence for a selected module.
-var _independence_controller: IndependenceController = IndependenceController.new()
-
 @onready var _camera: Camera3D = $Camera3D
 
 
@@ -91,11 +87,6 @@ func _ready() -> void:
 ## Called from _ready() at startup and from tests directly.
 ## Caches the graph so overlay functions (_apply_alignment_overlay, etc.) can
 ## access node/edge data after the scene has been built.
-##
-## Smooth regrouping: if anchors already exist (this is a reload), node positions
-## are animated smoothly to their new values — nodes slide rather than jump.
-## This satisfies the spec requirement: "nodes animate smoothly to their new
-## positions, preserving spatial continuity" when independence groups change.
 func build_from_graph(graph: Dictionary) -> void:
 	# Cache graph so overlay functions can use it even when called from tests.
 	_graph = graph
@@ -107,40 +98,23 @@ func build_from_graph(graph: Dictionary) -> void:
 	for nd: Dictionary in nodes:
 		node_data_map[nd["id"]] = nd
 
-	# Detect reload: if anchors already exist, animate positions instead of recreating.
-	var is_reload: bool = not _anchors.is_empty()
-
-	# Clear and recompute world positions for the new graph.
-	_world_positions.clear()
+	# Pre-compute every node's world-space centre before creating geometry,
+	# so that edge endpoints are available without depending on Godot's
+	# deferred global-transform propagation.
 	_compute_world_positions(nodes, node_data_map)
 
-	# Create or animate volumes: parents first so children can be parented to them.
+	# Create volumes: parents first so children can be parented to them.
 	for nd: Dictionary in nodes:
 		if nd["parent"] == null:
-			if is_reload and _anchors.has(nd["id"]):
-				# Anchor already exists: animate to new position for smooth regrouping.
-				_animate_node_to_position(nd)
-			else:
-				_create_volume(nd, self)
+			_create_volume(nd, self)
 	for nd: Dictionary in nodes:
 		if nd["parent"] != null:
-			if is_reload and _anchors.has(nd["id"]):
-				# Anchor already exists: animate to new position for smooth regrouping.
-				_animate_node_to_position(nd)
+			var parent_anchor: Node3D = _anchors.get(nd["parent"])
+			if parent_anchor != null:
+				_create_volume(nd, parent_anchor)
 			else:
-				var parent_anchor: Node3D = _anchors.get(nd["parent"])
-				if parent_anchor != null:
-					_create_volume(nd, parent_anchor)
-				else:
-					push_warning("CodeVis: parent '%s' not found for '%s'." % [nd["parent"], nd["id"]])
-					_create_volume(nd, self)
-
-	# Recreate edge visuals (always fresh — they depend on current world positions).
-	if is_reload:
-		for entry: Dictionary in _lod_edge_entries:
-			(entry["visual"] as Node3D).queue_free()
-		_lod_edge_entries.clear()
-		_path_edge_entries.clear()
+				push_warning("CodeVis: parent '%s' not found for '%s'." % [nd["parent"], nd["id"]])
+				_create_volume(nd, self)
 
 	# Create edge lines after all volumes exist.
 	for ed: Dictionary in edges:
@@ -154,34 +128,6 @@ func build_from_graph(graph: Dictionary) -> void:
 
 	# Apply initial LOD pass so visibility is correct before any _process tick.
 	_update_lod()
-
-
-## Animate an existing anchor node to the position specified in *nd*.
-##
-## spec: "nodes animate smoothly to their new positions" (smooth regrouping).
-## When the node is in the scene tree, a Tween slides the anchor.
-## When not in the tree (unit tests), the position is set directly.
-func _animate_node_to_position(nd: Dictionary) -> void:
-	var anchor: Node3D = _anchors.get(nd["id"])
-	if anchor == null:
-		return
-	var p: Dictionary = nd["position"]
-	var new_pos := Vector3(float(p["x"]), float(p["y"]), float(p["z"]))
-	if anchor.position.is_equal_approx(new_pos):
-		return
-	if is_inside_tree():
-		# spec: "nodes slide rather than jump" — Tween preserves spatial continuity.
-		var tween: Tween = create_tween()
-		tween.tween_property(anchor, "position", new_pos, 0.5)
-	else:
-		# Not in scene tree (unit tests): set position directly.
-		anchor.position = new_pos
-
-
-## Return the internal anchors dictionary (node id → Node3D).
-## Exposed for tests that verify smooth regrouping preserves anchor identity.
-func get_anchors() -> Dictionary:
-	return _anchors
 
 
 # ---------------------------------------------------------------------------
@@ -592,7 +538,6 @@ func _frame_camera() -> void:
 ##   H → apply alignment overlay (spec-vs-realization — shows how build matches design).
 ##   J → apply quality overlay  (quality-metrics — shows coupling and centrality).
 ##   K → apply failure impact overlay (cascade-injection — shows impact from first node).
-##   I → toggle independence overlay for the first module in the graph.
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed:
 		return
@@ -603,8 +548,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			_apply_quality_overlay()
 		KEY_K:
 			_apply_failure_impact_overlay()
-		KEY_I:
-			_toggle_independence_overlay()
 
 
 # ---------------------------------------------------------------------------
@@ -639,34 +582,3 @@ func _apply_failure_impact_overlay() -> void:
 	var target_id: String = nodes[0].get("id", "")
 	if not target_id.is_empty():
 		_understanding_overlay.apply_failure_overlay(target_id, _graph, _anchors, self)
-
-
-# ---------------------------------------------------------------------------
-# Independence overlay (I key)
-# ---------------------------------------------------------------------------
-
-## Toggle independence overlay (I key) — orthogonal independence view.
-##
-## On first press: selects the first module node in the graph and highlights
-## its orthogonal complement (modules in different independence groups).
-## Modules in the same group are coloured as co-dependent; modules in other
-## groups are coloured as independent; unrelated bounded contexts are shown
-## as fully context-independent.
-##
-## On second press (or if already active): clears the independence highlight.
-func _toggle_independence_overlay() -> void:
-	if not _independence_controller.get_selected_id().is_empty():
-		# Already active — clear the highlight.
-		_independence_controller.clear_independence_highlight(_anchors, _graph, self)
-		return
-
-	# Find the first module node to act as the selection target.
-	var nodes: Array = _graph.get("nodes", [])
-	var target_id: String = ""
-	for nd: Dictionary in nodes:
-		if nd.get("type", "") == "module":
-			target_id = nd.get("id", "")
-			break
-
-	if not target_id.is_empty():
-		_independence_controller.select_module(target_id, _graph, _anchors, self)

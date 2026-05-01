@@ -213,13 +213,6 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
     render time — storing absolute coordinates here would cause double-offset
     rendering.
 
-    If module nodes carry an ``independence_group`` field (set by
-    :func:`compute_independence_groups`), modules in different groups are
-    spatially separated: each group occupies its own sub-cluster within the
-    parent BC's volume, with a visible gap between groups.  Single-group BCs
-    (or BCs whose modules have no ``independence_group``) keep the original
-    circular layout.
-
     Spec nodes are placed in a row beyond the far edge of the code circle so
     that the intended design (specs) is spatially distinct from the realized
     design (code).  See :func:`_position_spec_nodes`.
@@ -245,58 +238,19 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
             parent_children.setdefault(n["parent"], []).append(n)
 
     for parent_id, children in parent_children.items():
-        # Group children by independence_group.  Nodes without the field are
-        # all assigned to a synthetic single group so they fall through to the
-        # standard circular layout path.
-        _SINGLETON = "__single__"
-        children_by_group: dict[str, list[Node]] = {}
-        for child in children:
-            gid = child.get("independence_group", _SINGLETON)
-            children_by_group.setdefault(gid, []).append(child)
-
-        n_groups = len(children_by_group)
-        # Total available radius for modules within this BC (same cap as before).
         mod_radius = min(
             max(1.5, len(children) * 0.9), bc_radius * 0.4
         )  # cap inside parent
-
-        if n_groups <= 1:
-            # Single group (or no group info): original circular layout.
-            # Store LOCAL offsets only (relative to the parent BC's origin).
-            # main.gd resolves world positions by adding parent world pos + local offset,
-            # so storing absolute coords here would cause double-offset rendering.
-            mod_positions = _circular_positions(len(children), mod_radius, y=0.0)
-            for child, pos in zip(children, mod_positions):
-                child["position"] = {
-                    "x": pos[0],
-                    "y": pos[1],
-                    "z": pos[2],
-                }
-        else:
-            # Multiple independence groups: arrange each group as a sub-cluster.
-            # group_orbit_r: orbit radius for group centres (from BC origin).
-            # sub_r: orbit radius for modules within each group.
-            # Constraint: group_orbit_r + sub_r <= mod_radius keeps all modules
-            # within the parent BC's spatial bounds.
-            # # sub_r occupies ~35 % of available radius (modules stay within group).
-            sub_r = min(max(0.4, mod_radius * 0.3), mod_radius * 0.35)
-            # group_orbit_r pushes groups apart to create a visible gap.
-            group_orbit_r = min(max(sub_r + 0.3, mod_radius * 0.55), mod_radius - sub_r)
-            group_ids = sorted(children_by_group.keys())  # deterministic ordering
-            group_centers = _circular_positions(n_groups, group_orbit_r, y=0.0)
-            for gid, (gcx, gcy, gcz) in zip(group_ids, group_centers):
-                members = children_by_group[gid]
-                # Sub-ring around each group centre; coupling-aware layout still
-                # applies within the group (modules in a tight cluster).
-                member_positions = _circular_positions(len(members), sub_r, y=0.0)
-                for member, (mx, my, mz) in zip(members, member_positions):
-                    # Store LOCAL offset from BC origin (gcx + mx is still relative
-                    # to the BC anchor, which sits at the BC world position).
-                    member["position"] = {
-                        "x": gcx + mx,
-                        "y": 0.0,
-                        "z": gcz + mz,
-                    }
+        mod_positions = _circular_positions(len(children), mod_radius, y=0.0)
+        # Store LOCAL offsets only (relative to the parent BC's origin).
+        # main.gd resolves world positions by adding parent world pos + local offset,
+        # so storing absolute coords here would cause double-offset rendering.
+        for child, pos in zip(children, mod_positions):
+            child["position"] = {
+                "x": pos[0],
+                "y": pos[1],
+                "z": pos[2],
+            }
 
     # Position spec nodes beyond the code circle so intended and realized
     # design occupy distinct spatial regions.
@@ -1015,16 +969,12 @@ def build_scene_graph(src_path: Path) -> SceneGraph:
     spec_nodes = discover_spec_nodes(src_path)
     nodes.extend(spec_nodes)
 
-    # 5. Assign independence groups BEFORE layout so that compute_layout can
-    #    use the groups for spatial separation.  Modules in different groups
-    #    are placed in distinct sub-clusters within the BC's volume (a visible
-    #    gap between them) while modules within a group stay close together.
-    compute_independence_groups(nodes, edges)
-
-    # 6. Compute layout with coupling-aware BC ordering (mutates positions in-place).
+    # 5. Compute layout with coupling-aware BC ordering (mutates positions in-place).
     #    Spec nodes are positioned beyond the code circle by compute_layout().
-    #    Module nodes with independence_group set receive group-aware layout.
     compute_layout(nodes, edges)
+
+    # 6. Assign independence groups to module nodes (mutates nodes in-place).
+    compute_independence_groups(nodes, edges)
 
     # 7. Compute cluster suggestions for tightly-coupled module groups.
     clusters = compute_clusters(nodes, edges)
