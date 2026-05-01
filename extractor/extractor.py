@@ -1291,7 +1291,7 @@ def extract_call_graph(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
 # ---------------------------------------------------------------------------
 
 # Hub threshold: a node is a hub when its in-degree exceeds this value.
-_HUB_IN_DEGREE_THRESHOLD: int = 3
+_HUB_IN_DEGREE_THRESHOLD: int = 2
 
 # Bridge threshold: betweenness centrality above this value marks a bridge.
 _BRIDGE_BETWEENNESS_THRESHOLD: float = 0.1
@@ -1449,6 +1449,7 @@ def compute_structural_significance(nodes: list[Node], edges: list[Edge]) -> Non
             in_deg[tgt] += 1
         if src in id_set and tgt in id_set:
             adj[src].append(tgt)
+            adj[tgt].append(src)  # undirected for betweenness/bridge detection
 
     # Betweenness centrality via Brandes BFS.
     betweenness = _compute_betweenness(code_ids, adj)
@@ -1478,19 +1479,14 @@ def compute_structural_significance(nodes: list[Node], edges: list[Edge]) -> Non
 
         if node["type"] == "module" and nid in community_map:
             sig["community_id"] = community_map[nid]
-            # community_drift: detected community differs from declared package.
-            declared_package = nid.split(".")[0]  # e.g. 'iam' from 'iam.domain'
-            # Find what community other modules in the same BC belong to.
-            # Drift = this module's community is dominated by a different BC.
+            # community_drift: True when the community contains modules from more
+            # than one bounded context (i.e. the component spans context boundaries).
             detected_community = community_map[nid]
-            # Count how many modules with this community belong to a different BC.
             same_community_mods = [
                 m for m, c in community_map.items() if c == detected_community
             ]
-            other_bc_count = sum(
-                1 for m in same_community_mods if m.split(".")[0] != declared_package
-            )
-            sig["community_drift"] = other_bc_count > len(same_community_mods) // 2
+            bcs_in_community = {m.split(".")[0] for m in same_community_mods}
+            sig["community_drift"] = len(bcs_in_community) > 1
 
         node["structural_significance"] = sig
 
