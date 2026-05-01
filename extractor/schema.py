@@ -71,6 +71,58 @@ class Node(TypedDict):
     the origin; depth 2 means it depends on a depth-1 node; and so on.
     """
 
+    # ── Structural Significance (visual-primitives.spec.md) ──────────────────
+
+    in_degree: NotRequired[int]
+    """Number of edges arriving at this node from other nodes.
+
+    Computed by compute_structural_significance().  Used to identify hubs.
+    """
+
+    out_degree: NotRequired[int]
+    """Number of edges leaving this node toward other nodes.
+
+    Computed by compute_structural_significance().  Used to identify peripheral nodes.
+    """
+
+    is_hub: NotRequired[bool]
+    """True when this node has the highest in-degree (most depended-upon).
+
+    Hub nodes become Landmarks in the Godot renderer: they are always visible
+    regardless of LOD level and receive distinctive visual treatment.
+    Spec: visual-primitives.spec.md § Structural Significance Extraction / Hub detection.
+    """
+
+    is_bridge: NotRequired[bool]
+    """True when this node is a graph articulation point (bridge).
+
+    Removing a bridge node would disconnect the module graph.  Bridge nodes
+    become Landmarks to help humans spot structural bottlenecks.
+    Spec: visual-primitives.spec.md § Structural Significance Extraction / Bridge detection.
+    """
+
+    is_peripheral: NotRequired[bool]
+    """True when in_degree == 0 and out_degree <= 1 (leaf utility node).
+
+    Peripheral nodes are candidates for de-emphasis at overview zoom levels.
+    Spec: visual-primitives.spec.md § Structural Significance Extraction / Peripheral detection.
+    """
+
+    community_id: NotRequired[int]
+    """Connected-component community identifier assigned by community detection.
+
+    Nodes in the same strongly-connected component share the same identifier.
+    Spec: visual-primitives.spec.md § Structural Significance Extraction / Community detection.
+    """
+
+    community_drift: NotRequired[bool]
+    """True when the detected community spans more than one bounded context.
+
+    A module whose community includes nodes from a different bounded context
+    may be poorly co-located with its structural peers.
+    Spec: visual-primitives.spec.md § Structural Significance Extraction / Community detection.
+    """
+
 
 class Edge(TypedDict):
     """A directed dependency edge between two nodes."""
@@ -92,6 +144,16 @@ class Edge(TypedDict):
     individual import counts between the two bounded contexts.
     """
 
+    ubiquitous: NotRequired[bool]
+    """True when the target node is a ubiquitous dependency.
+
+    Ubiquitous dependencies are imported by more than the configured fraction
+    of all module nodes.  The Godot renderer suppresses drawing these edges by
+    default (power-rail notation) and instead shows a small indicator on the
+    source node.
+    Spec: visual-primitives.spec.md § Ubiquitous Dependency Detection.
+    """
+
 
 class Metadata(TypedDict):
     """Extraction metadata recorded alongside the graph."""
@@ -101,6 +163,15 @@ class Metadata(TypedDict):
 
     timestamp: str
     """ISO-8601 UTC timestamp of when the extraction was performed."""
+
+    ubiquity_threshold: NotRequired[float]
+    """Fraction of modules that must import a dependency for it to be flagged
+    as ubiquitous (default 0.5 = 50%).
+
+    Recorded so the Godot renderer and human can understand which suppression
+    rule was applied.
+    Spec: visual-primitives.spec.md § Ubiquitous Dependency Detection / Threshold.
+    """
 
 
 class AggregateMetrics(TypedDict):

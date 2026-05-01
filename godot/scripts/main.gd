@@ -44,6 +44,18 @@ var _lod_edge_entries: Array = []
 ## Used to verify dependency direction (which component depends on which).
 var _path_edge_entries: Array = []
 
+## Aggregate edge visuals — shown at FAR LOD only.
+## One MeshInstance3D line per (source_context, target_context) pair, with
+## visual weight proportional to total import count between the two contexts.
+## Implements specs/visualization/spatial-structure.spec.md § "Far — bounded
+## context architecture": "cross-context dependencies are shown as single
+## aggregate edges per context pair, with weight indicating total import count".
+var _aggregate_edge_visuals: Array = []
+
+## Tracks whether the last LOD update placed the camera at FAR distance.
+## Used to avoid recreating Tweens every frame — only animate on transitions.
+var _was_at_far_lod: bool = false
+
 ## Understanding overlay controller — activates alignment, quality, and impact overlays.
 var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
 
@@ -108,6 +120,9 @@ func build_from_graph(graph: Dictionary) -> void:
 	for ed: Dictionary in edges:
 		_create_edge(ed)
 
+	# Build aggregate edges (one line per context pair, shown at FAR LOD).
+	_build_aggregate_edges(edges)
+
 	# Reposition camera to frame the whole graph.
 	_frame_camera()
 
@@ -124,11 +139,31 @@ func _process(_delta: float) -> void:
 
 
 ## Query the camera's current distance and apply LOD visibility accordingly.
+## Aggregate edges use Tween-based opacity animation so they fade in at FAR
+## and fade out at MEDIUM/NEAR — implementing the smooth-transition requirement.
+## Spec: "elements fade in or out with animated opacity, never appearing or
+## disappearing instantly" (spatial-structure.spec.md § Smooth transitions).
 func _update_lod() -> void:
 	if _camera == null or not _camera.has_method("get_distance"):
 		return
 	var dist: float = _camera.call("get_distance")
 	_lod.update_lod(_lod_node_entries, _lod_edge_entries, dist)
+	# Aggregate edges: shown only at FAR (individual edges are suppressed there).
+	# Animate modulate.a so they fade in/out rather than appear or vanish instantly.
+	var at_far_lod: bool = dist > LodManager.FAR_THRESHOLD
+	if at_far_lod != _was_at_far_lod:
+		var target_alpha: float = 1.0 if at_far_lod else 0.0
+		for agg_visual: Node3D in _aggregate_edge_visuals:
+			# Animate the material's albedo alpha — MeshInstance3D is a 3D node and
+			# does not have a 2D modulate property; opacity is controlled via material.
+			var tween := create_tween()
+			tween.tween_property(
+				(agg_visual as MeshInstance3D).material_override,
+				"albedo_color:a",
+				target_alpha,
+				0.25
+			)
+		_was_at_far_lod = at_far_lod
 
 
 # ---------------------------------------------------------------------------
@@ -175,8 +210,28 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	anchor.position = Vector3(float(p["x"]), float(p["y"]), float(p["z"]))
 	parent_node.add_child(anchor)
 	_anchors[nd["id"]] = anchor
-	# Register with LOD manager so visibility can be toggled by camera distance.
-	_lod_node_entries.append({"anchor": anchor, "node_type": nd["type"]})
+
+	# ── Landmark check (visual-primitives.spec.md § Landmark Primitive) ──────
+	# Landmark nodes are always visible at every LOD level so the human can
+	# always use them as spatial orientation anchors.
+	# Spec § Landmark sources: "Landmarks are derived from:
+	#   hubs (high in-degree),
+	#   bridges (high betweenness centrality),
+	#   entry points (no in-edges from application code)"
+	# Achieved by NOT registering landmarks in _lod_node_entries so the LOD
+	# manager never hides them.
+	var is_hub: bool = bool(nd.get("is_hub", false))
+	# is_bridge=true → graph articulation point (bridge) → → landmark
+	var is_bridge: bool = bool(nd.get("is_bridge", false))
+	# in_degree=0 AND parent=null → no application code imports this BC → entry point → landmark
+	var in_deg: int = int(nd.get("in_degree", -1))
+	var is_entry_point: bool = (in_deg == 0 and nd.get("parent") == null)
+	var is_landmark: bool = is_hub or is_bridge or is_entry_point
+	if not is_landmark:
+		# Register with LOD manager so visibility can be toggled by camera distance.
+		_lod_node_entries.append({"anchor": anchor, "node_type": nd["type"]})
+	# Landmark nodes are omitted from _lod_node_entries: the LOD manager never
+	# hides them, so they remain visible at all zoom levels (FAR / MEDIUM / NEAR).
 
 	var sz: float = float(nd["size"])
 	var node_type: String = nd["type"]
@@ -188,7 +243,17 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	var box := BoxMesh.new()
 
 	var mat := StandardMaterial3D.new()
-	if is_spec:
+	if is_landmark:
+		# Landmark nodes (hubs): enlarged bright-white box so they stand out as
+		# spatial anchors at every zoom level.
+		# Spec: "distinctive visual treatment (larger, brighter, or marked with a glyph)"
+		var landmark_sz: float = sz * 1.5
+		box.size = Vector3(landmark_sz, landmark_sz * 0.6, landmark_sz)
+		mat.albedo_color = Color(1.0, 0.95, 0.30, 1.0)  # bright yellow-white
+		mat.emission_enabled = true
+		mat.emission = Color(0.8, 0.75, 0.0)
+		mat.emission_energy_multiplier = 0.4
+	elif is_spec:
 		# Spec nodes represent the *intended design* — rendered as thin gold slabs
 		# so the human can immediately distinguish them from the realized code nodes.
 		# Gold colour signals "intended / authoritative specification".
@@ -225,6 +290,38 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	anchor.add_child(label)
 
 
+## Add a Power Rail indicator glyph to an anchor node.
+##
+## The indicator is a small bright-magenta sphere positioned at the base of
+## the anchor so the human can see at a glance that this node has suppressed
+## ubiquitous dependencies.
+##
+## Spec: visual-primitives.spec.md § Power Rail Notation —
+## "each Node that imports [a ubiquitous dep] has a small, consistent
+## indicator (e.g. a tiny rail glyph at its base)"
+func _add_power_rail_indicator(anchor: Node3D, node_sz: float) -> void:
+	var sphere_mesh := SphereMesh.new()
+	sphere_mesh.radius = maxf(0.2, node_sz * 0.12)
+	sphere_mesh.height = sphere_mesh.radius * 2.0
+	sphere_mesh.radial_segments = 6
+	sphere_mesh.rings = 4
+
+	var rail_mat := StandardMaterial3D.new()
+	# Bright magenta rail glyph — visually consistent across all nodes.
+	rail_mat.albedo_color = Color(0.9, 0.1, 0.9, 1.0)
+	rail_mat.emission_enabled = true
+	rail_mat.emission = Color(0.6, 0.0, 0.6)
+	rail_mat.emission_energy_multiplier = 0.5
+
+	var rail_indicator := MeshInstance3D.new()
+	rail_indicator.name = "PowerRailIndicator"
+	rail_indicator.mesh = sphere_mesh
+	rail_indicator.material_override = rail_mat
+	# Position at the base of the anchor (slightly below the mesh centre).
+	rail_indicator.position = Vector3(0.0, -(node_sz * 0.35 + sphere_mesh.radius), 0.0)
+	anchor.add_child(rail_indicator)
+
+
 # ---------------------------------------------------------------------------
 # Edge creation
 # ---------------------------------------------------------------------------
@@ -232,6 +329,31 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 func _create_edge(ed: Dictionary) -> void:
 	var src: String = ed["source"]
 	var tgt: String = ed["target"]
+
+	# ── Power Rail notation (visual-primitives.spec.md § Power Rail Notation) ──
+	# Ubiquitous edges are suppressed from the default view to prevent clutter.
+	# Instead, a small glyph (Power Rail indicator) is added to the source node
+	# so the human knows the dependency exists without it cluttering the graph.
+	# Spec: "no edges to [ubiquitous module] are drawn AND each Node that imports
+	# [it] has a small, consistent indicator at its base."
+	if bool(ed.get("ubiquitous", false)):
+		var src_anchor: Node3D = _anchors.get(src)
+		if src_anchor != null:
+			# Only add the indicator if one doesn't already exist (deduplicate).
+			var already_has_indicator: bool = false
+			for child: Node in src_anchor.get_children():
+				if child.name == "PowerRailIndicator":
+					already_has_indicator = true
+					break
+			if not already_has_indicator:
+				var src_data: Dictionary = {}
+				for nd: Dictionary in _graph.get("nodes", []):
+					if nd["id"] == src:
+						src_data = nd
+						break
+				var nd_sz: float = float(src_data.get("size", 1.0))
+				_add_power_rail_indicator(src_anchor, nd_sz)
+		return  # Do NOT draw the edge line.
 
 	if not _world_positions.has(src) or not _world_positions.has(tgt):
 		push_warning("CodeVis: skipping edge '%s' → '%s' (node missing)." % [src, tgt])
@@ -294,6 +416,95 @@ func _create_edge(ed: Dictionary) -> void:
 	_lod_edge_entries.append({"visual": arrow, "edge_type": ed["type"]})
 	# Track arrowhead direction for dependency direction verification.
 	_path_edge_entries.append({"visual": arrow, "source": src, "target": tgt})
+
+
+# ---------------------------------------------------------------------------
+# Aggregate edge rendering (FAR LOD)
+# ---------------------------------------------------------------------------
+
+## Build aggregate edges: group all cross-context edges by (source_context,
+## target_context) pair and render one weighted line per unique pair.
+##
+## Implements specs/visualization/spatial-structure.spec.md § "Far — bounded
+## context architecture":
+##   "cross-context dependencies are shown as single aggregate edges per
+##    context pair, with weight indicating total import count"
+##
+## These aggregate edge visuals are stored in _aggregate_edge_visuals and shown
+## only at FAR LOD; individual cross-context edges are shown at MEDIUM/NEAR.
+func _build_aggregate_edges(edges: Array) -> void:
+	# Build a context-id lookup: for each node, what bounded_context contains it?
+	var context_of: Dictionary = {}  # node_id -> bounded_context node_id
+	var nodes: Array = _graph.get("nodes", [])
+	for nd: Dictionary in nodes:
+		var nid: String = nd["id"]
+		var ntype: String = nd["type"]
+		if ntype == "bounded_context":
+			context_of[nid] = nid
+		else:
+			var parent_id = nd.get("parent")
+			if parent_id != null and context_of.has(parent_id):
+				context_of[nid] = context_of[parent_id]
+			elif parent_id != null:
+				context_of[nid] = parent_id  # best-effort parent climb
+			else:
+				context_of[nid] = nid
+
+	# Group cross-context edges by (source_context, target_context) pair.
+	# edges_by_context_pair: "src_ctx|tgt_ctx" -> edge count (import weight).
+	var edges_by_context_pair: Dictionary = {}
+	for ed: Dictionary in edges:
+		if ed.get("type", "") != "cross_context":
+			continue
+		if bool(ed.get("ubiquitous", false)):
+			continue  # Power Rail edges suppressed even in aggregate view
+		var src_ctx: String = context_of.get(ed["source"], ed["source"])
+		var tgt_ctx: String = context_of.get(ed["target"], ed["target"])
+		if src_ctx == tgt_ctx:
+			continue  # internal edge disguised as cross_context — skip
+		var context_pair: String = src_ctx + "|" + tgt_ctx
+		edges_by_context_pair[context_pair] = edges_by_context_pair.get(context_pair, 0) + 1
+
+	# Create one aggregate edge visual per context pair.
+	for context_pair: String in edges_by_context_pair:
+		var import_count: int = edges_by_context_pair[context_pair]
+		var parts: PackedStringArray = context_pair.split("|")
+		if parts.size() != 2:
+			continue
+		var src_ctx: String = parts[0]
+		var tgt_ctx: String = parts[1]
+		if not _world_positions.has(src_ctx) or not _world_positions.has(tgt_ctx):
+			continue
+		var from_pos: Vector3 = _world_positions[src_ctx]
+		var to_pos: Vector3 = _world_positions[tgt_ctx]
+		if from_pos.is_equal_approx(to_pos):
+			continue
+
+		# Bold orange line — visually distinct from individual edges (lighter orange).
+		# Start fully transparent (alpha=0); _update_lod() Tweens albedo_color:a to
+		# 1.0 when camera reaches FAR distance, producing a smooth fade-in.
+		# Weight is proportional to import_count, clamped to [0.5, 3.0].
+		var imesh := ImmediateMesh.new()
+		imesh.surface_begin(Mesh.PRIMITIVE_LINES)
+		imesh.surface_add_vertex(from_pos)
+		imesh.surface_add_vertex(to_pos)
+		imesh.surface_end()
+
+		var agg_mat := StandardMaterial3D.new()
+		agg_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		# Transparency required so albedo_color:a can be animated from 0→1.
+		agg_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		agg_mat.albedo_color = Color(1.0, 0.60, 0.15, 0.0)  # bold orange, start transparent
+
+		var agg_visual := MeshInstance3D.new()
+		agg_visual.name = "AggregateEdge_" + context_pair.replace("|", "_")
+		agg_visual.mesh = imesh
+		agg_visual.material_override = agg_mat
+		# Scale line proportional to import_count — weight indicates total import count.
+		var weight: float = clampf(float(import_count) * 0.4, 0.5, 3.0)
+		agg_visual.scale = Vector3(weight, 1.0, weight)
+		add_child(agg_visual)
+		_aggregate_edge_visuals.append(agg_visual)
 
 
 # ---------------------------------------------------------------------------

@@ -738,6 +738,203 @@ def annotate_cascade_depth(nodes: list[Node], depth_map: dict[str, int]) -> None
 
 
 # ---------------------------------------------------------------------------
+# Structural Significance
+# ---------------------------------------------------------------------------
+
+# Fraction of nodes whose in-degree must exceed the median for a node to be
+# considered a hub.  Set to 2× the mean in-degree.  Any node with in-degree
+# above this multiple is flagged as a hub.
+_HUB_MULTIPLIER: float = 2.0
+
+
+def compute_structural_significance(nodes: list[Node], edges: list[Edge]) -> None:
+    """Annotate every node with structural significance metrics (in-place).
+
+    Computes:
+    - ``in_degree``/``out_degree``: raw edge counts.
+    - ``is_hub``: True when in_degree > 2 × mean(in_degree) across all nodes
+      AND in_degree ≥ 2 (a hub must have at least two dependents).
+    - ``is_bridge``: True when the node is a graph articulation point whose
+      removal would disconnect the undirected version of the module graph.
+    - ``is_peripheral``: True when in_degree == 0 and out_degree ≤ 1.
+    - ``community_id``: connected-component index in the undirected module graph.
+    - ``community_drift``: True when the node's community contains nodes from
+      more than one bounded context (cross-context component).
+
+    Spec: visual-primitives.spec.md § Structural Significance Extraction.
+    """
+    # Build adjacency for all node IDs.
+    node_ids: set[str] = {n["id"] for n in nodes}
+
+    # ── In-degree / out-degree ────────────────────────────────────────────────
+    in_deg: dict[str, int] = {nid: 0 for nid in node_ids}
+    out_deg: dict[str, int] = {nid: 0 for nid in node_ids}
+
+    for edge in edges:
+        src, tgt = edge["source"], edge["target"]
+        if src in out_deg:
+            out_deg[src] += 1
+        if tgt in in_deg:
+            in_deg[tgt] += 1
+
+    # ── Hub detection ─────────────────────────────────────────────────────────
+    # A hub is a node whose in-degree exceeds _HUB_MULTIPLIER × the mean
+    # in-degree AND has at least 2 incoming edges.
+    total_in = sum(in_deg.values())
+    n_nodes = len(node_ids)
+    mean_in = total_in / n_nodes if n_nodes > 0 else 0.0
+    hub_threshold = _HUB_MULTIPLIER * mean_in
+
+    # ── Undirected adjacency for bridge/community detection ───────────────────
+    adj: dict[str, set[str]] = {nid: set() for nid in node_ids}
+    for edge in edges:
+        src, tgt = edge["source"], edge["target"]
+        if src in adj and tgt in adj:
+            adj[src].add(tgt)
+            adj[tgt].add(src)
+
+    # ── Bridge detection via articulation-point DFS ──────────────────────────
+    # A node is an articulation point if removing it increases the number of
+    # connected components in the undirected graph.
+    discovery: dict[str, int] = {}
+    low: dict[str, int] = {}
+    parent_dfs: dict[str, str | None] = {}
+    articulation_points: set[str] = set()
+    timer: list[int] = [0]  # mutable counter in closure
+
+    def _dfs_ap(u: str) -> None:
+        children = 0
+        discovery[u] = low[u] = timer[0]
+        timer[0] += 1
+        for v in adj[u]:
+            if v not in discovery:
+                children += 1
+                parent_dfs[v] = u
+                _dfs_ap(v)
+                low[u] = min(low[u], low[v])
+                # Root of DFS tree: articulation if it has ≥ 2 DFS children.
+                if parent_dfs.get(u) is None and children > 1:
+                    articulation_points.add(u)
+                # Non-root: articulation if no back edge from subtree.
+                if parent_dfs.get(u) is not None and low[v] >= discovery[u]:
+                    articulation_points.add(u)
+            elif v != parent_dfs.get(u):
+                low[u] = min(low[u], discovery[v])
+
+    for nid in node_ids:
+        if nid not in discovery:
+            parent_dfs[nid] = None
+            _dfs_ap(nid)
+
+    # ── Community detection via connected components ──────────────────────────
+    community_map: dict[str, int] = {}
+    component_idx = 0
+
+    def _bfs_component(start: str, comp_id: int) -> None:
+        frontier = [start]
+        community_map[start] = comp_id
+        while frontier:
+            next_frontier: list[str] = []
+            for u in frontier:
+                for v in adj[u]:
+                    if v not in community_map:
+                        community_map[v] = comp_id
+                        next_frontier.append(v)
+            frontier = next_frontier
+
+    for nid in node_ids:
+        if nid not in community_map:
+            _bfs_component(nid, component_idx)
+            component_idx += 1
+
+    # For each community, collect the set of bounded contexts represented.
+    component_contexts: dict[int, set[str]] = {}
+    node_by_id: dict[str, Node] = {n["id"]: n for n in nodes}
+    for nid, comp_id in community_map.items():
+        nd = node_by_id[nid]
+        # A bounded context's "own" context is itself; a module's is its parent.
+        context = nd["parent"] if nd["parent"] is not None else nid
+        component_contexts.setdefault(comp_id, set()).add(context)
+
+    # ── Annotate nodes ────────────────────────────────────────────────────────
+    for node in nodes:
+        nid = node["id"]
+        node["in_degree"] = in_deg[nid]
+        node["out_degree"] = out_deg[nid]
+
+        # Hub: above threshold AND at least 2 dependents.
+        node["is_hub"] = in_deg[nid] >= 2 and in_deg[nid] > hub_threshold
+
+        # Bridge: articulation point in the undirected graph.
+        node["is_bridge"] = nid in articulation_points
+
+        # Peripheral: no incoming edges and at most one outgoing edge.
+        node["is_peripheral"] = in_deg[nid] == 0 and out_deg[nid] <= 1
+
+        comp_id = community_map.get(nid, 0)
+        node["community_id"] = comp_id
+
+        # Drift: the community spans more than one bounded context.
+        node["community_drift"] = len(component_contexts.get(comp_id, set())) > 1
+
+
+# ---------------------------------------------------------------------------
+# Ubiquitous Dependency Detection
+# ---------------------------------------------------------------------------
+
+# Default fraction of module nodes that must import a dependency for it to be
+# considered ubiquitous and suppressed from the default view.
+_DEFAULT_UBIQUITY_THRESHOLD: float = 0.5
+
+
+def compute_ubiquitous_flags(
+    nodes: list[Node],
+    edges: list[Edge],
+    threshold: float = _DEFAULT_UBIQUITY_THRESHOLD,
+) -> dict[str, float]:
+    """Flag edges whose target is a ubiquitous dependency (in-place on edges).
+
+    A dependency is ubiquitous when the fraction of module nodes that import it
+    exceeds *threshold* (default 0.50 — more than half of all modules).
+
+    For each edge whose target is ubiquitous, sets ``edge["ubiquitous"] = True``.
+    Non-ubiquitous edges are not modified.
+
+    Returns a mapping of ``{target_id: import_fraction}`` for all targets that
+    exceeded the threshold, so the caller can embed the threshold in metadata.
+
+    Spec: visual-primitives.spec.md § Ubiquitous Dependency Detection.
+    """
+    # Count how many module-level nodes import each target (by edge source).
+    module_ids: set[str] = {n["id"] for n in nodes if n["type"] == "module"}
+    total_modules = len(module_ids)
+
+    if total_modules == 0:
+        return {}
+
+    # importers[target_id] = set of source module IDs that import it.
+    importers: dict[str, set[str]] = {}
+    for edge in edges:
+        src, tgt = edge["source"], edge["target"]
+        if src in module_ids:
+            importers.setdefault(tgt, set()).add(src)
+
+    # Identify ubiquitous targets.
+    ubiquitous_targets: dict[str, float] = {}
+    for tgt, srcs in importers.items():
+        fraction = len(srcs) / total_modules
+        if fraction > threshold:
+            ubiquitous_targets[tgt] = fraction
+
+    # Annotate edges.
+    for edge in edges:
+        if edge["target"] in ubiquitous_targets:
+            edge["ubiquitous"] = True
+
+    return ubiquitous_targets
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -782,10 +979,22 @@ def build_scene_graph(src_path: Path) -> SceneGraph:
     # 7. Compute cluster suggestions for tightly-coupled module groups.
     clusters = compute_clusters(nodes, edges)
 
-    # 8. Assemble metadata.
+    # 8. Compute structural significance (hub, bridge, peripheral, community).
+    #    This annotates every node with in_degree/out_degree/is_hub/is_bridge/
+    #    is_peripheral/community_id/community_drift so the Godot renderer can
+    #    display Landmark visual treatment for structurally important nodes.
+    compute_structural_significance(nodes, edges)
+
+    # 9. Detect ubiquitous dependencies and mark edges accordingly.
+    #    Edges to ubiquitous targets get ubiquitous=True; the Godot renderer
+    #    suppresses these edges and shows a Power Rail indicator instead.
+    compute_ubiquitous_flags(nodes, edges)
+
+    # 10. Assemble metadata.
     metadata: Metadata = {
         "source_path": str(src_path),
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "ubiquity_threshold": _DEFAULT_UBIQUITY_THRESHOLD,
     }
 
     return {"nodes": nodes, "edges": edges, "metadata": metadata, "clusters": clusters}
