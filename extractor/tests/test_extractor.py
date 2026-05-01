@@ -1073,6 +1073,142 @@ class TestIndependenceGroups:
                 f"Module node {node['id']} missing independence_group"
             )
 
+    def test_two_independent_clusters_abcd(self, tmp_path: Path) -> None:
+        """Spec scenario: A imports B, C imports D; {A,B} and {C,D} are independent.
+
+        GIVEN a bounded context with modules A, B, C, D
+        AND A imports B, C imports D, but neither {A,B} nor {C,D} imports the other
+        WHEN independence analysis runs
+        THEN {A,B} and {C,D} are identified as independent groups
+        AND each module carries its group identifier in the scene graph
+        """
+        ctx = tmp_path / "ctx"
+        for mod in ["a", "b", "c", "d"]:
+            pkg = ctx / mod
+            pkg.mkdir(parents=True)
+            (pkg / "__init__.py").write_text("")
+        (ctx / "__init__.py").write_text("")
+        # A imports B (internal dependency A → B)
+        (ctx / "a" / "code.py").write_text("from ctx.b import something\n")
+        # C imports D (internal dependency C → D)
+        (ctx / "c" / "code.py").write_text("from ctx.d import something\n")
+        # No cross-group imports
+
+        nodes: list[Node] = discover_bounded_contexts(tmp_path)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(tmp_path, bc["id"]))
+        edges = build_dependency_edges(tmp_path, nodes)
+        compute_independence_groups(nodes, edges)
+
+        groups = {
+            n["id"]: n.get("independence_group") for n in nodes if n["type"] == "module"
+        }
+        # {A,B} must share a group
+        assert groups["ctx.a"] == groups["ctx.b"], (
+            f"A and B must be in the same group (A imports B): {groups}"
+        )
+        # {C,D} must share a group
+        assert groups["ctx.c"] == groups["ctx.d"], (
+            f"C and D must be in the same group (C imports D): {groups}"
+        )
+        # {A,B} and {C,D} must be in different groups
+        assert groups["ctx.a"] != groups["ctx.c"], (
+            f"{{A,B}} and {{C,D}} must be in different groups: {groups}"
+        )
+
+    def test_fully_connected_context_is_single_group(self, tmp_path: Path) -> None:
+        """Spec scenario: fully connected context → entire context is one group.
+
+        GIVEN a bounded context where every module transitively depends on every other
+        WHEN independence analysis runs
+        THEN the entire context is a single group
+        AND no independence separation is applied
+        """
+        ctx = tmp_path / "hub"
+        for mod in ["alpha", "beta", "gamma"]:
+            pkg = ctx / mod
+            pkg.mkdir(parents=True)
+            (pkg / "__init__.py").write_text("")
+        (ctx / "__init__.py").write_text("")
+        # alpha → beta → gamma → alpha (fully connected cycle)
+        (ctx / "alpha" / "code.py").write_text("from hub.beta import x\n")
+        (ctx / "beta" / "code.py").write_text("from hub.gamma import y\n")
+        (ctx / "gamma" / "code.py").write_text("from hub.alpha import z\n")
+
+        nodes: list[Node] = discover_bounded_contexts(tmp_path)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(tmp_path, bc["id"]))
+        edges = build_dependency_edges(tmp_path, nodes)
+        compute_independence_groups(nodes, edges)
+
+        groups = {
+            n["id"]: n.get("independence_group") for n in nodes if n["type"] == "module"
+        }
+        # All modules must share the same group identifier
+        unique_groups = set(groups.values())
+        assert len(unique_groups) == 1, (
+            f"Fully connected context must be a single group; got {unique_groups}: {groups}"
+        )
+
+    def test_independent_groups_are_spatially_separated(self, tmp_path: Path) -> None:
+        """Spec scenario: independent groups occupy distinct spatial regions.
+
+        GIVEN a bounded context containing two independent groups
+        WHEN compute_layout runs with independence groups assigned
+        THEN the groups occupy distinct spatial regions within the context's volume
+        AND a visible gap separates the groups
+
+        Verified by: modules in different groups are further apart from each other
+        than modules within the same group.
+        """
+        ctx = tmp_path / "ctx"
+        for mod in ["a", "b", "c", "d"]:
+            pkg = ctx / mod
+            pkg.mkdir(parents=True)
+            (pkg / "__init__.py").write_text("")
+        (ctx / "__init__.py").write_text("")
+        # Group 1: a ↔ b (coupled)
+        (ctx / "a" / "code.py").write_text("from ctx.b import x\n")
+        # Group 2: c ↔ d (coupled)
+        (ctx / "c" / "code.py").write_text("from ctx.d import y\n")
+
+        nodes: list[Node] = discover_bounded_contexts(tmp_path)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(tmp_path, bc["id"]))
+        edges = build_dependency_edges(tmp_path, nodes)
+        # compute_independence_groups BEFORE compute_layout (same order as build_scene_graph)
+        compute_independence_groups(nodes, edges)
+        compute_layout(nodes, edges)
+
+        # Collect module positions by id
+        pos: dict[str, tuple[float, float, float]] = {
+            n["id"]: (n["position"]["x"], n["position"]["y"], n["position"]["z"])
+            for n in nodes
+            if n["type"] == "module"
+        }
+
+        def dist(a: str, b: str) -> float:
+            ax, ay, az = pos[a]
+            bx, by, bz = pos[b]
+            return math.sqrt((ax - bx) ** 2 + (ay - by) ** 2 + (az - bz) ** 2)
+
+        # Cross-group distances (a↔c, a↔d, b↔c, b↔d) must be larger than
+        # within-group distances (a↔b, c↔d) to prove spatial separation.
+        within_group_ab = dist("ctx.a", "ctx.b")
+        within_group_cd = dist("ctx.c", "ctx.d")
+        cross_group_ac = dist("ctx.a", "ctx.c")
+
+        assert cross_group_ac > within_group_ab, (
+            f"Cross-group distance ctx.a↔ctx.c ({cross_group_ac:.3f}) must exceed "
+            f"within-group distance ctx.a↔ctx.b ({within_group_ab:.3f}) — "
+            "independent groups must be spatially separated"
+        )
+        assert cross_group_ac > within_group_cd, (
+            f"Cross-group distance ctx.a↔ctx.c ({cross_group_ac:.3f}) must exceed "
+            f"within-group distance ctx.c↔ctx.d ({within_group_cd:.3f}) — "
+            "independent groups must be spatially separated"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Requirement: Clusters
