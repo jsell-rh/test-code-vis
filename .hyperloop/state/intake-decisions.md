@@ -4,10 +4,12 @@ Records cases where specs were reviewed but no tasks were created, with rational
 
 ---
 
-## 2026-05-02 — Full batch of 5 modified specs
+## 2026-05-02 — Full batch of 5 modified specs (reviewed twice, same day)
 
 All five specs were already present in `resolved-specs.json` with blob SHAs unchanged
 since the 2026-05-01 review. No reopen conditions triggered. **No tasks created.**
+Reviewed twice (first pass HEAD `cf00f6d4`, second pass HEAD `d567556c`) — same
+conclusion both times.
 
 | Spec | Blob SHA | Decision |
 |---|---|---|
@@ -17,7 +19,8 @@ since the 2026-05-01 review. No reopen conditions triggered. **No tasks created.
 | `specs/visualization/orthogonal-independence.spec.md` | `ca0ad7af` (unchanged) | **No tasks. Permanently resolved.** All 3 requirements covered by existing tasks. |
 | `specs/visualization/spatial-structure.spec.md` | `359dbcb1` (unchanged) | **No tasks. Permanently resolved.** All in-scope requirements covered; first-person navigation remains out of scope. |
 
-HEAD at review: `cf00f6d4`
+HEAD at first review: `cf00f6d4`
+HEAD at second review: `d567556c`
 
 ---
 
