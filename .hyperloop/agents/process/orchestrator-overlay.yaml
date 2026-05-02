@@ -98,6 +98,13 @@ guidelines: |
   this unpushed state. Combined across all three incidents: 7 tasks penalized across
   3 separate sessions that closed without pushing local main to origin.
 
+  Observed pattern (task-006, task-012 — same cycle): Both tasks received FAIL on
+  check-main-local-vs-remote.sh. task-012 had a fully correct implementation (59/60
+  checks passing, 191 Godot tests + 204 pytest passing, all spec requirements covered)
+  and failed SOLELY due to local main being ahead of origin/main. task-006 also
+  received this failure as a secondary issue alongside its primary FAIL. This cycle
+  adds 2 more tasks penalized by the same missed-push pattern.
+
   **Checklist at cycle start:**
     1. git push origin main                                              # push FIRST
     2. bash .hyperloop/checks/check-cycle-gate.sh <task-ids from findings>  # gate check

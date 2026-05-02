@@ -403,6 +403,27 @@ guidelines: |
   Even when this check exits 0, verify that the non-.hyperloop/ files on the
   branch correspond to the spec being implemented (not unrelated files).
 
+  ## CHECK-BRANCH-HAS-IMPL-FILES — TWO LOOPHOLES PERMANENTLY CLOSED
+
+  When this check exits non-zero, no reasoning can override the FAIL verdict.
+  Two specific bypass arguments are permanently closed as of cycle task-006:
+
+  **LOOPHOLE 1 — "Implementation is on main":** The check measures THIS branch's
+  commits — not the project's overall state. Code that arrived on main via other
+  branches or prior tasks does NOT satisfy the requirement that this branch contribute
+  at least one non-.hyperloop/ commit. A branch where every commit exclusively
+  touches `.hyperloop/` files has zero implementation, regardless of what exists
+  on main. Do NOT PASS based on this reasoning.
+
+  **LOOPHOLE 2 — "The check was added after the branch committed (FAST-FIX)":**
+  FAST-FIX classification applies ONLY to sync-script race conditions where the
+  newer version of a check script produces identical output to the older version
+  — a timing artifact with no substantive impact. It does NOT apply to
+  `check-branch-has-impl-files.sh` failures. A branch with zero implementation
+  commits has a genuine gap regardless of when the check was added to main. The
+  timing of the check's introduction is irrelevant to whether this branch did work.
+  Do NOT classify this as FAST-FIX. Issue a standard FAIL.
+
   ## PERCEPTUAL CHANNEL VERIFICATION
 
   When a spec THEN-clause names a specific perceptual channel for a visual property,
