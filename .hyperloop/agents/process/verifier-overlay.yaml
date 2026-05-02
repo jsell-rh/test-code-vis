@@ -216,6 +216,31 @@ guidelines: |
   the branch was not rebased. check-pytest-passes.sh exits 0 in this case
   (all remaining tests pass), making the regression invisible without this check.
 
+  Run `bash .hyperloop/checks/check-class-test-count.sh` and include its
+  complete output verbatim in your report.
+
+  This check counts ALL `def test_` occurrences (class methods included), unlike
+  check-pytest-test-count.sh which counts only top-level `^def test_` functions.
+  Class-method tests can be silently dropped while the top-level count stays the
+  same or rises — the top-level check passes while a substantial regression hides.
+
+  Observed failure (task-034): 16 class-method tests in TestSpecNodeDiscovery were
+  removed (prohibited feature). Two new top-level tests were added. Top-level check
+  saw 10 vs 8 (OK). All-inclusive count saw 244 vs 256 (FAIL). The regression was
+  invisible to the top-level-only check and was only caught by manual audit.
+  check-class-test-count.sh closes this mechanical gap.
+
+  If check-class-test-count.sh exits NON-ZERO: issue FAIL — treat identically to a
+  check-pytest-test-count.sh failure.
+
+  If check-class-test-count.sh exits 0 with a NOTE ("intentional and scope-correct"):
+  do NOT automatically accept this as PASS. Manually validate all four required elements:
+  1. The specific function name(s) removed are named in the commit message.
+  2. The prototype-scope.spec.md prohibition is cited by name.
+  3. The claimed test count matches the actual delta computed by this check.
+  4. The exact phrase "intentional and scope-correct" is present.
+  If any element is missing: issue FAIL — the NOTE does not override the gap.
+
   **Exception — intentional scope-mandated removal:** When the branch correctly
   removes functions prohibited by prototype-scope.spec.md, their tests are also
   legitimately removed. A deliberate removal MUST be documented in the commit
@@ -227,7 +252,8 @@ guidelines: |
   1. Run `git log --oneline main..HEAD | xargs git show --name-only` and
      look for a commit message containing "scope-correct" and "not a rebase regression."
   2. Verify each removed function appears in check-not-in-scope.sh prohibited patterns.
-  3. Verify the removed test count matches the commit message claim.
+  3. Verify the removed test count matches the commit message claim AND the delta
+     reported by check-class-test-count.sh.
   4. If all three hold: classify as intentional; include a NOTE in your report
      but do NOT issue FAIL solely for the test count delta.
   5. If any element is missing (no documented commit, function not prohibited,

@@ -538,6 +538,23 @@ guidelines: |
   MUST also be removed. This deliberately lowers the `def test_` count below
   origin/main, causing `check-pytest-test-count.sh` to exit non-zero.
 
+  **TWO checks enforce test count — both must pass:**
+  - `check-pytest-test-count.sh` — counts top-level `^def test_` only.
+  - `check-class-test-count.sh` — counts ALL `def test_` including class methods.
+    Class-method tests can be silently dropped while the top-level count stays
+    the same or goes up (e.g., adding 2 top-level tests while removing 16
+    class-method tests). This second check catches that pattern.
+
+  Run BOTH before submitting whenever tests are removed:
+    bash .hyperloop/checks/check-pytest-test-count.sh
+    bash .hyperloop/checks/check-class-test-count.sh
+
+  Observed failure (task-034): 16 class-method tests in TestSpecNodeDiscovery were
+  removed (prohibited feature). Two new top-level tests were added. The top-level
+  check showed 10 vs 8 (OK). The all-inclusive count showed 244 vs 256 (FAIL).
+  The commit message was missing elements (3) and (4), so check-class-test-count.sh
+  would have exited 1. The verifier caught the missing documentation and issued FAIL.
+
   A silent test count drop is always treated as a regression by the verifier.
   Make the removal legible by stating it explicitly in the commit message:
 
@@ -546,7 +563,7 @@ guidelines: |
     discover_spec_nodes() and _position_spec_nodes() implement spec extraction,
     which is explicitly "NOT implemented" per prototype-scope.spec.md.
     Removes 16 tests from TestSpecNodeDiscovery; test count reduction is
-    intentional and scope-correct (not a rebase regression).
+    intentional and scope-correct — not a rebase regression.
 
     Spec-Ref: specs/prototype/prototype-scope.spec.md@<hash>
     Task-Ref: task-NNN
@@ -556,9 +573,13 @@ guidelines: |
   2. Cite the prototype-scope.spec.md prohibition by name.
   3. State the exact number of tests removed.
   4. Assert the reduction is intentional and scope-correct — not a rebase regression.
+     The exact phrase "intentional and scope-correct" MUST appear in the commit
+     message. check-class-test-count.sh greps for this phrase to distinguish
+     intentional removals from accidental regressions. If the phrase is absent,
+     the check exits 1 regardless of whether the removal was actually correct.
 
-  Without this language, the verifier MUST treat the test count drop as a rebase
-  regression and issue FAIL. With it, the verifier can verify the prohibition,
+  Without elements (1)–(4), the verifier MUST treat the test count drop as a rebase
+  regression and issue FAIL. With all four, the verifier can verify the prohibition,
   count the tests, and classify the delta as intentional.
 
   ## INVALID ASSIGNMENT — COMPLETE STOP PROTOCOL
