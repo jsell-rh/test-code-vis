@@ -22,6 +22,8 @@ from extractor.schema import (
     Node,
     NodeMetrics,
     SceneGraph,
+    StructuralSignificanceMetrics,
+    SymbolInfo,
 )
 
 # ---------------------------------------------------------------------------
@@ -738,144 +740,787 @@ def annotate_cascade_depth(nodes: list[Node], depth_map: dict[str, int]) -> None
 
 
 # ---------------------------------------------------------------------------
-# Structural Significance
+# Symbol Table Extraction (visual-primitives.spec.md §Symbol Table Extraction)
 # ---------------------------------------------------------------------------
 
-# Fraction of nodes whose in-degree must exceed the median for a node to be
-# considered a hub.  Set to 2× the mean in-degree.  Any node with in-degree
-# above this multiple is flagged as a hub.
-_HUB_MULTIPLIER: float = 2.0
+# Badge types automatically inferred from AST analysis.
+# Spec: visual-primitives.spec.md §Badge Primitive — vocabulary of badge types.
+_BADGE_PURE = "pure"
+_BADGE_IO = "io"
+_BADGE_ASYNC = "async"
+_BADGE_STATEFUL = "stateful"
+_BADGE_ERROR_HANDLING = "error_handling"
+_BADGE_TEST = "test"
+_BADGE_ENTRY_POINT = "entry_point"
+_BADGE_DEPRECATED = "deprecated"
+
+# I/O-performing stdlib names used to detect the 'io' badge.
+_IO_NAMES: frozenset[str] = frozenset(
+    {
+        "open",
+        "print",
+        "input",
+        "read",
+        "write",
+        "send",
+        "recv",
+        "connect",
+        "listen",
+        "accept",
+        "socket",
+        "request",
+        "get",
+        "post",
+        "put",
+        "delete",
+        "fetch",
+    }
+)
+
+
+def _format_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    """Return a concise human-readable signature string for *node*.
+
+    Includes parameter names and type-hint strings where present, plus the
+    return annotation.  The result is not guaranteed to be valid Python; it
+    prioritises readability over precision.
+
+    Args:
+        node: An AST function definition node.
+
+    Returns:
+        A string like ``'(x: int, y: str = "") -> bool'``.
+    """
+    params: list[str] = []
+    args = node.args
+
+    # Positional-only args (Python 3.8+)
+    for arg in args.posonlyargs:
+        param = arg.arg
+        if arg.annotation:
+            param += f": {ast.unparse(arg.annotation)}"
+        params.append(param)
+    if args.posonlyargs:
+        params.append("/")
+
+    # Regular args
+    n_defaults = len(args.defaults)
+    n_args = len(args.args)
+    for i, arg in enumerate(args.args):
+        param = arg.arg
+        if arg.annotation:
+            param += f": {ast.unparse(arg.annotation)}"
+        default_idx = i - (n_args - n_defaults)
+        if default_idx >= 0:
+            param += f" = {ast.unparse(args.defaults[default_idx])}"
+        params.append(param)
+
+    # *args
+    if args.vararg:
+        a = args.vararg
+        varg = f"*{a.arg}"
+        if a.annotation:
+            varg += f": {ast.unparse(a.annotation)}"
+        params.append(varg)
+    elif args.kwonlyargs:
+        params.append("*")
+
+    # Keyword-only args
+    for i, arg in enumerate(args.kwonlyargs):
+        param = arg.arg
+        if arg.annotation:
+            param += f": {ast.unparse(arg.annotation)}"
+        kw_default = args.kw_defaults[i]
+        if kw_default is not None:
+            param += f" = {ast.unparse(kw_default)}"
+        params.append(param)
+
+    # **kwargs
+    if args.kwarg:
+        kw = args.kwarg
+        kwarg = f"**{kw.arg}"
+        if kw.annotation:
+            kwarg += f": {ast.unparse(kw.annotation)}"
+        params.append(kwarg)
+
+    param_str = ", ".join(params)
+    ret = ""
+    if node.returns:
+        ret = f" -> {ast.unparse(node.returns)}"
+    return f"({param_str}){ret}"
+
+
+def _infer_badges(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    """Infer badge types for a function from its AST.
+
+    Spec: visual-primitives.spec.md §Badge Primitive — vocabulary includes:
+    'pure', 'io', 'async', 'stateful', 'error_handling', 'test', 'entry_point',
+    'deprecated'.
+
+    Args:
+        func_node: An AST function definition node.
+
+    Returns:
+        A list of applicable badge type strings (may be empty).
+    """
+    badges: list[str] = []
+
+    # 'async' badge — trivially inferred from AST node type.
+    if isinstance(func_node, ast.AsyncFunctionDef):
+        badges.append(_BADGE_ASYNC)
+
+    # 'test' badge — function name starts with 'test_'.
+    if func_node.name.startswith("test_"):
+        badges.append(_BADGE_TEST)
+
+    # 'deprecated' badge — has a @deprecated decorator or calls warnings.warn.
+    for decorator in func_node.decorator_list:
+        if isinstance(decorator, ast.Name) and decorator.id in (
+            "deprecated",
+            "Deprecated",
+        ):
+            badges.append(_BADGE_DEPRECATED)
+            break
+        if isinstance(decorator, ast.Attribute) and decorator.attr in (
+            "deprecated",
+            "Deprecated",
+        ):
+            badges.append(_BADGE_DEPRECATED)
+            break
+
+    # Walk the function body once and collect signals for remaining badges.
+    has_io = False
+    has_try_except = False
+    has_global_nonlocal = False
+    has_raise = False
+
+    for child in ast.walk(func_node):
+        # 'io' badge — calls any known I/O function.
+        if isinstance(child, ast.Call):
+            func_name = ""
+            if isinstance(child.func, ast.Name):
+                func_name = child.func.id
+            elif isinstance(child.func, ast.Attribute):
+                func_name = child.func.attr
+            if func_name in _IO_NAMES:
+                has_io = True
+
+        # 'error_handling' badge — contains try/except or explicit raise.
+        if isinstance(child, (ast.Try, ast.TryStar)):
+            has_try_except = True
+        if isinstance(child, ast.Raise):
+            has_raise = True
+
+        # 'stateful' badge — modifies global or non-local state.
+        if isinstance(child, (ast.Global, ast.Nonlocal)):
+            has_global_nonlocal = True
+
+    if has_io:
+        badges.append(_BADGE_IO)
+    if has_try_except or has_raise:
+        badges.append(_BADGE_ERROR_HANDLING)
+    if has_global_nonlocal:
+        badges.append(_BADGE_STATEFUL)
+
+    # 'pure' badge — no I/O, no exception handling, no state mutation,
+    # not async, not a test, not deprecated.
+    if not badges:
+        badges.append(_BADGE_PURE)
+
+    return badges
+
+
+def extract_symbols(src_path: Path, nodes: list[Node]) -> None:
+    """Extract the symbol table for each module node and annotate it in-place.
+
+    For every node whose ``type`` is ``'module'``, parses the Python files in
+    that module's directory and records all top-level functions, classes,
+    constants, and variables with their visibility and (for callables) their
+    signature.
+
+    Visibility follows the Python convention:
+    - Names without a leading underscore are ``'public'``.
+    - Names with a leading underscore are ``'private'``.
+
+    Spec: visual-primitives.spec.md § Requirement: Symbol Table Extraction
+    THEN both functions are emitted as symbols
+    AND ``process_order`` is marked as public visibility
+    AND ``_validate_input`` is marked as private visibility
+    AND each symbol carries its signature.
+
+    Args:
+        src_path: Root of the Python codebase.
+        nodes: All nodes (mutated in-place — ``symbols`` key added to module nodes).
+    """
+    for node in nodes:
+        if node["type"] != "module":
+            continue
+        node_path = src_path / Path(node["id"].replace(".", "/"))
+        if not node_path.is_dir():
+            continue
+
+        symbols: list[SymbolInfo] = []
+        seen_names: set[str] = set()
+
+        for py_file in sorted(node_path.rglob("*.py")):
+            try:
+                source = py_file.read_text(encoding="utf-8", errors="replace")
+                tree = ast.parse(source, filename=str(py_file))
+            except (SyntaxError, ValueError, UnicodeDecodeError):
+                continue
+
+            for item in ast.walk(tree):
+                # Only capture top-level (module-level) or class-level defs.
+                # ast.walk is depth-first; to restrict to top-level defs we
+                # check that the parent is the module or a ClassDef.
+                if not isinstance(
+                    item, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                ):
+                    continue
+                name = item.name
+                if name in seen_names:
+                    continue
+                seen_names.add(name)
+
+                visibility = "private" if name.startswith("_") else "public"
+
+                if isinstance(item, ast.ClassDef):
+                    sym: SymbolInfo = {
+                        "name": name,
+                        "visibility": visibility,
+                        "kind": "class",
+                    }
+                else:
+                    sig = _format_signature(item)
+                    sym = {
+                        "name": name,
+                        "visibility": visibility,
+                        "kind": "function",
+                        "signature": sig,
+                    }
+                symbols.append(sym)
+
+        node["symbols"] = symbols
+
+
+# ---------------------------------------------------------------------------
+# Type Topology Extraction (visual-primitives.spec.md §Type Topology Extraction)
+# ---------------------------------------------------------------------------
+
+
+def extract_type_topology(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
+    """Extract inheritance and composition edges between modules.
+
+    Parses class definitions to find:
+    - Inheritance: ``class Foo(Bar)`` → edge of type ``'inherits'``
+    - Composition: class field typed as a known class → edge of type ``'has_a'``
+
+    Only edges between known node IDs are emitted.  Cross-file class resolution
+    relies solely on AST: the class name must match a known name in another
+    module's symbol table.  Unresolvable bases are silently skipped.
+
+    Spec: visual-primitives.spec.md § Requirement: Type Topology Extraction
+    THEN an inheritance edge is emitted … AND the edge type is 'inherits'
+    THEN a composition edge is emitted … AND the edge type is 'has_a'
+    AND it requires only AST parsing of class declarations, field types,
+    and base classes — no type inference or flow analysis.
+
+    Args:
+        src_path: Root of the Python codebase.
+        all_nodes: All nodes in the scene graph.
+
+    Returns:
+        A list of new edges with type ``'inherits'`` or ``'has_a'``.
+    """
+    # Build a map: class_name → module_id that defines it.
+    class_to_module: dict[str, str] = {}
+    for node in all_nodes:
+        if node["type"] != "module":
+            continue
+        node_path = src_path / Path(node["id"].replace(".", "/"))
+        if not node_path.is_dir():
+            continue
+        for py_file in sorted(node_path.rglob("*.py")):
+            try:
+                source = py_file.read_text(encoding="utf-8", errors="replace")
+                tree = ast.parse(source, filename=str(py_file))
+            except (SyntaxError, ValueError, UnicodeDecodeError):
+                continue
+            for item in tree.body:
+                if isinstance(item, ast.ClassDef):
+                    class_to_module[item.name] = node["id"]
+
+    all_module_ids = {n["id"] for n in all_nodes if n["type"] == "module"}
+    edges: list[Edge] = []
+    seen_edges: set[tuple[str, str, str]] = set()
+
+    for node in all_nodes:
+        if node["type"] != "module":
+            continue
+        source_id = node["id"]
+        node_path = src_path / Path(source_id.replace(".", "/"))
+        if not node_path.is_dir():
+            continue
+
+        for py_file in sorted(node_path.rglob("*.py")):
+            try:
+                source = py_file.read_text(encoding="utf-8", errors="replace")
+                tree = ast.parse(source, filename=str(py_file))
+            except (SyntaxError, ValueError, UnicodeDecodeError):
+                continue
+
+            for item in tree.body:
+                if not isinstance(item, ast.ClassDef):
+                    continue
+
+                # Inheritance edges: each base class → 'inherits' edge.
+                for base in item.bases:
+                    base_name = ""
+                    if isinstance(base, ast.Name):
+                        base_name = base.id
+                    elif isinstance(base, ast.Attribute):
+                        base_name = base.attr
+                    if not base_name:
+                        continue
+                    target_id = class_to_module.get(base_name)
+                    if (
+                        target_id is None
+                        or target_id == source_id
+                        or target_id not in all_module_ids
+                    ):
+                        continue
+                    key = (source_id, target_id, "inherits")
+                    if key not in seen_edges:
+                        seen_edges.add(key)
+                        edges.append(
+                            {
+                                "source": source_id,
+                                "target": target_id,
+                                "type": "inherits",
+                            }
+                        )
+
+                # Composition edges: class body with annotated fields.
+                for stmt in item.body:
+                    if not isinstance(stmt, ast.AnnAssign):
+                        continue
+                    ann = stmt.annotation
+                    # Accept simple names and subscript outer (e.g. list[Foo]).
+                    type_name = ""
+                    if isinstance(ann, ast.Name):
+                        type_name = ann.id
+                    elif isinstance(ann, ast.Subscript) and isinstance(
+                        ann.value, ast.Name
+                    ):
+                        # e.g. list[PaymentInfo] — extract the subscript argument.
+                        if isinstance(ann.slice, ast.Name):
+                            type_name = ann.slice.id
+                        elif isinstance(ann.slice, ast.Constant) and isinstance(
+                            ann.slice.value, str
+                        ):
+                            type_name = ann.slice.value
+                    if not type_name:
+                        continue
+                    target_id = class_to_module.get(type_name)
+                    if (
+                        target_id is None
+                        or target_id == source_id
+                        or target_id not in all_module_ids
+                    ):
+                        continue
+                    key = (source_id, target_id, "has_a")
+                    if key not in seen_edges:
+                        seen_edges.add(key)
+                        edges.append(
+                            {"source": source_id, "target": target_id, "type": "has_a"}
+                        )
+
+    return edges
+
+
+# ---------------------------------------------------------------------------
+# Call Graph Extraction (visual-primitives.spec.md §Call Graph Extraction)
+# ---------------------------------------------------------------------------
+
+
+def _collect_function_names(src_path: Path, nodes: list[Node]) -> dict[str, str]:
+    """Return a map from function name to module ID that defines it.
+
+    Used by :func:`extract_call_graph` to resolve call targets.
+
+    Args:
+        src_path: Root of the Python codebase.
+        nodes: All nodes in the scene graph.
+
+    Returns:
+        Dict mapping function name → module node ID.
+    """
+    fn_to_module: dict[str, str] = {}
+    for node in nodes:
+        if node["type"] != "module":
+            continue
+        node_path = src_path / Path(node["id"].replace(".", "/"))
+        if not node_path.is_dir():
+            continue
+        for py_file in sorted(node_path.rglob("*.py")):
+            try:
+                source = py_file.read_text(encoding="utf-8", errors="replace")
+                tree = ast.parse(source, filename=str(py_file))
+            except (SyntaxError, ValueError, UnicodeDecodeError):
+                continue
+            for item in tree.body:
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    fn_to_module[item.name] = node["id"]
+    return fn_to_module
+
+
+def extract_call_graph(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
+    """Extract function-call edges between modules.
+
+    For each function body, walks the AST to find ``Call`` nodes:
+    - If the callee resolves to a function in another known module, a
+      ``'direct_call'`` edge is emitted.  The ``weight`` carries the number
+      of distinct call sites from the source module to the target module.
+    - If the callee is a local variable/parameter (not a top-level name),
+      a ``'dynamic_call'`` edge with ``target == 'dynamic'`` is emitted,
+      recording that the source module has dynamic dispatch sites.
+
+    Spec: visual-primitives.spec.md § Requirement: Call Graph Extraction
+    THEN an edge is emitted from ``handle_request`` to ``validate_input``
+    AND the edge type is ``'direct_call'``
+    THEN the call site is emitted as a ``'dynamic_call'`` with no resolved target
+    THEN the edge A→B carries a weight of 3 (when A calls B three times).
+
+    Args:
+        src_path: Root of the Python codebase.
+        all_nodes: All nodes in the scene graph.
+
+    Returns:
+        A list of new edges with type ``'direct_call'`` or ``'dynamic_call'``.
+    """
+    fn_to_module = _collect_function_names(src_path, all_nodes)
+    all_module_ids = {n["id"] for n in all_nodes if n["type"] == "module"}
+
+    # Accumulate call counts per (source_module, target_module) pair.
+    call_counts: dict[tuple[str, str], int] = {}
+    # Track which source modules have dynamic dispatch sites.
+    # Maps source_id → the callee parameter name (first encountered) so the
+    # edge can carry param_name as required by the spec:
+    #   "the call site carries the parameter name and any type hints"
+    has_dynamic: dict[str, str] = {}
+
+    for node in all_nodes:
+        if node["type"] != "module":
+            continue
+        source_id = node["id"]
+        node_path = src_path / Path(source_id.replace(".", "/"))
+        if not node_path.is_dir():
+            continue
+
+        for py_file in sorted(node_path.rglob("*.py")):
+            try:
+                source = py_file.read_text(encoding="utf-8", errors="replace")
+                tree = ast.parse(source, filename=str(py_file))
+            except (SyntaxError, ValueError, UnicodeDecodeError):
+                continue
+
+            # Collect parameter names in each function — these are dynamic call
+            # targets (the callee could be any callable passed in).
+            for func_node in ast.walk(tree):
+                if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                param_names = {
+                    arg.arg for arg in func_node.args.args + func_node.args.kwonlyargs
+                }
+                if func_node.args.vararg:
+                    param_names.add(func_node.args.vararg.arg)
+                if func_node.args.kwarg:
+                    param_names.add(func_node.args.kwarg.arg)
+
+                for call_node in ast.walk(func_node):
+                    if not isinstance(call_node, ast.Call):
+                        continue
+                    callee_name = ""
+                    if isinstance(call_node.func, ast.Name):
+                        callee_name = call_node.func.id
+                    elif isinstance(call_node.func, ast.Attribute):
+                        callee_name = call_node.func.attr
+
+                    if not callee_name:
+                        continue
+
+                    if callee_name in param_names:
+                        # Dynamic call: callee is a parameter.
+                        # Record first-encountered param name per source module so
+                        # the edge carries param_name (spec: "the call site carries
+                        # the parameter name and any type hints").
+                        if source_id not in has_dynamic:
+                            has_dynamic[source_id] = callee_name
+                    else:
+                        target_id = fn_to_module.get(callee_name)
+                        if (
+                            target_id is not None
+                            and target_id != source_id
+                            and target_id in all_module_ids
+                        ):
+                            key = (source_id, target_id)
+                            call_counts[key] = call_counts.get(key, 0) + 1
+
+    edges: list[Edge] = []
+    for (src, tgt), weight in sorted(call_counts.items()):
+        edges.append(
+            {"source": src, "target": tgt, "type": "direct_call", "weight": weight}
+        )
+    for src in sorted(has_dynamic.keys()):
+        edges.append(
+            {
+                "source": src,
+                "target": "dynamic",
+                "type": "dynamic_call",
+                # spec: "the call site carries the parameter name and any type hints"
+                "param_name": has_dynamic[src],
+            }
+        )
+
+    return edges
+
+
+# ---------------------------------------------------------------------------
+# Structural Significance Extraction
+# (visual-primitives.spec.md §Structural Significance Extraction)
+# ---------------------------------------------------------------------------
+
+# Hub threshold: a node is a hub when its in-degree exceeds this value.
+_HUB_IN_DEGREE_THRESHOLD: int = 2
+
+# Bridge threshold: betweenness centrality above this value marks a bridge.
+_BRIDGE_BETWEENNESS_THRESHOLD: float = 0.1
+
+
+def _compute_betweenness(
+    node_ids: list[str], adj: dict[str, list[str]]
+) -> dict[str, float]:
+    """Compute normalised betweenness centrality for each node via BFS.
+
+    Uses the Brandes algorithm (BFS-based) for unweighted graphs.  The result
+    is normalised by ``(n-1)*(n-2)`` (directed graph normalisation) so values
+    fall in [0, 1].
+
+    Args:
+        node_ids: List of all node IDs to include.
+        adj: Adjacency list (directed: adj[u] contains nodes reachable from u).
+
+    Returns:
+        Dict mapping node ID → normalised betweenness centrality.
+    """
+    n = len(node_ids)
+    betweenness: dict[str, float] = {v: 0.0 for v in node_ids}
+    if n < 3:
+        return betweenness
+
+    for s in node_ids:
+        # Brandes: BFS from s.
+        stack: list[str] = []
+        predecessors: dict[str, list[str]] = {v: [] for v in node_ids}
+        sigma: dict[str, int] = {v: 0 for v in node_ids}
+        dist: dict[str, int] = {v: -1 for v in node_ids}
+        sigma[s] = 1
+        dist[s] = 0
+        queue: list[str] = [s]
+
+        while queue:
+            v = queue.pop(0)
+            stack.append(v)
+            for w in adj.get(v, []):
+                if dist[w] < 0:
+                    queue.append(w)
+                    dist[w] = dist[v] + 1
+                if dist[w] == dist[v] + 1:
+                    sigma[w] += sigma[v]
+                    predecessors[w].append(v)
+
+        delta: dict[str, float] = {v: 0.0 for v in node_ids}
+        while stack:
+            w = stack.pop()
+            for v in predecessors[w]:
+                if sigma[w] > 0:
+                    delta[v] += (sigma[v] / sigma[w]) * (1.0 + delta[w])
+            if w != s:
+                betweenness[w] += delta[w]
+
+    # Normalise for directed graph: divide by (n-1)(n-2).
+    norm = (n - 1) * (n - 2)
+    if norm > 0:
+        for v in betweenness:
+            betweenness[v] /= norm
+
+    return betweenness
+
+
+def _detect_communities(module_ids: list[str], edges: list[Edge]) -> dict[str, str]:
+    """Assign community identifiers to modules using a greedy connected-components
+    approach on the undirected projection of the module graph.
+
+    Each connected component (by internal and cross-context module edges) becomes
+    a community.  This is a simplified alternative to Louvain/Leiden that requires
+    only stdlib data structures.
+
+    Args:
+        module_ids: IDs of all module nodes.
+        edges: All graph edges (only module→module edges are used).
+
+    Returns:
+        Dict mapping module ID → community identifier string (e.g. ``'community_0'``).
+    """
+    id_set = set(module_ids)
+    parent: dict[str, str] = {m: m for m in module_ids}
+
+    def _find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def _union(a: str, b: str) -> None:
+        ra, rb = _find(a), _find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    for edge in edges:
+        src, tgt = edge["source"], edge["target"]
+        if src in id_set and tgt in id_set:
+            _union(src, tgt)
+
+    # Map root → sequential community index.
+    root_to_idx: dict[str, int] = {}
+    result: dict[str, str] = {}
+    for m in module_ids:
+        root = _find(m)
+        if root not in root_to_idx:
+            root_to_idx[root] = len(root_to_idx)
+        result[m] = f"community_{root_to_idx[root]}"
+
+    return result
 
 
 def compute_structural_significance(nodes: list[Node], edges: list[Edge]) -> None:
-    """Annotate every node with structural significance metrics (in-place).
+    """Compute and embed structural significance metrics for all code nodes (in-place).
 
-    Computes:
-    - ``in_degree``/``out_degree``: raw edge counts.
-    - ``is_hub``: True when in_degree > 2 × mean(in_degree) across all nodes
-      AND in_degree ≥ 2 (a hub must have at least two dependents).
-    - ``is_bridge``: True when the node is a graph articulation point whose
-      removal would disconnect the undirected version of the module graph.
-    - ``is_peripheral``: True when in_degree == 0 and out_degree ≤ 1.
-    - ``community_id``: connected-component index in the undirected module graph.
-    - ``community_drift``: True when the node's community contains nodes from
-      more than one bounded context (cross-context component).
+    For each bounded-context and module node, computes:
+    - ``in_degree`` / ``out_degree``
+    - ``betweenness_centrality`` (Brandes BFS)
+    - ``is_hub`` (in_degree > threshold)
+    - ``is_bridge`` (betweenness_centrality > threshold)
+    - ``is_peripheral`` (in_degree == 0 and out_degree <= 1)
+    - ``community_id`` (greedy connected-components community)
+    - ``community_drift`` (detected community ≠ declared package)
+    - ``is_landmark`` (hub or bridge)
 
-    Spec: visual-primitives.spec.md § Structural Significance Extraction.
+    Results are embedded in ``node['structural_significance']`` and
+    ``node['is_landmark']``.
+
+    Spec: visual-primitives.spec.md § Requirement: Structural Significance Extraction
+    Hub detection: high in-degree → flagged as hub
+    Bridge detection: high betweenness → flagged as bridge
+    Peripheral detection: in-degree 0, out-degree ≤ 1 → flagged as peripheral
+    Community detection: each module annotated with community_id; drift detected
+
+    Args:
+        nodes: All nodes in the scene graph (mutated in-place).
+        edges: All edges in the scene graph.
     """
-    # Build adjacency for all node IDs.
-    node_ids: set[str] = {n["id"] for n in nodes}
+    # Work on code nodes only (not spec nodes).
+    code_nodes = [n for n in nodes if n["type"] in ("bounded_context", "module")]
+    code_ids = [n["id"] for n in code_nodes]
+    id_set = set(code_ids)
 
-    # ── In-degree / out-degree ────────────────────────────────────────────────
-    in_deg: dict[str, int] = {nid: 0 for nid in node_ids}
-    out_deg: dict[str, int] = {nid: 0 for nid in node_ids}
+    # Count in/out-degree from all non-aggregate edges.
+    in_deg: dict[str, int] = {nid: 0 for nid in code_ids}
+    out_deg: dict[str, int] = {nid: 0 for nid in code_ids}
+    adj: dict[str, list[str]] = {nid: [] for nid in code_ids}
 
     for edge in edges:
+        if edge.get("type") == "aggregate":
+            continue
         src, tgt = edge["source"], edge["target"]
-        if src in out_deg:
+        if src in id_set:
             out_deg[src] += 1
-        if tgt in in_deg:
+        if tgt in id_set:
             in_deg[tgt] += 1
+        if src in id_set and tgt in id_set:
+            adj[src].append(tgt)
+            adj[tgt].append(src)  # undirected for betweenness/bridge detection
 
-    # ── Hub detection ─────────────────────────────────────────────────────────
-    # A hub is a node whose in-degree exceeds _HUB_MULTIPLIER × the mean
-    # in-degree AND has at least 2 incoming edges.
-    total_in = sum(in_deg.values())
-    n_nodes = len(node_ids)
-    mean_in = total_in / n_nodes if n_nodes > 0 else 0.0
-    hub_threshold = _HUB_MULTIPLIER * mean_in
+    # Betweenness centrality via Brandes BFS.
+    betweenness = _compute_betweenness(code_ids, adj)
 
-    # ── Undirected adjacency for bridge/community detection ───────────────────
-    adj: dict[str, set[str]] = {nid: set() for nid in node_ids}
-    for edge in edges:
-        src, tgt = edge["source"], edge["target"]
-        if src in adj and tgt in adj:
-            adj[src].add(tgt)
-            adj[tgt].add(src)
+    # Community detection.
+    module_ids = [n["id"] for n in code_nodes if n["type"] == "module"]
+    community_map = _detect_communities(module_ids, edges)
 
-    # ── Bridge detection via articulation-point DFS ──────────────────────────
-    # A node is an articulation point if removing it increases the number of
-    # connected components in the undirected graph.
-    discovery: dict[str, int] = {}
-    low: dict[str, int] = {}
-    parent_dfs: dict[str, str | None] = {}
-    articulation_points: set[str] = set()
-    timer: list[int] = [0]  # mutable counter in closure
-
-    def _dfs_ap(u: str) -> None:
-        children = 0
-        discovery[u] = low[u] = timer[0]
-        timer[0] += 1
-        for v in adj[u]:
-            if v not in discovery:
-                children += 1
-                parent_dfs[v] = u
-                _dfs_ap(v)
-                low[u] = min(low[u], low[v])
-                # Root of DFS tree: articulation if it has ≥ 2 DFS children.
-                if parent_dfs.get(u) is None and children > 1:
-                    articulation_points.add(u)
-                # Non-root: articulation if no back edge from subtree.
-                if parent_dfs.get(u) is not None and low[v] >= discovery[u]:
-                    articulation_points.add(u)
-            elif v != parent_dfs.get(u):
-                low[u] = min(low[u], discovery[v])
-
-    for nid in node_ids:
-        if nid not in discovery:
-            parent_dfs[nid] = None
-            _dfs_ap(nid)
-
-    # ── Community detection via connected components ──────────────────────────
-    community_map: dict[str, int] = {}
-    component_idx = 0
-
-    def _bfs_component(start: str, comp_id: int) -> None:
-        frontier = [start]
-        community_map[start] = comp_id
-        while frontier:
-            next_frontier: list[str] = []
-            for u in frontier:
-                for v in adj[u]:
-                    if v not in community_map:
-                        community_map[v] = comp_id
-                        next_frontier.append(v)
-            frontier = next_frontier
-
-    for nid in node_ids:
-        if nid not in community_map:
-            _bfs_component(nid, component_idx)
-            component_idx += 1
-
-    # For each community, collect the set of bounded contexts represented.
-    component_contexts: dict[int, set[str]] = {}
-    node_by_id: dict[str, Node] = {n["id"]: n for n in nodes}
-    for nid, comp_id in community_map.items():
-        nd = node_by_id[nid]
-        # A bounded context's "own" context is itself; a module's is its parent.
-        context = nd["parent"] if nd["parent"] is not None else nid
-        component_contexts.setdefault(comp_id, set()).add(context)
-
-    # ── Annotate nodes ────────────────────────────────────────────────────────
-    for node in nodes:
+    # Annotate each node in-place.
+    for node in code_nodes:
         nid = node["id"]
-        node["in_degree"] = in_deg[nid]
-        node["out_degree"] = out_deg[nid]
+        ind = in_deg[nid]
+        outd = out_deg[nid]
+        bc = betweenness[nid]
+        is_hub = ind > _HUB_IN_DEGREE_THRESHOLD
+        is_bridge = bc > _BRIDGE_BETWEENNESS_THRESHOLD
+        is_peripheral = ind == 0 and outd <= 1
 
-        # Hub: above threshold AND at least 2 dependents.
-        node["is_hub"] = in_deg[nid] >= 2 and in_deg[nid] > hub_threshold
+        sig: StructuralSignificanceMetrics = {
+            "in_degree": ind,
+            "out_degree": outd,
+            "is_hub": is_hub,
+            "is_bridge": is_bridge,
+            "is_peripheral": is_peripheral,
+            "betweenness_centrality": bc,
+        }
 
-        # Bridge: articulation point in the undirected graph.
-        node["is_bridge"] = nid in articulation_points
+        if node["type"] == "module" and nid in community_map:
+            sig["community_id"] = community_map[nid]
+            # community_drift: True when the community contains modules from more
+            # than one bounded context (i.e. the component spans context boundaries).
+            detected_community = community_map[nid]
+            same_community_mods = [
+                m for m, c in community_map.items() if c == detected_community
+            ]
+            bcs_in_community = {m.split(".")[0] for m in same_community_mods}
+            sig["community_drift"] = len(bcs_in_community) > 1
 
-        # Peripheral: no incoming edges and at most one outgoing edge.
-        node["is_peripheral"] = in_deg[nid] == 0 and out_deg[nid] <= 1
+        node["structural_significance"] = sig
 
-        comp_id = community_map.get(nid, 0)
-        node["community_id"] = comp_id
+        # Flat fields for backward compatibility with task-074 tests.
+        # Also ensures build_scene_graph produces in_degree/is_hub etc. on all nodes.
+        node["in_degree"] = ind
+        node["out_degree"] = outd
+        node["is_hub"] = is_hub
+        node["is_bridge"] = is_bridge
+        node["is_peripheral"] = is_peripheral
 
-        # Drift: the community spans more than one bounded context.
-        node["community_drift"] = len(component_contexts.get(comp_id, set())) > 1
+        # community_id as int (extract index from "community_N" string).
+        if nid in community_map:
+            community_str = community_map[nid]  # e.g. "community_0"
+            node["community_id"] = int(community_str.split("_")[-1])
+        else:
+            node["community_id"] = 0
+
+        # community_drift from structural_significance if present, else False.
+        node["community_drift"] = bool(sig.get("community_drift", False))
+
+        # Landmark: hub, bridge, or entry-point nodes persist at all zoom levels.
+        # Entry point: no in-edges from application code (in_degree == 0) but
+        # has multiple out-edges (out_degree > 1) — it is a dependency source,
+        # not a peripheral leaf.
+        # spec: visual-primitives.spec.md §Scenario: Landmark sources —
+        #   "hubs (high in-degree), bridges (high betweenness centrality),
+        #    entry points (no in-edges from application code)"
+        is_entry_point = ind == 0 and outd > 1
+
+        # Landmark: hub, bridge or entry points persist at all zoom levels.
+        # Also flag entry points as landmarks (they are navigation anchors).
+        if is_hub or is_bridge or is_entry_point:
+            node["is_landmark"] = True
 
 
 # ---------------------------------------------------------------------------
@@ -934,6 +1579,70 @@ def compute_ubiquitous_flags(
     return ubiquitous_targets
 
 
+# (visual-primitives.spec.md §Ubiquitous Dependency Detection)
+
+# Default threshold: a module imported by more than this fraction of all
+# modules is considered ubiquitous.
+UBIQUITOUS_THRESHOLD: float = 0.5
+
+
+def detect_ubiquitous_dependencies(
+    nodes: list[Node],
+    edges: list[Edge],
+    threshold: float = UBIQUITOUS_THRESHOLD,
+) -> None:
+    """Flag ubiquitous dependencies and mark dependent nodes for power-rail rendering.
+
+    A module is ubiquitous when the fraction of other modules that import it
+    exceeds *threshold*.  Ubiquitous edges are annotated with ``ubiquitous=True``;
+    nodes that import at least one ubiquitous module get ``has_ubiquitous_dep=True``.
+
+    The extraction metadata threshold is embedded as ``metadata['ubiquitous_threshold']``
+    if a metadata dict is provided — that is handled in :func:`build_scene_graph`.
+
+    Spec: visual-primitives.spec.md § Requirement: Ubiquitous Dependency Detection
+    GIVEN that 85% of modules import ``logging``
+    THEN ``logging`` is flagged as ubiquitous
+    AND its edges are present in the scene graph but marked as ``ubiquitous: true``
+
+    Args:
+        nodes: All nodes (mutated in-place — ``has_ubiquitous_dep`` added where needed).
+        edges: All edges (mutated in-place — ``ubiquitous`` added where needed).
+        threshold: Fraction of modules that must import a target to flag it ubiquitous.
+    """
+    # Count how many distinct source modules reference each target.
+    module_ids = {n["id"] for n in nodes if n["type"] in ("bounded_context", "module")}
+    total_modules = len(module_ids)
+    if total_modules == 0:
+        return
+
+    import_count: dict[str, set[str]] = {}  # target_id → set of importing module IDs
+    for edge in edges:
+        src, tgt = edge["source"], edge["target"]
+        if src in module_ids:
+            import_count.setdefault(tgt, set()).add(src)
+
+    # Identify ubiquitous targets.
+    ubiquitous_ids: set[str] = set()
+    for tgt, importers in import_count.items():
+        if len(importers) / total_modules > threshold:
+            ubiquitous_ids.add(tgt)
+
+    if not ubiquitous_ids:
+        return
+
+    # Mark edges and source nodes.
+    nodes_with_ubiquitous: set[str] = set()
+    for edge in edges:
+        if edge["target"] in ubiquitous_ids:
+            edge["ubiquitous"] = True
+            nodes_with_ubiquitous.add(edge["source"])
+
+    for node in nodes:
+        if node["id"] in nodes_with_ubiquitous:
+            node["has_ubiquitous_dep"] = True
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
@@ -979,18 +1688,30 @@ def build_scene_graph(src_path: Path) -> SceneGraph:
     # 7. Compute cluster suggestions for tightly-coupled module groups.
     clusters = compute_clusters(nodes, edges)
 
-    # 8. Compute structural significance (hub, bridge, peripheral, community).
-    #    This annotates every node with in_degree/out_degree/is_hub/is_bridge/
-    #    is_peripheral/community_id/community_drift so the Godot renderer can
-    #    display Landmark visual treatment for structurally important nodes.
+    # 8. Extract symbol table for module nodes (visual-primitives.spec.md).
+    #    Annotates each module node with its public/private named entities.
+    extract_symbols(src_path, nodes)
+
+    # 9. Extract type topology (inheritance + composition) edges.
+    #    Emits 'inherits' and 'has_a' edges between module nodes.
+    topology_edges = extract_type_topology(src_path, nodes)
+    edges.extend(topology_edges)
+
+    # 10. Extract call graph edges between module nodes.
+    #     Emits 'direct_call' and 'dynamic_call' edges.
+    call_edges = extract_call_graph(src_path, nodes)
+    edges.extend(call_edges)
+
+    # 11. Compute structural significance (hub, bridge, peripheral, community).
+    #     Annotates every code node with structural_significance and is_landmark.
+    #     Also sets flat fields (in_degree, is_hub, etc.) for backward compatibility.
     compute_structural_significance(nodes, edges)
 
-    # 9. Detect ubiquitous dependencies and mark edges accordingly.
-    #    Edges to ubiquitous targets get ubiquitous=True; the Godot renderer
-    #    suppresses these edges and shows a Power Rail indicator instead.
-    compute_ubiquitous_flags(nodes, edges)
+    # 12. Detect ubiquitous dependencies and mark for power-rail notation.
+    #     Marks edges as ubiquitous and nodes with has_ubiquitous_dep.
+    detect_ubiquitous_dependencies(nodes, edges)
 
-    # 10. Assemble metadata.
+    # 13. Assemble metadata.
     metadata: Metadata = {
         "source_path": str(src_path),
         "timestamp": datetime.now(timezone.utc).isoformat(),

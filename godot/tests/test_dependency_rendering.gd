@@ -69,15 +69,14 @@ func _make_fixture_cross_context() -> Dictionary:
 
 
 ## THEN a line connects the two context volumes —
-## _create_edge() adds an ImmediateMesh MeshInstance3D as a child of the main node.
+## _create_edge() adds a Node3D body named "EdgeLine" as a child of the main node.
 func test_edge_line_mesh_created() -> bool:
 	var main_node: Node3D = MainScript.new()
 	main_node.build_from_graph(_make_fixture_internal())
 
 	for child: Node in main_node.get_children():
-		if child is MeshInstance3D:
-			if (child as MeshInstance3D).mesh is ImmediateMesh:
-				return true
+		if str(child.name) == "EdgeLine":
+			return true
 	return false
 
 

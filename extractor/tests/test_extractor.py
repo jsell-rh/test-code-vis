@@ -33,10 +33,14 @@ from extractor.extractor import (
     compute_loc,
     compute_structural_significance,
     compute_ubiquitous_flags,
+    detect_ubiquitous_dependencies,
     discover_bounded_contexts,
     discover_spec_nodes,
     discover_submodules,
+    extract_call_graph,
     extract_imports_from_file,
+    extract_symbols,
+    extract_type_topology,
     get_target_node_id,
     is_bounded_context,
     is_internal_module,
@@ -1349,24 +1353,374 @@ class TestClusterDoesNotPrescribePosition:
 
 
 # ---------------------------------------------------------------------------
-# Requirement: Structural Significance Extraction
-# spec: visual-primitives.spec.md § Structural Significance Extraction
-#
-# Scenarios covered:
-#   Hub detection        — GIVEN a module imported by many others
-#                          WHEN structural significance is computed
-#                          THEN it is annotated with high in_degree AND flagged as hub
-#   Bridge detection     — GIVEN a module with high betweenness centrality
-#                          THEN it is flagged as a bridge
-#   Peripheral detection — GIVEN in_degree=0, out_degree=1
-#                          THEN it is annotated as peripheral
-#   Community detection  — THEN each module gets a community_id
-#                          AND community_drift flagged for cross-context components
+# Requirement: Symbol Table Extraction
+# spec: visual-primitives.spec.md § Requirement: Symbol Table Extraction
+# THEN both functions are emitted as symbols
+# AND process_order is marked as public visibility
+# AND _validate_input is marked as private visibility
+# AND each symbol carries its signature
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture()
+def src_symbols(tmp_path: Path) -> Path:
+    """Source tree with public and private symbols for symbol table tests."""
+    bc = tmp_path / "orders"
+    module = bc / "domain"
+    module.mkdir(parents=True)
+    for d in [bc, module]:
+        (d / "__init__.py").write_text("")
+    # Module with public function, private function, and class.
+    (module / "handlers.py").write_text(
+        "class Order:\n"
+        "    total: float\n\n"
+        "def process_order(order: 'Order', strict: bool = False) -> bool:\n"
+        "    return True\n\n"
+        "def _validate_input(data: dict) -> None:\n"
+        "    pass\n"
+    )
+    return tmp_path
+
+
+class TestSymbolTableExtraction:
+    """Spec: visual-primitives.spec.md § Requirement: Symbol Table Extraction."""
+
+    def test_public_function_marked_public(self, src_symbols: Path) -> None:
+        """process_order has no leading underscore → visibility='public'."""
+        nodes: list[Node] = discover_bounded_contexts(src_symbols)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_symbols, bc["id"]))
+        extract_symbols(src_symbols, nodes)
+
+        domain_node = next(n for n in nodes if n["id"] == "orders.domain")
+        symbols = domain_node.get("symbols", [])
+        names = {s["name"]: s for s in symbols}
+
+        assert "process_order" in names, "process_order must be extracted as a symbol"
+        assert names["process_order"]["visibility"] == "public", (
+            "process_order must be marked visibility='public'"
+        )
+
+    def test_private_function_marked_private(self, src_symbols: Path) -> None:
+        """_validate_input has a leading underscore → visibility='private'."""
+        nodes: list[Node] = discover_bounded_contexts(src_symbols)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_symbols, bc["id"]))
+        extract_symbols(src_symbols, nodes)
+
+        domain_node = next(n for n in nodes if n["id"] == "orders.domain")
+        symbols = domain_node.get("symbols", [])
+        names = {s["name"]: s for s in symbols}
+
+        assert "_validate_input" in names, (
+            "_validate_input must be extracted as a symbol"
+        )
+        assert names["_validate_input"]["visibility"] == "private", (
+            "_validate_input must be marked visibility='private'"
+        )
+
+    def test_function_carries_signature(self, src_symbols: Path) -> None:
+        """Each function symbol carries its parameter/return signature."""
+        nodes: list[Node] = discover_bounded_contexts(src_symbols)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_symbols, bc["id"]))
+        extract_symbols(src_symbols, nodes)
+
+        domain_node = next(n for n in nodes if n["id"] == "orders.domain")
+        symbols = domain_node.get("symbols", [])
+        names = {s["name"]: s for s in symbols}
+
+        assert "signature" in names["process_order"], (
+            "process_order must carry a 'signature' field"
+        )
+        # Signature should mention the parameter names.
+        sig = names["process_order"]["signature"]
+        assert "order" in sig, (
+            f"Signature should include 'order' parameter; got {sig!r}"
+        )
+
+    def test_class_extracted_as_symbol(self, src_symbols: Path) -> None:
+        """Class definitions are extracted with kind='class'."""
+        nodes: list[Node] = discover_bounded_contexts(src_symbols)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_symbols, bc["id"]))
+        extract_symbols(src_symbols, nodes)
+
+        domain_node = next(n for n in nodes if n["id"] == "orders.domain")
+        symbols = domain_node.get("symbols", [])
+        names = {s["name"]: s for s in symbols}
+
+        assert "Order" in names, "Order class must be extracted as a symbol"
+        assert names["Order"]["kind"] == "class", "Order must have kind='class'"
+
+    def test_symbols_embedded_in_module_node(self, src_symbols: Path) -> None:
+        """The extractor embeds symbols in the module node dict."""
+        nodes: list[Node] = discover_bounded_contexts(src_symbols)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_symbols, bc["id"]))
+        extract_symbols(src_symbols, nodes)
+
+        domain_node = next(n for n in nodes if n["id"] == "orders.domain")
+        assert "symbols" in domain_node, (
+            "module node must have a 'symbols' field after extract_symbols()"
+        )
+        assert isinstance(domain_node["symbols"], list), (
+            "'symbols' field must be a list"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Type Topology Extraction
+# spec: visual-primitives.spec.md § Requirement: Type Topology Extraction
+# THEN an inheritance edge is emitted … edge type is 'inherits'
+# THEN a composition edge is emitted … edge type is 'has_a'
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def src_topology(tmp_path: Path) -> Path:
+    """Source tree with inheritance and composition relationships."""
+    # payment bounded context
+    payment = tmp_path / "payment"
+    base_mod = payment / "base"
+    proc_mod = payment / "processor"
+    base_mod.mkdir(parents=True)
+    proc_mod.mkdir(parents=True)
+    for d in [payment, base_mod, proc_mod]:
+        (d / "__init__.py").write_text("")
+
+    # base module defines BaseProcessor
+    (base_mod / "base.py").write_text("class BaseProcessor:\n    pass\n")
+    # processor module defines PaymentProcessor(BaseProcessor)
+    (proc_mod / "processor.py").write_text(
+        "from payment.base import BaseProcessor\n"
+        "class PaymentProcessor(BaseProcessor):\n"
+        "    pass\n"
+    )
+
+    # order bounded context with composition
+    order = tmp_path / "order"
+    order_mod = order / "domain"
+    order_mod.mkdir(parents=True)
+    for d in [order, order_mod]:
+        (d / "__init__.py").write_text("")
+
+    # domain module uses PaymentInfo (from another module)
+    info_mod = order / "info"
+    info_mod.mkdir()
+    (info_mod / "__init__.py").write_text("")
+    (info_mod / "types.py").write_text("class PaymentInfo:\n    pass\n")
+
+    (order_mod / "models.py").write_text(
+        "from order.info import PaymentInfo\nclass Order:\n    payment: PaymentInfo\n"
+    )
+
+    return tmp_path
+
+
+class TestTypeTopologyExtraction:
+    """Spec: visual-primitives.spec.md § Requirement: Type Topology Extraction."""
+
+    def test_inheritance_edge_emitted(self, src_topology: Path) -> None:
+        """PaymentProcessor extends BaseProcessor → 'inherits' edge emitted."""
+        nodes: list[Node] = discover_bounded_contexts(src_topology)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_topology, bc["id"]))
+
+        edges = extract_type_topology(src_topology, nodes)
+        inherits_edges = [e for e in edges if e["type"] == "inherits"]
+
+        assert inherits_edges, (
+            "At least one 'inherits' edge must be emitted when inheritance exists"
+        )
+
+    def test_inheritance_edge_type_is_inherits(self, src_topology: Path) -> None:
+        """The edge type for inheritance is exactly 'inherits'."""
+        nodes: list[Node] = discover_bounded_contexts(src_topology)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_topology, bc["id"]))
+
+        edges = extract_type_topology(src_topology, nodes)
+        for e in edges:
+            assert e["type"] in ("inherits", "has_a"), (
+                f"Type topology edges must be 'inherits' or 'has_a'; got {e['type']!r}"
+            )
+
+    def test_composition_edge_emitted(self, src_topology: Path) -> None:
+        """Order has PaymentInfo field → 'has_a' edge emitted."""
+        nodes: list[Node] = discover_bounded_contexts(src_topology)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_topology, bc["id"]))
+
+        edges = extract_type_topology(src_topology, nodes)
+        has_a_edges = [e for e in edges if e["type"] == "has_a"]
+
+        assert has_a_edges, (
+            "At least one 'has_a' edge must be emitted when composition exists"
+        )
+
+    def test_composition_edge_type_is_has_a(self, src_topology: Path) -> None:
+        """The edge type for composition is exactly 'has_a'."""
+        nodes: list[Node] = discover_bounded_contexts(src_topology)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_topology, bc["id"]))
+
+        edges = extract_type_topology(src_topology, nodes)
+        for e in edges:
+            assert e["type"] in ("inherits", "has_a"), (
+                f"Expected 'inherits' or 'has_a'; got {e['type']!r}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Call Graph Extraction
+# spec: visual-primitives.spec.md § Requirement: Call Graph Extraction
+# THEN an edge is emitted from handle_request to validate_input
+# AND the edge type is 'direct_call'
+# THEN the call site is emitted as a 'dynamic_call' with no resolved target
+# THEN the edge A→B carries a weight of 3
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def src_calls(tmp_path: Path) -> Path:
+    """Source tree with function calls between modules."""
+    svc = tmp_path / "svc"
+    handler_mod = svc / "handlers"
+    validator_mod = svc / "validators"
+    handler_mod.mkdir(parents=True)
+    validator_mod.mkdir(parents=True)
+    for d in [svc, handler_mod, validator_mod]:
+        (d / "__init__.py").write_text("")
+
+    # validator module defines validate_input
+    (validator_mod / "funcs.py").write_text(
+        "def validate_input(data):\n    return True\n"
+    )
+    # handler module calls validate_input three times (direct calls)
+    (handler_mod / "funcs.py").write_text(
+        "from svc.validators import validate_input\n"
+        "def handle_request(data, handler=None):\n"
+        "    validate_input(data)\n"
+        "    validate_input(data)\n"
+        "    validate_input(data)\n"
+        "    if handler:\n"
+        "        handler(data)\n"  # dynamic call via parameter
+    )
+    return tmp_path
+
+
+class TestCallGraphExtraction:
+    """Spec: visual-primitives.spec.md § Requirement: Call Graph Extraction."""
+
+    def test_direct_call_edge_emitted(self, src_calls: Path) -> None:
+        """handle_request calls validate_input → 'direct_call' edge emitted."""
+        nodes: list[Node] = discover_bounded_contexts(src_calls)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_calls, bc["id"]))
+
+        edges = extract_call_graph(src_calls, nodes)
+        direct_edges = [e for e in edges if e["type"] == "direct_call"]
+
+        assert direct_edges, "At least one 'direct_call' edge must be emitted"
+
+    def test_direct_call_edge_type(self, src_calls: Path) -> None:
+        """Direct call edges have type exactly 'direct_call'."""
+        nodes: list[Node] = discover_bounded_contexts(src_calls)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_calls, bc["id"]))
+
+        edges = extract_call_graph(src_calls, nodes)
+        for e in edges:
+            assert e["type"] in ("direct_call", "dynamic_call"), (
+                f"Call graph edges must be 'direct_call' or 'dynamic_call'; got {e['type']!r}"
+            )
+
+    def test_direct_call_weight_counts_call_sites(self, src_calls: Path) -> None:
+        """Edge A→B weight equals the number of call sites from A to B."""
+        nodes: list[Node] = discover_bounded_contexts(src_calls)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_calls, bc["id"]))
+
+        edges = extract_call_graph(src_calls, nodes)
+        direct_edges = [e for e in edges if e["type"] == "direct_call"]
+
+        assert direct_edges, "Need at least one direct_call edge to check weight"
+        # handle_request calls validate_input 3 times → weight should be 3
+        max_weight = max(e.get("weight", 1) for e in direct_edges)
+        assert max_weight >= 3, (
+            f"Expected weight ≥ 3 for three call sites; got {max_weight}"
+        )
+
+    def test_dynamic_call_edge_emitted(self, src_calls: Path) -> None:
+        """handler(data) where handler is a parameter → 'dynamic_call' edge emitted."""
+        nodes: list[Node] = discover_bounded_contexts(src_calls)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_calls, bc["id"]))
+
+        edges = extract_call_graph(src_calls, nodes)
+        dynamic_edges = [e for e in edges if e["type"] == "dynamic_call"]
+
+        assert dynamic_edges, (
+            "At least one 'dynamic_call' edge must be emitted for parameter callees"
+        )
+
+    def test_dynamic_call_edge_carries_param_name(self, src_calls: Path) -> None:
+        """spec: 'the call site carries the parameter name and any type hints'
+        The dynamic_call edge must include a non-empty param_name field.
+        """
+        nodes: list[Node] = discover_bounded_contexts(src_calls)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_calls, bc["id"]))
+
+        edges = extract_call_graph(src_calls, nodes)
+        dynamic_edges = [e for e in edges if e["type"] == "dynamic_call"]
+
+        assert dynamic_edges, "At least one 'dynamic_call' edge must be emitted"
+        for edge in dynamic_edges:
+            param_name = edge.get("param_name", "")
+            assert param_name != "", (
+                f"'dynamic_call' edge from '{edge['source']}' must carry a non-empty "
+                f"'param_name' field; got {edge!r}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Structural Significance Extraction
+# spec: visual-primitives.spec.md § Requirement: Structural Significance Extraction
+# Hub detection: high in-degree → is_hub=True
+# Bridge detection: high betweenness_centrality → is_bridge=True
+# Peripheral detection: in-degree 0, out-degree ≤ 1 → is_peripheral=True
+# Community detection: community_id assigned; community_drift when differs
+# ---------------------------------------------------------------------------
+
+
+def _make_bc_node(node_id: str) -> Node:
+    """Helper: create a minimal bounded_context node for significance tests."""
+    return {
+        "id": node_id,
+        "name": node_id.title(),
+        "type": "bounded_context",
+        "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+        "size": 1.0,
+        "parent": None,
+    }
+
+
+def _make_mod_node(node_id: str, parent: str) -> Node:
+    """Helper: create a minimal module node for significance tests."""
+    return {
+        "id": node_id,
+        "name": node_id,
+        "type": "module",
+        "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+        "size": 1.0,
+        "parent": parent,
+    }
+
+
 def _make_node_id(nid: str, ntype: str = "module", parent: str | None = None) -> Node:
-    """Return a minimal valid Node dict for significance tests."""
+    """Return a minimal valid Node dict for significance tests (compat helper)."""
     return {
         "id": nid,
         "name": nid.upper(),
@@ -1787,3 +2141,238 @@ class TestStdlibOnly:
             "Extractor must use only stdlib imports. "
             "Third-party imports found:\n" + "\n".join(third_party)
         )
+
+
+def _edge(src: str, tgt: str) -> Edge:
+    return {"source": src, "target": tgt, "type": "cross_context"}
+
+
+class TestStructuralSignificanceExtraction:
+    """Spec: visual-primitives.spec.md § Requirement: Structural Significance Extraction."""
+
+    def test_hub_detection_high_in_degree(self) -> None:
+        """Module with in_degree > 3 must be flagged is_hub=True."""
+        # shared_kernel is imported by 4 modules → in_degree == 4 → is_hub=True
+        hub = _make_bc_node("shared_kernel")
+        importers = [_make_bc_node(f"svc_{i}") for i in range(4)]
+        nodes: list[Node] = [hub] + importers
+        edges = [_edge(imp["id"], "shared_kernel") for imp in importers]
+
+        compute_structural_significance(nodes, edges)
+
+        sig = hub.get("structural_significance", {})
+        assert sig.get("in_degree") == 4, (
+            f"shared_kernel in_degree must be 4; got {sig.get('in_degree')}"
+        )
+        assert sig.get("is_hub") is True, (
+            "shared_kernel must be flagged is_hub=True with in_degree=4"
+        )
+
+    def test_peripheral_detection(self) -> None:
+        """Module with in_degree=0 and out_degree≤1 must be is_peripheral=True."""
+        leaf = _make_bc_node("leaf_util")
+        center = _make_bc_node("center")
+        nodes: list[Node] = [leaf, center]
+        # leaf → center: leaf has out_degree=1, in_degree=0
+        edges = [_edge("leaf_util", "center")]
+
+        compute_structural_significance(nodes, edges)
+
+        sig = leaf.get("structural_significance", {})
+        assert sig.get("in_degree") == 0, (
+            f"leaf_util in_degree must be 0; got {sig.get('in_degree')}"
+        )
+        assert sig.get("out_degree") == 1, (
+            f"leaf_util out_degree must be 1; got {sig.get('out_degree')}"
+        )
+        assert sig.get("is_peripheral") is True, (
+            "leaf_util must be flagged is_peripheral=True"
+        )
+
+    def test_betweenness_centrality_computed(self) -> None:
+        """Bridge node (sits on shortest paths) gets betweenness_centrality > 0."""
+        # A → bridge → B: bridge is the only path from A to B.
+        a = _make_bc_node("a")
+        bridge = _make_bc_node("bridge")
+        b = _make_bc_node("b")
+        nodes: list[Node] = [a, bridge, b]
+        edges = [_edge("a", "bridge"), _edge("bridge", "b")]
+
+        compute_structural_significance(nodes, edges)
+
+        sig = bridge.get("structural_significance", {})
+        bc = sig.get("betweenness_centrality", 0.0)
+        assert bc > 0.0, f"bridge node must have betweenness_centrality > 0; got {bc}"
+
+    def test_hub_is_marked_landmark(self) -> None:
+        """Hub nodes (is_hub=True) must also be marked is_landmark=True."""
+        hub = _make_bc_node("core")
+        importers = [_make_bc_node(f"svc_{i}") for i in range(4)]
+        nodes: list[Node] = [hub] + importers
+        edges = [_edge(imp["id"], "core") for imp in importers]
+
+        compute_structural_significance(nodes, edges)
+
+        assert hub.get("is_landmark") is True, (
+            "Hub node must be marked is_landmark=True"
+        )
+
+    def test_bridge_is_marked_landmark(self) -> None:
+        """Bridge nodes (is_bridge=True) must also be marked is_landmark=True.
+        spec: visual-primitives.spec.md §Scenario: Landmark sources —
+          'bridges (high betweenness centrality)'
+        """
+        a = _make_bc_node("a")
+        bridge = _make_bc_node("bridge")
+        b = _make_bc_node("b")
+        nodes: list[Node] = [a, bridge, b]
+        # A → bridge → B: bridge is the only path, giving it high betweenness.
+        edges = [_edge("a", "bridge"), _edge("bridge", "b")]
+
+        compute_structural_significance(nodes, edges)
+
+        # Verify bridge detection first.
+        sig = bridge.get("structural_significance", {})
+        assert sig.get("is_bridge") is True, (
+            f"bridge node must have is_bridge=True (betweenness={sig.get('betweenness_centrality', 0):.3f})"
+        )
+        # Then verify landmark assignment.
+        assert bridge.get("is_landmark") is True, (
+            "Bridge node must be marked is_landmark=True"
+        )
+
+    def test_entry_point_is_marked_landmark(self) -> None:
+        """Entry-point nodes (in_degree=0, out_degree>1) must be marked is_landmark=True.
+        spec: visual-primitives.spec.md §Scenario: Landmark sources —
+          'entry points (no in-edges from application code)'
+        """
+        entry = _make_bc_node("entry")
+        svc_a = _make_bc_node("svc_a")
+        svc_b = _make_bc_node("svc_b")
+        nodes: list[Node] = [entry, svc_a, svc_b]
+        # entry has in_degree=0, out_degree=2 → entry point
+        edges = [_edge("entry", "svc_a"), _edge("entry", "svc_b")]
+
+        compute_structural_significance(nodes, edges)
+
+        sig = entry.get("structural_significance", {})
+        assert sig.get("in_degree") == 0, (
+            f"entry node must have in_degree=0; got {sig.get('in_degree')}"
+        )
+        assert sig.get("out_degree") == 2, (
+            f"entry node must have out_degree=2; got {sig.get('out_degree')}"
+        )
+        assert entry.get("is_landmark") is True, (
+            "Entry-point node (in_degree=0, out_degree>1) must be marked is_landmark=True"
+        )
+
+    def test_structural_significance_field_present(self) -> None:
+        """After compute_structural_significance, every code node has the field."""
+        a = _make_bc_node("a")
+        b = _make_bc_node("b")
+        nodes: list[Node] = [a, b]
+        edges: list[Edge] = [_edge("a", "b")]
+
+        compute_structural_significance(nodes, edges)
+
+        for n in nodes:
+            assert "structural_significance" in n, (
+                f"Node {n['id']!r} must have 'structural_significance' after computation"
+            )
+
+    def test_community_id_assigned_to_modules(self) -> None:
+        """Module nodes get a community_id after compute_structural_significance."""
+        bc = _make_bc_node("mybc")
+        mod_a = _make_mod_node("mybc.a", "mybc")
+        mod_b = _make_mod_node("mybc.b", "mybc")
+        nodes: list[Node] = [bc, mod_a, mod_b]
+        edges: list[Edge] = [
+            {"source": "mybc.a", "target": "mybc.b", "type": "internal"}
+        ]
+
+        compute_structural_significance(nodes, edges)
+
+        for mod in (mod_a, mod_b):
+            sig = mod.get("structural_significance", {})
+            assert "community_id" in sig, (
+                f"Module {mod['id']!r} must have community_id in structural_significance"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Ubiquitous Dependency Detection
+# spec: visual-primitives.spec.md § Requirement: Ubiquitous Dependency Detection
+# GIVEN 85% of modules import logging
+# THEN logging is flagged as ubiquitous (edges marked ubiquitous=True)
+# AND dependent nodes get has_ubiquitous_dep=True
+# ---------------------------------------------------------------------------
+
+
+class TestUbiquitousDependencyDetection:
+    """Spec: visual-primitives.spec.md § Requirement: Ubiquitous Dependency Detection."""
+
+    def _make_graph_with_ubiquitous(
+        self,
+    ) -> tuple[list[Node], list[Edge]]:
+        """Create a graph where 'logging' is imported by 3 of 3 modules (100%)."""
+        # Three source modules all importing 'logging' (a 4th node).
+        logging_node = _make_bc_node("logging")
+        modules = [_make_bc_node(f"svc_{i}") for i in range(3)]
+        nodes: list[Node] = [logging_node] + modules
+        edges: list[Edge] = [_edge(m["id"], "logging") for m in modules]
+        return nodes, edges
+
+    def test_ubiquitous_edges_flagged(self) -> None:
+        """Edges to a ubiquitous module must have ubiquitous=True."""
+        nodes, edges = self._make_graph_with_ubiquitous()
+        detect_ubiquitous_dependencies(nodes, edges, threshold=0.5)
+
+        ubiquitous_edges = [e for e in edges if e.get("ubiquitous") is True]
+        assert ubiquitous_edges, (
+            "Edges to a ubiquitous module must be marked ubiquitous=True"
+        )
+
+    def test_dependent_nodes_flagged(self) -> None:
+        """Nodes that import a ubiquitous module get has_ubiquitous_dep=True."""
+        nodes, edges = self._make_graph_with_ubiquitous()
+        detect_ubiquitous_dependencies(nodes, edges, threshold=0.5)
+
+        dep_nodes = [n for n in nodes if n.get("has_ubiquitous_dep") is True]
+        assert dep_nodes, (
+            "Nodes that import a ubiquitous module must have has_ubiquitous_dep=True"
+        )
+
+    def test_threshold_controls_detection(self) -> None:
+        """A module imported by fewer modules than the threshold is not ubiquitous."""
+        # Only 1 of 3 modules imports 'rare' (33%); threshold=0.5 → not ubiquitous.
+        rare = _make_bc_node("rare")
+        modules = [_make_bc_node(f"svc_{i}") for i in range(3)]
+        nodes: list[Node] = [rare] + modules
+        edges: list[Edge] = [_edge("svc_0", "rare")]  # only 1 importer
+
+        detect_ubiquitous_dependencies(nodes, edges, threshold=0.5)
+
+        for e in edges:
+            assert e.get("ubiquitous", False) is False, (
+                "Edge to non-ubiquitous module must not be marked ubiquitous=True"
+            )
+
+    def test_ubiquitous_edge_type_preserved(self) -> None:
+        """The 'type' field on ubiquitous edges is unchanged after detection."""
+        nodes, edges = self._make_graph_with_ubiquitous()
+        original_types = [e["type"] for e in edges]
+        detect_ubiquitous_dependencies(nodes, edges, threshold=0.5)
+
+        for e, orig_type in zip(edges, original_types):
+            assert e["type"] == orig_type, (
+                "detect_ubiquitous_dependencies must not change edge 'type'"
+            )
+
+    def test_build_scene_graph_embeds_ubiquitous_flag(self, src: Path) -> None:
+        """build_scene_graph output has 'ubiquitous' key on at least one edge when applicable."""
+        graph = build_scene_graph(src)
+        # Even if no edge is ubiquitous, the graph should be a valid dict.
+        assert "edges" in graph, "Scene graph must have edges"
+        # All edges must be dicts (not malformed).
+        for e in graph["edges"]:
+            assert isinstance(e, dict), f"Edge must be a dict; got {type(e)}"

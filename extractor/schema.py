@@ -19,7 +19,98 @@ class Position(TypedDict):
 
 
 NodeType = Literal["bounded_context", "module", "spec"]
-EdgeType = Literal["cross_context", "internal", "aggregate"]
+EdgeType = Literal[
+    "cross_context",
+    "internal",
+    "aggregate",
+    "inherits",
+    "has_a",
+    "direct_call",
+    "dynamic_call",
+]
+
+# ---------------------------------------------------------------------------
+# Visual-primitive support types (visual-primitives.spec.md)
+# ---------------------------------------------------------------------------
+
+SymbolVisibility = Literal["public", "private"]
+SymbolKind = Literal["function", "class", "constant", "variable"]
+
+BadgeType = Literal[
+    "pure",
+    "io",
+    "async",
+    "stateful",
+    "error_handling",
+    "test",
+    "entry_point",
+    "deprecated",
+]
+
+
+class SymbolInfo(TypedDict):
+    """A named entity extracted from a module's symbol table.
+
+    Spec: visual-primitives.spec.md § Requirement: Symbol Table Extraction
+    """
+
+    name: str
+    """Identifier as it appears in source code."""
+
+    visibility: SymbolVisibility
+    """'public' for names without a leading underscore, 'private' otherwise."""
+
+    kind: SymbolKind
+    """Category of the symbol."""
+
+    signature: NotRequired[str]
+    """Human-readable parameter and return-type string for functions/methods.
+
+    Example: ``'(order: Order, *, strict: bool = False) -> Result'``
+    Omitted for non-callable symbols.
+    """
+
+
+class StructuralSignificanceMetrics(TypedDict):
+    """Graph-theoretic significance measures for a node.
+
+    Spec: visual-primitives.spec.md § Requirement: Structural Significance Extraction
+    """
+
+    in_degree: int
+    """Number of edges arriving at this node from other nodes."""
+
+    out_degree: int
+    """Number of edges leaving this node to other nodes."""
+
+    is_hub: bool
+    """True when in_degree exceeds the hub threshold (most-depended-upon nodes)."""
+
+    is_bridge: bool
+    """True when betweenness_centrality exceeds the bridge threshold."""
+
+    is_peripheral: bool
+    """True when in_degree == 0 and out_degree <= 1 (leaf utility nodes)."""
+
+    betweenness_centrality: float
+    """Fraction of shortest paths between other node pairs that pass through this node.
+
+    Range [0.0, 1.0].  A value of 0.0 means the node is not on any shortest path.
+    """
+
+    community_id: NotRequired[str]
+    """Detected community identifier (e.g. ``'community_0'``).
+
+    Set by community-detection analysis.  Absent when community detection
+    has not been run.
+    """
+
+    community_drift: NotRequired[bool]
+    """True when the detected community differs from the declared package.
+
+    A module flagged as ``community_drift=True`` is structurally closer to a
+    different bounded context than the one it is declared in.
+    """
 
 
 class NodeMetrics(TypedDict):
@@ -72,6 +163,7 @@ class Node(TypedDict):
     """
 
     # ── Structural Significance (visual-primitives.spec.md) ──────────────────
+    # Flat fields set by compute_structural_significance() for backward compat.
 
     in_degree: NotRequired[int]
     """Number of edges arriving at this node from other nodes.
@@ -123,6 +215,46 @@ class Node(TypedDict):
     Spec: visual-primitives.spec.md § Structural Significance Extraction / Community detection.
     """
 
+    # ------------------------------------------------------------------
+    # Visual-primitive fields (visual-primitives.spec.md)
+    # ------------------------------------------------------------------
+
+    symbols: NotRequired[list[SymbolInfo]]
+    """Symbol table for this module: named entities with visibility and kind.
+
+    Spec: visual-primitives.spec.md § Requirement: Symbol Table Extraction
+    Present for 'module' nodes only.
+    """
+
+    badges: NotRequired[list[str]]
+    """Set of Badge types attached to this node (subset of BadgeType literals).
+
+    Spec: visual-primitives.spec.md § Requirement: Badge Primitive
+    Each badge encodes a cross-cutting aspect (e.g. 'io', 'async', 'pure').
+    """
+
+    is_landmark: NotRequired[bool]
+    """True when this node is designated a Landmark.
+
+    Spec: visual-primitives.spec.md § Requirement: Landmark Primitive
+    Landmarks persist at all zoom levels and serve as orientation anchors.
+    Derived from structural significance (hub, bridge) or explicit designation.
+    """
+
+    structural_significance: NotRequired[StructuralSignificanceMetrics]
+    """Graph-theoretic significance measures.
+
+    Spec: visual-primitives.spec.md § Requirement: Structural Significance Extraction
+    Present after compute_structural_significance() has run.
+    """
+
+    has_ubiquitous_dep: NotRequired[bool]
+    """True when this node imports at least one ubiquitous dependency.
+
+    Spec: visual-primitives.spec.md § Requirement: Ubiquitous Dependency Detection
+    When True, the renderer displays a power-rail indicator on this node.
+    """
+
 
 class Edge(TypedDict):
     """A directed dependency edge between two nodes."""
@@ -142,10 +274,12 @@ class Edge(TypedDict):
 
     Omitting weight implies weight=1.  Aggregate edges carry the sum of all
     individual import counts between the two bounded contexts.
+    For 'direct_call' edges, weight is the number of call sites from source
+    to target within the source module's function bodies.
     """
 
     ubiquitous: NotRequired[bool]
-    """True when the target node is a ubiquitous dependency.
+    """True when the target of this edge is a ubiquitous dependency.
 
     Ubiquitous dependencies are imported by more than the configured fraction
     of all module nodes.  The Godot renderer suppresses drawing these edges by

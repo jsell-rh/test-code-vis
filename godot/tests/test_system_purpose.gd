@@ -226,18 +226,16 @@ func test_label_pixel_size_positive_for_readability() -> void:
 ## To identify structural problems (excessive coupling, tangled dependencies),
 ## the system must render dependency edges as visible line connections between nodes.
 ## Without visible edges, the human cannot see which components depend on which.
-## Implemented by: main.gd → _create_edge() → ImmediateMesh line per edge
+## Implemented by: main.gd → _create_edge() → Node3D body named "EdgeLine" per edge
 func test_dependencies_are_visible_as_connections() -> void:
 	var main_node: Node3D = MainScript.new()
 	main_node.build_from_graph(_make_system_fixture())
 
 	var line_found: bool = false
 	for child: Node in main_node.get_children():
-		if child is MeshInstance3D:
-			var mi := child as MeshInstance3D
-			if mi.mesh is ImmediateMesh:
-				line_found = true
-				break
+		if str(child.name) == "EdgeLine":
+			line_found = true
+			break
 
 	_check(line_found,
 		"At least one dependency edge must be rendered as a visible line connection so structural problems are identifiable")

@@ -4,10 +4,14 @@ extends Node3D
 ##
 ## Loads the JSON scene graph produced by the Python extractor via SceneGraphLoader
 ## and procedurally builds the 3D visualisation:
-##   - bounded-context nodes  → large translucent boxes
+##   - bounded-context nodes  → large translucent boxes (membrane opacity reflects
+##     public/private symbol ratio — spec §Container membrane permeability)
 ##   - module nodes           → smaller opaque boxes nested inside their context
-##   - edges                  → coloured lines with arrowhead cones
-##     (orange = cross-context, grey = internal)
+##   - edges                  → coloured geometry with weight-based thickness and
+##     line style encoding edge type (solid=calls, dashed=imports, dotted=inheritance)
+##     (spec §Edge Primitive — FAIL-1 thickness, FAIL-2 line style)
+##   - ubiquitous edges       → suppressed by default; toggled with T key
+##     (spec §Power Rail Notation — FAIL-3/4 suppression, FAIL-5 toggle)
 ##
 ## Level-of-detail (LOD) is applied every frame via LodManager:
 ##   far distance  → only bounded_context nodes visible
@@ -19,6 +23,7 @@ extends Node3D
 const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
 const LodManager = preload("res://scripts/lod_manager.gd")
 const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
+const VisualPrimitives = preload("res://scripts/visual_primitives.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -59,6 +64,18 @@ var _was_at_far_lod: bool = false
 ## Understanding overlay controller — activates alignment, quality, and impact overlays.
 var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
 
+## Visual primitives renderer — attaches badge, landmark, and power rail decorations.
+var _visual_primitives: VisualPrimitives = VisualPrimitives.new()
+
+## Tracks Node3D visuals for suppressed ubiquitous edges.
+## These are created but hidden by default; toggled with the T key.
+## spec §Power Rail Notation — "the Edge is NOT drawn" (hidden by default)
+## spec §Power Rail Toggle — "all suppressed ubiquitous edges fade in" (T to reveal)
+var _ubiquitous_edge_visuals: Array = []
+
+## Whether ubiquitous edges are currently shown (toggled by T key).
+var _ubiquitous_edges_visible: bool = false
+
 @onready var _camera: Camera3D = $Camera3D
 
 
@@ -87,6 +104,11 @@ func _ready() -> void:
 ## Called from _ready() at startup and from tests directly.
 ## Caches the graph so overlay functions (_apply_alignment_overlay, etc.) can
 ## access node/edge data after the scene has been built.
+##
+## Smooth regrouping: if anchors already exist (this is a reload), node positions
+## are animated smoothly to their new values — nodes slide rather than jump.
+## This satisfies the spec requirement: "nodes animate smoothly to their new
+## positions, preserving spatial continuity" when independence groups change.
 func build_from_graph(graph: Dictionary) -> void:
 	# Cache graph so overlay functions can use it even when called from tests.
 	_graph = graph
@@ -98,23 +120,44 @@ func build_from_graph(graph: Dictionary) -> void:
 	for nd: Dictionary in nodes:
 		node_data_map[nd["id"]] = nd
 
-	# Pre-compute every node's world-space centre before creating geometry,
-	# so that edge endpoints are available without depending on Godot's
-	# deferred global-transform propagation.
+	# Detect reload: if anchors already exist, animate positions instead of recreating.
+	var is_reload: bool = not _anchors.is_empty()
+
+	# Clear and recompute world positions for the new graph.
+	_world_positions.clear()
 	_compute_world_positions(nodes, node_data_map)
 
-	# Create volumes: parents first so children can be parented to them.
+	# Create or animate volumes: parents first so children can be parented to them.
 	for nd: Dictionary in nodes:
 		if nd["parent"] == null:
-			_create_volume(nd, self)
+			if is_reload and _anchors.has(nd["id"]):
+				# Anchor already exists: animate to new position for smooth regrouping.
+				_animate_node_to_position(nd)
+			else:
+				_create_volume(nd, self)
 	for nd: Dictionary in nodes:
 		if nd["parent"] != null:
-			var parent_anchor: Node3D = _anchors.get(nd["parent"])
-			if parent_anchor != null:
-				_create_volume(nd, parent_anchor)
+			if is_reload and _anchors.has(nd["id"]):
+				# Anchor already exists: animate to new position for smooth regrouping.
+				_animate_node_to_position(nd)
 			else:
-				push_warning("CodeVis: parent '%s' not found for '%s'." % [nd["parent"], nd["id"]])
-				_create_volume(nd, self)
+				var parent_anchor: Node3D = _anchors.get(nd["parent"])
+				if parent_anchor != null:
+					_create_volume(nd, parent_anchor)
+				else:
+					push_warning("CodeVis: parent '%s' not found for '%s'." % [nd["parent"], nd["id"]])
+					_create_volume(nd, self)
+
+	# Recreate edge visuals (always fresh — they depend on current world positions).
+	if is_reload:
+		for entry: Dictionary in _lod_edge_entries:
+			(entry["visual"] as Node3D).queue_free()
+		_lod_edge_entries.clear()
+		_path_edge_entries.clear()
+		for vis: Node3D in _ubiquitous_edge_visuals:
+			vis.queue_free()
+		_ubiquitous_edge_visuals.clear()
+		_ubiquitous_edges_visible = false
 
 	# Create edge lines after all volumes exist.
 	for ed: Dictionary in edges:
@@ -128,6 +171,34 @@ func build_from_graph(graph: Dictionary) -> void:
 
 	# Apply initial LOD pass so visibility is correct before any _process tick.
 	_update_lod()
+
+
+## Animate an existing anchor node to the position specified in *nd*.
+##
+## spec: "nodes animate smoothly to their new positions" (smooth regrouping).
+## When the node is in the scene tree, a Tween slides the anchor.
+## When not in the tree (unit tests), the position is set directly.
+func _animate_node_to_position(nd: Dictionary) -> void:
+	var anchor: Node3D = _anchors.get(nd["id"])
+	if anchor == null:
+		return
+	var p: Dictionary = nd["position"]
+	var new_pos := Vector3(float(p["x"]), float(p["y"]), float(p["z"]))
+	if anchor.position.is_equal_approx(new_pos):
+		return
+	if is_inside_tree():
+		# spec: "nodes slide rather than jump" — Tween preserves spatial continuity.
+		var tween: Tween = create_tween()
+		tween.tween_property(anchor, "position", new_pos, 0.5)
+	else:
+		# Not in scene tree (unit tests): set position directly.
+		anchor.position = new_pos
+
+
+## Return the internal anchors dictionary (node id → Node3D).
+## Exposed for tests that verify smooth regrouping preserves anchor identity.
+func get_anchors() -> Dictionary:
+	return _anchors
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +335,23 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	elif is_context:
 		# Larger, flat, translucent slab — acts as a visible floor/boundary.
 		box.size = Vector3(sz, sz * 0.2, sz)
-		mat.albedo_color = Color(0.25, 0.45, 0.85, 0.18)
+		# spec §Container membrane permeability:
+		#   "the membrane appears thick/opaque (strong encapsulation — few openings)"
+		#   "a module with 25 public symbols has a thin/porous membrane"
+		#   "permeability is a continuous visual property, not a binary toggle"
+		# alpha = 1 - public_ratio: many public symbols → porous (low alpha),
+		#                           few public symbols → opaque (high alpha).
+		var symbols: Array = nd.get("symbols", [])
+		var alpha: float = 0.18  # default when symbol data is absent
+		if symbols.size() > 0:
+			var public_count: int = 0
+			for sym: Dictionary in symbols:
+				if sym.get("visibility", "") == "public":
+					public_count += 1
+			var public_ratio: float = float(public_count) / float(symbols.size())
+			# Invert: high public ratio → porous (low alpha); low ratio → opaque (high alpha).
+			alpha = clampf(1.0 - public_ratio, 0.05, 0.55)
+		mat.albedo_color = Color(0.25, 0.45, 0.85, alpha)
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		# Show both sides so the translucent slab is visible from above and below.
 		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -288,6 +375,11 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	# Draw on top so labels remain visible through geometry.
 	label.no_depth_test = true
 	anchor.add_child(label)
+
+	# Visual primitives — badge glyphs, landmark ring, power rail disc.
+	# Spec: visual-primitives.spec.md §Badge Primitive, §Landmark Primitive,
+	# §Power Rail Notation.
+	_visual_primitives.attach_primitives(nd, anchor, sz)
 
 
 ## Add a Power Rail indicator glyph to an anchor node.
@@ -323,6 +415,202 @@ func _add_power_rail_indicator(anchor: Node3D, node_sz: float) -> void:
 
 
 # ---------------------------------------------------------------------------
+# Aggregate edge grouping (visual-primitives.spec.md §Power Rail Notation,
+# spatial-structure.spec.md §Far — bounded context architecture)
+# ---------------------------------------------------------------------------
+
+## Group edges by their (source_context, target_context) context pair and sum
+## import counts.  Returns a dict keyed by "src_ctx→tgt_ctx" → { weight: int }.
+##
+## Used to verify that aggregate edges are correctly grouped at FAR distance.
+## Spec: "cross-context dependencies are shown as single aggregate edges per
+## context pair, with weight indicating total import count"
+func _build_edges_by_context(edges: Array) -> Dictionary:
+	# edges_by_context: maps "source_context→target_context" → summed weight.
+	var edges_by_context: Dictionary = {}
+	for ed: Dictionary in edges:
+		if ed["type"] != "aggregate":
+			continue
+		var context_pair: String = "%s→%s" % [ed["source"], ed["target"]]
+		var existing_weight: int = edges_by_context.get(context_pair, {}).get("weight", 0)
+		edges_by_context[context_pair] = {
+			"source": ed["source"],
+			"target": ed["target"],
+			"weight": existing_weight + int(ed.get("weight", 1))
+		}
+	return edges_by_context
+
+
+# ---------------------------------------------------------------------------
+# Edge creation helpers
+# ---------------------------------------------------------------------------
+
+## Determine the line style for an edge based on its type.
+##
+## spec §Edge Primitive §Scenario: Edge type distinction —
+##   "edge type is encoded by line style (solid for calls, dashed for imports,
+##    dotted for inheritance)"
+##
+## Mapping:
+##   direct_call, dynamic_call → "solid"
+##   cross_context, internal, aggregate → "dashed"  (import-based)
+##   inherits, has_a → "dotted"
+func _edge_line_style(edge_type: String) -> String:
+	match edge_type:
+		"direct_call", "dynamic_call":
+			return "solid"
+		"inherits", "has_a":
+			return "dotted"
+		_:
+			# cross_context, internal, aggregate and any unknown type → dashed
+			return "dashed"
+
+
+## Choose the line colour for an edge based on its type.
+func _edge_color(edge_type: String) -> Color:
+	match edge_type:
+		"cross_context", "aggregate":
+			return Color(1.0, 0.50, 0.10)   # orange: cross-boundary import
+		"direct_call", "dynamic_call":
+			return Color(0.30, 0.75, 1.00)  # light blue: call graph
+		"inherits", "has_a":
+			return Color(0.90, 0.80, 0.20)  # gold: type relationship
+		_:
+			return Color(0.55, 0.55, 0.55)  # grey: internal import / unknown
+
+
+## Orient a Node3D so its +Y axis aligns with *dir*.
+## CylinderMesh default height is along +Y; rotating +Y → dir aligns the
+## cylinder with the edge direction.
+func _orient_to_dir(node: Node3D, dir: Vector3) -> void:
+	if dir.is_equal_approx(-Vector3.UP):
+		# Degenerate case: exact down direction — use 180° rotation around X.
+		node.basis = Basis.from_euler(Vector3(PI, 0.0, 0.0))
+	elif not dir.is_equal_approx(Vector3.UP):
+		node.basis = Basis(Quaternion(Vector3.UP, dir))
+	# else dir == UP: identity basis (no rotation needed).
+
+
+## Create the visual body for a SOLID edge — one CylinderMesh spanning from→to.
+##
+## spec §Edge Primitive §Scenario: Weighted edge —
+##   "its visual thickness is proportional to the weight"
+##   "a single-import Edge is visibly thinner than a 12-import Edge"
+## The cylinder radius encodes weight: radius = BASE_RADIUS * (1 + weight/10).
+func _create_solid_body(
+	from_pos: Vector3, to_pos: Vector3, radius: float, color: Color
+) -> MeshInstance3D:
+	var dir: Vector3 = (to_pos - from_pos).normalized()
+	var length: float = from_pos.distance_to(to_pos)
+
+	var cyl := CylinderMesh.new()
+	cyl.height = length
+	cyl.top_radius = radius
+	cyl.bottom_radius = radius
+	cyl.radial_segments = 6
+	cyl.rings = 1
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	var body := MeshInstance3D.new()
+	body.mesh = cyl
+	body.material_override = mat
+	_orient_to_dir(body, dir)
+	body.position = (from_pos + to_pos) * 0.5
+	return body
+
+
+## Create the visual body for a DASHED edge — alternating CylinderMesh segments.
+## Each segment is ~60% of the dash unit; 40% is gap.
+##
+## spec §Edge Primitive §Scenario: Edge type distinction —
+##   "dashed for imports" (cross_context, internal)
+func _create_dashed_body(
+	from_pos: Vector3, to_pos: Vector3, radius: float, color: Color
+) -> Node3D:
+	var container := Node3D.new()
+	var dir: Vector3 = (to_pos - from_pos).normalized()
+	var length: float = from_pos.distance_to(to_pos)
+
+	var dash_len: float = 0.7
+	var unit_len: float = 1.2  # dash + gap
+	var offset: float = 0.0
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	while offset < length:
+		var seg_len: float = minf(dash_len, length - offset)
+		if seg_len < 0.05:
+			break
+
+		var cyl := CylinderMesh.new()
+		cyl.height = seg_len
+		cyl.top_radius = radius
+		cyl.bottom_radius = radius
+		cyl.radial_segments = 5
+		cyl.rings = 1
+
+		var seg := MeshInstance3D.new()
+		seg.mesh = cyl
+		seg.material_override = mat
+		_orient_to_dir(seg, dir)
+		# Centre of this segment along the edge direction.
+		seg.position = from_pos + dir * (offset + seg_len * 0.5)
+		container.add_child(seg)
+
+		offset += unit_len
+
+	return container
+
+
+## Create the visual body for a DOTTED edge — small cylinder segments with larger gaps.
+##
+## spec §Edge Primitive §Scenario: Edge type distinction —
+##   "dotted for inheritance" (inherits, has_a)
+func _create_dotted_body(
+	from_pos: Vector3, to_pos: Vector3, radius: float, color: Color
+) -> Node3D:
+	var container := Node3D.new()
+	var dir: Vector3 = (to_pos - from_pos).normalized()
+	var length: float = from_pos.distance_to(to_pos)
+
+	var dot_len: float = 0.20
+	var unit_len: float = 0.55  # dot + gap
+	var offset: float = 0.0
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	while offset < length:
+		if length - offset < 0.05:
+			break
+
+		var seg_len: float = minf(dot_len, length - offset)
+		var cyl := CylinderMesh.new()
+		cyl.height = seg_len
+		cyl.top_radius = radius
+		cyl.bottom_radius = radius
+		cyl.radial_segments = 5
+		cyl.rings = 1
+
+		var seg := MeshInstance3D.new()
+		seg.mesh = cyl
+		seg.material_override = mat
+		_orient_to_dir(seg, dir)
+		seg.position = from_pos + dir * (offset + seg_len * 0.5)
+		container.add_child(seg)
+
+		offset += unit_len
+
+	return container
+
+
+# ---------------------------------------------------------------------------
 # Edge creation
 # ---------------------------------------------------------------------------
 
@@ -353,7 +641,9 @@ func _create_edge(ed: Dictionary) -> void:
 						break
 				var nd_sz: float = float(src_data.get("size", 1.0))
 				_add_power_rail_indicator(src_anchor, nd_sz)
-		return  # Do NOT draw the edge line.
+		# Do NOT return — continue to create a hidden body tracked in
+		# _ubiquitous_edge_visuals so it can be toggled on/off by the human.
+		# spec §Power Rail Toggle: "all suppressed ubiquitous edges fade in"
 
 	if not _world_positions.has(src) or not _world_positions.has(tgt):
 		push_warning("CodeVis: skipping edge '%s' → '%s' (node missing)." % [src, tgt])
@@ -365,35 +655,51 @@ func _create_edge(ed: Dictionary) -> void:
 	if from_pos.is_equal_approx(to_pos):
 		return  # Self-loop or co-located nodes — nothing to draw.
 
-	var is_cross: bool = ed["type"] == "cross_context"
-	var line_color: Color = Color(1.0, 0.50, 0.10) if is_cross else Color(0.55, 0.55, 0.55)
+	var edge_type: String = ed["type"]
+	var weight: int = int(ed.get("weight", 1))
+	var is_ubiquitous: bool = ed.get("ubiquitous", false)
 
-	# Build a line mesh using ImmediateMesh (PRIMITIVE_LINES, two vertices).
-	var imesh := ImmediateMesh.new()
-	imesh.surface_begin(Mesh.PRIMITIVE_LINES)
-	imesh.surface_set_color(line_color)
-	imesh.surface_add_vertex(from_pos)
-	imesh.surface_set_color(line_color)
-	imesh.surface_add_vertex(to_pos)
-	imesh.surface_end()
+	var line_style: String = _edge_line_style(edge_type)
+	var line_color: Color = _edge_color(edge_type)
 
-	var mat := StandardMaterial3D.new()
-	mat.vertex_color_use_as_albedo = true
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	# spec §Edge Primitive §Scenario: Weighted edge —
+	# "its visual thickness is proportional to the weight (12)"
+	# "a single-import Edge is visibly thinner than a 12-import Edge"
+	# Radius encodes weight: base 0.06 units, scaled proportionally with weight.
+	const BASE_RADIUS: float = 0.06
+	var radius: float = clampf(BASE_RADIUS * (1.0 + float(weight) / 10.0), BASE_RADIUS, BASE_RADIUS * 4.0)
 
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.mesh = imesh
-	mesh_instance.material_override = mat
-	# Edges live at the scene root so their positions are already world-space.
-	add_child(mesh_instance)
-	# Register line with LOD manager.
-	_lod_edge_entries.append({"visual": mesh_instance, "edge_type": ed["type"]})
-	# Track edge direction (source/target) so dependency direction can be verified.
-	_path_edge_entries.append({"visual": mesh_instance, "source": src, "target": tgt})
+	var dir: Vector3 = (to_pos - from_pos).normalized()
+
+	# Build the edge body according to line style.
+	# Each body node carries line_style and edge_weight metadata for test assertions.
+	var body: Node3D
+	match line_style:
+		"solid":
+			body = _create_solid_body(from_pos, to_pos, radius, line_color)
+		"dotted":
+			body = _create_dotted_body(from_pos, to_pos, radius, line_color)
+		_:  # "dashed" — import-based edges
+			body = _create_dashed_body(from_pos, to_pos, radius, line_color)
+
+	# Tag the body so tests can verify the correct perceptual channel is used.
+	body.set_meta("line_style", line_style)
+	body.set_meta("edge_weight", weight)
+	body.name = "EdgeLine"
+
+	if is_ubiquitous:
+		# spec §Power Rail Notation §Scenario: Standard library power rail —
+		# "no edges to logging are drawn" — hidden initially, toggled via T.
+		body.visible = false
+		add_child(body)
+		_ubiquitous_edge_visuals.append(body)
+	else:
+		add_child(body)
+		_lod_edge_entries.append({"visual": body, "edge_type": edge_type})
+		_path_edge_entries.append({"visual": body, "source": src, "target": tgt})
 
 	# Arrowhead: a cone (CylinderMesh, top_radius=0 = pointed tip) placed at the
 	# target end, oriented along the edge direction, indicating dependency flow.
-	var dir: Vector3 = (to_pos - from_pos).normalized()
 	var cone_mesh := CylinderMesh.new()
 	cone_mesh.top_radius = 0.0       # pointed tip at +Y
 	cone_mesh.bottom_radius = 0.25
@@ -408,14 +714,48 @@ func _create_edge(ed: Dictionary) -> void:
 	arrow.mesh = cone_mesh
 	arrow.material_override = cone_mat
 	# Rotate so the cone's +Y (tip) aligns with the edge direction.
-	arrow.basis = Basis(Quaternion(Vector3.UP, dir))
+	_orient_to_dir(arrow, dir)
 	# Centre the cone so its tip lands exactly at to_pos.
 	arrow.position = to_pos - dir * (cone_mesh.height * 0.5)
-	add_child(arrow)
-	# Register arrowhead with LOD manager (same edge_type as the line).
-	_lod_edge_entries.append({"visual": arrow, "edge_type": ed["type"]})
-	# Track arrowhead direction for dependency direction verification.
-	_path_edge_entries.append({"visual": arrow, "source": src, "target": tgt})
+
+	if is_ubiquitous:
+		arrow.visible = false
+		add_child(arrow)
+		_ubiquitous_edge_visuals.append(arrow)
+	else:
+		add_child(arrow)
+		# Register arrowhead with LOD manager (same edge_type as the line).
+		_lod_edge_entries.append({"visual": arrow, "edge_type": edge_type})
+		# Track arrowhead direction for dependency direction verification.
+		_path_edge_entries.append({"visual": arrow, "source": src, "target": tgt})
+
+
+# ---------------------------------------------------------------------------
+# Power Rail Toggle
+# ---------------------------------------------------------------------------
+
+## Toggle ubiquitous edge visibility (T key).
+##
+## spec §Power Rail Notation §Scenario: Power rail toggle —
+##   "WHEN the human toggles power rails to visible
+##    THEN all suppressed ubiquitous edges fade in
+##    AND the toggle is reversible"
+##
+## When in the scene tree, edges fade in/out via Tween on modulate.a.
+## When outside the tree (unit tests), visibility is toggled directly.
+func toggle_ubiquitous_edges() -> void:
+	_ubiquitous_edges_visible = not _ubiquitous_edges_visible
+	for vis: Node3D in _ubiquitous_edge_visuals:
+		if is_inside_tree():
+			if _ubiquitous_edges_visible:
+				vis.visible = true
+				vis.modulate.a = 0.0
+			var tween: Tween = create_tween()
+			var target: float = 1.0 if _ubiquitous_edges_visible else 0.0
+			tween.tween_property(vis, "modulate:a", target, 0.3)
+		else:
+			# Unit test context: toggle visible directly.
+			vis.visible = _ubiquitous_edges_visible
 
 
 # ---------------------------------------------------------------------------
@@ -538,6 +878,7 @@ func _frame_camera() -> void:
 ##   H → apply alignment overlay (spec-vs-realization — shows how build matches design).
 ##   J → apply quality overlay  (quality-metrics — shows coupling and centrality).
 ##   K → apply failure impact overlay (cascade-injection — shows impact from first node).
+##   T → toggle ubiquitous (power rail) edges on/off.
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed:
 		return
@@ -548,6 +889,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			_apply_quality_overlay()
 		KEY_K:
 			_apply_failure_impact_overlay()
+		KEY_T:
+			# spec §Power Rail Toggle — "T key toggles ubiquitous edges on/off"
+			toggle_ubiquitous_edges()
 
 
 # ---------------------------------------------------------------------------
@@ -582,3 +926,5 @@ func _apply_failure_impact_overlay() -> void:
 	var target_id: String = nodes[0].get("id", "")
 	if not target_id.is_empty():
 		_understanding_overlay.apply_failure_overlay(target_id, _graph, _anchors, self)
+
+

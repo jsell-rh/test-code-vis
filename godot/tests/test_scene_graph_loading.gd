@@ -68,19 +68,26 @@ func test_mesh_instances_exist_in_anchors() -> bool:
 
 
 ## AND generates connections for each edge —
-## build_from_graph() adds at least one MeshInstance3D to the main node for each edge
-## (the line mesh) plus at least one more for the arrowhead cone.
+## build_from_graph() adds a body named "EdgeLine" and a CylinderMesh arrowhead cone
+## to the main node for each edge.
 func test_edge_mesh_instances_created() -> bool:
 	var main_node: Node3D = MainScript.new()
 	main_node.build_from_graph(_make_fixture())
 
-	var edge_mesh_count := 0
+	var edge_line_found := false
+	var cone_found := false
 	for child: Node in main_node.get_children():
+		if str(child.name) == "EdgeLine":
+			edge_line_found = true
 		if child is MeshInstance3D:
-			edge_mesh_count += 1
+			var mi := child as MeshInstance3D
+			if mi.mesh is CylinderMesh:
+				var cyl := mi.mesh as CylinderMesh
+				if cyl.top_radius == 0.0:
+					cone_found = true
 
-	# Each edge produces: 1 ImmediateMesh line + 1 CylinderMesh arrowhead = 2
-	return edge_mesh_count >= 2
+	# Each edge produces: 1 EdgeLine body + 1 CylinderMesh arrowhead cone
+	return edge_line_found and cone_found
 
 
 ## AND positions elements according to the layout data in the JSON —

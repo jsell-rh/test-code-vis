@@ -238,22 +238,24 @@ func test_containment_expressed_as_scene_tree_parenting() -> void:
 
 
 ## AND structural relationships (dependency) are expressed spatially —
-## An edge between two nodes produces at least one MeshInstance3D child of main.
+## An edge between two nodes produces a body node named "EdgeLine" (Node3D or
+## MeshInstance3D) with line_style metadata, plus a CylinderMesh arrowhead.
 ## Implemented by: main.gd → _create_edge()
-##   creates ImmediateMesh line and CylinderMesh arrowhead as children of main
+##   - solid edge (calls): MeshInstance3D CylinderMesh body
+##   - dashed/dotted edge (imports/inheritance): Node3D container with segment children
+##   All bodies are named "EdgeLine" and carry line_style + edge_weight metadata.
 func test_dependency_expressed_as_visible_connection() -> void:
 	var main_node: Node3D = MainScript.new()
 	main_node.build_from_graph(_make_multi_service_fixture())
 
+	# Look for a direct child named "EdgeLine" — the edge body created by _create_edge().
 	var line_found: bool = false
 	for child: Node in main_node.get_children():
-		if child is MeshInstance3D:
-			var mi := child as MeshInstance3D
-			if mi.mesh is ImmediateMesh:
-				line_found = true
-				break
+		if str(child.name) == "EdgeLine":
+			line_found = true
+			break
 	_check(line_found,
-		"A dependency edge must produce a visible line (ImmediateMesh) in the scene")
+		"A dependency edge must produce a child named 'EdgeLine' in the scene")
 
 
 # ---------------------------------------------------------------------------
@@ -308,9 +310,11 @@ func test_far_distance_shows_only_bounded_contexts() -> void:
 		(e["visual"] as Node3D).free()
 
 
-## WHEN the human is far away, all edges are hidden.
+## WHEN the human is far away, individual cross-context and internal edges are hidden.
+## Aggregate edges (one per context pair, weight = total import count) remain VISIBLE.
 ## Implemented by: lod_manager.gd → _apply_far()
-##   `(entry["visual"] as Node3D).visible = false`
+##   cross_context:  `vis_node.visible = (etype == "aggregate")` → false (cross_context)
+##   internal:       `vis_node.visible = (etype == "aggregate")` → false (internal)
 func test_far_distance_hides_all_edges() -> void:
 	var lod := LodManager.new()
 	var node_entries := _make_lod_node_entries()
@@ -319,7 +323,7 @@ func test_far_distance_hides_all_edges() -> void:
 	lod.update_lod(node_entries, edge_entries, LodManager.FAR_THRESHOLD + 10.0)
 
 	_check(not (edge_entries[0]["visual"] as Node3D).visible,
-		"Cross-context edge must be hidden at far distance")
+		"Cross-context edge must be hidden at far distance (aggregate edge takes its place)")
 	_check(not (edge_entries[1]["visual"] as Node3D).visible,
 		"Internal edge must be hidden at far distance")
 
@@ -327,6 +331,44 @@ func test_far_distance_hides_all_edges() -> void:
 		(e["anchor"] as Node3D).free()
 	for e in edge_entries:
 		(e["visual"] as Node3D).free()
+
+
+## FAR: aggregate edges (one per context pair, with weight) are visible.
+## Cross-context individual edges and internal edges are hidden.
+## Spec: spatial-structure.spec.md §Far — bounded context architecture:
+##   "cross-context dependencies are shown as single aggregate edges per
+##    context pair, with weight indicating total import count"
+## Spec: visual-primitives.spec.md §Power Rail Notation — aggregate_edges at FAR.
+## Implemented by: lod_manager.gd → _apply_far()
+##   aggregate:     `vis_node.visible = (etype == "aggregate")` → true
+##   cross_context: `vis_node.visible = (etype == "aggregate")` → false
+func test_far_distance_shows_aggregate_edges() -> void:
+	var lod := LodManager.new()
+	var node_entries := _make_lod_node_entries()
+	# Include one aggregate, one cross_context, and one internal edge.
+	var agg_edge := MeshInstance3D.new()
+	var cross_edge := MeshInstance3D.new()
+	var internal_edge := MeshInstance3D.new()
+	var edge_entries: Array = [
+		{"visual": agg_edge,      "edge_type": "aggregate"},
+		{"visual": cross_edge,    "edge_type": "cross_context"},
+		{"visual": internal_edge, "edge_type": "internal"},
+	]
+
+	lod.update_lod(node_entries, edge_entries, LodManager.FAR_THRESHOLD + 10.0)
+
+	_check(agg_edge.visible,
+		"Aggregate edge must be VISIBLE at FAR distance (one per context pair with weight)")
+	_check(not cross_edge.visible,
+		"Individual cross-context edge must be HIDDEN at FAR distance (aggregate supersedes it)")
+	_check(not internal_edge.visible,
+		"Internal edge must be HIDDEN at FAR distance")
+
+	for e in node_entries:
+		(e["anchor"] as Node3D).free()
+	agg_edge.free()
+	cross_edge.free()
+	internal_edge.free()
 
 
 ## AND when the human moves closer to a service, internal modules become visible.
@@ -529,3 +571,347 @@ func test_lod_integration_far_hides_modules_in_built_scene() -> void:
 	if ctx_anchor != null:
 		_check(ctx_anchor.visible,
 			"Context anchor must remain visible after applying FAR LOD")
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Edge Primitive — visual-primitives.spec.md
+# Scenario: Weighted edge — "its visual thickness is proportional to the weight"
+# Scenario: Edge type distinction — "edge type is encoded by line style"
+# Scenario: Suppressed ubiquitous edges — "the Edge is NOT drawn"
+# Scenario: Power rail toggle — "all suppressed ubiquitous edges fade in"
+# ---------------------------------------------------------------------------
+
+## Helper: build a graph with a single direct_call edge of the given weight.
+## Uses distinct positions so the edge direction is non-degenerate.
+func _make_call_edge_fixture(weight: int) -> Dictionary:
+	return {
+		"nodes": [
+			{
+				"id": "ctx",
+				"name": "Ctx",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 10.0,
+			},
+			{
+				"id": "mod_a",
+				"name": "ModA",
+				"type": "module",
+				"parent": "ctx",
+				"position": {"x": -5.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+			{
+				"id": "mod_b",
+				"name": "ModB",
+				"type": "module",
+				"parent": "ctx",
+				"position": {"x": 5.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+		],
+		"edges": [
+			{
+				"source": "mod_a",
+				"target": "mod_b",
+				"type": "direct_call",
+				"weight": weight,
+			},
+		],
+	}
+
+
+## Helper: extract the CylinderMesh top_radius from an "EdgeLine" child.
+## For solid edges (MeshInstance3D), reads .mesh.top_radius directly.
+## Returns -1.0 if no solid EdgeLine is found.
+func _get_solid_edge_radius(main_node: Node3D) -> float:
+	for child: Node in main_node.get_children():
+		if str(child.name) == "EdgeLine" and child is MeshInstance3D:
+			var mi: MeshInstance3D = child as MeshInstance3D
+			if mi.mesh is CylinderMesh:
+				return (mi.mesh as CylinderMesh).top_radius
+	return -1.0
+
+
+## spec §Edge Primitive §Scenario: Weighted edge —
+## "its visual thickness is proportional to the weight (12)"
+## "a single-import Edge is visibly thinner than a 12-import Edge"
+## The edge body uses a CylinderMesh whose radius encodes weight.
+func test_edge_thickness_proportional_to_weight() -> void:
+	_test_failed = false
+	var main_light: Node3D = MainScript.new()
+	main_light.build_from_graph(_make_call_edge_fixture(1))
+
+	var main_heavy: Node3D = MainScript.new()
+	main_heavy.build_from_graph(_make_call_edge_fixture(12))
+
+	var light_radius: float = _get_solid_edge_radius(main_light)
+	var heavy_radius: float = _get_solid_edge_radius(main_heavy)
+
+	_check(light_radius > 0.0, "Weight-1 edge must have a positive cylinder radius")
+	_check(heavy_radius > 0.0, "Weight-12 edge must have a positive cylinder radius")
+	_check(
+		heavy_radius > light_radius,
+		"Weight-12 edge must be wider than weight-1 edge; got %.4f vs %.4f" % [heavy_radius, light_radius]
+	)
+
+
+## spec §Edge Primitive §Scenario: Edge type distinction —
+## "edge type is encoded by line style (solid for calls, dashed for imports,
+##  dotted for inheritance)"
+## direct_call edges must be encoded as 'solid' line style.
+func test_direct_call_edge_has_solid_style() -> void:
+	_test_failed = false
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_call_edge_fixture(1))
+
+	var found_solid: bool = false
+	for child: Node in main_node.get_children():
+		if str(child.name) == "EdgeLine" and child.has_meta("line_style"):
+			if str(child.get_meta("line_style")) == "solid":
+				found_solid = true
+				break
+
+	_check(found_solid, "direct_call edge must have line_style == 'solid'")
+
+
+## spec §Edge Primitive §Scenario: Edge type distinction —
+## cross_context (import-based) edges must be encoded as 'dashed' line style.
+func test_import_edge_has_dashed_style() -> void:
+	_test_failed = false
+	var main_node: Node3D = MainScript.new()
+	# _make_multi_service_fixture has a cross_context edge (import-based).
+	main_node.build_from_graph(_make_multi_service_fixture())
+
+	var found_dashed: bool = false
+	for child: Node in main_node.get_children():
+		if str(child.name) == "EdgeLine" and child.has_meta("line_style"):
+			if str(child.get_meta("line_style")) == "dashed":
+				found_dashed = true
+				break
+
+	_check(found_dashed, "cross_context (import-based) edge must have line_style == 'dashed'")
+
+
+## Helper: build a graph with a single inherits edge.
+func _make_inherits_edge_fixture() -> Dictionary:
+	return {
+		"nodes": [
+			{
+				"id": "mod_a",
+				"name": "ModA",
+				"type": "module",
+				"parent": null,
+				"position": {"x": -10.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+			{
+				"id": "mod_b",
+				"name": "ModB",
+				"type": "module",
+				"parent": null,
+				"position": {"x": 10.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+		],
+		"edges": [
+			{
+				"source": "mod_a",
+				"target": "mod_b",
+				"type": "inherits",
+				"weight": 1,
+			},
+		],
+	}
+
+
+## spec §Edge Primitive §Scenario: Edge type distinction —
+## inherits edges must be encoded as 'dotted' line style.
+func test_inherits_edge_has_dotted_style() -> void:
+	_test_failed = false
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_inherits_edge_fixture())
+
+	var found_dotted: bool = false
+	for child: Node in main_node.get_children():
+		if str(child.name) == "EdgeLine" and child.has_meta("line_style"):
+			if str(child.get_meta("line_style")) == "dotted":
+				found_dotted = true
+				break
+
+	_check(found_dotted, "inherits edge must have line_style == 'dotted'")
+
+
+## Helper: build a graph with a single ubiquitous edge.
+func _make_ubiquitous_edge_fixture() -> Dictionary:
+	return {
+		"nodes": [
+			{
+				"id": "logging",
+				"name": "logging",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": -20.0, "y": 0.0, "z": 0.0},
+				"size": 5.0,
+			},
+			{
+				"id": "mymod",
+				"name": "MyMod",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 20.0, "y": 0.0, "z": 0.0},
+				"size": 5.0,
+			},
+		],
+		"edges": [
+			{
+				"source": "mymod",
+				"target": "logging",
+				"type": "cross_context",
+				"weight": 1,
+				"ubiquitous": true,
+			},
+		],
+	}
+
+
+## spec §Edge Primitive §Scenario: Suppressed ubiquitous edges —
+## "the Edge is NOT drawn" — ubiquitous edges must be hidden by default.
+## spec §Power Rail Notation §Scenario: Standard library power rail —
+## "no edges to logging are drawn"
+func test_ubiquitous_edge_suppressed_by_default() -> void:
+	_test_failed = false
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_ubiquitous_edge_fixture())
+
+	# Ubiquitous edge visuals must be tracked and hidden.
+	var ubiquitous_visuals: Array = main_node.get("_ubiquitous_edge_visuals")
+	_check(
+		ubiquitous_visuals.size() > 0,
+		"Ubiquitous edge visuals must be tracked in _ubiquitous_edge_visuals"
+	)
+	for vis: Node3D in ubiquitous_visuals:
+		_check(
+			not (vis as Node3D).visible,
+			"Ubiquitous edge visual must be hidden (not visible) by default"
+		)
+
+	# Ubiquitous edges must NOT appear in LOD entries (they bypass LOD).
+	var lod_entries: Array = main_node.get("_lod_edge_entries")
+	for entry: Dictionary in lod_entries:
+		var vis_node: Node3D = entry["visual"] as Node3D
+		_check(
+			vis_node.visible,
+			"Non-ubiquitous edge in LOD entries must be visible"
+		)
+
+
+## spec §Power Rail Notation §Scenario: Power rail toggle —
+## "WHEN the human toggles power rails to visible
+##  THEN all suppressed ubiquitous edges fade in
+##  AND the toggle is reversible"
+func test_ubiquitous_edge_toggle_shows_then_hides() -> void:
+	_test_failed = false
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_ubiquitous_edge_fixture())
+
+	var ubiquitous_visuals: Array = main_node.get("_ubiquitous_edge_visuals")
+	_check(ubiquitous_visuals.size() > 0, "Must have ubiquitous edge visuals to toggle")
+
+	# Toggle ON — all ubiquitous edges become visible.
+	main_node.call("toggle_ubiquitous_edges")
+	for vis: Node3D in ubiquitous_visuals:
+		_check(
+			(vis as Node3D).visible,
+			"Ubiquitous edge must become visible after first toggle"
+		)
+
+	# Toggle OFF — all ubiquitous edges become hidden again (reversible).
+	main_node.call("toggle_ubiquitous_edges")
+	for vis: Node3D in ubiquitous_visuals:
+		_check(
+			not (vis as Node3D).visible,
+			"Ubiquitous edge must be hidden again after second toggle (reversible)"
+		)
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Container Primitive — membrane permeability
+# visual-primitives.spec.md §Scenario: Container membrane permeability —
+# "the membrane appears thick/opaque (strong encapsulation)"
+# "permeability is a continuous visual property, not a binary toggle"
+# ---------------------------------------------------------------------------
+
+## Helper: build a graph with one bounded_context node that has explicit symbols.
+func _make_context_with_symbols(symbols: Array) -> Dictionary:
+	return {
+		"nodes": [
+			{
+				"id": "ctx",
+				"name": "Ctx",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 10.0,
+				"symbols": symbols,
+			},
+		],
+		"edges": [],
+	}
+
+
+## Helper: get the material alpha of the first MeshInstance3D child of anchor "ctx".
+func _get_ctx_alpha(main_node: Node3D) -> float:
+	var anchors: Dictionary = main_node.get("_anchors")
+	var ctx: Node3D = anchors.get("ctx")
+	if ctx == null:
+		return -1.0
+	for child: Node in ctx.get_children():
+		if child is MeshInstance3D:
+			var mat: StandardMaterial3D = (child as MeshInstance3D).material_override as StandardMaterial3D
+			if mat != null:
+				return mat.albedo_color.a
+	return -1.0
+
+
+## spec §Container Primitive §Scenario: Container membrane permeability —
+## "the membrane appears thick/opaque (strong encapsulation — few openings)"
+## "a module with 25 public symbols has a thin/porous membrane"
+## "permeability is a continuous visual property, not a binary toggle"
+##
+## Container with mostly private symbols (strong encapsulation) must have
+## higher alpha (more opaque) than container with mostly public symbols.
+func test_membrane_permeability_reflects_public_private_ratio() -> void:
+	_test_failed = false
+	# Few public symbols → strong encapsulation → opaque (high alpha).
+	var few_public_symbols: Array = [
+		{"name": "priv1", "visibility": "private"},
+		{"name": "priv2", "visibility": "private"},
+		{"name": "priv3", "visibility": "private"},
+		{"name": "pub1",  "visibility": "public"},  # 1 of 4 = 25% public
+	]
+	# Many public symbols → weak encapsulation → porous (low alpha).
+	var many_public_symbols: Array = [
+		{"name": "pub1", "visibility": "public"},
+		{"name": "pub2", "visibility": "public"},
+		{"name": "pub3", "visibility": "public"},
+		{"name": "priv", "visibility": "private"},  # 3 of 4 = 75% public
+	]
+
+	var main_opaque: Node3D = MainScript.new()
+	main_opaque.build_from_graph(_make_context_with_symbols(few_public_symbols))
+
+	var main_porous: Node3D = MainScript.new()
+	main_porous.build_from_graph(_make_context_with_symbols(many_public_symbols))
+
+	var alpha_opaque: float = _get_ctx_alpha(main_opaque)
+	var alpha_porous: float = _get_ctx_alpha(main_porous)
+
+	_check(alpha_opaque > 0.0, "Opaque container must have positive alpha; got %.3f" % alpha_opaque)
+	_check(alpha_porous > 0.0, "Porous container must have positive alpha; got %.3f" % alpha_porous)
+	_check(
+		alpha_opaque > alpha_porous,
+		"Container with fewer public symbols must have higher alpha (more opaque); "
+		+ "got opaque=%.3f, porous=%.3f" % [alpha_opaque, alpha_porous]
+	)
