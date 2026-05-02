@@ -3,12 +3,12 @@ id: task-034
 title: Implement type topology extraction (inheritance, composition, has-a edges)
 spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
 status: in_progress
-phase: implement
+phase: verify
 deps:
 - task-006
 round: 0
 branch: hyperloop/task-034
-pr: null
+pr: https://github.com/jsell-rh/test-code-vis/pull/236
 pr_title: 'feat(extractor): implement type topology extraction (inheritance, composition,
   has-a)'
 pr_description: "## What and Why\n\nAdds a type topology extraction pass to the Python\

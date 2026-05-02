@@ -2,8 +2,8 @@
 id: task-025
 title: Implement type topology extraction (inheritance and has-a edges)
 spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
-status: in_progress
-phase: verify
+status: failed
+phase: null
 deps:
 - task-003
 - task-007
