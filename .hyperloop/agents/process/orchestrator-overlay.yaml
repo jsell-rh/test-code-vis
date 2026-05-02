@@ -172,6 +172,15 @@ guidelines: |
   59/60 checks passing, 191 Godot + 204 pytest tests green, all spec requirements
   covered — every failure has been caused solely by the push/fetch rule violation.
 
+  Observed pattern (task-034): A correct implementation (all 5 Type Topology
+  Extraction spec THEN-clauses covered, 254 pytest + 280 Godot tests passing,
+  71/71 check scripts in sync) received FAIL solely because a prior
+  process-improvement session committed to local main without pushing. Local main
+  (11e40ac7) was AHEAD of origin/main (354babde). Both check-main-local-vs-remote.sh
+  and check-main-not-diverged.sh EXIT 1 in every verifier worktree; implementers
+  cannot resolve this. The verifier correctly classified it FAST-FIX / ORCHESTRATOR
+  CONFIGURATION and specified the single required action: git push origin main.
+
   ## FETCH BEFORE COMMITTING — PREVENTS DIVERGED STATE
 
   PRs merged to origin/main via GitHub create new commits on origin that local main
@@ -281,6 +290,7 @@ guidelines: |
   | task-028 | understanding-modes.spec.md (scope-prohibited + body prohibition) | 9 |
   | task-031 | understanding-modes.spec.md (scope-prohibited) | 6 |
   | task-021 | data-flow.spec.md (scope-prohibited) | 2 |
+  | task-078 | Symbol Table Extraction — superseded by task-075 (extract_symbols on main at 08dd753f); 5x STOP PROTOCOL; branch resets defeated check-stop-protocol-repeat.sh until fix | 5 |
 
   These numbers appear in `check-retry-not-scope-prohibited.sh` as permanent blocks
   AND in `check-banned-task-ids-closed.sh` which verifies both the main branch AND
@@ -662,11 +672,24 @@ guidelines: |
   re-assignment after any STOP PROTOCOL round. If that gate is somehow bypassed
   and Round 2+ arrives, deletion is the only correct response.
 
-  Observed failure: task-078 triggered STOP PROTOCOL in Rounds 1, 2, 3, and 4.
-  The orchestrator-overlay documented Rounds 2 and 3 and required retirement.
-  The task was NOT retired. Round 4 produced identical output. The overlay rule
-  existed and was not followed. Task file deletion is the only action that stops
-  the loop — a rule that says "retire the task" without deleting the file leaves
-  the task in the candidate pool. check-stop-protocol-repeat.sh closes this gap
-  mechanically: check-cycle-gate.sh now exits 1 for any task with prior STOP
-  PROTOCOL history, requiring the orchestrator to act before the gate will pass.
+  Observed failure: task-078 triggered STOP PROTOCOL in Rounds 1–5.
+  The orchestrator-overlay documented Rounds 2–4 and required retirement each time.
+  The task was NOT retired. Round 5 revealed a second mechanical gap:
+  check-stop-protocol-repeat.sh scans the task's remote branch for commits above
+  origin/main that contain worker-result.yaml with "STOP PROTOCOL" text. When the
+  branch is reset to zero commits after each round, those commits are gone — the
+  script SKIPs with "no commits above origin/main" and the gate passes. This allowed
+  Round 5 to be dispatched despite four prior STOP PROTOCOL rounds.
+
+  Two mechanical fixes were applied for Round 5+:
+    1. task-078 added to BANNED_IDS in check-banned-task-ids-closed.sh. This check
+       is branch-state-independent (reads task file status on both branches) and
+       cannot be defeated by branch resets. check-cycle-gate.sh Step 1b runs it.
+    2. check-stop-protocol-repeat.sh now has a fallback for the zero-commits case:
+       when the branch has no commits above main, it scans the orchestrator-overlay
+       on origin/main for the task ID co-occurring with "STOP PROTOCOL". If found,
+       exits 1 instead of SKIPping.
+
+  task-078 is now in the PERMANENTLY BANNED TASK NUMBERS table. DO NOT re-assign it
+  under any task ID, spec_ref, or framing. extract_symbols was delivered by task-075
+  at commit 08dd753f. The feature is complete. No work remains.

@@ -66,6 +66,27 @@ COMMITS_ABOVE=$(git log "origin/main..${REMOTE_BRANCH}" --format="%H" \
     2>/dev/null | wc -l | tr -d ' ')
 
 if [ "$COMMITS_ABOVE" -eq 0 ]; then
+    # Fallback: when a task branch is reset to zero commits after each STOP PROTOCOL
+    # round, the branch-history scan above cannot detect prior rounds. Check if the
+    # orchestrator-overlay on origin/main documents this task's prior STOP PROTOCOL
+    # history — process-improvement commits record each round's escalation there.
+    #
+    # Observed gap (task-078, Round 5): branch was reset after every round, so the
+    # above scan found 0 commits and exited SKIP. The overlay on main contained
+    # "task-078 triggered STOP PROTOCOL in Rounds 1, 2, 3, and 4" but was never
+    # consulted. Round 5 was re-assigned and produced the identical outcome.
+    OVERLAY_PATH=".hyperloop/agents/process/orchestrator-overlay.yaml"
+    OVERLAY_CONTENT=$(git show "origin/main:${OVERLAY_PATH}" 2>/dev/null || true)
+    if [ -n "$OVERLAY_CONTENT" ] && \
+       echo "$OVERLAY_CONTENT" | grep -qP "${TASK_ID}[^\\n]*STOP PROTOCOL|STOP PROTOCOL[^\\n]*${TASK_ID}"; then
+        echo "FAIL: ${TASK_ID} branch has zero commits above origin/main (reset after prior round),"
+        echo "  but the orchestrator-overlay on origin/main documents prior STOP PROTOCOL history"
+        echo "  for this task. Branch resets erase branch commit history but not overlay records."
+        echo ""
+        echo "  REQUIRED ORCHESTRATOR ACTION — retire or redesign ${TASK_ID}."
+        echo "  DO NOT re-assign this task unchanged."
+        exit 1
+    fi
     echo "SKIP: ${REMOTE_BRANCH} has no commits above origin/main — nothing to scan."
     exit 0
 fi

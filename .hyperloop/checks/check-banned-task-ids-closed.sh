@@ -46,12 +46,14 @@ declare -a BANNED_IDS=(
     "task-024"
     "task-028"
     "task-031"
+    "task-078"
 )
 declare -a BANNED_REASONS=(
     "data-flow.spec.md (scope-prohibited; 2 mis-assignments)"
     "moldable-views.spec.md (scope-prohibited; 8 mis-assignments)"
     "understanding-modes.spec.md (scope-prohibited; 9 mis-assignments as task-028)"
     "understanding-modes.spec.md (scope-prohibited; 6 mis-assignments as task-031)"
+    "Symbol Table Extraction (superseded by task-075; extract_symbols on main at 08dd753f; 5x STOP PROTOCOL — branch resets defeated check-stop-protocol-repeat.sh)"
 )
 
 BANNED_FOUND=0
