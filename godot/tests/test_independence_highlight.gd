@@ -404,3 +404,50 @@ func test_clear_restores_context_highlight() -> void:
 	)
 
 	main.free()
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Spatial Separation of Independent Groups
+# spec: orthogonal-independence.spec.md § Scenario: Smooth regrouping on data change
+# ---------------------------------------------------------------------------
+
+## THEN nodes animate smoothly to their new positions (smooth regrouping).
+## spec: "When a new extraction produces different independence groups, nodes animate
+##  smoothly to their new positions."
+## In headless mode _animate_node_to_position() applies the direct-assignment
+## path (anchor.position = new_pos), which is fully testable.
+func test_smooth_regrouping_updates_anchor_positions() -> void:
+	_test_failed = false
+	var main := Main.new()
+
+	# v1: initial positions from the standard fixture.
+	var graph_v1: Dictionary = _make_independence_fixture()
+	main.build_from_graph(graph_v1)
+
+	# Record the anchor objects — identity must be preserved across reload.
+	var anchor_before: Node3D = main.get_anchors().get("ctx_a.mod_isolated")
+	_check(anchor_before != null, "Anchor must exist after first build_from_graph")
+	if anchor_before == null:
+		main.free()
+		return
+	var pos_before: Vector3 = anchor_before.position
+
+	# v2: same nodes, positions shifted (+3 x, +1 z) to simulate regrouping.
+	var graph_v2: Dictionary = _make_independence_fixture()
+	for nd: Dictionary in graph_v2.get("nodes", []):
+		var p: Dictionary = nd.get("position", {})
+		p["x"] = float(p.get("x", 0.0)) + 3.0
+		p["z"] = float(p.get("z", 0.0)) + 1.0
+
+	main.build_from_graph(graph_v2)
+
+	# Anchor identity preserved; position should have changed.
+	var anchor_after: Node3D = main.get_anchors().get("ctx_a.mod_isolated")
+	_check(anchor_after == anchor_before, "Anchor identity must be preserved on reload")
+	_check(
+		not anchor_after.position.is_equal_approx(pos_before),
+		"Anchor position must update on reload — smooth regrouping must move nodes; "
+		+ "before: %s, after: %s" % [str(pos_before), str(anchor_after.position)]
+	)
+
+	main.free()
