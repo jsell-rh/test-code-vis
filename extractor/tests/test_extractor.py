@@ -23,6 +23,7 @@ from extractor.extractor import (
     _order_by_coupling,
     _position_spec_nodes,
     annotate_cascade_depth,
+    apply_independence_spatial_layout,
     build_dependency_edges,
     build_scene_graph,
     classify_edge_type,
@@ -1077,6 +1078,208 @@ class TestIndependenceGroups:
             assert "independence_group" in node, (
                 f"Module node {node['id']} missing independence_group"
             )
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Spatial Separation of Independent Groups
+# ---------------------------------------------------------------------------
+
+
+class TestApplyIndependenceSpatialLayout:
+    """Modules in different independence groups must occupy distinct spatial regions."""
+
+    def test_two_groups_have_distinct_positions(self, src_independence: Path) -> None:
+        """GIVEN two independent groups THEN they occupy distinct spatial regions.
+
+        Spec: 'the groups occupy distinct spatial regions within the context's volume
+        AND a visible gap separates the groups'.
+
+        With independent groups {application, domain} and {isolated}, the modules
+        must NOT all cluster on the same angle — their positions must differ.
+        """
+        nodes: list[Node] = discover_bounded_contexts(src_independence)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_independence, bc["id"]))
+        edges = build_dependency_edges(src_independence, nodes)
+        compute_layout(nodes, edges)
+        compute_independence_groups(nodes, edges)
+        apply_independence_spatial_layout(nodes)
+
+        module_nodes = [n for n in nodes if n["type"] == "module"]
+        # Collect (x, z) positions — these are local offsets within the BC.
+        positions = [(n["position"]["x"], n["position"]["z"]) for n in module_nodes]
+        # At least two modules must have distinct angular positions.
+        assert len(set(positions)) >= 2, (
+            "Modules in different independence groups must have distinct spatial positions; "
+            f"got {positions}"
+        )
+
+    def test_independent_groups_are_angularly_separated(
+        self, src_independence: Path
+    ) -> None:
+        """GIVEN two independence groups THEN a visible gap separates them.
+
+        The angular gap between the two groups must be non-trivial (> 5°).
+        """
+        nodes: list[Node] = discover_bounded_contexts(src_independence)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_independence, bc["id"]))
+        edges = build_dependency_edges(src_independence, nodes)
+        compute_layout(nodes, edges)
+        compute_independence_groups(nodes, edges)
+        apply_independence_spatial_layout(nodes)
+
+        groups: dict[str, list[tuple[float, float]]] = {}
+        for n in nodes:
+            if n["type"] != "module":
+                continue
+            g = n["independence_group"]
+            if g not in groups:
+                groups[g] = []
+            groups[g].append((n["position"]["x"], n["position"]["z"]))
+
+        if len(groups) < 2:
+            pytest.skip("Only one independence group — no gap to measure")
+
+        import math
+
+        # Compute the angular centre of each group.
+        def group_centre_angle(pts: list[tuple[float, float]]) -> float:
+            avg_x = sum(p[0] for p in pts) / len(pts)
+            avg_z = sum(p[1] for p in pts) / len(pts)
+            return math.atan2(avg_z, avg_x)
+
+        group_ids = list(groups.keys())
+        a0 = group_centre_angle(groups[group_ids[0]])
+        a1 = group_centre_angle(groups[group_ids[1]])
+        diff = abs(a1 - a0)
+        # Normalize to [0, π]
+        diff = min(diff, 2 * math.pi - diff)
+        assert diff > math.radians(5.0), (
+            f"Independence groups must have a visible angular gap (>5°); got {math.degrees(diff):.1f}°"
+        )
+
+    def test_single_group_positions_unchanged(self, tmp_path: Path) -> None:
+        """GIVEN a single independence group THEN positions are not altered.
+
+        Spec: 'the entire context is a single group AND no independence separation is applied'.
+        """
+        # Build a BC where all modules are connected (one group).
+        bc_dir = tmp_path / "monolith"
+        mod_a = bc_dir / "a"
+        mod_b = bc_dir / "b"
+        for d in [bc_dir, mod_a, mod_b]:
+            d.mkdir(parents=True)
+            (d / "__init__.py").write_text("")
+        # a imports b — both in one connected component.
+        (mod_a / "logic.py").write_text("from monolith.b import X\n")
+        (mod_b / "models.py").write_text("class X: pass\n")
+
+        nodes: list[Node] = discover_bounded_contexts(tmp_path)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(tmp_path, bc["id"]))
+        edges = build_dependency_edges(tmp_path, nodes)
+        compute_layout(nodes, edges)
+
+        # Capture positions before group layout.
+        before = {
+            n["id"]: (n["position"]["x"], n["position"]["z"])
+            for n in nodes
+            if n["type"] == "module"
+        }
+
+        compute_independence_groups(nodes, edges)
+        apply_independence_spatial_layout(nodes)
+
+        after = {
+            n["id"]: (n["position"]["x"], n["position"]["z"])
+            for n in nodes
+            if n["type"] == "module"
+        }
+
+        # Positions must not have changed since there's only one group.
+        for mod_id in before:
+            assert before[mod_id] == after[mod_id], (
+                f"Module {mod_id} position changed despite being in a single independence group: "
+                f"{before[mod_id]} → {after[mod_id]}"
+            )
+
+    def test_modules_within_group_remain_close(self, src_independence: Path) -> None:
+        """GIVEN modules in the same group THEN they remain close to each other.
+
+        Spec: 'modules within each group remain close to each other'.
+        Modules in the same group must be angularly closer to each other than to
+        modules in a different group (i.e., intra-group distance < inter-group distance).
+        """
+        nodes: list[Node] = discover_bounded_contexts(src_independence)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_independence, bc["id"]))
+        edges = build_dependency_edges(src_independence, nodes)
+        compute_layout(nodes, edges)
+        compute_independence_groups(nodes, edges)
+        apply_independence_spatial_layout(nodes)
+
+        import math
+
+        module_nodes = [n for n in nodes if n["type"] == "module"]
+        groups: dict[str, list[Node]] = {}
+        for n in module_nodes:
+            g = n["independence_group"]
+            if g not in groups:
+                groups[g] = []
+            groups[g].append(n)
+
+        if len(groups) < 2:
+            pytest.skip("Need at least 2 groups to measure intra vs inter distance")
+
+        def angle(n: Node) -> float:
+            return math.atan2(n["position"]["z"], n["position"]["x"])
+
+        def angular_distance(a: float, b: float) -> float:
+            diff = abs(a - b)
+            return min(diff, 2 * math.pi - diff)
+
+        # For each multi-module group, verify intra-group angular span < inter-group distance.
+        group_ids = list(groups.keys())
+        g0_nodes = groups[group_ids[0]]
+        g1_nodes = groups[group_ids[1]]
+
+        if len(g0_nodes) >= 2:
+            # Intra-group: angular distance between first two modules in group 0.
+            intra = angular_distance(angle(g0_nodes[0]), angle(g0_nodes[1]))
+            # Inter-group: angular distance between a module in g0 and one in g1.
+            inter = angular_distance(angle(g0_nodes[0]), angle(g1_nodes[0]))
+            assert intra <= inter, (
+                f"Intra-group angular distance ({math.degrees(intra):.1f}°) must be ≤ "
+                f"inter-group distance ({math.degrees(inter):.1f}°); "
+                "modules within a group must remain close to each other."
+            )
+
+    def test_build_scene_graph_spatially_separates_independent_groups(
+        self, src_independence: Path
+    ) -> None:
+        """build_scene_graph produces spatial separation for multiple groups end-to-end."""
+        graph = build_scene_graph(src_independence)
+        module_nodes = [n for n in graph["nodes"] if n["type"] == "module"]
+
+        # Collect positions per group.
+        groups: dict[str, list[tuple[float, float]]] = {}
+        for n in module_nodes:
+            g = n.get("independence_group", "")
+            if g:
+                if g not in groups:
+                    groups[g] = []
+                groups[g].append((n["position"]["x"], n["position"]["z"]))
+
+        assert len(groups) >= 2, (
+            "src_independence fixture must produce at least 2 independence groups"
+        )
+
+        # The positions of modules in different groups must not all be identical.
+        all_positions = [pos for pts in groups.values() for pos in pts]
+        assert len(set(all_positions)) > 1, (
+            "Independence groups must produce spatially distinct module positions"
+        )
 
 
 # ---------------------------------------------------------------------------

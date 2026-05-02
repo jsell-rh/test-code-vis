@@ -24,6 +24,7 @@ const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
 const LodManager = preload("res://scripts/lod_manager.gd")
 const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
 const VisualPrimitives = preload("res://scripts/visual_primitives.gd")
+const IndependenceOverlay = preload("res://scripts/independence_overlay.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -66,6 +67,9 @@ var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
 
 ## Visual primitives renderer — attaches badge, landmark, and power rail decorations.
 var _visual_primitives: VisualPrimitives = VisualPrimitives.new()
+
+## Independence overlay controller — highlights orthogonal complements on module selection.
+var _independence_overlay: IndependenceOverlay = IndependenceOverlay.new()
 
 ## Tracks Node3D visuals for suppressed ubiquitous edges.
 ## These are created but hidden by default; toggled with the T key.
@@ -879,6 +883,7 @@ func _frame_camera() -> void:
 ##   J → apply quality overlay  (quality-metrics — shows coupling and centrality).
 ##   K → apply failure impact overlay (cascade-injection — shows impact from first node).
 ##   T → toggle ubiquitous (power rail) edges on/off.
+##   I → apply independence overlay (orthogonal-independence — shows safe-change peers).
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed:
 		return
@@ -892,6 +897,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_T:
 			# spec §Power Rail Toggle — "T key toggles ubiquitous edges on/off"
 			toggle_ubiquitous_edges()
+		KEY_I:
+			# spec §Independence — "I key shows orthogonal complement of first module"
+			_apply_independence_overlay()
 
 
 # ---------------------------------------------------------------------------
@@ -926,5 +934,33 @@ func _apply_failure_impact_overlay() -> void:
 	var target_id: String = nodes[0].get("id", "")
 	if not target_id.is_empty():
 		_understanding_overlay.apply_failure_overlay(target_id, _graph, _anchors, self)
+
+
+## Apply independence overlay (I key) — orthogonal independence view.
+##
+## Selects the first module node in the graph and shows its orthogonal complement:
+##   - Modules in OTHER independence groups within the same BC → teal (safe to change)
+##   - Modules in the SAME independence group → amber (co-dependent)
+##   - BCs with no transitive dependency on the selected module's context → green
+##
+## Spec: "The human MUST be able to select a module and see its orthogonal
+## complement — everything that can change without affecting it."
+func _apply_independence_overlay() -> void:
+	var nodes: Array = _graph.get("nodes", [])
+	# Find the first module node as the target.
+	var target_id: String = ""
+	for nd in nodes:
+		if nd.get("type", "") == "module":
+			target_id = nd.get("id", "")
+			break
+	if target_id.is_empty():
+		return
+	_independence_overlay.apply_independence_highlight(target_id, _graph, _anchors, self)
+
+
+## Apply independence highlight for a specific module ID.
+## Public API used by tests and external callers.
+func apply_independence_for(module_id: String) -> Dictionary:
+	return _independence_overlay.apply_independence_highlight(module_id, _graph, _anchors, self)
 
 

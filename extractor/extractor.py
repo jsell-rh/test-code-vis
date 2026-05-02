@@ -545,6 +545,98 @@ def compute_independence_groups(nodes: list[Node], edges: list[Edge]) -> None:
             node["independence_group"] = f"{context_id}:{root_to_index[root]}"
 
 
+def apply_independence_spatial_layout(nodes: list[Node]) -> None:
+    """Adjust module positions within each BC to spatially separate independence groups.
+
+    After ``compute_layout()`` places modules in a uniform circle and
+    ``compute_independence_groups()`` assigns group identifiers, this function
+    rearranges modules within each bounded context so that modules in the same
+    independence group cluster together, with a visible angular gap between groups.
+
+    Group positions are LOCAL offsets relative to the parent BC origin (same
+    contract as ``compute_layout()``).  Modules whose parent BC has only one
+    independence group are not moved — no unnecessary layout changes are made.
+
+    Args:
+        nodes: All nodes in the scene graph.  Module nodes are mutated in-place.
+    """
+    # Collect module nodes per BC.
+    by_bc: dict[str, list[Node]] = {}
+    for node in nodes:
+        if (
+            node["type"] == "module"
+            and node.get("parent")
+            and node.get("independence_group")
+        ):
+            by_bc.setdefault(node["parent"], []).append(node)
+
+    for _bc_id, module_nodes in by_bc.items():
+        # Collect unique groups in discovery order.
+        seen_groups: list[str] = []
+        group_modules: dict[str, list[Node]] = {}
+        for node in module_nodes:
+            g = node["independence_group"]
+            if g not in group_modules:
+                group_modules[g] = []
+                seen_groups.append(g)
+            group_modules[g].append(node)
+
+        n_groups = len(seen_groups)
+        if n_groups <= 1:
+            # Single group: spatial separation is trivially satisfied; leave as-is.
+            continue
+
+        # Derive the module orbit radius from the first module's existing position.
+        # (All modules were placed at the same radius by compute_layout.)
+        first = module_nodes[0]
+        cx = first["position"]["x"]
+        cz = first["position"]["z"]
+        mod_radius = math.sqrt(cx**2 + cz**2)
+        if mod_radius < 0.1:
+            # Fallback for degenerate single-module edge case.
+            mod_radius = 1.5
+
+        # Angular gap between groups: 15° per inter-group gap, capped at 40% of circle.
+        # gap_total = n_groups * gap_per_group radians
+        gap_per_group = math.radians(15.0)
+        gap_total = min(gap_per_group * n_groups, 0.4 * 2.0 * math.pi)
+        gap_per_group = gap_total / n_groups
+
+        # Usable arc (2π minus all gaps) distributed proportionally to group size.
+        usable_arc = 2.0 * math.pi - gap_total
+        total_modules = len(module_nodes)
+
+        current_angle = 0.0
+        for g in seen_groups:
+            group_mods = group_modules[g]
+            n_mods = len(group_mods)
+            # This group's allocated arc is proportional to its module count.
+            group_arc_allocated = usable_arc * (n_mods / total_modules)
+            # Each group is centred in its allocated sector.
+            group_centre = (
+                current_angle + gap_per_group * 0.5 + group_arc_allocated * 0.5
+            )
+            # Intra-group spread: modules cluster tightly around the group centre.
+            # Cap spread at 30° or half the allocated arc, whichever is smaller.
+            # → keeps "modules within each group remain close to each other" (spec).
+            intra_spread = min(group_arc_allocated * 0.5, math.radians(30.0))
+            for i, mod in enumerate(group_mods):
+                if n_mods == 1:
+                    # Single module: place exactly at the group centre.
+                    angle = group_centre
+                else:
+                    # Spread symmetrically around centre, within intra_spread.
+                    offset = (i / (n_mods - 1) - 0.5) * intra_spread
+                    angle = group_centre + offset
+                # LOCAL offset only (relative to parent BC origin).
+                # main.gd adds parent world pos at render time; storing absolute
+                # coords here would cause double-offset rendering.
+                mod["position"]["x"] = mod_radius * math.cos(angle)
+                mod["position"]["z"] = mod_radius * math.sin(angle)
+                mod["position"]["y"] = 0.0  # y=0 — no vertical offset in layouts
+            current_angle += gap_per_group + group_arc_allocated
+
+
 # ---------------------------------------------------------------------------
 # Cluster computation
 # ---------------------------------------------------------------------------
@@ -1959,6 +2051,11 @@ def build_scene_graph(src_path: Path) -> SceneGraph:
 
     # 6. Assign independence groups to module nodes (mutates nodes in-place).
     compute_independence_groups(nodes, edges)
+
+    # 6b. Rearrange module positions so that independent groups are spatially
+    #     separated within each bounded context (mutates positions in-place).
+    #     Groups receive distinct angular sectors; a visible gap separates them.
+    apply_independence_spatial_layout(nodes)
 
     # 7. Compute cluster suggestions for tightly-coupled module groups.
     clusters = compute_clusters(nodes, edges)
