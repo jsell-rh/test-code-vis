@@ -3,7 +3,7 @@ id: task-027
 title: Performance validation at kartograph scale
 spec_ref: specs/prototype/nfr.spec.md@0080904a70ceb6a333132117f810e3290dac8083
 status: in_progress
-phase: implement
+phase: verify
 deps:
 - task-006
 - task-013
