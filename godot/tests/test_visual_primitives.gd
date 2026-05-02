@@ -807,6 +807,32 @@ func test_badge_vocabulary_deprecated() -> void:
 	_check(found, "'deprecated' badge must create a Badge_deprecated child")
 
 
+func test_badge_vocabulary_error_handling() -> void:
+	## The 'error_handling' badge type must render without error and create a Badge_error_handling child.
+	## spec §Scenario: Badge vocabulary — "at minimum: ... error_handling ..."
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	_vp.attach_primitives(_make_badge_node_data(["error_handling"]), anchor, 1.5)
+	var found: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "Badge_error_handling":
+			found = true
+	_check(found, "'error_handling' badge must create a Badge_error_handling child")
+
+
+func test_badge_vocabulary_entry_point() -> void:
+	## The 'entry_point' badge type must render without error and create a Badge_entry_point child.
+	## spec §Scenario: Badge vocabulary — "at minimum: ... entry_point ..."
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	_vp.attach_primitives(_make_badge_node_data(["entry_point"]), anchor, 1.5)
+	var found: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "Badge_entry_point":
+			found = true
+	_check(found, "'entry_point' badge must create a Badge_entry_point child")
+
+
 # ---------------------------------------------------------------------------
 # Requirement: Landmark Primitive
 # Spec: visual-primitives.spec.md § Requirement: Landmark Primitive
@@ -1106,4 +1132,334 @@ func test_all_three_primitives_compose() -> void:
 	_check(
 		anchor.scale.x > 1.0,
 		"All-three node landmark scale must be > 1.0; got %.3f" % anchor.scale.x
+	)
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Route Primitive
+# Spec: visual-primitives.spec.md § Requirement: Route Primitive
+#
+# Scenario: Request path
+#   THEN a Route is rendered as a highlighted, labeled path
+#   AND the Route has a name
+#   AND each segment of the Route is a sequence of Edges
+#   AND non-Route elements are de-emphasized
+#
+# Scenario: Route classification
+#   THEN each Route has a distinct visual treatment (color)
+#
+# Scenario: Route direction
+#   THEN the entry point and terminus of the Route are visually distinct
+# ---------------------------------------------------------------------------
+
+
+func _make_route_fixture() -> Dictionary:
+	## Fixture: two nodes connected by one edge, wrapped in one route.
+	## Entry: "handler" — Terminus: "service"
+	return {
+		"nodes": [
+			{
+				"id": "handler",
+				"name": "HTTPHandler",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 2.0,
+			},
+			{
+				"id": "service",
+				"name": "OrderService",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 8.0, "y": 0.0, "z": 0.0},
+				"size": 2.0,
+			},
+			{
+				"id": "db",
+				"name": "Database",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 16.0, "y": 0.0, "z": 0.0},
+				"size": 2.0,
+			},
+		],
+		"edges": [
+			# Route edge (part of the happy-path route)
+			{"source": "handler", "target": "service", "type": "cross_context"},
+			# Non-route edge
+			{"source": "service", "target": "db", "type": "cross_context"},
+		],
+		"routes": [
+			{
+				"name": "Order Submission",
+				"classification": "happy_path",
+				"segments": [
+					{"source": "handler", "target": "service"},
+				],
+			},
+		],
+		"metadata": {},
+	}
+
+
+func _make_multi_route_fixture() -> Dictionary:
+	## Fixture: happy_path and error_path routes.
+	return {
+		"nodes": [
+			{
+				"id": "entry",
+				"name": "Entry",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 2.0,
+			},
+			{
+				"id": "happy_svc",
+				"name": "HappyService",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 8.0, "y": 0.0, "z": 0.0},
+				"size": 2.0,
+			},
+			{
+				"id": "error_svc",
+				"name": "ErrorService",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 8.0, "y": 0.0, "z": 8.0},
+				"size": 2.0,
+			},
+		],
+		"edges": [
+			{"source": "entry", "target": "happy_svc", "type": "cross_context"},
+			{"source": "entry", "target": "error_svc", "type": "cross_context"},
+		],
+		"routes": [
+			{
+				"name": "Happy Path",
+				"classification": "happy_path",
+				"segments": [{"source": "entry", "target": "happy_svc"}],
+			},
+			{
+				"name": "Error Path",
+				"classification": "error_path",
+				"segments": [{"source": "entry", "target": "error_svc"}],
+			},
+		],
+		"metadata": {},
+	}
+
+
+func test_route_creates_highlight_overlay_for_route_segments() -> void:
+	## GIVEN a scene graph with a route containing one segment (handler → service)
+	## WHEN build_from_graph is called
+	## THEN a RouteHighlight MeshInstance3D exists as a scene child for that segment
+	## Spec §Scenario: Request path — "a Route is rendered as a highlighted, labeled path"
+	_test_failed = false
+	var root := Main.new()
+	root.build_from_graph(_make_route_fixture())
+
+	var found_highlight: bool = false
+	for child: Node in root.get_children():
+		if str(child.name).begins_with("RouteHighlight_"):
+			found_highlight = true
+			break
+
+	_check(
+		found_highlight,
+		"Route segment (handler→service) must create a RouteHighlight_ child on the scene root"
+	)
+
+
+func test_route_has_name_label() -> void:
+	## GIVEN a route with name "Order Submission"
+	## WHEN build_from_graph is called
+	## THEN a Label3D child named "RouteLabel_Order_Submission" exists
+	## Spec §Scenario: Request path — "the Route has a name"
+	_test_failed = false
+	var root := Main.new()
+	root.build_from_graph(_make_route_fixture())
+
+	var found_label: bool = false
+	for child: Node in root.get_children():
+		if str(child.name).begins_with("RouteLabel_"):
+			found_label = true
+			_check(
+				child is Label3D,
+				"RouteLabel_ child must be a Label3D; got %s" % child.get_class()
+			)
+			break
+
+	_check(found_label, "Route must create a RouteLabel_ Label3D child for its name")
+
+
+func test_route_entry_endpoint_marker_exists() -> void:
+	## GIVEN a route from handler → service
+	## WHEN build_from_graph is called
+	## THEN a RouteEntry_ MeshInstance3D exists at the entry node position
+	## Spec §Scenario: Route direction — "entry point … visually distinct (landmark-style)"
+	_test_failed = false
+	var root := Main.new()
+	root.build_from_graph(_make_route_fixture())
+
+	var found_entry: bool = false
+	for child: Node in root.get_children():
+		if str(child.name).begins_with("RouteEntry_"):
+			found_entry = true
+			_check(
+				child is MeshInstance3D,
+				"RouteEntry_ must be a MeshInstance3D (sphere marker); got %s" % child.get_class()
+			)
+			break
+
+	_check(found_entry, "Route entry node must have a RouteEntry_ sphere marker")
+
+
+func test_route_terminus_endpoint_marker_exists() -> void:
+	## GIVEN a route from handler → service
+	## WHEN build_from_graph is called
+	## THEN a RouteTerminus_ MeshInstance3D exists at the terminus node position
+	## Spec §Scenario: Route direction — "terminus of the Route visually distinct (landmark-style)"
+	_test_failed = false
+	var root := Main.new()
+	root.build_from_graph(_make_route_fixture())
+
+	var found_terminus: bool = false
+	for child: Node in root.get_children():
+		if str(child.name).begins_with("RouteTerminus_"):
+			found_terminus = true
+			_check(
+				child is MeshInstance3D,
+				"RouteTerminus_ must be a MeshInstance3D (sphere marker); got %s" % child.get_class()
+			)
+			break
+
+	_check(found_terminus, "Route terminus node must have a RouteTerminus_ sphere marker")
+
+
+func test_routes_active_flag_set_when_routes_present() -> void:
+	## GIVEN a scene graph with routes
+	## WHEN build_from_graph is called
+	## THEN get_routes_active() returns true
+	_test_failed = false
+	var root := Main.new()
+	root.build_from_graph(_make_route_fixture())
+
+	_check(
+		root.get_routes_active(),
+		"_routes_active must be true when routes are present in the scene graph"
+	)
+
+
+func test_no_routes_flag_false_when_no_routes() -> void:
+	## GIVEN a scene graph with no routes
+	## WHEN build_from_graph is called
+	## THEN get_routes_active() returns false
+	_test_failed = false
+	var root := Main.new()
+	var fixture: Dictionary = _make_hub_fixture()  # no routes key
+	root.build_from_graph(fixture)
+
+	_check(
+		not root.get_routes_active(),
+		"_routes_active must be false when no routes are in the scene graph"
+	)
+
+
+func test_route_classification_happy_path_uses_green_color() -> void:
+	## GIVEN a route with classification="happy_path"
+	## WHEN build_from_graph is called
+	## THEN the RouteHighlight_ MeshInstance3D has a green-dominant albedo color
+	## Spec §Scenario: Route classification — "each Route has a distinct visual treatment (color)"
+	_test_failed = false
+	var root := Main.new()
+	root.build_from_graph(_make_route_fixture())  # happy_path route
+
+	var found_green: bool = false
+	for child: Node in root.get_children():
+		if str(child.name).begins_with("RouteHighlight_"):
+			var mi: MeshInstance3D = child as MeshInstance3D
+			if mi != null and mi.material_override is StandardMaterial3D:
+				var color: Color = (mi.material_override as StandardMaterial3D).albedo_color
+				# Green channel must exceed red channel (happy_path = bright green).
+				if color.g > color.r:
+					found_green = true
+			break
+
+	_check(
+		found_green,
+		"happy_path route highlight must have a green-dominant color (g > r)"
+	)
+
+
+func test_route_classification_error_path_uses_red_color() -> void:
+	## GIVEN a route with classification="error_path"
+	## WHEN build_from_graph is called
+	## THEN the error route RouteHighlight_ has a red-dominant albedo color
+	## Spec §Scenario: Route classification — "each Route has a distinct visual treatment (color)"
+	_test_failed = false
+	var root := Main.new()
+	root.build_from_graph(_make_multi_route_fixture())
+
+	# Walk all RouteHighlight_ children and find the error path one.
+	var found_red: bool = false
+	for child: Node in root.get_children():
+		if str(child.name).begins_with("RouteHighlight_") and str(child.name).contains("Error"):
+			var mi: MeshInstance3D = child as MeshInstance3D
+			if mi != null and mi.material_override is StandardMaterial3D:
+				var color: Color = (mi.material_override as StandardMaterial3D).albedo_color
+				# Red channel must exceed green channel (error_path = bright red).
+				if color.r > color.g:
+					found_red = true
+
+	_check(
+		found_red,
+		"error_path route highlight must have a red-dominant color (r > g)"
+	)
+
+
+func test_two_routes_produce_distinct_highlight_colors() -> void:
+	## GIVEN two routes (happy_path and error_path)
+	## WHEN build_from_graph is called
+	## THEN the highlight colors of the two routes differ
+	## Spec §Scenario: Route classification — "each Route has a distinct visual treatment"
+	_test_failed = false
+	var root := Main.new()
+	root.build_from_graph(_make_multi_route_fixture())
+
+	var colors: Array = []
+	for child: Node in root.get_children():
+		if str(child.name).begins_with("RouteHighlight_"):
+			var mi: MeshInstance3D = child as MeshInstance3D
+			if mi != null and mi.material_override is StandardMaterial3D:
+				var c: Color = (mi.material_override as StandardMaterial3D).albedo_color
+				# Normalize alpha to compare only hue/saturation/value.
+				var c_no_alpha := Color(c.r, c.g, c.b, 1.0)
+				colors.append(c_no_alpha)
+
+	_check(
+		colors.size() >= 2,
+		"Multi-route fixture must produce at least 2 RouteHighlight_ children; got %d" % colors.size()
+	)
+
+	if colors.size() >= 2:
+		_check(
+			not colors[0].is_equal_approx(colors[1]),
+			"Two different route classifications must produce different highlight colors"
+		)
+
+
+func test_route_visuals_array_has_one_entry_per_route() -> void:
+	## GIVEN two routes in the scene graph
+	## WHEN build_from_graph is called
+	## THEN get_route_visuals() returns an array with 2 entries (one per route)
+	_test_failed = false
+	var root := Main.new()
+	root.build_from_graph(_make_multi_route_fixture())
+
+	var rv: Array = root.get_route_visuals()
+	_check(
+		rv.size() == 2,
+		"get_route_visuals() must have one entry per route; expected 2, got %d" % rv.size()
 	)
