@@ -3,13 +3,13 @@ id: task-025
 title: Implement type topology extraction (inheritance and has-a edges)
 spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
 status: in_progress
-phase: implement
+phase: verify
 deps:
 - task-003
 - task-007
 round: 0
 branch: hyperloop/task-025
-pr: null
+pr: https://github.com/jsell-rh/test-code-vis/pull/233
 pr_title: 'feat(extractor): add type topology extraction (inherits and has_a edges)'
 pr_description: "## What and Why\n\nThis PR implements **Type Topology Extraction**\
   \ as defined in `specs/core/visual-primitives.spec.md`\n(Extraction Layer § Type\
