@@ -461,6 +461,126 @@ class TestDependencyExtraction:
             )
             assert e["weight"] >= 1, f"internal edge 'weight' must be >= 1: {e}"
 
+    def test_cross_context_edge_weight_accumulates_for_multiple_imports(
+        self, tmp_path: Path
+    ) -> None:
+        """cross_context edge weight == 2 when two distinct module-level nodes
+        in the same source BC each import from the same target BC.
+
+        Spec: visual-primitives.spec.md § Module Graph Extraction —
+        "each edge carries the import count (number of individual import
+        statements between the pair)."
+
+        This test proves accumulation (weight == 2, not merely >= 1) when
+        two distinct module-level nodes each contribute +1 to the same
+        (source_bc, target_bc) cross_context edge weight.
+        """
+        # Source bounded context: ctx_a, with TWO modules each importing target.
+        ctx_a = tmp_path / "ctx_a"
+        (ctx_a / "mod1").mkdir(parents=True)
+        (ctx_a / "mod2").mkdir(parents=True)
+        for d in [ctx_a, ctx_a / "mod1", ctx_a / "mod2"]:
+            (d / "__init__.py").write_text("")
+        # First import: ctx_a.mod1 imports ctx_b
+        (ctx_a / "mod1" / "service.py").write_text("from ctx_b.api import API\n")
+        # Second import: ctx_a.mod2 ALSO imports ctx_b (different module, same BC pair)
+        (ctx_a / "mod2" / "client.py").write_text("from ctx_b.api import API\n")
+
+        # Target bounded context: ctx_b
+        ctx_b = tmp_path / "ctx_b"
+        ctx_b.mkdir()
+        (ctx_b / "__init__.py").write_text("")
+        (ctx_b / "api.py").write_text("class API:\n    pass\n")
+
+        all_nodes: list[Node] = discover_bounded_contexts(tmp_path)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(tmp_path, bc["id"]))
+
+        edges = build_dependency_edges(tmp_path, all_nodes)
+
+        # Find the cross_context edge ctx_a → ctx_b.
+        matching = [
+            e
+            for e in edges
+            if e["type"] == "cross_context"
+            and e["source"] == "ctx_a"
+            and e["target"] == "ctx_b"
+        ]
+        assert matching, (
+            "Expected a cross_context edge ctx_a → ctx_b; "
+            f"cross_context edges found: {[e for e in edges if e['type'] == 'cross_context']}"
+        )
+        assert len(matching) == 1, (
+            f"Expected exactly ONE cross_context edge ctx_a → ctx_b (accumulated), "
+            f"got {len(matching)}: {matching}"
+        )
+        edge = matching[0]
+        # weight == 2: mod1 scan (+1) + mod2 scan (+1) = 2.
+        assert edge["weight"] == 2, (
+            f"cross_context edge weight must be 2 (two distinct module imports), "
+            f"got {edge['weight']}: {edge}"
+        )
+
+    def test_internal_edge_weight_accumulates_for_multiple_imports(
+        self, tmp_path: Path
+    ) -> None:
+        """internal edge weight == 2 when one source module has two distinct
+        import strings that both resolve to the same target module.
+
+        Proves weight accumulation is correct (== 2, not merely >= 1).
+
+        The extractor accumulates one weight unit per distinct imported-module
+        string that resolves to the same target node id.  A module that imports
+        both ``ctx_a.domain.models`` and ``ctx_a.domain.services`` contributes
+        +1 for each string, even though both resolve to the same target module
+        node ``ctx_a.domain``.  This proves the per-import-string accumulation
+        rather than per-target-node deduplication.
+        """
+        # Bounded context: ctx_a, with domain and application submodules.
+        ctx_a = tmp_path / "ctx_a"
+        (ctx_a / "domain").mkdir(parents=True)
+        (ctx_a / "application").mkdir(parents=True)
+        for d in [ctx_a, ctx_a / "domain", ctx_a / "application"]:
+            (d / "__init__.py").write_text("")
+        # Target module: ctx_a.domain, with TWO importable sub-modules.
+        (ctx_a / "domain" / "models.py").write_text("class Model:\n    pass\n")
+        (ctx_a / "domain" / "services.py").write_text("class Service:\n    pass\n")
+        # Source module: ctx_a.application imports TWO distinct paths from ctx_a.domain.
+        # Both `ctx_a.domain.models` and `ctx_a.domain.services` resolve to the
+        # same target node `ctx_a.domain`, so weight accumulates to 2.
+        (ctx_a / "application" / "handler.py").write_text(
+            "from ctx_a.domain.models import Model\n"
+            "from ctx_a.domain.services import Service\n"
+        )
+
+        all_nodes: list[Node] = discover_bounded_contexts(tmp_path)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(tmp_path, bc["id"]))
+
+        edges = build_dependency_edges(tmp_path, all_nodes)
+
+        matching = [
+            e
+            for e in edges
+            if e["type"] == "internal"
+            and e["source"] == "ctx_a.application"
+            and e["target"] == "ctx_a.domain"
+        ]
+        assert matching, (
+            "Expected an internal edge ctx_a.application → ctx_a.domain; "
+            f"internal edges: {[e for e in edges if e['type'] == 'internal']}"
+        )
+        assert len(matching) == 1, (
+            f"Expected exactly ONE internal edge (accumulated), got {len(matching)}: {matching}"
+        )
+        edge = matching[0]
+        # weight == 2: two distinct import strings both resolving to ctx_a.domain.
+        assert edge["weight"] == 2, (
+            f"internal edge weight must be 2 "
+            f"(ctx_a.domain.models +1, ctx_a.domain.services +1 — same target), "
+            f"got {edge['weight']}: {edge}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Requirement: Layout

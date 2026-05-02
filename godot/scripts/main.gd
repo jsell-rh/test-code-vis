@@ -24,6 +24,7 @@ const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
 const LodManager = preload("res://scripts/lod_manager.gd")
 const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
 const VisualPrimitives = preload("res://scripts/visual_primitives.gd")
+const PortRenderer = preload("res://scripts/port_renderer.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -60,6 +61,19 @@ var _aggregate_edge_visuals: Array = []
 ## Tracks whether the last LOD update placed the camera at FAR distance.
 ## Used to avoid recreating Tweens every frame — only animate on transitions.
 var _was_at_far_lod: bool = false
+
+## Tracks the last LOD tier so Port renderers are only updated on transitions.
+## -1 = not yet applied; 0 = FAR; 1 = MEDIUM; 2 = NEAR.
+var _last_lod_tier: int = -1
+
+## Port renderers keyed by node id (String → PortRenderer).
+## One renderer per Container (bounded_context) node with public symbols.
+var _port_renderers: Dictionary = {}
+
+## Port world-position map for edge routing.
+## Key: "node_id/symbol_name_in" or "node_id/symbol_name_out" (String)
+## Value: Vector3 world position
+var _port_world_positions: Dictionary = {}
 
 ## Understanding overlay controller — activates alignment, quality, and impact overlays.
 var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
@@ -268,6 +282,23 @@ func _update_lod() -> void:
 			)
 		_was_at_far_lod = at_far_lod
 
+	# Port LOD: determine tier and propagate to all PortRenderers.
+	# tier-0 (FAR): Ports invisible; tier-1 (MEDIUM): Ports invisible;
+	# tier-2 (NEAR): Ports fade in.
+	# Spec: visual-primitives.spec.md § Port visibility at zoom levels —
+	#   "Ports are hidden at far distance; as the human zooms in, Ports fade in"
+	var port_tier: int
+	if dist > LodManager.FAR_THRESHOLD:
+		port_tier = PortRenderer.LOD_TIER_FAR
+	elif dist > LodManager.NEAR_THRESHOLD:
+		port_tier = PortRenderer.LOD_TIER_MEDIUM
+	else:
+		port_tier = PortRenderer.LOD_TIER_NEAR
+	if port_tier != _last_lod_tier:
+		_last_lod_tier = port_tier
+		for pr: PortRenderer in _port_renderers.values():
+			pr.set_lod_tier(port_tier)
+
 
 # ---------------------------------------------------------------------------
 # World-position helpers
@@ -412,6 +443,22 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	# Spec: visual-primitives.spec.md §Badge Primitive, §Landmark Primitive,
 	# §Power Rail Notation.
 	_visual_primitives.attach_primitives(nd, anchor, sz)
+
+	# Port Primitive — attach labeled Ports on the Container membrane for each
+	# public symbol.  Only bounded_context nodes carry Ports in the prototype;
+	# module-level Port rendering is a future enhancement.
+	# Spec: visual-primitives.spec.md § Requirement: Port Primitive —
+	#   "a Port is a small visual element anchored to a Container's membrane"
+	if is_context:
+		var pr := PortRenderer.new()
+		pr.attach_ports(nd, anchor, sz)
+		_port_renderers[nd["id"]] = pr
+		# Build world-position map for edge routing.
+		# local positions + Container world position = Port world position.
+		var node_world_pos: Vector3 = _world_positions.get(nd["id"], Vector3.ZERO)
+		for port_key: String in pr.get_port_local_positions():
+			var local_pos: Vector3 = pr.get_port_local_positions()[port_key]
+			_port_world_positions[nd["id"] + "/" + port_key] = node_world_pos + local_pos
 
 
 ## Add a Power Rail indicator glyph to an anchor node.
@@ -643,6 +690,44 @@ func _create_dotted_body(
 
 
 # ---------------------------------------------------------------------------
+# Port position helpers
+# ---------------------------------------------------------------------------
+
+## Return the edge endpoint for *node_id*, preferring a Port world position
+## when Ports are visible (tier-2 LOD), falling back to the Container centroid.
+##
+## is_source=true  → use an output Port (positive-X side) as the source
+## is_source=false → use an input Port  (negative-X side) as the target
+##
+## If no Port world positions are registered for *node_id* (i.e. the node has
+## no public symbols or is a module-level node), the Container centroid is
+## returned unconditionally.
+##
+## Spec: "Edges connect to Ports, not directly to the Container body" (tier-2)
+##        "falls back to Container centroid when Ports are hidden/unavailable"
+func _find_port_or_centroid(node_id: String, is_source: bool) -> Vector3:
+	var centroid: Vector3 = _world_positions.get(node_id, Vector3.ZERO)
+	# Check if any Port positions are registered for this node.
+	var port_suffix: String = "_out" if is_source else "_in"
+	for key: String in _port_world_positions:
+		if key.begins_with(node_id + "/") and key.ends_with(port_suffix):
+			# Return the first matching Port position.
+			return _port_world_positions[key]
+	# No Port found — fall back to centroid.
+	return centroid
+
+
+## Expose Port world positions for tests.
+func get_port_world_positions() -> Dictionary:
+	return _port_world_positions
+
+
+## Expose Port renderers for tests.
+func get_port_renderers() -> Dictionary:
+	return _port_renderers
+
+
+# ---------------------------------------------------------------------------
 # Edge creation
 # ---------------------------------------------------------------------------
 
@@ -681,8 +766,14 @@ func _create_edge(ed: Dictionary) -> void:
 		push_warning("CodeVis: skipping edge '%s' → '%s' (node missing)." % [src, tgt])
 		return
 
-	var from_pos: Vector3 = _world_positions[src]
-	var to_pos: Vector3 = _world_positions[tgt]
+	# Port-based edge routing: route Edge endpoints to the closest Port on the
+	# source/target Container when Ports are visible (tier-2 LOD).
+	# Falls back to Container centroid when no Ports are available.
+	# Spec: visual-primitives.spec.md § Port Primitive —
+	#   "Edges connect to Ports, not directly to the Container body"
+	#   "If no Ports are present (tier-0/1 LOD), the Edge falls back to Container centroid"
+	var from_pos: Vector3 = _find_port_or_centroid(src, true)
+	var to_pos: Vector3 = _find_port_or_centroid(tgt, false)
 
 	if from_pos.is_equal_approx(to_pos):
 		return  # Self-loop or co-located nodes — nothing to draw.

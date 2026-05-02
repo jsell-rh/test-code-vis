@@ -72,6 +72,12 @@ func _init() -> void:
 	# Cross-context independence: BCs with no transitive dep highlighted.
 	_run_suite(preload("res://tests/test_orthogonal_independence.gd").new())
 
+	# --- task-038: Port Primitive renderer (core/visual-primitives.spec.md) ---
+	# Port: public symbols rendered as labeled Ports on Container membrane.
+	# LOD: Ports fade in at tier-2 (near), invisible at tier-0/1.
+	# Edge routing: edges connect to Port positions rather than Container centroid.
+	_run_suite(preload("res://tests/test_port_renderer.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
