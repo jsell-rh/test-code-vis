@@ -65,6 +65,10 @@ func _init() -> void:
 	# Power Rail: ubiquitous edges suppressed, indicator added to source node.
 	_run_suite(preload("res://tests/test_visual_primitives.gd").new())
 
+	# --- task-022: Orthogonal Independence spec (visualization/orthogonal-independence.spec.md) ---
+	# Spatial separation of independent groups; independence queryable property.
+	_run_suite(preload("res://tests/test_orthogonal_independence.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
