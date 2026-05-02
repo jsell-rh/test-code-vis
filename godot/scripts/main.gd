@@ -24,6 +24,8 @@ const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
 const LodManager = preload("res://scripts/lod_manager.gd")
 const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
 const VisualPrimitives = preload("res://scripts/visual_primitives.gd")
+const NodePrimitive = preload("res://scripts/node_primitive.gd")
+const PortPrimitive = preload("res://scripts/port_primitive.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -66,6 +68,20 @@ var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
 
 ## Visual primitives renderer — attaches badge, landmark, and power rail decorations.
 var _visual_primitives: VisualPrimitives = VisualPrimitives.new()
+
+## Node Primitive renderer — populates anchors for function/method/class nodes.
+## Spec: visual-primitives.spec.md § Requirement: Node Primitive
+## "Nodes do not have baked-in types — their visual identity comes entirely from Badges."
+var _node_primitive: NodePrimitive = NodePrimitive.new()
+
+## Port Primitive renderer — anchors ports to Container membranes for public functions.
+## Spec: visual-primitives.spec.md § Requirement: Port Primitive
+## "a small visual element anchored to a Container's membrane"
+var _port_primitive: PortPrimitive = PortPrimitive.new()
+
+## Index of raw node data by ID — populated in build_from_graph(), used by _create_volume()
+## to let the Port Primitive match function child nodes when overriding world positions.
+var _node_data_map: Dictionary = {}
 
 ## Tracks Node3D visuals for suppressed ubiquitous edges.
 ## These are created but hidden by default; toggled with the T key.
@@ -144,6 +160,10 @@ func build_from_graph(graph: Dictionary) -> void:
 	var node_data_map: Dictionary = {}
 	for nd: Dictionary in nodes:
 		node_data_map[nd["id"]] = nd
+
+	# Cache node_data_map so _create_volume() can pass it to PortPrimitive for
+	# edge-wiring: port creation overrides world positions of child function nodes.
+	_node_data_map = node_data_map
 
 	# Detect reload: if anchors already exist, animate positions instead of recreating.
 	var is_reload: bool = not _anchors.is_empty()
@@ -231,6 +251,12 @@ func _animate_node_to_position(nd: Dictionary) -> void:
 ## Exposed for tests that verify smooth regrouping preserves anchor identity.
 func get_anchors() -> Dictionary:
 	return _anchors
+
+
+## Return the internal world-positions dictionary (node id → Vector3).
+## Exposed for tests that verify port edge-wiring overrides function world positions.
+func get_world_positions() -> Dictionary:
+	return _world_positions
 
 
 # ---------------------------------------------------------------------------
@@ -341,76 +367,105 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	var is_context: bool = node_type == "bounded_context"
 	var is_spec: bool = node_type == "spec"
 
-	# Mesh ----------------------------------------------------------------
-	var mesh_instance := MeshInstance3D.new()
-	var box := BoxMesh.new()
-
-	var mat := StandardMaterial3D.new()
-	if is_landmark:
-		# Landmark nodes (hubs): enlarged bright-white box so they stand out as
-		# spatial anchors at every zoom level.
-		# Spec: "distinctive visual treatment (larger, brighter, or marked with a glyph)"
-		var landmark_sz: float = sz * 1.5
-		box.size = Vector3(landmark_sz, landmark_sz * 0.6, landmark_sz)
-		mat.albedo_color = Color(1.0, 0.95, 0.30, 1.0)  # bright yellow-white
-		mat.emission_enabled = true
-		mat.emission = Color(0.8, 0.75, 0.0)
-		mat.emission_energy_multiplier = 0.4
-	elif is_spec:
-		# Spec nodes represent the *intended design* — rendered as thin gold slabs
-		# so the human can immediately distinguish them from the realized code nodes.
-		# Gold colour signals "intended / authoritative specification".
-		box.size = Vector3(sz, sz * 0.15, sz)
-		mat.albedo_color = Color(0.95, 0.80, 0.10, 0.55)
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	elif is_context:
-		# Larger, flat, translucent slab — acts as a visible floor/boundary.
-		box.size = Vector3(sz, sz * 0.2, sz)
-		# spec §Container membrane permeability:
-		#   "the membrane appears thick/opaque (strong encapsulation — few openings)"
-		#   "a module with 25 public symbols has a thin/porous membrane"
-		#   "permeability is a continuous visual property, not a binary toggle"
-		# alpha = 1 - public_ratio: many public symbols → porous (low alpha),
-		#                           few public symbols → opaque (high alpha).
-		var symbols: Array = nd.get("symbols", [])
-		var alpha: float = 0.18  # default when symbol data is absent
-		if symbols.size() > 0:
-			var public_count: int = 0
-			for sym: Dictionary in symbols:
-				if sym.get("visibility", "") == "public":
-					public_count += 1
-			var public_ratio: float = float(public_count) / float(symbols.size())
-			# Invert: high public ratio → porous (low alpha); low ratio → opaque (high alpha).
-			alpha = clampf(1.0 - public_ratio, 0.05, 0.55)
-		mat.albedo_color = Color(0.25, 0.45, 0.85, alpha)
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		# Show both sides so the translucent slab is visible from above and below.
-		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# ── Node Primitive (function / method / class) ────────────────────────────
+	# Spec § Requirement: Node Primitive — "Nodes do not have baked-in types —
+	# their visual identity comes entirely from their Badges."
+	# NodePrimitive.populate_anchor() creates the mesh AND the label for these
+	# types, so we skip the generic inline mesh/label block below.
+	if NodePrimitive.handles(node_type) and not is_landmark:
+		_node_primitive.populate_anchor(anchor, nd, sz)
 	else:
-		# Compact, opaque box for modules — height proportional to size.
-		box.size = Vector3(sz, sz * 0.6, sz)
-		mat.albedo_color = Color(0.35, 0.70, 0.40, 1.0)
+		# Mesh ----------------------------------------------------------------
+		var mesh_instance := MeshInstance3D.new()
+		var box := BoxMesh.new()
 
-	mesh_instance.mesh = box
-	mesh_instance.material_override = mat
-	anchor.add_child(mesh_instance)
+		var mat := StandardMaterial3D.new()
+		if is_landmark:
+			# Landmark nodes (hubs): enlarged bright-white box so they stand out as
+			# spatial anchors at every zoom level.
+			# Spec: "distinctive visual treatment (larger, brighter, or marked with a glyph)"
+			var landmark_sz: float = sz * 1.5
+			box.size = Vector3(landmark_sz, landmark_sz * 0.6, landmark_sz)
+			mat.albedo_color = Color(1.0, 0.95, 0.30, 1.0)  # bright yellow-white
+			mat.emission_enabled = true
+			mat.emission = Color(0.8, 0.75, 0.0)
+			mat.emission_energy_multiplier = 0.4
+		elif is_spec:
+			# Spec nodes represent the *intended design* — rendered as thin gold slabs
+			# so the human can immediately distinguish them from the realized code nodes.
+			# Gold colour signals "intended / authoritative specification".
+			box.size = Vector3(sz, sz * 0.15, sz)
+			mat.albedo_color = Color(0.95, 0.80, 0.10, 0.55)
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		elif is_context:
+			# Larger, flat, translucent slab — acts as a visible floor/boundary.
+			box.size = Vector3(sz, sz * 0.2, sz)
+			# spec §Container membrane permeability:
+			#   "the membrane appears thick/opaque (strong encapsulation — few openings)"
+			#   "a module with 25 public symbols has a thin/porous membrane"
+			#   "permeability is a continuous visual property, not a binary toggle"
+			# alpha = 1 - public_ratio: many public symbols → porous (low alpha),
+			#                           few public symbols → opaque (high alpha).
+			var symbols: Array = nd.get("symbols", [])
+			var alpha: float = 0.18  # default when symbol data is absent
+			if symbols.size() > 0:
+				var public_count: int = 0
+				for sym: Dictionary in symbols:
+					if sym.get("visibility", "") == "public":
+						public_count += 1
+				var public_ratio: float = float(public_count) / float(symbols.size())
+				# Invert: high public ratio → porous (low alpha); low ratio → opaque (high alpha).
+				alpha = clampf(1.0 - public_ratio, 0.05, 0.55)
+			mat.albedo_color = Color(0.25, 0.45, 0.85, alpha)
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			# Show both sides so the translucent slab is visible from above and below.
+			mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		else:
+			# Compact, opaque box for modules — height proportional to size.
+			box.size = Vector3(sz, sz * 0.6, sz)
+			mat.albedo_color = Color(0.35, 0.70, 0.40, 1.0)
 
-	# Label ---------------------------------------------------------------
-	var label := Label3D.new()
-	label.text = nd["name"]
-	# pixel_size controls real-world text size; must be > 0 for legibility.
-	label.pixel_size = 0.012
-	label.position = Vector3(0.0, sz * 0.15 + 0.4, 0.0)
-	# Always face the camera (mandatory for legibility in 3D).
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	# Draw on top so labels remain visible through geometry.
-	label.no_depth_test = true
-	anchor.add_child(label)
+		mesh_instance.mesh = box
+		mesh_instance.material_override = mat
+		anchor.add_child(mesh_instance)
+
+		# Label ---------------------------------------------------------------
+		var label := Label3D.new()
+		label.text = nd["name"]
+		# pixel_size controls real-world text size; must be > 0 for legibility.
+		label.pixel_size = 0.012
+		label.position = Vector3(0.0, sz * 0.15 + 0.4, 0.0)
+		# Always face the camera (mandatory for legibility in 3D).
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		# Draw on top so labels remain visible through geometry.
+		label.no_depth_test = true
+		anchor.add_child(label)
+
+	# ── Port Primitive (visual-primitives.spec.md § Requirement: Port Primitive) ──
+	# Place Ports on the membrane of Container nodes (module, bounded_context).
+	# Ports represent public function interface points anchored to the outer boundary.
+	# Spec: "a small visual element anchored to a Container's membrane"
+	# Spec: "Ports are hidden [at far] AND as the human zooms in, Ports fade in"
+	# Only create ports for Container-type nodes (not Node Primitive function/class nodes).
+	if not NodePrimitive.handles(node_type) and not is_landmark:
+		var port_entries: Array = _port_primitive.add_ports_to_container(
+			anchor,
+			nd,
+			sz,
+			_world_positions.get(nd["id"], Vector3.ZERO),
+			_world_positions,
+			_node_data_map
+		)
+		# Register each port with the LOD manager so it is hidden at FAR/MEDIUM
+		# and shown at NEAR — matching the LOD Shell tier-2 behavior for ports.
+		for port_entry: Dictionary in port_entries:
+			_lod_node_entries.append(port_entry)
 
 	# Visual primitives — badge glyphs, landmark ring, power rail disc.
 	# Spec: visual-primitives.spec.md §Badge Primitive, §Landmark Primitive,
 	# §Power Rail Notation.
+	# Applied to ALL node types (including NodePrimitive function/class/method nodes).
 	_visual_primitives.attach_primitives(nd, anchor, sz)
 
 

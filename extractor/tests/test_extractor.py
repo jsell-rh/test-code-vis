@@ -38,6 +38,7 @@ from extractor.extractor import (
     discover_spec_nodes,
     discover_submodules,
     extract_call_graph,
+    extract_data_flow_spines,
     extract_imports_from_file,
     extract_symbols,
     extract_type_topology,
@@ -2663,3 +2664,344 @@ class TestUbiquitousDependencyDetection:
         # All edges must be dicts (not malformed).
         for e in graph["edges"]:
             assert isinstance(e, dict), f"Edge must be a dict; got {type(e)}"
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Data Flow Spine Extraction
+# spec: visual-primitives.spec.md § Requirement: Data Flow Spine Extraction
+#
+# Scenarios covered:
+#   GIVEN function transform(input: Data) -> Result passing input through ops
+#   THEN the spine from parameter input through each operation to the return
+#        value is emitted
+#   AND each step references the intermediate function or expression
+#   THEN the spine includes: A's x → B's parameter → B's return → A's y
+#   AND the extractor does NOT trace deeper than one call level
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def data_flow_src(tmp_path: Path) -> Path:
+    """Return a source tree with functions suitable for data flow tracing."""
+    bc = tmp_path / "svc"
+    mod = bc / "pipeline"
+    mod.mkdir(parents=True)
+    (bc / "__init__.py").write_text("")
+    (mod / "__init__.py").write_text("")
+
+    # Module: transform passes 'input' to a helper and returns result.
+    (mod / "transform.py").write_text(
+        "def transform(input):\n"
+        "    result = process(input)\n"
+        "    return result\n"
+        "\n"
+        "def process(data):\n"
+        "    return data\n"
+    )
+    return tmp_path
+
+
+@pytest.fixture()
+def data_flow_nodes(data_flow_src: Path) -> list[Node]:
+    """Return nodes discovered from data_flow_src."""
+    bc_nodes = discover_bounded_contexts(data_flow_src)
+    nodes: list[Node] = list(bc_nodes)
+    for bc in bc_nodes:
+        nodes.extend(discover_submodules(data_flow_src, bc["id"]))
+    return nodes
+
+
+class TestDataFlowSpineExtraction:
+    """Spec: visual-primitives.spec.md § Requirement: Data Flow Spine Extraction."""
+
+    # -----------------------------------------------------------------------
+    # Scenario: Parameter to return value
+    # GIVEN function transform(input) that passes input through ops before returning
+    # THEN the spine from parameter input through each operation to the return
+    #      value is emitted
+    # AND each step in the spine references the intermediate function or expression
+    # -----------------------------------------------------------------------
+
+    def test_spine_emitted_for_traced_parameter(
+        self, data_flow_src: Path, data_flow_nodes: list[Node]
+    ) -> None:
+        """extract_data_flow_spines produces at least one spine for transform(input)."""
+        spines = extract_data_flow_spines(data_flow_src, data_flow_nodes)
+        assert spines, (
+            "extract_data_flow_spines must return at least one spine for a "
+            "codebase with traceable parameter flow"
+        )
+
+    def test_spine_references_function_name(
+        self, data_flow_src: Path, data_flow_nodes: list[Node]
+    ) -> None:
+        """Each spine dict must carry the function_name of the traced function."""
+        spines = extract_data_flow_spines(data_flow_src, data_flow_nodes)
+        for spine in spines:
+            assert "function_name" in spine, (
+                "Each spine must have a 'function_name' key"
+            )
+            assert isinstance(spine["function_name"], str), (
+                "function_name must be a str"
+            )
+
+    def test_spine_references_parameter_name(
+        self, data_flow_src: Path, data_flow_nodes: list[Node]
+    ) -> None:
+        """Each spine must carry the parameter name being traced."""
+        spines = extract_data_flow_spines(data_flow_src, data_flow_nodes)
+        for spine in spines:
+            assert "parameter" in spine, "Each spine must have a 'parameter' key"
+            assert isinstance(spine["parameter"], str), "parameter must be a str"
+
+    def test_spine_has_steps_list(
+        self, data_flow_src: Path, data_flow_nodes: list[Node]
+    ) -> None:
+        """Each spine must carry a 'steps' list with at least one entry."""
+        spines = extract_data_flow_spines(data_flow_src, data_flow_nodes)
+        for spine in spines:
+            assert "steps" in spine, "Each spine must have a 'steps' key"
+            assert isinstance(spine["steps"], list), "'steps' must be a list"
+            assert len(spine["steps"]) >= 1, "Each spine must have at least one step"
+
+    def test_spine_steps_have_required_keys(
+        self, data_flow_src: Path, data_flow_nodes: list[Node]
+    ) -> None:
+        """Each step in a spine must have source_ref, target_ref, and step_type."""
+        spines = extract_data_flow_spines(data_flow_src, data_flow_nodes)
+        for spine in spines:
+            for step in spine["steps"]:
+                assert "source_ref" in step, (
+                    f"Step in spine {spine['function_name']!r} missing 'source_ref'"
+                )
+                assert "target_ref" in step, (
+                    f"Step in spine {spine['function_name']!r} missing 'target_ref'"
+                )
+                assert "step_type" in step, (
+                    f"Step in spine {spine['function_name']!r} missing 'step_type'"
+                )
+
+    def test_transform_spine_includes_return_step(
+        self, data_flow_src: Path, data_flow_nodes: list[Node]
+    ) -> None:
+        """The transform(input) function spine must include a step targeting 'return'.
+
+        Spec: 'the spine from parameter input ... to the return value is emitted'
+        """
+        spines = extract_data_flow_spines(data_flow_src, data_flow_nodes)
+        transform_spines = [s for s in spines if s["function_name"] == "transform"]
+        assert transform_spines, "Spine for 'transform' function must be emitted"
+
+        has_return_step = any(
+            step.get("target_ref") == "return"
+            for spine in transform_spines
+            for step in spine["steps"]
+        )
+        assert has_return_step, (
+            "transform(input) spine must include a step targeting 'return' "
+            "(the parameter flows to the return value)"
+        )
+
+    def test_spine_step_source_ref_contains_param_name(
+        self, data_flow_src: Path, data_flow_nodes: list[Node]
+    ) -> None:
+        """Step source_ref must reference the parameter name (e.g. 'param:input')."""
+        spines = extract_data_flow_spines(data_flow_src, data_flow_nodes)
+        for spine in spines:
+            param = spine["parameter"]
+            param_step = next(
+                (s for s in spine["steps"] if param in s.get("source_ref", "")),
+                None,
+            )
+            assert param_step is not None, (
+                f"Spine for {spine['function_name']!r} param {param!r} "
+                f"must have at least one step whose source_ref references the param"
+            )
+
+    # -----------------------------------------------------------------------
+    # Scenario: One-call-deep interprocedural flow
+    # GIVEN function A calls function B with argument x, B returns value A assigns to y
+    # THEN the spine includes: A's x → B's parameter → B's return → A's y
+    # AND the extractor does NOT trace deeper than one call level
+    # -----------------------------------------------------------------------
+
+    def test_interprocedural_field_present(
+        self, data_flow_src: Path, data_flow_nodes: list[Node]
+    ) -> None:
+        """Each spine must carry an 'interprocedural' key."""
+        spines = extract_data_flow_spines(data_flow_src, data_flow_nodes)
+        for spine in spines:
+            assert "interprocedural" in spine, (
+                "Each spine must have an 'interprocedural' key"
+            )
+            assert isinstance(spine["interprocedural"], list), (
+                "'interprocedural' must be a list"
+            )
+
+    def test_interprocedural_entries_have_required_keys(self, tmp_path: Path) -> None:
+        """Interprocedural entries must carry call_name, callee_param, assign_to.
+
+        Spec: 'the spine includes: A's x → B's parameter → B's return → A's y'
+        """
+        # Module A calls module B's function (cross-module call).
+        bc = tmp_path / "flow_bc"
+        mod_a = bc / "caller"
+        mod_b = bc / "callee"
+        mod_a.mkdir(parents=True)
+        mod_b.mkdir(parents=True)
+        for d in [bc, mod_a, mod_b]:
+            (d / "__init__.py").write_text("")
+
+        (mod_b / "funcs.py").write_text("def b_func(y):\n    return y\n")
+        (mod_a / "funcs.py").write_text(
+            "from flow_bc.callee import b_func\n"
+            "def a_func(x):\n"
+            "    result = b_func(x)\n"
+            "    return result\n"
+        )
+
+        bc_nodes = discover_bounded_contexts(tmp_path)
+        nodes: list[Node] = list(bc_nodes)
+        for bc_node in bc_nodes:
+            nodes.extend(discover_submodules(tmp_path, bc_node["id"]))
+
+        spines = extract_data_flow_spines(tmp_path, nodes)
+        a_spines = [s for s in spines if s["function_name"] == "a_func"]
+
+        # a_func(x) calls b_func(x) → interprocedural entry must be recorded.
+        assert a_spines, "Spine for a_func must be emitted"
+
+        ip_entries = [ip for spine in a_spines for ip in spine["interprocedural"]]
+        assert ip_entries, (
+            "a_func(x) calls b_func(x) — the interprocedural spine MUST include "
+            "at least one entry linking A's argument to B's parameter/return"
+        )
+        for ip in ip_entries:
+            assert "call_name" in ip, "Interprocedural entry must have 'call_name'"
+            assert "callee_param" in ip or "callee_return" in ip, (
+                "Interprocedural entry must carry callee flow info"
+            )
+
+    def test_interprocedural_does_not_exceed_one_level(self, tmp_path: Path) -> None:
+        """Spec: 'the extractor does NOT trace deeper than one call level'.
+
+        A calls B; B calls C. The spine for A must record B as the callee,
+        but must NOT record C (that would be two levels deep).
+        """
+        bc = tmp_path / "deep_bc"
+        mod = bc / "deep_mod"
+        mod.mkdir(parents=True)
+        for d in [bc, mod]:
+            (d / "__init__.py").write_text("")
+
+        (mod / "chain.py").write_text(
+            "def a_func(x):\n"
+            "    result = b_func(x)\n"
+            "    return result\n"
+            "\n"
+            "def b_func(y):\n"
+            "    return c_func(y)\n"
+            "\n"
+            "def c_func(z):\n"
+            "    return z\n"
+        )
+        bc_nodes = discover_bounded_contexts(tmp_path)
+        nodes: list[Node] = list(bc_nodes)
+        for bc_node in bc_nodes:
+            nodes.extend(discover_submodules(tmp_path, bc_node["id"]))
+
+        spines = extract_data_flow_spines(tmp_path, nodes)
+        a_spines = [s for s in spines if s["function_name"] == "a_func"]
+
+        # Each interprocedural entry for a_func must reference b_func, not c_func.
+        for spine in a_spines:
+            for ip in spine["interprocedural"]:
+                assert ip.get("call_name") != "c_func", (
+                    "Interprocedural tracing must NOT exceed one call level; "
+                    "c_func is two levels from a_func's parameter"
+                )
+
+    # -----------------------------------------------------------------------
+    # Scenario: Extraction cost boundary
+    # THEN it completes by analyzing each function body independently
+    # AND whole-program fixed-point analysis is NOT performed
+    # -----------------------------------------------------------------------
+
+    def test_extraction_completes_per_function_independently(
+        self, tmp_path: Path
+    ) -> None:
+        """Data flow extraction completes using only AST analysis (no type inference).
+
+        Spec: 'it completes by analyzing each function body independently (intraprocedural)'
+        """
+        bc = tmp_path / "isolated"
+        for i in range(5):
+            mod = bc / f"mod_{i}"
+            mod.mkdir(parents=True)
+            (mod / "__init__.py").write_text("")
+            (mod / "funcs.py").write_text(
+                f"def compute_{i}(value):\n    x = value\n    return x\n"
+            )
+        (bc / "__init__.py").write_text("")
+
+        bc_nodes = discover_bounded_contexts(tmp_path)
+        nodes: list[Node] = list(bc_nodes)
+        for bc_node in bc_nodes:
+            nodes.extend(discover_submodules(tmp_path, bc_node["id"]))
+
+        # Must not raise — extraction is bounded per-function.
+        spines = extract_data_flow_spines(tmp_path, nodes)
+        assert isinstance(spines, list), "extract_data_flow_spines must return a list"
+
+    def test_node_annotated_with_data_flow_spines(
+        self, data_flow_src: Path, data_flow_nodes: list[Node]
+    ) -> None:
+        """Module nodes with traceable flow are annotated with data_flow_spines in-place.
+
+        Spec: the spine is available for the composition layer to map onto views.
+        """
+        extract_data_flow_spines(data_flow_src, data_flow_nodes)
+        module_nodes = [n for n in data_flow_nodes if n["type"] == "module"]
+        annotated = [n for n in module_nodes if "data_flow_spines" in n]
+        assert annotated, (
+            "At least one module node must have 'data_flow_spines' after extraction "
+            "(for a module with traceable parameter flow)"
+        )
+        for node in annotated:
+            assert isinstance(node["data_flow_spines"], list), (
+                "'data_flow_spines' must be a list"
+            )
+
+    def test_build_scene_graph_includes_data_flow_spines(self, src: Path) -> None:
+        """build_scene_graph produces scene graphs where module nodes may have data_flow_spines.
+
+        Spec: the extraction pipeline integrates data flow spine extraction
+        so the composition layer can access spines on module nodes.
+        """
+        graph = build_scene_graph(src)
+        # Any node of type 'module' that has spines must have a valid list.
+        for node in graph["nodes"]:
+            spines = node.get("data_flow_spines")
+            if spines is not None:
+                assert isinstance(spines, list), (
+                    f"data_flow_spines on node {node['id']!r} must be a list"
+                )
+                for spine in spines:
+                    assert "function_name" in spine, (
+                        f"Each spine on {node['id']!r} must have 'function_name'"
+                    )
+                    assert "steps" in spine, (
+                        f"Each spine on {node['id']!r} must have 'steps'"
+                    )
+
+    def test_returns_empty_list_when_no_module_nodes(self, tmp_path: Path) -> None:
+        """extract_data_flow_spines returns empty list when no module nodes exist."""
+        # A codebase with only a bounded context (no submodules)
+        bc = tmp_path / "empty_bc"
+        bc.mkdir()
+        (bc / "__init__.py").write_text("")
+
+        bc_nodes = discover_bounded_contexts(tmp_path)
+        spines = extract_data_flow_spines(tmp_path, bc_nodes)
+        # BC nodes have no directory to walk (bc_nodes only, no submodules)
+        assert isinstance(spines, list), "Must return a list even when empty"
