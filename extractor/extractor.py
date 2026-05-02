@@ -401,15 +401,24 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
     its ``weight``.  Internal edges are created at the module level (e.g.
     ``iam.application → iam.domain``).
 
-    Duplicate edges are deduplicated.
+    Every individual edge (cross_context or internal) carries a ``weight``
+    field equal to the number of unique module-level import statements
+    between the pair.  This lets humans assess coupling strength without
+    reading code (spec §Understanding Without Writing Code).
+
+    Duplicate edges are deduplicated; their weights are summed.
     """
     all_ids = {n["id"] for n in all_nodes}
     context_ids = {n["id"] for n in all_nodes if n["type"] == "bounded_context"}
 
-    raw_edges: set[tuple[str, str, EdgeType]] = set()
+    # Count unique module-level imports per edge triple (src, tgt, type).
+    # Replaces the previous raw_edges set so weight is accumulated alongside
+    # deduplication.  Each unique (source_module, imported_module) pair that
+    # resolves to an edge triple increments its count by 1.
+    raw_edge_count: dict[tuple[str, str, EdgeType], int] = {}
 
     # Count unique module-level cross-context imports per BC pair.
-    # Keyed by (source_bc, target_bc) → import count.
+    # Keyed by (source_bc, target_bc) → import count (for aggregate edges).
     bc_pair_weight: dict[tuple[str, str], int] = {}
 
     for node in all_nodes:
@@ -442,7 +451,8 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
                 edge_tgt = target_context
                 if edge_src not in context_ids or edge_tgt not in context_ids:
                     continue
-                raw_edges.add((edge_src, edge_tgt, "cross_context"))
+                key: tuple[str, str, EdgeType] = (edge_src, edge_tgt, "cross_context")
+                raw_edge_count[key] = raw_edge_count.get(key, 0) + 1
                 # Count weight from module-level scans only to avoid
                 # double-counting the BC-level rglob that also sees module files.
                 if node["type"] == "module":
@@ -456,12 +466,14 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
                 if target_id == source_context:
                     # The import resolves only to the BC itself — skip.
                     continue
-                raw_edges.add((source_id, target_id, "internal"))
+                int_key: tuple[str, str, EdgeType] = (source_id, target_id, "internal")
+                raw_edge_count[int_key] = raw_edge_count.get(int_key, 0) + 1
 
-    # Individual cross-context and internal edges.
+    # Individual cross-context and internal edges — each carries its import count
+    # as weight so humans can assess coupling strength without reading source code.
     edges: list[Edge] = [
-        {"source": src, "target": tgt, "type": etype}
-        for src, tgt, etype in sorted(raw_edges)
+        {"source": src, "target": tgt, "type": etype, "weight": count}
+        for (src, tgt, etype), count in sorted(raw_edge_count.items())
     ]
 
     # Aggregate edges: one per BC-pair, carrying the total import count as weight.
