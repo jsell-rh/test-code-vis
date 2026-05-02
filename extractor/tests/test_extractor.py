@@ -23,6 +23,7 @@ from extractor.extractor import (
     _order_by_coupling,
     _position_spec_nodes,
     annotate_cascade_depth,
+    apply_independence_spatial_layout,
     build_dependency_edges,
     build_scene_graph,
     classify_edge_type,
@@ -1580,15 +1581,11 @@ def src_two_independent_groups(tmp_path: Path) -> Path:
         (bc / mod / "__init__.py").write_text("")
     (bc / "__init__.py").write_text("")
     # Group 0: mod_a imports mod_b
-    (bc / "mod_a" / "service.py").write_text("from mybc.mod_b import X
-")
-    (bc / "mod_b" / "models.py").write_text("class X: pass
-")
+    (bc / "mod_a" / "service.py").write_text("from mybc.mod_b import X\n")
+    (bc / "mod_b" / "models.py").write_text("class X: pass\n")
     # Group 1: mod_c imports mod_d
-    (bc / "mod_c" / "service.py").write_text("from mybc.mod_d import Y
-")
-    (bc / "mod_d" / "models.py").write_text("class Y: pass
-")
+    (bc / "mod_c" / "service.py").write_text("from mybc.mod_d import Y\n")
+    (bc / "mod_d" / "models.py").write_text("class Y: pass\n")
     return tmp_path
 
 
@@ -1674,10 +1671,8 @@ class TestApplyIndependenceSpatialLayout:
         for d in [bc_dir, mod_a, mod_b]:
             d.mkdir(parents=True)
             (d / "__init__.py").write_text("")
-        (mod_a / "logic.py").write_text("from monolith.b import X
-")
-        (mod_b / "models.py").write_text("class X: pass
-")
+        (mod_a / "logic.py").write_text("from monolith.b import X\n")
+        (mod_b / "models.py").write_text("class X: pass\n")
 
         nodes: list[Node] = discover_bounded_contexts(tmp_path)
         for bc_node in list(nodes):
@@ -1686,9 +1681,13 @@ class TestApplyIndependenceSpatialLayout:
         compute_layout(nodes, edges)
         compute_independence_groups(nodes, edges)
 
-        positions_before = {n["id"]: dict(n["position"]) for n in nodes if n["type"] == "module"}
+        positions_before = {
+            n["id"]: dict(n["position"]) for n in nodes if n["type"] == "module"
+        }
         apply_independence_spatial_layout(nodes)
-        positions_after = {n["id"]: dict(n["position"]) for n in nodes if n["type"] == "module"}
+        positions_after = {
+            n["id"]: dict(n["position"]) for n in nodes if n["type"] == "module"
+        }
 
         assert positions_before == positions_after, (
             "Single-group contexts: apply_independence_spatial_layout must not move modules"
@@ -1729,7 +1728,12 @@ class TestApplyIndependenceSpatialLayout:
         g1 = by_group[group_keys[1]]
 
         max_intra = (
-            max(dist2d(a, b) for grp in [g0, g1] for i, a in enumerate(grp) for b in grp[i + 1:])
+            max(
+                dist2d(a, b)
+                for grp in [g0, g1]
+                for i, a in enumerate(grp)
+                for b in grp[i + 1 :]
+            )
             if any(len(grp) > 1 for grp in [g0, g1])
             else 0.0
         )
@@ -1755,7 +1759,9 @@ class TestApplyIndependenceSpatialLayout:
 
         # The positions of modules in different groups must not all be identical.
         all_positions = [
-            (n["position"]["x"], n["position"]["z"]) for pts in groups.values() for n in pts
+            (n["position"]["x"], n["position"]["z"])
+            for pts in groups.values()
+            for n in pts
         ]
         assert len(set(all_positions)) > 1, (
             "Independence groups must produce spatially distinct module positions"
