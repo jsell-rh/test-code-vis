@@ -49,20 +49,42 @@ if grep -q "question_panel\|QuestionPanel\|ViewSpec\|view_spec_requested\|view_s
 fi
 
 # ── 2. Spec extraction ────────────────────────────────────────────────────────
-# Patterns extended (task-034): discover_spec_nodes and _position_spec_nodes were
-# correctly removed from this codebase; guard prevents accidental reintroduction.
+# Branch-attribution: FAIL only when this branch INTRODUCED the prohibited pattern.
+# Pre-existing spec-extraction code (present at fork point, not added by this branch)
+# produces NOTE only — another task is responsible for its removal.
+# Use git diff +lines to determine introduction: a file can have branch commits for
+# unrelated work while the prohibited functions predate the branch entirely, so
+# "file has branch commits" is insufficient — we check whether the PATTERN was added.
+_SE_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+_SE_IMPL_PAT="extract_spec_nodes|_layout_spec_nodes|include_specs|--specs\b|discover_spec_nodes|_position_spec_nodes"
+_SE_TEST_PAT="TestSpecExtraction|test_spec_extraction|src_with_specs|TestSpecNodeDiscovery|test_discover_spec_nodes|test_position_spec_nodes"
+
 for src in extractor/extractor.py extractor/__main__.py; do
-  if [ -f "$src" ]; then
-    if grep -q "extract_spec_nodes\|_layout_spec_nodes\|include_specs\|--specs\b\|discover_spec_nodes\|_position_spec_nodes" "$src"; then
+  if [ -f "$src" ] && grep -qE "$_SE_IMPL_PAT" "$src" 2>/dev/null; then
+    if [[ "$_SE_BRANCH" == "main" || "$_SE_BRANCH" == "HEAD" ]]; then
       echo "FAIL: Prohibited spec-extraction code found in $src"
       FAIL=1
+    elif git diff main..HEAD -- "$src" 2>/dev/null | grep '^+[^+]' | grep -qE "$_SE_IMPL_PAT"; then
+      echo "FAIL: Prohibited spec-extraction code introduced by this branch in $src"
+      FAIL=1
+    else
+      echo "NOTE: Pre-existing prohibited spec-extraction code in $src (NOT introduced by this branch)."
+      echo "  Informational only — does NOT count as FAIL. Another task is responsible for removal."
     fi
   fi
 done
 
-if grep -rq "TestSpecExtraction\|test_spec_extraction\|src_with_specs\|TestSpecNodeDiscovery\|test_discover_spec_nodes\|test_position_spec_nodes" extractor/tests/ 2>/dev/null; then
-  echo "FAIL: Prohibited spec-extraction tests found in extractor/tests/"
-  FAIL=1
+if grep -rqE "$_SE_TEST_PAT" extractor/tests/ 2>/dev/null; then
+  if [[ "$_SE_BRANCH" == "main" || "$_SE_BRANCH" == "HEAD" ]]; then
+    echo "FAIL: Prohibited spec-extraction tests found in extractor/tests/"
+    FAIL=1
+  elif git diff main..HEAD -- extractor/tests/ 2>/dev/null | grep '^+[^+]' | grep -qE "$_SE_TEST_PAT"; then
+    echo "FAIL: Prohibited spec-extraction tests introduced by this branch in extractor/tests/"
+    FAIL=1
+  else
+    echo "NOTE: Pre-existing prohibited spec-extraction tests in extractor/tests/ (NOT introduced by this branch)."
+    echo "  Informational only — does NOT count as FAIL. Another task is responsible for removal."
+  fi
 fi
 
 # ── 3. Other prohibited modes (belt-and-suspenders) ──────────────────────────

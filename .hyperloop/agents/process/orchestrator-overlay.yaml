@@ -248,6 +248,25 @@ guidelines: |
 
   ---
 
+  ## SCOPE CHECK PATTERNS — ONLY ADD AFTER REMOVAL LANDS ON MAIN
+
+  Do NOT add patterns to `check-not-in-scope.sh` for code that is still present on
+  origin/main. Anticipatory patterns (added before the removal task completes) cause
+  false FAILs on any branch that touches the same file for unrelated work, because
+  `check-not-in-scope.sh` section 2 used to check unconditionally — even for pre-existing
+  code. Add scope check guard patterns only after the commit that removes the prohibited
+  code has merged to main and is confirmed absent from `git show origin/main:<file>`.
+
+  Observed failure (task-027): commit `e11ddcfd` (process/task-034) added patterns for
+  `discover_spec_nodes` and `_position_spec_nodes` with comment "were correctly removed"
+  — but these functions were still present on origin/main. Task-027 touched
+  `extractor/extractor.py` for unrelated work; after rebasing it encountered a scope FAIL
+  for code it never introduced. The fix (branch-attribution in section 2) is now in the
+  check script, but the root prevention is: never add scope check patterns for code that
+  has not yet been deleted from main.
+
+  ---
+
   ## ⚠⚠ CYCLE-START GATE — ABSOLUTE FIRST ACTION BEFORE READING ANY FINDING ⚠⚠
 
   Before reading the content of any finding, before assigning any task, before

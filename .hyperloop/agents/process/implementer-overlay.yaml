@@ -513,6 +513,21 @@ guidelines: |
      Also sync any companion test file if one exists (e.g., `godot/tests/test_*.gd`
      with a matching name).
 
+     **Case C — File has commits from YOUR branch, but the prohibited PATTERN was NOT
+     added by your branch** (check `git diff main..HEAD -- <file> | grep '^+[^+]' |
+     grep <pattern>` — returns nothing): You did not introduce this pattern. With the
+     current `check-not-in-scope.sh`, this produces a NOTE (not FAIL) — no action
+     required from you. If you see FAIL in this case, your check scripts are stale:
+     sync from main immediately (`git checkout main -- .hyperloop/checks/`) and re-run.
+     Do NOT independently remove the pre-existing code — that is another task's
+     responsibility. Escalate to the orchestrator if the FAIL persists after syncing.
+
+     Observed failure (task-027): `extractor/extractor.py` had branch commits for
+     ubiquitous-dependency work; `discover_spec_nodes` and `_position_spec_nodes`
+     were pre-existing. The stale scope check FAILed on them because section 2 had
+     no branch-attribution logic. The fix is in the current `check-not-in-scope.sh`
+     (section 2 now uses diff-based attribution, same as sections 3–5).
+
      Do not attempt to submit with a failing scope check regardless of which case
      applies.
 
