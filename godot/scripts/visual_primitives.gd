@@ -5,7 +5,7 @@ extends RefCounted
 ## Implements the composition layer of the visual-primitives specification:
 ##   specs/core/visual-primitives.spec.md
 ##
-## This module handles rendering of three primitive types that are layered
+## This module handles rendering of four primitive types that are layered
 ## on top of the base Container/Node/Edge rendered by main.gd:
 ##
 ##   Badge Primitive — small glyph docked to a node indicating a cross-cutting
@@ -20,9 +20,19 @@ extends RefCounted
 ##     dependencies.  The rail indicates the dependency exists without drawing
 ##     the edge.  Spec §Requirement: Power Rail Notation.
 ##
+##   Port Primitive — small sphere markers anchored to a Container's membrane
+##     representing public function interface points.  Visible at NEAR zoom only.
+##     Spec §Requirement: Port Primitive.
+##
+##   Tint Primitive — categorical background colors for Container nodes encoding
+##     one dimension of categorical data (e.g. domain ownership).  A palette of
+##     6 desaturated colors is pre-defined.  Spec §Requirement: Tint Primitive.
+##
 ## Usage: call attach_primitives(node_data, anchor) after the base volume has
 ## been created.  The function inspects the node_data dict and attaches the
 ## appropriate child nodes to the anchor.
+## Call render_ports(symbols, anchor, node_size, lod_entries) to add Port markers.
+## Call get_tint(index) to retrieve a categorical fill color for a Container.
 
 # ---------------------------------------------------------------------------
 # Badge colours
@@ -241,3 +251,153 @@ func _render_power_rail(anchor: Node3D, node_size: float) -> void:
 	disc_instance.material_override = rail_mat
 	disc_instance.position = Vector3(0.0, POWER_RAIL_Y_OFFSET, 0.0)
 	anchor.add_child(disc_instance)
+
+
+# ===========================================================================
+# Tint Primitive
+# ===========================================================================
+
+## Categorical color palette for the Tint Primitive.
+##
+## Desaturated colors allow simultaneous use alongside other primitives
+## without visual interference.  Limited to 6 entries per the spec:
+##   "palette is limited to 4-6 categorical colors (preattentive discrimination limit)"
+## Spec §Requirement: Tint Primitive / §Scenario: Domain tinting.
+const TINT_PALETTE: Array[Color] = [
+	Color(0.38, 0.58, 0.82, 1.0),  # muted blue   — domain 0
+	Color(0.38, 0.72, 0.52, 1.0),  # muted green  — domain 1
+	Color(0.82, 0.62, 0.32, 1.0),  # muted amber  — domain 2
+	Color(0.68, 0.38, 0.68, 1.0),  # muted purple — domain 3
+	Color(0.72, 0.42, 0.42, 1.0),  # muted red    — domain 4
+	Color(0.38, 0.72, 0.72, 1.0),  # muted teal   — domain 5
+]
+
+
+## Return the categorical Tint color for a Container at position *index*.
+##
+## The index wraps around the palette when there are more bounded contexts
+## than palette entries.  The returned Color's alpha is always 1.0 — the
+## caller (main.gd) overlays the permeability alpha before assigning to the
+## material so that Tint and membrane permeability use independent channels.
+##
+## Spec §Requirement: Tint Primitive:
+##   "each context has a distinct desaturated fill color"
+##   "palette is limited to 4-6 categorical colors"
+##   "only ONE categorical dimension is encoded via Tint at a time"
+func get_tint(index: int) -> Color:
+	return TINT_PALETTE[index % TINT_PALETTE.size()]
+
+
+# ===========================================================================
+# Port Primitive
+# ===========================================================================
+
+## Radius of each Port marker sphere in scene units.
+## Small enough to sit on the Container membrane without obscuring the label.
+const PORT_RADIUS: float = 0.12
+
+## Offset added to the Container half-size so ports sit on the membrane face.
+const PORT_EDGE_OFFSET: float = 0.06
+
+## Base color for all Port markers: light grey to stand out against Container fill.
+## Spec §Port Primitive — "a small visual element anchored to a Container's membrane"
+const PORT_COLOR: Color = Color(0.88, 0.88, 0.88, 0.92)
+
+## Label3D pixel_size for Port labels — slightly smaller than node labels.
+const PORT_LABEL_PIXEL_SIZE: float = 0.008
+
+
+## Render Port markers on a Container's membrane for each public function.
+##
+## For every symbol with visibility="public" and kind="function", a small sphere
+## is placed on the front face of the Container box and labeled with the function
+## name.  All port visuals (sphere + label anchor) are appended to *lod_entries*
+## with node_type="port" so that the LOD manager hides them at FAR and MEDIUM
+## zoom levels and reveals them only at NEAR.
+##
+## Spec §Requirement: Port Primitive / §Scenario: Port placement:
+##   "4 Ports appear on its membrane"
+##   "each Port is labeled with the function name"
+## Spec §Scenario: Port visibility at zoom levels:
+##   "WHEN the zoom level is far THEN Ports are hidden"
+##   "as the human zooms in, Ports fade in on the membrane"
+##
+## Parameters:
+##   symbols:     Array of SymbolInfo dicts (from scene graph node["symbols"])
+##   anchor:      Container Node3D anchor to attach Port markers to
+##   node_size:   The node's 'size' field — used to compute membrane position
+##   lod_entries: LOD entry array — port visuals are appended with type "port"
+func render_ports(
+	symbols: Array,
+	anchor: Node3D,
+	node_size: float,
+	lod_entries: Array,
+) -> void:
+	# Collect public functions only — private symbols are NOT ports.
+	# Spec §Scenario: Port placement: ports represent public interface points.
+	var public_fns: Array = []
+	for sym: Dictionary in symbols:
+		if sym.get("visibility", "") == "public" and sym.get("kind", "") == "function":
+			public_fns.append(sym)
+
+	if public_fns.is_empty():
+		return
+
+	var n: int = public_fns.size()
+	# Space ports evenly across the front face of the Container box.
+	# The Container box spans [-node_size, +node_size] on X (size = full width).
+	var total_span: float = node_size * 1.6  # 80% of the box width
+	var spacing: float = total_span / float(max(n, 1))
+	var start_x: float = -(total_span * 0.5) + spacing * 0.5
+
+	# Y: near the top of the Container surface (bounded_context height ≈ size * 0.2)
+	var port_y: float = node_size * 0.12 + PORT_RADIUS
+
+	# Z: the front face of the box is at +node_size/2; add a small offset so
+	# the sphere visually sits on the membrane rather than inside it.
+	var port_z: float = node_size * 0.5 + PORT_EDGE_OFFSET
+
+	for i: int in range(n):
+		var sym: Dictionary = public_fns[i]
+		var fn_name: String = str(sym.get("name", "fn_%d" % i))
+
+		# --- Port sphere mesh -----------------------------------------------
+		var port_mesh := SphereMesh.new()
+		port_mesh.radius = PORT_RADIUS
+		port_mesh.height = PORT_RADIUS * 2.0
+		port_mesh.radial_segments = 8
+		port_mesh.rings = 4
+
+		var port_mat := StandardMaterial3D.new()
+		port_mat.albedo_color = PORT_COLOR
+		port_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		port_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+
+		var port_instance := MeshInstance3D.new()
+		port_instance.name = "Port_" + fn_name
+		port_instance.mesh = port_mesh
+		port_instance.material_override = port_mat
+		port_instance.position = Vector3(
+			start_x + float(i) * spacing,
+			port_y,
+			port_z,
+		)
+		anchor.add_child(port_instance)
+
+		# --- Port label -------------------------------------------------------
+		# Label3D sits above the sphere so the function name is readable.
+		var port_label := Label3D.new()
+		port_label.name = "PortLabel_" + fn_name
+		port_label.text = fn_name
+		port_label.pixel_size = PORT_LABEL_PIXEL_SIZE
+		port_label.position = port_instance.position + Vector3(0.0, PORT_RADIUS + 0.08, 0.0)
+		port_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		port_label.no_depth_test = true
+		anchor.add_child(port_label)
+
+		# Register both visuals as "port" type so LOD manager shows them only at NEAR.
+		# Spec §Scenario: Port visibility at zoom levels —
+		#   "WHEN the zoom level is far THEN Ports are hidden"
+		#   "as the human zooms in, Ports fade in on the membrane"
+		lod_entries.append({"anchor": port_instance, "node_type": "port"})
+		lod_entries.append({"anchor": port_label, "node_type": "port"})
