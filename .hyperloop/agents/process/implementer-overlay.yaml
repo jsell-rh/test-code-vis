@@ -277,6 +277,54 @@ guidelines: |
   do not review implementation quality." Fix process issues first. Never submit
   with these checks failing.
 
+  ## SINGLE-IMPLEMENTATION-CHECK FAIL — CHECK-FIRST PROTOCOL
+
+  When your prior FAIL report shows exactly ONE implementation check exiting
+  non-zero (rebase and sync checks pass), execute this protocol BEFORE writing
+  any code or running any other check:
+
+  1. Run the single failing check and capture its COMPLETE output:
+
+       bash .hyperloop/checks/<failing-check-name>.sh 2>&1 | cat
+
+  2. Find the "Required fix" or "Required:" section in the output. Apply the
+     fix VERBATIM — copy the code exactly as printed. Do NOT paraphrase, do NOT
+     rewrite, do NOT attempt an alternative approach.
+
+  3. Run the single failing check again immediately:
+
+       bash .hyperloop/checks/<failing-check-name>.sh   # must exit 0
+
+  4. Only after the specific check exits 0, run the full suite:
+
+       bash .hyperloop/checks/run-all-checks.sh
+
+  Do NOT make changes unrelated to the failing check. Do NOT re-attempt with
+  the same broken implementation — every check that fails has printed exactly
+  what is wrong and exactly what to do. If it has failed for multiple rounds,
+  the check's own output has prescribed the fix each time and was not followed.
+
+  **Why `check-prescribed-fixes-applied.sh` does not catch this:**
+  That check tracks "Offending lines:" formatted citations in the FAIL report.
+  Many checks (including `check-individual-edge-weight.sh`) use a "Required fix:"
+  bullet format instead — those are NOT scanned. This means sole-check failures
+  with "Required fix:" output can persist indefinitely if the check's output is
+  not read and applied directly.
+
+  Observed failure (task-108, rounds 1–10): sole blocking check was
+  `check-individual-edge-weight.sh`. Its stdout printed:
+
+    Required fix in build_dependency_edges():
+      1. Replace the raw_edges set with a dict[tuple, int] that accumulates
+         import count per (source_id, target_id, etype) triple:
+           raw_edge_count: dict[tuple[str,str,str], int] = {}
+           raw_edge_count[key] = raw_edge_count.get(key, 0) + 1
+      2. Emit weight on each individual edge:
+           {'source': src, 'target': tgt, 'type': etype, 'weight': count}
+
+  After 10 rounds, the fix was still not applied verbatim. Apply the check's
+  own prescribed fix first — do not write any other code until the check exits 0.
+
   ## CHECK SYNC ≠ REBASE — TWO DISTINCT GIT OPERATIONS, BOTH REQUIRED
 
   `git checkout main -- .hyperloop/checks/` copies CHECK SCRIPT FILES into your
