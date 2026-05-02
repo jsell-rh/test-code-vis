@@ -204,10 +204,24 @@ guidelines: |
   FAIL. The implementation quality review is irrelevant — silent test omission
   means coverage claims cannot be trusted.
 
+  Run `bash .hyperloop/checks/check-pytest-test-count.sh` and include its
+  complete output verbatim in your report.
+
+  If the Python test count on the branch is less than on origin/main, issue
+  FAIL. A branch with fewer pytest functions than origin/main has silently
+  dropped tests added by other tasks after the fork — almost always because
+  the branch was not rebased. check-pytest-passes.sh exits 0 in this case
+  (all remaining tests pass), making the regression invisible without this check.
+
+  **Observed failure (task-063, round 3):** branch had 254 pytest tests vs 264
+  on origin/main. The 10 missing tests were added by task-023 and task-040.
+  check-pytest-passes.sh exited 0; no mechanical check caught the regression
+  until the verifier ran extractor-lint.sh manually against both revisions.
+
   **Observed failure (task-108, round 8):** branch had 17 _run_suite() calls
   vs 18 on main. 161 tests passed. The missing suite (test_visual_primitives.gd)
   covered task-074 requirements that the branch had silently reverted. These
-  two new mechanical checks catch this pattern before any manual review.
+  mechanical checks catch this pattern before any manual review.
 
   ## Pipeline Integration — Compute Functions Must Be Called
 

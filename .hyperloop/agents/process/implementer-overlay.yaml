@@ -142,9 +142,10 @@ guidelines: |
   rebase, a missing test file is NOT automatically restored when the conflict was
   in a different file — explicitly restore it from origin/main.
 
-  After rebase, run the regression guard before `run-all-checks.sh`:
+  After rebase, run both regression guards before `run-all-checks.sh`:
 
-    bash .hyperloop/checks/check-run-tests-suite-count.sh
+    bash .hyperloop/checks/check-run-tests-suite-count.sh   # GDScript suite count
+    bash .hyperloop/checks/check-pytest-test-count.sh       # Python test count
     bash .hyperloop/checks/run-all-checks.sh
 
   ## COMMIT TRAILER DISCIPLINE — VERIFY AFTER EVERY COMMIT
