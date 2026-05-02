@@ -1735,6 +1735,46 @@ class TestTypeTopologyExtraction:
                 f"Expected 'inherits' or 'has_a'; got {e['type']!r}"
             )
 
+    def test_extraction_cost_ast_only_no_type_inference(self, tmp_path: Path) -> None:
+        """Spec: Extraction cost scenario — THEN it requires only AST parsing.
+
+        Verifies that extract_type_topology completes successfully on a codebase
+        that contains external base classes (e.g. from third-party libraries) that
+        cannot be resolved.  AST-only extraction skips unresolvable bases instead
+        of raising an error or attempting cross-file type inference.
+
+        GIVEN a codebase where a class inherits from an external (unresolvable) type
+        WHEN type topology extraction runs
+        THEN it completes without error
+        AND it does not require type inference or flow analysis (only AST parsing)
+        AND it emits no edge for the unresolvable external base (silently skipped)
+        """
+        pkg = tmp_path / "svc"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+
+        # Class inherits from pydantic.BaseModel — not defined in this codebase.
+        # AST-only extraction must handle this gracefully (skip the external base).
+        (pkg / "models.py").write_text(
+            "from pydantic import BaseModel\nclass MyModel(BaseModel):\n    name: str\n"
+        )
+
+        nodes: list[Node] = discover_bounded_contexts(tmp_path)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(tmp_path, bc["id"]))
+
+        # Must complete without raising an exception (no type inference attempted).
+        edges = extract_type_topology(tmp_path, nodes)
+
+        # Unresolvable external base → no edge emitted (skipped silently).
+        # The function must not crash or attempt import-based type resolution.
+        assert isinstance(edges, list), "extract_type_topology must return a list"
+        # No inherits edge for 'BaseModel' since it is external and unresolvable.
+        for e in edges:
+            assert e.get("target") != "BaseModel", (
+                "Unresolvable external base 'BaseModel' must not produce an edge"
+            )
+
 
 # ---------------------------------------------------------------------------
 # Requirement: Call Graph Extraction
