@@ -3,8 +3,8 @@ id: task-038
 title: Implement Port primitive renderer in Godot (public interface points on Container
   membrane)
 spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
-status: in_progress
-phase: merge
+status: complete
+phase: null
 deps:
 - task-023
 - task-012
