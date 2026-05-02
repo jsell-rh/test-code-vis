@@ -1789,6 +1789,19 @@ def src_symbols(tmp_path: Path) -> Path:
     return tmp_path
 
 
+@pytest.fixture()
+def src_symbols_constants(tmp_path: Path) -> Path:
+    """Source tree with module-level constants and variables for symbol kind tests."""
+    bc = tmp_path / "catalog"
+    module = bc / "config"
+    module.mkdir(parents=True)
+    for d in [bc, module]:
+        (d / "__init__.py").write_text("")
+    # Module with ALL_CAPS constant and lowercase variable.
+    (module / "settings.py").write_text("MAX_RETRIES = 3\ndefault_timeout = 30\n")
+    return tmp_path
+
+
 class TestSymbolTableExtraction:
     """Spec: visual-primitives.spec.md § Requirement: Symbol Table Extraction."""
 
@@ -1873,6 +1886,65 @@ class TestSymbolTableExtraction:
         )
         assert isinstance(domain_node["symbols"], list), (
             "'symbols' field must be a list"
+        )
+
+    def test_function_kind_is_function(self, src_symbols: Path) -> None:
+        """Function symbols have kind='function'.
+
+        Spec: visual-primitives.spec.md § Symbol Table — SymbolKind literals.
+        """
+        nodes: list[Node] = discover_bounded_contexts(src_symbols)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_symbols, bc["id"]))
+        extract_symbols(src_symbols, nodes)
+
+        domain_node = next(n for n in nodes if n["id"] == "orders.domain")
+        symbols = domain_node.get("symbols", [])
+        names = {s["name"]: s for s in symbols}
+
+        assert "process_order" in names, "process_order must be extracted as a symbol"
+        assert names["process_order"]["kind"] == "function", (
+            "process_order must have kind='function'"
+        )
+
+    def test_constant_kind_is_constant(self, src_symbols_constants: Path) -> None:
+        """ALL_CAPS module-level assignments have kind='constant'.
+
+        Spec: visual-primitives.spec.md § Symbol Table — SymbolKind literals.
+        """
+        nodes: list[Node] = discover_bounded_contexts(src_symbols_constants)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_symbols_constants, bc["id"]))
+        extract_symbols(src_symbols_constants, nodes)
+
+        config_node = next(n for n in nodes if n["id"] == "catalog.config")
+        symbols = config_node.get("symbols", [])
+        names = {s["name"]: s for s in symbols}
+
+        assert "MAX_RETRIES" in names, "MAX_RETRIES must be extracted as a symbol"
+        assert names["MAX_RETRIES"]["kind"] == "constant", (
+            "ALL_CAPS name MAX_RETRIES must have kind='constant'"
+        )
+
+    def test_variable_kind_is_variable(self, src_symbols_constants: Path) -> None:
+        """Lowercase module-level assignments have kind='variable'.
+
+        Spec: visual-primitives.spec.md § Symbol Table — SymbolKind literals.
+        """
+        nodes: list[Node] = discover_bounded_contexts(src_symbols_constants)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_symbols_constants, bc["id"]))
+        extract_symbols(src_symbols_constants, nodes)
+
+        config_node = next(n for n in nodes if n["id"] == "catalog.config")
+        symbols = config_node.get("symbols", [])
+        names = {s["name"]: s for s in symbols}
+
+        assert "default_timeout" in names, (
+            "default_timeout must be extracted as a symbol"
+        )
+        assert names["default_timeout"]["kind"] == "variable", (
+            "Lowercase name default_timeout must have kind='variable'"
         )
 
 

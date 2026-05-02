@@ -24,6 +24,7 @@ from extractor.schema import (
     SceneGraph,
     StructuralSignificanceMetrics,
     SymbolInfo,
+    SymbolKind,
 )
 
 # ---------------------------------------------------------------------------
@@ -1047,36 +1048,72 @@ def extract_symbols(src_path: Path, nodes: list[Node]) -> None:
             except (SyntaxError, ValueError, UnicodeDecodeError):
                 continue
 
-            for item in ast.walk(tree):
-                # Only capture top-level (module-level) or class-level defs.
-                # ast.walk is depth-first; to restrict to top-level defs we
-                # check that the parent is the module or a ClassDef.
-                if not isinstance(
-                    item, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-                ):
-                    continue
-                name = item.name
-                if name in seen_names:
-                    continue
-                seen_names.add(name)
-
-                visibility = "private" if name.startswith("_") else "public"
-
-                if isinstance(item, ast.ClassDef):
-                    sym: SymbolInfo = {
-                        "name": name,
-                        "visibility": visibility,
-                        "kind": "class",
-                    }
-                else:
+            for item in tree.body:
+                # Iterate over module-level statements only (tree.body = top-level).
+                # Captures functions, classes, constants, and variables as defined
+                # by the spec (visual-primitives.spec.md §Symbol Table Extraction).
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    name = item.name
+                    if name in seen_names:
+                        continue
+                    seen_names.add(name)
+                    visibility = "private" if name.startswith("_") else "public"
                     sig = _format_signature(item)
-                    sym = {
+                    sym: SymbolInfo = {
                         "name": name,
                         "visibility": visibility,
                         "kind": "function",
                         "signature": sig,
                     }
-                symbols.append(sym)
+                    symbols.append(sym)
+
+                elif isinstance(item, ast.ClassDef):
+                    name = item.name
+                    if name in seen_names:
+                        continue
+                    seen_names.add(name)
+                    visibility = "private" if name.startswith("_") else "public"
+                    sym = {
+                        "name": name,
+                        "visibility": visibility,
+                        "kind": "class",
+                    }
+                    symbols.append(sym)
+
+                elif isinstance(item, ast.Assign):
+                    # e.g. MAX_SIZE = 100 (constant) or default_value = None (variable)
+                    for target in item.targets:
+                        if not isinstance(target, ast.Name):
+                            continue
+                        name = target.id
+                        if name in seen_names or name.startswith("__"):
+                            continue
+                        seen_names.add(name)
+                        visibility = "private" if name.startswith("_") else "public"
+                        kind: SymbolKind = "constant" if name.isupper() else "variable"
+                        sym = {
+                            "name": name,
+                            "visibility": visibility,
+                            "kind": kind,
+                        }
+                        symbols.append(sym)
+
+                elif isinstance(item, ast.AnnAssign):
+                    # e.g. MAX_SIZE: int = 100 or timeout: float = 30.0
+                    if not isinstance(item.target, ast.Name):
+                        continue
+                    name = item.target.id
+                    if name in seen_names or name.startswith("__"):
+                        continue
+                    seen_names.add(name)
+                    visibility = "private" if name.startswith("_") else "public"
+                    kind = "constant" if name.isupper() else "variable"
+                    sym = {
+                        "name": name,
+                        "visibility": visibility,
+                        "kind": kind,
+                    }
+                    symbols.append(sym)
 
         node["symbols"] = symbols
 
