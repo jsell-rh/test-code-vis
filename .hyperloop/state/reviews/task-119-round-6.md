@@ -1,116 +1,110 @@
 ---
 task_id: task-119
 round: 6
-role: verifier
+role: spec-reviewer
 verdict: fail
 ---
-## Scope Check Output
-OK: No prohibited (not-in-scope) features detected.
-
-## Rebase Check — BLOCKING FAIL
-
-The branch is NOT rebased onto origin/main.
-
-- Fork point (merge-base): 45a4dca
-- origin/main HEAD: 396d83a
-- Commits on main not in branch: 2
-  - 396d83ac feat(extraction): extractor — cluster detection (tightly-coupled module groups) (#231)
-  - 61c9117a chore(tasks): intake visual-primitives gaps — type topology extraction and Node renderer
-
-Merging this branch as-is would revert both commits that main added after 45a4dca. This is a blocking FAIL per the review protocol ("If it exits non-zero, issue FAIL immediately.").
-
-**Required fix:**
-```
-git fetch origin main:main
-git rebase origin/main
-# Keep all cluster detection functions/files that main added (incoming 'theirs' side)
-# Apply task-119 changes on top
-```
-
-## Test Suite Count Check
-OK: _run_suite() count on branch (19) >= origin/main (19). PASS.
-
-## run-all-checks.sh Summary
-60 checks run. One check exited non-zero: check-rebased-onto-main.sh (the rebase failure above). All other checks passed.
-
-## Step 8 — Mandatory Specific Checks
-
-- check-branch-has-impl-files.sh: PASS — 5 non-.hyperloop/ files changed
-- check-spec-ref-staleness.sh: PASS — specs/core/visual-primitives.spec.md is identical at Spec-Ref and HEAD; no spec drift
-- check-compute-functions-called-from-entry-point.sh: PASS — all 7 compute functions called from extractor.py
-- check-typeddict-fields-extractor-tested.sh: PASS — all Literal type values covered
-- check-lod-opacity-animation.sh: PASS — no LOD files introduced or modified; check not applicable
-- check-aggregate-edge-impl.sh: PASS — branch does not modify LOD/visualization files; check not applicable
-- check-tscn-no-dangling-references.sh: PASS — all ext_resource paths in .tscn files resolve
-- check-no-gdscript-duplicate-functions.sh: PASS — no GDScript files changed on this branch
-- check-lod-level-tests.sh: PASS — no LOD files modified; check not applicable
-- godot-compile.sh: PASS — Godot project compiles successfully (runtime ERRORs for tweened modulate:a on Node3D nodes are pre-existing issues in lod_manager.gd, not introduced by this branch)
-- godot-tests.sh: PASS — GDScript behavioral tests passed
-
-## Python Quality Checks
-- ruff check extractor/: PASS — All checks passed
-- ruff format --check extractor/: PASS — 8 files already formatted
-- pytest (248 tests): PASS — 248 passed in 0.67s
-
-## Spec-Ref Analysis
+## Spec Alignment Review — task-119 (Visual Primitives: Bridge Detection / Betweenness Centrality)
 
 Spec-Ref: specs/core/visual-primitives.spec.md@67df14bc9137e80de5a60d12dad7f77c7d995959
 Task-Ref: task-119
 
-Spec section targeted: "Structural Significance Extraction / Bridge detection"
+---
 
-Relevant scenario from spec:
-- "GIVEN a module with high betweenness centrality (sits on many shortest paths between other modules) WHEN structural significance is computed THEN the module is annotated with its betweenness centrality score AND it is flagged as a bridge"
+## Blocking Issue
 
-The implementation directly satisfies this scenario. The spec-ref is confirmed non-stale.
+**FAIL — Branch is not rebased onto origin/main.**
 
-## Commit Trailer Audit
+- Fork point (merge-base): 45a4dca
+- origin/main HEAD: 396d83a
+- Commits on main NOT in branch (2):
+  - 396d83ac feat(extraction): extractor — cluster detection (tightly-coupled module groups) (#231)
+  - 61c9117a chore(tasks): intake visual-primitives gaps — type topology extraction and Node renderer
 
-All implementation commits carry `Task-Ref: task-119`. Spec-Ref trailers are present on the two substantive implementation commits. The chore commit for checks sync correctly carries Task-Ref only (no spec change). PASS.
+Merging this branch as-is would revert both commits. This is a blocking FAIL per the review protocol.
 
-## Implementation Review
+Required fix:
+```
+git fetch origin main:main
+git rebase origin/main
+# Keep all cluster detection functions/files added by main (incoming 'theirs' side)
+# Apply task-119 changes on top
+```
 
-### Files changed (excluding .hyperloop)
-1. extractor/extractor.py — adds _compute_betweenness_centrality() and calls it from compute_structural_significance()
-2. extractor/schema.py — adds betweenness_centrality: NotRequired[float] to Node TypedDict; adds validator rule 11; adds metrics/loc validator rules 9-10
-3. extractor/schema.md — new authoritative schema documentation file
-4. extractor/tests/test_extractor.py — 3 new betweenness centrality tests + 3 new scene graph output tests
-5. extractor/tests/test_schema.py — 11 new TestNodeMetricsValidation tests
+---
 
-### Algorithm correctness
-_compute_betweenness_centrality() implements Brandes BFS correctly:
-- Builds shortest-path DAG from each source node
-- Back-propagates dependency scores
-- Normalises by 1/((n-1)*(n-2)) for directed graphs where n > 2
-- Returns dict with scores in [0.0, 1.0]
+## Requirement Coverage
 
-The adjacency list passed from compute_structural_significance() treats edges as undirected (both directions added), which is correct for betweenness centrality in an import graph where structural bridging is symmetric.
+### Extraction Layer
 
-The score is stored as a top-level node field `betweenness_centrality` (not nested in `structural_significance`), consistent with the schema.md documentation and with how `is_bridge` is stored.
+**Requirement: Scope Nesting Extraction** — NOT IN SCOPE for task-119. Pre-existing. COVERED (not re-reviewed).
 
-### Spec compliance
-The spec requires: "the module is annotated with its betweenness centrality score AND it is flagged as a bridge." The implementation annotates every node with a float score (not just bridge nodes), which is a superset of the requirement. `is_bridge` continues to be set based on articulation-point detection (DFS), while `betweenness_centrality` provides the continuous score. This is correct and matches the spec intent.
+**Requirement: Module Graph Extraction** — NOT IN SCOPE for task-119. Pre-existing. COVERED (not re-reviewed).
 
-### Validator correctness
-Rule 11: rejects bool (isinstance check for bool before int/float check is correct since bool is a subtype of int in Python). Accepts int and float. This mirrors the pattern already used for metrics.loc.
+**Requirement: Symbol Table Extraction** — NOT IN SCOPE for task-119. Pre-existing. COVERED (not re-reviewed).
 
-### Test coverage
-- test_betweenness_centrality_computed_for_bridge_node: GIVEN A-B-C chain, THEN B has bc > 0. Correct.
-- test_betweenness_centrality_zero_for_non_bridge_in_cycle: GIVEN A→B→C→A cycle, THEN all bc == 0. Correct: in a 3-cycle all shortest paths between any pair have equal-length alternatives.
-- test_compute_betweenness_centrality_direct: unit tests the helper function directly. Correct.
+**Requirement: Type Topology Extraction** — NOT IN SCOPE for task-119. Pre-existing. COVERED (not re-reviewed).
 
-No Godot-side changes were made (this is Python-extractor only work for task-119). The Godot tests pass unchanged.
+**Requirement: Call Graph Extraction** — NOT IN SCOPE for task-119. Pre-existing. COVERED (not re-reviewed).
 
-### No regressions introduced
-- Test suite count held at 19 suites (248 tests, up from ~234 — adds 14 new tests).
-- All 248 tests pass.
-- No ruff violations.
-- No GDScript changes.
-- No TSCN changes.
+**Requirement: Data Flow Spine Extraction** — NOT IN SCOPE for task-119. Pre-existing. COVERED (not re-reviewed).
 
-## SPEC-DRIFT Note
-The spec section on Bridge detection also mentions Landmark annotation for bridges ("GIVEN a module with high betweenness centrality... WHEN it is identified as a Landmark THEN it persists at all zoom levels"). This is Composition Layer behavior in Godot — it is not the scope of this task (Python extractor only). This is a SPEC-DRIFT observation, NOT a FAIL driver per guidelines.
+**Requirement: Structural Significance Extraction**
+Primary target of task-119. Focus on Bridge Detection scenario.
+
+- **Scenario: Hub detection** — COVERED. Pre-existing in-degree annotation and hub flagging untouched by this branch; 248 tests pass.
+
+- **Scenario: Bridge detection** — COVERED.
+  - Implementation: extractor/extractor.py adds _compute_betweenness_centrality() using Brandes BFS; called from compute_structural_significance(). Algorithm is correct: builds shortest-path DAG, back-propagates dependency scores, normalises by 1/((n-1)*(n-2)) for directed graphs (n > 2). Adjacency list is treated as undirected (both directions added), correct for structural bridging. betweenness_centrality float stored on every node; is_bridge set separately via articulation-point DFS. This is a superset of the spec requirement.
+  - Schema: extractor/schema.py adds betweenness_centrality: NotRequired[float] to Node TypedDict; validator rule 11 correctly rejects bool (checked before int/float since bool is a subtype of int) and accepts int/float.
+  - Tests (extractor/tests/test_extractor.py):
+    - test_betweenness_centrality_computed_for_bridge_node: GIVEN A->B->C chain THEN B has bc > 0. PASS.
+    - test_betweenness_centrality_zero_for_non_bridge_in_cycle: GIVEN A->B->C->A cycle THEN all bc == 0 (all shortest paths have equal-length alternatives). PASS.
+    - test_compute_betweenness_centrality_direct: unit-tests helper function directly. PASS.
+    - 3 additional scene-graph output tests and 11 TestNodeMetricsValidation tests in test_schema.py. PASS.
+  - All 248 pytest tests pass; no ruff violations.
+
+- **Scenario: Peripheral detection** — COVERED. Pre-existing; not modified by this branch.
+
+- **Scenario: Community detection** — COVERED. Pre-existing (Louvain/Leiden community detection exists and is tested); not modified by this branch.
+
+**Requirement: Ubiquitous Dependency Detection** — NOT IN SCOPE for task-119. Pre-existing. COVERED (not re-reviewed).
+
+---
+
+### Composition Layer Requirements
+
+All Composition Layer requirements (Container, Node, Badge, Edge, Port, Route, Landmark, Tint, LOD Shell, Power Rail, Overlay/Facet, Distortion Legend, Purpose-Level Annotation, Primitives Compose, Primitive Set is Closed) are Godot/renderer-side concerns.
+
+Task-119 is Python-extractor only. No Godot files were modified. GDScript behavioral tests pass unchanged (godot-tests.sh: PASS; godot --headless compile: PASS). These requirements are not within this task's scope and are not evaluated here.
+
+SPEC-DRIFT observation (non-blocking): The Landmark primitive scenario for bridge nodes ("GIVEN a module with high betweenness centrality... WHEN it is identified as a Landmark THEN it persists at all zoom levels") is Composition Layer / Godot behavior — not addressed by this task. This is a noted gap for a future Godot-side task, not a FAIL driver here.
+
+---
+
+## Quality Checks Summary
+
+| Check                                         | Result |
+|-----------------------------------------------|--------|
+| Rebased onto origin/main                      | FAIL (2 commits behind) |
+| Test suite count (19 suites)                  | PASS   |
+| 248 pytest tests                              | PASS   |
+| ruff check extractor/                         | PASS   |
+| ruff format --check                           | PASS   |
+| check-branch-has-impl-files.sh                | PASS   |
+| check-spec-ref-staleness.sh                   | PASS   |
+| check-compute-functions-called-from-entry-point.sh | PASS |
+| check-typeddict-fields-extractor-tested.sh    | PASS   |
+| check-tscn-no-dangling-references.sh          | PASS   |
+| check-no-gdscript-duplicate-functions.sh      | PASS   |
+| godot-compile.sh                              | PASS   |
+| godot-tests.sh                                | PASS   |
+| All other checks (60 total run)               | PASS   |
+
+---
 
 ## Summary
 
-The implementation is technically correct and complete for its stated scope. All Python checks pass. The sole reason for FAIL is the rebase requirement: the branch is 2 commits behind origin/main (cluster detection feature and a task intake commit). The author must rebase onto current origin/main before this branch can be merged.
+The implementation for task-119 (betweenness centrality / bridge detection) is technically correct, well-tested, and spec-compliant for every in-scope SHALL requirement under Structural Significance Extraction. The sole reason for FAIL is the rebase requirement: the branch forks from 45a4dca and is missing 2 commits that origin/main has accumulated since then, including the cluster detection feature (#231). The author must rebase onto current origin/main — preserving all cluster detection additions from the incoming side — before this branch can be merged.
+
+Action required: git rebase origin/main (keep cluster detection on theirs/incoming side), then re-submit for review.
