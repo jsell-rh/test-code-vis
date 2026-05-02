@@ -105,31 +105,52 @@ guidelines: |
   received this failure as a secondary issue alongside its primary FAIL. This cycle
   adds 2 more tasks penalized by the same missed-push pattern.
 
+  Observed pattern (task-012 — recurrence, next cycle): task-012 was reviewed AGAIN
+  and failed check-main-local-vs-remote.sh a SECOND time. Root cause: the subsequent
+  INTAKE session (commit 031e6730, "sixteenth PM pass — 3 new tasks") and a
+  PROCESS-IMPROVEMENT session (commit 5d785278, "clarify check-sync ≠ rebase") both
+  committed to local main without pushing. The original process-improvement session
+  documenting task-012's first failure (c39079ca) DID push — but the two sessions
+  immediately following it did not. This demonstrates the push rule must apply to
+  EVERY session that commits to main — not just process-improvement sessions.
+  INTAKE SESSIONS are equally capable of creating the missed-push condition.
+
   **Checklist at cycle start:**
     1. git push origin main                                              # push FIRST
     2. bash .hyperloop/checks/check-cycle-gate.sh <task-ids from findings>  # gate check
     3. Only assign tasks after both steps succeed.
 
-  **Checklist after any mid-cycle commit to main:**
+  **Checklist after any mid-cycle commit to main (process-improvement OR intake OR closure):**
     1. git push origin main                                              # push IMMEDIATELY
-    2. Do not spawn any new task until the push completes.
+    2. bash .hyperloop/checks/check-main-local-vs-remote.sh             # must exit 0
+    3. Do not spawn any new task until both steps succeed.
 
-  **PROCESS-IMPROVEMENT SESSIONS — MANDATORY FINAL ACTION:**
+  **ALL SESSIONS THAT COMMIT TO MAIN — MANDATORY FINAL ACTION:**
 
-  Process-improvement work (overlay edits, new check scripts, kustomization updates)
-  ALWAYS produces commits on local main. These commits MUST be pushed before the
-  session ends — not deferred to "the start of the next cycle".
+  Process-improvement, intake, and task-closure work ALL produce commits on local
+  main. Every such commit MUST be pushed before the session ends — not deferred
+  to "the start of the next cycle".
+
+  Affected session types (all apply equally — none are exempt):
+    - Process-improvement sessions (overlay edits, new check scripts, kustomization)
+    - Intake sessions (task file creation, PM passes, queue management)
+    - Task-closure sessions (closing banned tasks, dual-branch closures)
 
   The 3 unpushed commits causing task-011/task-108-round-10 failures included
   `process: fix spec-ref check for process commits` — a process-improvement commit
   itself. The session that wrote it did not push before closing.
 
-  Last action of every process-improvement session, without exception:
+  The 2 unpushed commits causing task-012's second failure were from an INTAKE
+  session (031e6730) and a PROCESS-IMPROVEMENT session (5d785278) — both made after
+  the previous process-improvement session had already pushed. Correct behavior in
+  one session does NOT protect against unpushed commits from the next session.
+
+  Last action of EVERY session that writes a commit to main, without exception:
     git push origin main
     bash .hyperloop/checks/check-main-local-vs-remote.sh   # must exit 0
 
-  If check-main-local-vs-remote.sh exits 1 at the end of a process-improvement
-  session, the session is NOT complete. Push and verify before closing.
+  If check-main-local-vs-remote.sh exits 1 at the end of ANY session,
+  the session is NOT complete. Push and verify before closing.
 
   ## UNPUSHED CHECK SCRIPTS = IMPLEMENTER BLIND SPOTS
 
