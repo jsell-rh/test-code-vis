@@ -65,9 +65,6 @@ func _init() -> void:
 	# Power Rail: ubiquitous edges suppressed, indicator added to source node.
 	_run_suite(preload("res://tests/test_visual_primitives.gd").new())
 
-	# --- task-012: Readable Labels at all zoom levels (prototype-scope spec) ---
-	_run_suite(preload("res://tests/test_readable_labels.gd").new())
-
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 

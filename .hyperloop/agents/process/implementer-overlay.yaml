@@ -828,6 +828,28 @@ guidelines: |
   Without a spec amendment, a different algorithm or proxy value is always
   PARTIAL/FAIL regardless of how well it approximates the spec's requirement.
 
+  ## CHECK-SPEC-REF-VALID — INTAKE-COMMIT FALSE POSITIVES
+
+  If `check-spec-ref-valid.sh` exits non-zero with FAIL lines that reference
+  commits carrying `Task-Ref: intake`, the check script on your branch is stale
+  — a pre-fix version that does not yet skip intake commits.
+
+  Intake commits use bare spec paths (no `@hash` suffix) by convention. That is
+  correct and expected — do NOT attempt to amend or reword intake commits.
+
+  The ONLY fix is to bring in the updated check script via rebase:
+
+    git fetch origin main:main
+    git rebase origin/main
+
+  After rebasing, the updated `check-spec-ref-valid.sh` from main will skip
+  `Task-Ref: intake` commits automatically and the check will pass.
+
+  Observed failure (task-108, round 10): check-spec-ref-valid.sh flagged bare
+  Spec-Refs on intake history. All 5 implementation commits had correct `path@hash`
+  refs. The false-fail disappeared after rebasing onto main@82e9d5c3, which
+  carried the fixed script.
+
   ## SPEC-REF TRAILER — COMMIT HASH, NOT BLOB HASH
 
   The `Spec-Ref` trailer MUST contain a **commit hash**, not a blob hash.
