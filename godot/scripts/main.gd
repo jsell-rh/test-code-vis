@@ -25,6 +25,7 @@ const LodManager = preload("res://scripts/lod_manager.gd")
 const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
 const VisualPrimitives = preload("res://scripts/visual_primitives.gd")
 const NodePrimitive = preload("res://scripts/node_primitive.gd")
+const PortPrimitive = preload("res://scripts/port_primitive.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -72,6 +73,15 @@ var _visual_primitives: VisualPrimitives = VisualPrimitives.new()
 ## Spec: visual-primitives.spec.md § Requirement: Node Primitive
 ## "Nodes do not have baked-in types — their visual identity comes entirely from Badges."
 var _node_primitive: NodePrimitive = NodePrimitive.new()
+
+## Port Primitive renderer — anchors ports to Container membranes for public functions.
+## Spec: visual-primitives.spec.md § Requirement: Port Primitive
+## "a small visual element anchored to a Container's membrane"
+var _port_primitive: PortPrimitive = PortPrimitive.new()
+
+## Index of raw node data by ID — populated in build_from_graph(), used by _create_volume()
+## to let the Port Primitive match function child nodes when overriding world positions.
+var _node_data_map: Dictionary = {}
 
 ## Tracks Node3D visuals for suppressed ubiquitous edges.
 ## These are created but hidden by default; toggled with the T key.
@@ -150,6 +160,10 @@ func build_from_graph(graph: Dictionary) -> void:
 	var node_data_map: Dictionary = {}
 	for nd: Dictionary in nodes:
 		node_data_map[nd["id"]] = nd
+
+	# Cache node_data_map so _create_volume() can pass it to PortPrimitive for
+	# edge-wiring: port creation overrides world positions of child function nodes.
+	_node_data_map = node_data_map
 
 	# Detect reload: if anchors already exist, animate positions instead of recreating.
 	var is_reload: bool = not _anchors.is_empty()
@@ -237,6 +251,12 @@ func _animate_node_to_position(nd: Dictionary) -> void:
 ## Exposed for tests that verify smooth regrouping preserves anchor identity.
 func get_anchors() -> Dictionary:
 	return _anchors
+
+
+## Return the internal world-positions dictionary (node id → Vector3).
+## Exposed for tests that verify port edge-wiring overrides function world positions.
+func get_world_positions() -> Dictionary:
+	return _world_positions
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +441,26 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 		# Draw on top so labels remain visible through geometry.
 		label.no_depth_test = true
 		anchor.add_child(label)
+
+	# ── Port Primitive (visual-primitives.spec.md § Requirement: Port Primitive) ──
+	# Place Ports on the membrane of Container nodes (module, bounded_context).
+	# Ports represent public function interface points anchored to the outer boundary.
+	# Spec: "a small visual element anchored to a Container's membrane"
+	# Spec: "Ports are hidden [at far] AND as the human zooms in, Ports fade in"
+	# Only create ports for Container-type nodes (not Node Primitive function/class nodes).
+	if not NodePrimitive.handles(node_type) and not is_landmark:
+		var port_entries: Array = _port_primitive.add_ports_to_container(
+			anchor,
+			nd,
+			sz,
+			_world_positions.get(nd["id"], Vector3.ZERO),
+			_world_positions,
+			_node_data_map
+		)
+		# Register each port with the LOD manager so it is hidden at FAR/MEDIUM
+		# and shown at NEAR — matching the LOD Shell tier-2 behavior for ports.
+		for port_entry: Dictionary in port_entries:
+			_lod_node_entries.append(port_entry)
 
 	# Visual primitives — badge glyphs, landmark ring, power rail disc.
 	# Spec: visual-primitives.spec.md §Badge Primitive, §Landmark Primitive,
