@@ -24,6 +24,7 @@ from extractor.schema import (
     SceneGraph,
     StructuralSignificanceMetrics,
     SymbolInfo,
+    UbiquitousDeps,
 )
 
 # ---------------------------------------------------------------------------
@@ -1668,15 +1669,15 @@ def detect_ubiquitous_dependencies(
     nodes: list[Node],
     edges: list[Edge],
     threshold: float = UBIQUITOUS_THRESHOLD,
-) -> None:
+) -> set[str]:
     """Flag ubiquitous dependencies and mark dependent nodes for power-rail rendering.
 
     A module is ubiquitous when the fraction of other modules that import it
     exceeds *threshold*.  Ubiquitous edges are annotated with ``ubiquitous=True``;
     nodes that import at least one ubiquitous module get ``has_ubiquitous_dep=True``.
 
-    The extraction metadata threshold is embedded as ``metadata['ubiquitous_threshold']``
-    if a metadata dict is provided — that is handled in :func:`build_scene_graph`.
+    The extraction metadata threshold and flagged-module list are embedded in the
+    ``ubiquitous_deps`` metadata section — that is handled in :func:`build_scene_graph`.
 
     Spec: visual-primitives.spec.md § Requirement: Ubiquitous Dependency Detection
     GIVEN that 85% of modules import ``logging``
@@ -1687,12 +1688,15 @@ def detect_ubiquitous_dependencies(
         nodes: All nodes (mutated in-place — ``has_ubiquitous_dep`` added where needed).
         edges: All edges (mutated in-place — ``ubiquitous`` added where needed).
         threshold: Fraction of modules that must import a target to flag it ubiquitous.
+
+    Returns:
+        Set of target IDs that were flagged as ubiquitous (empty set if none).
     """
     # Count how many distinct source modules reference each target.
     module_ids = {n["id"] for n in nodes if n["type"] in ("bounded_context", "module")}
     total_modules = len(module_ids)
     if total_modules == 0:
-        return
+        return set()
 
     import_count: dict[str, set[str]] = {}  # target_id → set of importing module IDs
     for edge in edges:
@@ -1707,7 +1711,7 @@ def detect_ubiquitous_dependencies(
             ubiquitous_ids.add(tgt)
 
     if not ubiquitous_ids:
-        return
+        return set()
 
     # Mark edges and source nodes.
     nodes_with_ubiquitous: set[str] = set()
@@ -1719,6 +1723,8 @@ def detect_ubiquitous_dependencies(
     for node in nodes:
         if node["id"] in nodes_with_ubiquitous:
             node["has_ubiquitous_dep"] = True
+
+    return ubiquitous_ids
 
 
 # ---------------------------------------------------------------------------
@@ -1792,13 +1798,22 @@ def build_scene_graph(src_path: Path) -> SceneGraph:
 
     # 12. Detect ubiquitous dependencies and mark for power-rail notation.
     #     Marks edges as ubiquitous and nodes with has_ubiquitous_dep.
-    detect_ubiquitous_dependencies(nodes, edges)
+    #     Returns the set of flagged module IDs for metadata recording.
+    ubiquitous_ids = detect_ubiquitous_dependencies(nodes, edges)
 
     # 13. Assemble metadata.
+    #     ubiquitous_deps records the threshold and the list of flagged modules so
+    #     the Godot renderer and human know what was suppressed and why.
+    #     Spec: visual-primitives.spec.md § Ubiquitous Dependency Detection / Threshold.
+    ubiquitous_deps: UbiquitousDeps = {
+        "threshold_pct": int(_DEFAULT_UBIQUITY_THRESHOLD * 100),
+        "flagged": sorted(ubiquitous_ids),
+    }
     metadata: Metadata = {
         "source_path": str(src_path),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "ubiquity_threshold": _DEFAULT_UBIQUITY_THRESHOLD,
+        "ubiquitous_deps": ubiquitous_deps,
     }
 
     return {"nodes": nodes, "edges": edges, "metadata": metadata, "clusters": clusters}
