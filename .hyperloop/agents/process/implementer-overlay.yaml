@@ -84,6 +84,18 @@ guidelines: |
     still present: `grep "def compute_" extractor/extractor.py`
   - For `godot/tests/run_tests.gd` specifically: count the `_run_suite()`
     lines after resolution — the count MUST be >= the count on main.
+  - **`extractor/tests/test_*.py` conflicts — KEEP ALL `def test_` from origin/main, run check immediately:**
+    After resolving any conflict in a Python test file, immediately run:
+      bash .hyperloop/checks/check-class-test-count.sh   # must exit 0
+    Never discard a `def test_` function from origin/main's side of a conflict
+    block — even if it appears to test the same subject as one of your branch's
+    tests. Both are required; they cover different scenarios or variants.
+    Observed failure (task-065, Round 3): 5 tests were dropped from origin/main's
+    commit during conflict resolution in test_extractor.py, including
+    test_fully_connected_context_is_single_group (a required spec scenario) and
+    test_cross_context_edge_weight_counts_imports. Net: −3 tests vs origin/main.
+    Running check-class-test-count.sh immediately after conflict resolution would
+    have caught this; the check was absent because Sync Point 1 was skipped.
   - **`.hyperloop/checks/` conflicts — take ALL of origin/main in one command:**
     When the rebase produces conflicts in `.hyperloop/checks/` (both sides added
     or modified the same check script), resolve the entire directory by taking
@@ -331,7 +343,12 @@ guidelines: |
   A fix commit authored on a non-rebased branch does NOT make the branch rebased.
   Committing your implementation fix and failing to run `git rebase origin/main`
   leaves check-rebased-onto-main.sh failing — the two operations are completely
-  independent.
+  independent. This applies to ALL commit types — implementation commits, fix
+  commits, ruff format commits, style clean-ups, spelling corrections. No commit
+  type substitutes for `git rebase origin/main`.
+
+  Observed failure (task-065, Round 3): a ruff-format commit was added to the
+  stale branch; the branch remained 8 commits behind origin/main afterward.
 
   `check-rebased-onto-main.sh` verifies branch ANCESTRY, not file content. A commit
   that adds new tests or fixes a bug does not move the fork point onto origin/main.
@@ -581,6 +598,30 @@ guidelines: |
   Without elements (1)–(4), the verifier MUST treat the test count drop as a rebase
   regression and issue FAIL. With all four, the verifier can verify the prohibition,
   count the tests, and classify the delta as intentional.
+
+  ## STOP PROTOCOL ROUND COUNT — INCLUDE IN EVERY STOP PROTOCOL REPORT
+
+  When you submit a STOP PROTOCOL FAIL report (feature already on origin/main),
+  include the round number so the orchestrator can act correctly. Determine the
+  round by scanning the task's remote branch history:
+
+    git fetch origin "hyperloop/<your-task-id>" 2>/dev/null || true
+    git log "origin/main..origin/hyperloop/<your-task-id>" \
+        --oneline -- .hyperloop/worker-result.yaml
+
+  Each line in that output is a prior STOP PROTOCOL submission. Count them and
+  state "Round N confirmation" in your report header, where N = prior count + 1.
+
+  Also run the mechanical round-count check and include its output verbatim:
+
+    bash .hyperloop/checks/check-stop-protocol-repeat.sh <your-task-id>
+
+  If it exits 1, paste its output in your report. The orchestrator's cycle gate
+  (check-cycle-gate.sh Step 2c) calls this check and will block re-assignment
+  until the task is retired or redesigned. Including this output in your report
+  makes the escalation path explicit: the gate will fail on the next cycle.
+
+  ---
 
   ## INVALID ASSIGNMENT — COMPLETE STOP PROTOCOL
 
@@ -1425,11 +1466,15 @@ guidelines: |
   2. Do NOT implement a different spec section as a substitute. Implementing any
      unassigned spec section is still a WRONG-FEATURE FAIL — the task assigned
      a specific section, not "pick something unimplemented from the same spec file."
-  3. Submit a FAIL report stating:
+  3. Determine the round number and include it in your report (see STOP PROTOCOL
+     ROUND COUNT section above). Run `bash .hyperloop/checks/check-stop-protocol-repeat.sh
+     <your-task-id>` and paste its output verbatim.
+  4. Submit a FAIL report stating:
      - The assigned feature (task title + primary function name)
      - The commit hash where it already exists on origin/main
      - That no implementation code was written
-  4. Request orchestrator clarification before re-attempting.
+     - The round number and check-stop-protocol-repeat.sh output
+  5. Request orchestrator clarification before re-attempting.
 
   Observed failure (task-078): task assigned "Symbol Table Extraction" (`extract_symbols`).
   The implementer found it already on main (task-023). Instead of stopping, they

@@ -30,11 +30,19 @@ guidelines: |
   If the function is present and fully implements the spec requirement → Option A.
   If a different spec section is unimplemented → Option B (update the task).
 
+  **MECHANICAL ENFORCEMENT — check-cycle-gate.sh Step 2c:**
+  `check-cycle-gate.sh` now includes Step 2c which calls
+  `check-stop-protocol-repeat.sh` for every task ID in findings. If the task's
+  remote branch has ANY prior STOP PROTOCOL commits in its history, Step 2c
+  exits 1 — the cycle gate FAILS. You cannot proceed past a failing cycle gate.
+  Fix by retiring or redesigning the task BEFORE running the gate again.
+
   Observed failure: task-078 ("Symbol Table Extraction" / `extract_symbols`)
   triggered STOP PROTOCOL in Round 2. The task was re-assigned in the next cycle
   with the same `spec_ref: specs/core/visual-primitives.spec.md` and the same
-  title. The same outcome (STOP PROTOCOL, zero code written) occurred again.
-  The task must be retired — `extract_symbols` exists on main at line 1011.
+  title. The same outcome (STOP PROTOCOL, zero code written) occurred again in
+  Round 3 and Round 4. The task must be retired — `extract_symbols` exists on
+  main at line 1011. check-cycle-gate.sh Step 2c would have blocked Round 3+.
 
   ---
 
@@ -620,12 +628,13 @@ guidelines: |
 
   ---
 
-  ## STOP PROTOCOL — THIRD OCCURRENCE REQUIRES IMMEDIATE TASK FILE DELETION
+  ## STOP PROTOCOL — ROUND 2+ REQUIRES IMMEDIATE TASK FILE DELETION
 
-  When a STOP PROTOCOL finding ("STOP PROTOCOL: Feature already on origin/main")
-  appears for the SAME task for the THIRD TIME (or beyond), the ABSOLUTE FIRST
-  action — before reading any other finding in the cycle — is to delete the task
-  file from BOTH branches:
+  A "Round 2 confirmation" in any STOP PROTOCOL finding means the orchestrator
+  did not act on Round 1. Round 3+ means the rule was still not followed.
+  check-cycle-gate.sh Step 2c now mechanically blocks re-assignment after Round 1,
+  but if findings reach Round 2+ anyway, the ABSOLUTE FIRST action — before reading
+  any other finding in the cycle — is to delete the task file from BOTH branches:
 
     # On hyperloop/state:
     git checkout hyperloop/state
@@ -646,16 +655,18 @@ guidelines: |
   delivered by a prior task. Deletion is the only action that prevents Round 4.
 
   How to count rounds: Round 1 = first STOP PROTOCOL report, Round 2 = second
-  report on the same task, Round 3 = third report. The verifier's preamble will
-  state "Round 2 confirmation" or "Round 3 confirmation" explicitly.
+  report on the same task. The verifier's preamble will state "Round 2 confirmation"
+  or "Round N confirmation" explicitly.
 
-  The existing STOP PROTOCOL section (top of this overlay) specifies what to do
-  for Rounds 1 and 2 — retire or redesign. This section adds the Round 3+
-  escalation: deletion without re-assignment, no exceptions.
+  check-cycle-gate.sh Step 2c (check-stop-protocol-repeat.sh) mechanically blocks
+  re-assignment after any STOP PROTOCOL round. If that gate is somehow bypassed
+  and Round 2+ arrives, deletion is the only correct response.
 
-  Observed failure: task-078 triggered STOP PROTOCOL in Round 1, Round 2, AND
-  Round 3. The orchestrator-overlay documented Round 2 and required retirement.
-  The task was NOT retired. Round 3 produced identical output. The overlay rule
+  Observed failure: task-078 triggered STOP PROTOCOL in Rounds 1, 2, 3, and 4.
+  The orchestrator-overlay documented Rounds 2 and 3 and required retirement.
+  The task was NOT retired. Round 4 produced identical output. The overlay rule
   existed and was not followed. Task file deletion is the only action that stops
   the loop — a rule that says "retire the task" without deleting the file leaves
-  the task in the candidate pool and produces a Round 4.
+  the task in the candidate pool. check-stop-protocol-repeat.sh closes this gap
+  mechanically: check-cycle-gate.sh now exits 1 for any task with prior STOP
+  PROTOCOL history, requiring the orchestrator to act before the gate will pass.
