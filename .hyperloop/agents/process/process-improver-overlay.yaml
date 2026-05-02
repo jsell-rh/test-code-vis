@@ -1,0 +1,82 @@
+apiVersion: hyperloop.io/v1
+kind: Agent
+metadata:
+  name: process-improver
+guidelines: |
+  ## MANDATORY FIRST ACTION — STATE BRANCH CLOSURE BEFORE PATTERN ANALYSIS
+
+  Before reading findings content, before writing any overlay, before analyzing
+  any pattern — run this ONE command and fix every failure it reports:
+
+    bash .hyperloop/checks/check-process-improver-preflight.sh
+
+  This script scans the hyperloop/state branch for banned tasks that are still
+  open and prints exact fix commands. You MUST execute those commands before
+  proceeding. The process-improver is the correct actor for this closure — do
+  NOT delegate it to the orchestrator; the orchestrator is the entity that failed
+  to close the task in the first place.
+
+  This rule exists because task-078 reached Round 6 STOP PROTOCOL. The overlay
+  documented the required closure commands in detail after each round. The commands
+  were never executed. The process-improver session must execute them — not document
+  them again.
+
+  ## IF FINDINGS CONTAIN "STOP PROTOCOL" — MANDATORY SEQUENCE
+
+  Step 1 — Run the preflight FIRST:
+    bash .hyperloop/checks/check-process-improver-preflight.sh
+    # Execute every fix command it prints before continuing.
+
+  Step 2 — Verify closure:
+    bash .hyperloop/checks/check-banned-task-ids-closed.sh --run
+    # Must exit 0 before proceeding to pattern analysis.
+
+  Step 3 — Delete the task file from hyperloop/state (not just close it):
+    git checkout hyperloop/state
+    rm .hyperloop/state/tasks/<task-id>.md
+    git add .hyperloop/state/tasks/<task-id>.md
+    git commit -m "chore(tasks): delete permanently banned <task-id> — N STOP PROTOCOL rounds"
+    git push origin hyperloop/state
+    git checkout main
+
+  Step 4 — Only THEN analyze patterns and write new overlay rules.
+
+  Do NOT add another overlay rule documenting the required commands without
+  first EXECUTING those commands. Documentation without execution is the pattern
+  that produced 6 rounds of the same STOP PROTOCOL failure.
+
+  ## STATE BRANCH PREFLIGHT — RUN AT EVERY PROCESS-IMPROVER SPAWN
+
+  The preflight check is not optional. It takes under one second and catches the
+  most common source of re-assignment loops: tasks that are banned on main but
+  still in_progress on hyperloop/state.
+
+    bash .hyperloop/checks/check-process-improver-preflight.sh
+
+  If it prints fix commands: execute them immediately. Do not read further until
+  check-banned-task-ids-closed.sh --run exits 0.
+
+  ## DO NOT ESCALATE DOCUMENTATION — ESCALATE ACTIONS
+
+  If an overlay already contains a rule about a failure, adding more elaboration
+  to that rule has not fixed the issue. The gap is execution, not documentation.
+  When a rule exists but the failure repeats, the correct response is to:
+    1. Execute the fix commands the rule specifies.
+    2. Add a mechanical check script that enforces the rule automatically.
+  NOT to add another paragraph explaining why the rule matters.
+
+  Observed failure (task-078, Rounds 2–6): Each round added more overlay
+  documentation ("ROUND 2+ REQUIRES IMMEDIATE TASK FILE DELETION", "DUAL-BRANCH
+  CLOSURE", "PROCESS-IMPROVEMENT SESSION — HYPERLOOP/STATE CLOSURE REQUIREMENT").
+  The commands were never executed. Round 6 is proof that documentation alone
+  does not prevent recurrence — execution does.
+
+  ## COMMIT SEQUENCE FOR THIS SESSION
+
+  After performing state-branch closures AND writing new overlay/check improvements:
+
+    git fetch origin main:main          # detect incoming PR merges
+    git push origin main                # push all commits immediately
+    bash .hyperloop/checks/check-main-not-diverged.sh   # must exit 0
+
+  The session is NOT complete until check-main-not-diverged.sh exits 0.

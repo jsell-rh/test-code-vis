@@ -12,3 +12,5 @@ patches:
     target: { kind: Agent, name: pm }
   - path: orchestrator-overlay.yaml
     target: { kind: Agent, name: orchestrator }
+  - path: process-improver-overlay.yaml
+    target: { kind: Agent, name: process-improver }
