@@ -65,6 +65,9 @@ func _init() -> void:
 	# Power Rail: ubiquitous edges suppressed, indicator added to source node.
 	_run_suite(preload("res://tests/test_visual_primitives.gd").new())
 
+	# --- task-019: Spatial Structure spec — cluster collapsing ---
+	# Cluster suggestion hints (subtle tint) and collapse/expand operations.
+	_run_suite(preload("res://tests/test_cluster_collapsing.gd").new())
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
