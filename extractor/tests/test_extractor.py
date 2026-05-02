@@ -826,20 +826,18 @@ class TestWeightedEdge:
 
     Spec THEN-clauses:
     - Individual module-level edges each have weight: 1 (or weight omitted,
-      defaulting to 1).
+      defaulting to 1).  The extractor emits an explicit weight carrying the
+      per-pair import count (>= 1).
     - The extractor also emits an aggregate edge with source, target, type='aggregate',
       and weight = total individual import count.
     """
 
-    def test_individual_cross_context_edges_have_no_weight_field(
-        self, src: Path
-    ) -> None:
-        """Individual cross-context edges from the extractor have no 'weight' key.
+    def test_individual_cross_context_edges_have_weight(self, src: Path) -> None:
+        """Individual cross-context edges carry an explicit weight >= 1.
 
-        Spec: 'individual module-level edges each have weight: 1 (or weight omitted,
-        defaulting to 1)'.  The extractor omits the field (implying default=1) so
-        that the Godot renderer can distinguish individual edges (no weight) from
-        aggregate edges (explicit weight > 1).
+        Spec: 'individual module-level edges each have weight: 1 (or weight
+        omitted, defaulting to 1)'.  The extractor emits an explicit weight
+        equal to the count of unique module-level imports for that BC pair.
         """
         all_nodes: list[Node] = discover_bounded_contexts(src)
         for bc in list(all_nodes):
@@ -849,17 +847,23 @@ class TestWeightedEdge:
         individual_cross_context = [e for e in edges if e["type"] == "cross_context"]
         assert individual_cross_context, "Expected at least one cross_context edge"
         for e in individual_cross_context:
-            assert "weight" not in e, (
+            assert "weight" in e, (
                 f"Individual cross_context edge {e['source']}→{e['target']} "
-                f"must NOT carry a 'weight' field (weight=1 is implied by omission); "
-                f"got {e}"
+                f"must carry a 'weight' field; got {e}"
+            )
+            assert isinstance(e["weight"], int), (
+                f"cross_context edge weight must be int, got {type(e['weight'])}: {e}"
+            )
+            assert e["weight"] >= 1, (
+                f"cross_context edge weight must be >= 1, got {e['weight']}: {e}"
             )
 
-    def test_individual_internal_edges_have_no_weight_field(self, src: Path) -> None:
-        """Internal module edges from the extractor have no 'weight' key.
+    def test_individual_internal_edges_have_weight(self, src: Path) -> None:
+        """Internal module edges carry an explicit weight >= 1.
 
-        Spec: 'individual module-level edges each have weight: 1 (or weight omitted,
-        defaulting to 1)'.  The same omission rule applies to internal edges.
+        Spec: 'individual module-level edges each have weight: 1 (or weight
+        omitted, defaulting to 1)'.  The extractor emits an explicit weight
+        equal to the count of unique imports between the two modules.
         """
         all_nodes: list[Node] = discover_bounded_contexts(src)
         for bc in list(all_nodes):
@@ -869,9 +873,15 @@ class TestWeightedEdge:
         internal_edges = [e for e in edges if e["type"] == "internal"]
         assert internal_edges, "Expected at least one internal edge"
         for e in internal_edges:
-            assert "weight" not in e, (
+            assert "weight" in e, (
                 f"Individual internal edge {e['source']}→{e['target']} "
-                f"must NOT carry a 'weight' field; got {e}"
+                f"must carry a 'weight' field; got {e}"
+            )
+            assert isinstance(e["weight"], int), (
+                f"internal edge weight must be int, got {type(e['weight'])}: {e}"
+            )
+            assert e["weight"] >= 1, (
+                f"internal edge weight must be >= 1, got {e['weight']}: {e}"
             )
 
     def test_aggregate_edge_weight_equals_module_import_count(
