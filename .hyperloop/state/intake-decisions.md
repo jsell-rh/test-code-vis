@@ -4,12 +4,12 @@ Records cases where specs were reviewed but no tasks were created, with rational
 
 ---
 
-## 2026-05-02 — Full batch of 5 modified specs (reviewed twice, same day)
+## 2026-05-02 — Full batch of 5 modified specs (reviewed three times, same day)
 
 All five specs were already present in `resolved-specs.json` with blob SHAs unchanged
 since the 2026-05-01 review. No reopen conditions triggered. **No tasks created.**
-Reviewed twice (first pass HEAD `cf00f6d4`, second pass HEAD `d567556c`) — same
-conclusion both times.
+Reviewed three times (first pass HEAD `cf00f6d4`, second pass HEAD `d567556c`, third
+pass HEAD `50e9a92b`) — same conclusion all three times.
 
 | Spec | Blob SHA | Decision |
 |---|---|---|
