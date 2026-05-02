@@ -4,6 +4,23 @@ Records cases where specs were reviewed but no tasks were created, with rational
 
 ---
 
+## 2026-05-02 — Full batch of 5 modified specs
+
+All five specs were already present in `resolved-specs.json` with blob SHAs unchanged
+since the 2026-05-01 review. No reopen conditions triggered. **No tasks created.**
+
+| Spec | Blob SHA | Decision |
+|---|---|---|
+| `specs/core/system-purpose.spec.md` | `f1f52d80` (unchanged) | **No tasks. Permanently resolved.** Vision-only document; all concrete features either serve the overarching hypothesis (already covered by prototype tasks) or are prohibited (spec extraction, conformance mode). |
+| `specs/core/visual-primitives.spec.md` | `82d048ec` (unchanged) | **No tasks. Permanently resolved.** All Extraction Layer and in-scope Composition Layer requirements covered. Out-of-scope items (Data Flow Spine, Badge, Port, Route, Overlay/Facet, Purpose-Level Annotation) deferred. |
+| `specs/extraction/scene-graph-schema.spec.md` | `4ea7e337` (unchanged) | **No tasks. Permanently resolved.** All 7 requirements covered; Cascade Depth (simulation mode) remains prohibited. |
+| `specs/visualization/orthogonal-independence.spec.md` | `ca0ad7af` (unchanged) | **No tasks. Permanently resolved.** All 3 requirements covered by existing tasks. |
+| `specs/visualization/spatial-structure.spec.md` | `359dbcb1` (unchanged) | **No tasks. Permanently resolved.** All in-scope requirements covered; first-person navigation remains out of scope. |
+
+HEAD at review: `cf00f6d4`
+
+---
+
 ## 2026-04-30 — Full batch of 6 modified specs
 
 | Spec | Decision | Rationale |
