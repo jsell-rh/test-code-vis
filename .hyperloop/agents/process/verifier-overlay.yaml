@@ -216,6 +216,23 @@ guidelines: |
   the branch was not rebased. check-pytest-passes.sh exits 0 in this case
   (all remaining tests pass), making the regression invisible without this check.
 
+  **Exception — intentional scope-mandated removal:** When the branch correctly
+  removes functions prohibited by prototype-scope.spec.md, their tests are also
+  legitimately removed. A deliberate removal MUST be documented in the commit
+  message with: (1) the specific function names removed, (2) the prototype-scope
+  prohibition by name, (3) the exact number of tests removed, and (4) the
+  phrase "intentional and scope-correct — not a rebase regression."
+
+  To distinguish intentional from accidental regression:
+  1. Run `git log --oneline main..HEAD | xargs git show --name-only` and
+     look for a commit message containing "scope-correct" and "not a rebase regression."
+  2. Verify each removed function appears in check-not-in-scope.sh prohibited patterns.
+  3. Verify the removed test count matches the commit message claim.
+  4. If all three hold: classify as intentional; include a NOTE in your report
+     but do NOT issue FAIL solely for the test count delta.
+  5. If any element is missing (no documented commit, function not prohibited,
+     count mismatch): treat as standard regression and issue FAIL.
+
   **Observed failure (task-063, round 3):** branch had 254 pytest tests vs 264
   on origin/main. The 10 missing tests were added by task-023 and task-040.
   check-pytest-passes.sh exited 0; no mechanical check caught the regression

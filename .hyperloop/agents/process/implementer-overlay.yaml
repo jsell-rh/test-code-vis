@@ -516,6 +516,36 @@ guidelines: |
      Do not attempt to submit with a failing scope check regardless of which case
      applies.
 
+  ## INTENTIONAL TEST COUNT REGRESSION — DOCUMENT IN COMMIT MESSAGE
+
+  When you remove code because it implements a prohibited feature
+  (`check-not-in-scope.sh` would FAIL if it were present), the associated tests
+  MUST also be removed. This deliberately lowers the `def test_` count below
+  origin/main, causing `check-pytest-test-count.sh` to exit non-zero.
+
+  A silent test count drop is always treated as a regression by the verifier.
+  Make the removal legible by stating it explicitly in the commit message:
+
+    fix(scope): remove prohibited spec-extraction functions and tests
+
+    discover_spec_nodes() and _position_spec_nodes() implement spec extraction,
+    which is explicitly "NOT implemented" per prototype-scope.spec.md.
+    Removes 16 tests from TestSpecNodeDiscovery; test count reduction is
+    intentional and scope-correct (not a rebase regression).
+
+    Spec-Ref: specs/prototype/prototype-scope.spec.md@<hash>
+    Task-Ref: task-NNN
+
+  Required elements in the commit message:
+  1. Name the specific function(s) removed.
+  2. Cite the prototype-scope.spec.md prohibition by name.
+  3. State the exact number of tests removed.
+  4. Assert the reduction is intentional and scope-correct — not a rebase regression.
+
+  Without this language, the verifier MUST treat the test count drop as a rebase
+  regression and issue FAIL. With it, the verifier can verify the prohibition,
+  count the tests, and classify the delta as intentional.
+
   ## INVALID ASSIGNMENT — COMPLETE STOP PROTOCOL
 
   When `check-assigned-spec-in-scope.sh` exits non-zero, you have an INVALID

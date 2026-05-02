@@ -38,8 +38,11 @@ git fetch origin main:main --quiet 2>/dev/null || true
 # Count test functions (^def test_) on origin/main across all .py files in TESTS_DIR.
 MAIN_COUNT=0
 while IFS= read -r filepath; do
-    c=$(git show "origin/main:${filepath}" 2>/dev/null | grep -c "^def test_" || echo "0")
-    MAIN_COUNT=$(( MAIN_COUNT + c ))
+    # Use || true (not || echo "0") — grep -c already outputs "0" when no matches
+    # are found; || echo "0" produces a second "0" making c="0\n0" which breaks
+    # arithmetic.  With || true the pipeline failure is absorbed with no extra output.
+    c=$(git show "origin/main:${filepath}" 2>/dev/null | grep -c "^def test_" || true)
+    MAIN_COUNT=$(( MAIN_COUNT + ${c:-0} ))
 done < <(git ls-tree -r --name-only origin/main -- "$TESTS_DIR" 2>/dev/null | grep "\.py$" || true)
 
 if [[ "$MAIN_COUNT" -eq 0 ]]; then
@@ -71,8 +74,9 @@ fi
 # Count test functions in the working tree across all .py files in TESTS_DIR.
 BRANCH_COUNT=0
 while IFS= read -r f; do
-    c=$(grep -c "^def test_" "$f" 2>/dev/null || echo "0")
-    BRANCH_COUNT=$(( BRANCH_COUNT + c ))
+    # Same fix: || true absorbs grep's non-zero exit without producing a second "0".
+    c=$(grep -c "^def test_" "$f" 2>/dev/null || true)
+    BRANCH_COUNT=$(( BRANCH_COUNT + ${c:-0} ))
 done < <(find "$TESTS_DIR" -name "*.py" 2>/dev/null || true)
 
 if [[ "$BRANCH_COUNT" -ge "$MAIN_COUNT" ]]; then

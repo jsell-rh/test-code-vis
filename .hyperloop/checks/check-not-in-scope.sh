@@ -49,16 +49,18 @@ if grep -q "question_panel\|QuestionPanel\|ViewSpec\|view_spec_requested\|view_s
 fi
 
 # ── 2. Spec extraction ────────────────────────────────────────────────────────
+# Patterns extended (task-034): discover_spec_nodes and _position_spec_nodes were
+# correctly removed from this codebase; guard prevents accidental reintroduction.
 for src in extractor/extractor.py extractor/__main__.py; do
   if [ -f "$src" ]; then
-    if grep -q "extract_spec_nodes\|_layout_spec_nodes\|include_specs\|--specs\b" "$src"; then
+    if grep -q "extract_spec_nodes\|_layout_spec_nodes\|include_specs\|--specs\b\|discover_spec_nodes\|_position_spec_nodes" "$src"; then
       echo "FAIL: Prohibited spec-extraction code found in $src"
       FAIL=1
     fi
   fi
 done
 
-if grep -rq "TestSpecExtraction\|test_spec_extraction\|src_with_specs" extractor/tests/ 2>/dev/null; then
+if grep -rq "TestSpecExtraction\|test_spec_extraction\|src_with_specs\|TestSpecNodeDiscovery\|test_discover_spec_nodes\|test_position_spec_nodes" extractor/tests/ 2>/dev/null; then
   echo "FAIL: Prohibited spec-extraction tests found in extractor/tests/"
   FAIL=1
 fi
