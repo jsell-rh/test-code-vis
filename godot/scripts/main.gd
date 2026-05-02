@@ -76,6 +76,22 @@ var _ubiquitous_edge_visuals: Array = []
 ## Whether ubiquitous edges are currently shown (toggled by T key).
 var _ubiquitous_edges_visible: bool = false
 
+## Cluster collapse state.
+##
+## Maps cluster_id (String) → Array of member node IDs (Array[String]).
+## A cluster that the human has collapsed is recorded here so that:
+##   - expand_cluster() knows which members to restore;
+##   - edge re-routing code knows which nodes are currently supernodes.
+##
+## Spec: spatial-structure.spec.md § Cluster Collapsing —
+##   "AND the supernode displays aggregate metrics"
+##   "AND edges that formerly entered or left any member … are re-routed to the supernode"
+var _collapsed_clusters: Dictionary = {}
+
+## The parsed cluster suggestion list loaded with the scene graph.
+## Each entry follows the Cluster TypedDict: {id, members, context, aggregate_metrics}.
+var _cluster_suggestions: Array = []
+
 @onready var _camera: Camera3D = $Camera3D
 
 
@@ -165,6 +181,13 @@ func build_from_graph(graph: Dictionary) -> void:
 
 	# Build aggregate edges (one line per context pair, shown at FAR LOD).
 	_build_aggregate_edges(edges)
+
+	# Load cluster suggestions (pre-computed by extractor) and apply visual hints.
+	# Spec: spatial-structure.spec.md § Pre-computed cluster suggestions —
+	#   "suggested clusters are indicated visually (e.g. subtle shared tint)"
+	#   "suggestions never auto-collapse — the human always initiates"
+	_cluster_suggestions = graph.get("clusters", [])
+	_apply_cluster_suggestions(_cluster_suggestions)
 
 	# Reposition camera to frame the whole graph.
 	_frame_camera()
@@ -845,6 +868,210 @@ func _build_aggregate_edges(edges: Array) -> void:
 		agg_visual.scale = Vector3(weight, 1.0, weight)
 		add_child(agg_visual)
 		_aggregate_edge_visuals.append(agg_visual)
+
+
+# ---------------------------------------------------------------------------
+# Cluster suggestions and collapsing
+# (specs/visualization/spatial-structure.spec.md § Cluster Collapsing)
+# ---------------------------------------------------------------------------
+
+## Apply visual tint to cluster member nodes so the human can see pre-computed
+## cluster suggestions without any auto-collapse.
+##
+## Spec: spatial-structure.spec.md § Pre-computed cluster suggestions —
+##   "suggested clusters are indicated visually (e.g. subtle shared tint
+##    or proximity grouping)"
+##   "suggestions never auto-collapse — the human always initiates"
+##
+## Implementation: for each cluster suggestion, a semi-transparent "ClusterTint"
+## overlay (small coloured MeshInstance3D) is added to every member anchor so
+## the human can see which modules belong to the same suggested cluster.
+## All member anchors remain fully visible (no auto-collapse).
+func _apply_cluster_suggestions(clusters: Array) -> void:
+	for cluster: Dictionary in clusters:
+		var members: Array = cluster.get("members", [])
+		# Tint colour: a muted warm amber — distinct from the module green and
+		# context blue, but not alarming. Each cluster could use a different hue
+		# index for disambiguation, but a single consistent tint keeps it subtle.
+		var tint_color := Color(0.90, 0.70, 0.15, 0.28)  # warm amber, subtle
+		for member_id: String in members:
+			var anchor: Node3D = _anchors.get(member_id) as Node3D
+			if anchor == null:
+				continue
+			# Avoid duplicate tints on reload.
+			var already_tinted: bool = false
+			for child: Node in anchor.get_children():
+				if str(child.name) == "ClusterTint":
+					already_tinted = true
+					break
+			if already_tinted:
+				continue
+
+			# Flat thin disc overlay — same footprint as the module box but very
+			# thin so it does not obscure the module label or mesh.
+			var sz: float = float(_get_anchor_size(anchor))
+			var tint_mesh := MeshInstance3D.new()
+			tint_mesh.name = "ClusterTint"
+			var box := BoxMesh.new()
+			box.size = Vector3(sz * 1.05, sz * 0.05, sz * 1.05)  # wider, very thin
+			tint_mesh.mesh = box
+			var tint_mat := StandardMaterial3D.new()
+			tint_mat.albedo_color = tint_color
+			tint_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			tint_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+			tint_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			tint_mesh.material_override = tint_mat
+			tint_mesh.position = Vector3(0.0, sz * 0.35, 0.0)  # just above the module box
+			anchor.add_child(tint_mesh)
+
+
+## Return the visual size of an anchor's BoxMesh, or 1.0 as fallback.
+## Used by _apply_cluster_suggestions to scale the tint overlay.
+func _get_anchor_size(anchor: Node3D) -> float:
+	for child: Node in anchor.get_children():
+		if child is MeshInstance3D:
+			var mi: MeshInstance3D = child as MeshInstance3D
+			if mi.mesh is BoxMesh:
+				return (mi.mesh as BoxMesh).size.x
+	return 1.0
+
+
+## Collapse a cluster: hide member anchors, create a supernode at their centroid,
+## and record the collapse in _collapsed_clusters.
+##
+## Spec: spatial-structure.spec.md § Collapsing a cluster —
+##   "THEN the modules animate together, converging smoothly into a single supernode"
+##   "AND the supernode displays aggregate metrics (total LOC, combined in-degree,
+##    combined out-degree)"
+##   "AND edges that formerly entered or left any member … are re-routed to the supernode"
+##
+## Animation: when in the scene tree a Tween animates member modulate.a to 0 then
+## hides them; outside the tree (unit tests) visibility is set directly.
+func collapse_cluster(cluster_id: String) -> void:
+	# Find the cluster definition.
+	var cluster_def: Dictionary = {}
+	for c: Dictionary in _cluster_suggestions:
+		if c.get("id", "") == cluster_id:
+			cluster_def = c
+			break
+
+	if cluster_def.is_empty():
+		push_warning("CodeVis: collapse_cluster('%s') — cluster not found." % cluster_id)
+		return
+
+	var members: Array = cluster_def.get("members", [])
+	if members.is_empty():
+		return
+
+	# Compute centroid of member world positions.
+	var centroid := Vector3.ZERO
+	var member_count: int = 0
+	for member_id: String in members:
+		if _world_positions.has(member_id):
+			centroid += _world_positions[member_id]
+			member_count += 1
+	if member_count > 0:
+		centroid /= float(member_count)
+
+	# Hide member anchors (animate when in scene tree).
+	for member_id: String in members:
+		var anchor: Node3D = _anchors.get(member_id) as Node3D
+		if anchor == null:
+			continue
+		if is_inside_tree():
+			var tween: Tween = create_tween()
+			tween.tween_property(anchor, "modulate:a", 0.0, 0.3)
+			# Hide after fade completes so layout remains stable during animation.
+			tween.tween_callback(func() -> void: anchor.visible = false)
+		else:
+			# Unit-test path: set directly.
+			anchor.visible = false
+
+	# Build the aggregate metrics label text.
+	var agg: Dictionary = cluster_def.get("aggregate_metrics", {})
+	var total_loc: int = int(agg.get("total_loc", 0))
+	var in_degree: int = int(agg.get("in_degree", 0))
+	var out_degree: int = int(agg.get("out_degree", 0))
+	var label_text: String = (
+		"%s\nLOC:%d  in:%d  out:%d" % [cluster_id, total_loc, in_degree, out_degree]
+	)
+
+	# Create a supernode anchor at the centroid.
+	var supernode := Node3D.new()
+	supernode.name = cluster_id.replace(":", "_").replace(".", "_")
+	supernode.position = centroid
+
+	var sz: float = 5.0  # supernode is slightly larger than a regular module
+	var box := BoxMesh.new()
+	box.size = Vector3(sz, sz * 0.7, sz)
+	var mat := StandardMaterial3D.new()
+	# Bold magenta — visually distinct from both context (blue) and module (green).
+	# The colour signals "this is a collapsed group, not a single module".
+	mat.albedo_color = Color(0.80, 0.25, 0.80, 1.0)
+	mat.emission_enabled = true
+	mat.emission = Color(0.4, 0.0, 0.4)
+	mat.emission_energy_multiplier = 0.3
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.mesh = box
+	mesh_instance.material_override = mat
+	supernode.add_child(mesh_instance)
+
+	# Label with aggregate metrics.
+	var label := Label3D.new()
+	label.text = label_text
+	label.pixel_size = 0.012
+	label.position = Vector3(0.0, sz * 0.5 + 0.4, 0.0)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	supernode.add_child(label)
+
+	add_child(supernode)
+	_anchors[cluster_id] = supernode
+	_world_positions[cluster_id] = centroid
+
+	# Record collapse so expand_cluster() and edge routing can reference it.
+	_collapsed_clusters[cluster_id] = members
+
+
+## Expand a previously collapsed supernode back into its constituent modules.
+##
+## Spec: spatial-structure.spec.md § Expanding a supernode —
+##   "THEN the supernode smoothly expands back into its constituent modules"
+##   "AND modules animate outward to their original positions"
+##   "AND edges re-route back to their original endpoints with smooth animation"
+##
+## Animation: when in scene tree, Tween fades member anchors back to alpha 1.0;
+## outside the tree (unit tests) visibility is set directly.
+func expand_cluster(cluster_id: String) -> void:
+	if not _collapsed_clusters.has(cluster_id):
+		push_warning("CodeVis: expand_cluster('%s') — cluster is not collapsed." % cluster_id)
+		return
+
+	var members: Array = _collapsed_clusters[cluster_id]
+
+	# Restore member anchor visibility.
+	for member_id: String in members:
+		var anchor: Node3D = _anchors.get(member_id) as Node3D
+		if anchor == null:
+			continue
+		if is_inside_tree():
+			anchor.visible = true
+			anchor.modulate.a = 0.0
+			var tween: Tween = create_tween()
+			tween.tween_property(anchor, "modulate:a", 1.0, 0.3)
+		else:
+			anchor.visible = true
+
+	# Remove the supernode.
+	if _anchors.has(cluster_id):
+		var supernode: Node3D = _anchors[cluster_id] as Node3D
+		if supernode != null:
+			supernode.queue_free()
+		_anchors.erase(cluster_id)
+		_world_positions.erase(cluster_id)
+
+	# Clear collapse record.
+	_collapsed_clusters.erase(cluster_id)
 
 
 # ---------------------------------------------------------------------------

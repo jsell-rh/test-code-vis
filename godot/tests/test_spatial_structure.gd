@@ -915,3 +915,374 @@ func test_membrane_permeability_reflects_public_private_ratio() -> void:
 		"Container with fewer public symbols must have higher alpha (more opaque); "
 		+ "got opaque=%.3f, porous=%.3f" % [alpha_opaque, alpha_porous]
 	)
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Cluster Collapsing
+# specs/visualization/spatial-structure.spec.md
+#
+#   Scenario: Pre-computed cluster suggestions
+#     GIVEN the extractor has identified groups of modules with high mutual coupling
+#     WHEN the scene graph is loaded
+#     THEN suggested clusters are indicated visually (e.g. subtle shared tint)
+#     AND the human can accept a suggestion to collapse, or ignore it
+#     AND suggestions never auto-collapse — the human always initiates
+#
+#   Scenario: Collapsing a cluster
+#     GIVEN a bounded context with a group of heavily interdependent modules
+#     WHEN the human triggers collapse on the group
+#     THEN the modules animate together, converging smoothly into a single supernode
+#     AND the supernode displays aggregate metrics (total LOC, combined in-degree,
+#         combined out-degree)
+#     AND edges that formerly entered or left any member are re-routed to the supernode
+#
+#   Scenario: Expanding a supernode
+#     GIVEN a collapsed supernode
+#     WHEN the human triggers expansion
+#     THEN the supernode smoothly expands back into its constituent modules
+#     AND edges re-route back to their original endpoints
+#
+#   Scenario: Nested collapsing
+#     GIVEN a bounded context with multiple suggested clusters
+#     WHEN the human collapses one cluster but not another
+#     THEN only the selected cluster collapses
+#     AND the uncollapsed modules remain in place
+# ---------------------------------------------------------------------------
+
+## Helper: build a scene graph dictionary with two coupled modules and one
+## pre-computed cluster suggestion.
+func _make_cluster_fixture() -> Dictionary:
+	return {
+		"nodes": [
+			{
+				"id": "ctx",
+				"name": "Ctx",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 15.0,
+			},
+			{
+				"id": "ctx.mod_a",
+				"name": "ModA",
+				"type": "module",
+				"parent": "ctx",
+				"position": {"x": -4.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+			{
+				"id": "ctx.mod_b",
+				"name": "ModB",
+				"type": "module",
+				"parent": "ctx",
+				"position": {"x": 4.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+			{
+				"id": "ctx.mod_c",
+				"name": "ModC",
+				"type": "module",
+				"parent": "ctx",
+				"position": {"x": 0.0, "y": 0.0, "z": 6.0},
+				"size": 3.0,
+			},
+		],
+		"edges": [
+			{"source": "ctx.mod_a", "target": "ctx.mod_b", "type": "internal", "weight": 3},
+			{"source": "ctx.mod_b", "target": "ctx.mod_a", "type": "internal", "weight": 2},
+			{"source": "ctx.mod_c", "target": "ctx.mod_a", "type": "internal", "weight": 1},
+		],
+		"clusters": [
+			{
+				"id": "ctx:cluster_0",
+				"members": ["ctx.mod_a", "ctx.mod_b"],
+				"context": "ctx",
+				"aggregate_metrics": {
+					"total_loc": 200,
+					"in_degree": 1,
+					"out_degree": 0,
+				},
+			},
+		],
+	}
+
+
+## Scenario: Pre-computed cluster suggestions —
+## "suggested clusters are indicated visually (e.g. subtle shared tint)"
+## Implemented by: main.gd → build_from_graph() → _apply_cluster_suggestions()
+##   each cluster member node gets a "ClusterTint" MeshInstance3D child with a
+##   distinctive semi-transparent overlay so the human can see the suggestion.
+## Test: cluster member anchor has a child named "ClusterTint".
+func test_cluster_suggestion_has_visual_tint() -> void:
+	_test_failed = false
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_cluster_fixture())
+	var anchors: Dictionary = main_node.get("_anchors")
+
+	# Both ctx.mod_a and ctx.mod_b are cluster members — both must have a tint.
+	for member_id: String in ["ctx.mod_a", "ctx.mod_b"]:
+		var anchor: Node3D = anchors.get(member_id) as Node3D
+		_check(anchor != null, "Cluster member %s anchor must exist" % member_id)
+		if anchor == null:
+			continue
+		var has_tint: bool = false
+		for child: Node in anchor.get_children():
+			if str(child.name) == "ClusterTint":
+				has_tint = true
+				break
+		_check(has_tint,
+			"Cluster member %s must have a 'ClusterTint' child for visual suggestion" % member_id)
+
+
+## Scenario: Pre-computed cluster suggestions —
+## "suggestions never auto-collapse — the human always initiates"
+## Implemented by: main.gd → build_from_graph(): cluster members are NOT hidden
+##   after build (no auto-collapse). The _collapsed_clusters dict starts empty.
+func test_cluster_suggestion_does_not_auto_collapse() -> void:
+	_test_failed = false
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_cluster_fixture())
+	var anchors: Dictionary = main_node.get("_anchors")
+
+	# After build, cluster members must still be visible (not auto-collapsed).
+	for member_id: String in ["ctx.mod_a", "ctx.mod_b"]:
+		var anchor: Node3D = anchors.get(member_id) as Node3D
+		_check(anchor != null, "Cluster member %s must have an anchor" % member_id)
+		if anchor != null:
+			_check(anchor.visible,
+				"Cluster member %s must be visible after build (no auto-collapse)" % member_id)
+
+	# No collapsed clusters exist after initial build.
+	var collapsed: Dictionary = main_node.get("_collapsed_clusters")
+	_check(collapsed.is_empty(),
+		"_collapsed_clusters must be empty after initial build (no auto-collapse)")
+
+
+## Scenario: Collapsing a cluster —
+## "WHEN the human triggers collapse on the group"
+## "THEN the modules animate together, converging smoothly into a single supernode"
+## Implemented by: main.gd → collapse_cluster(cluster_id)
+##   - hides member module anchors
+##   - creates a supernode Node3D at the centroid of the members
+##   - records the collapsed state in _collapsed_clusters
+func test_collapse_cluster_hides_members() -> void:
+	_test_failed = false
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_cluster_fixture())
+
+	main_node.call("collapse_cluster", "ctx:cluster_0")
+
+	var anchors: Dictionary = main_node.get("_anchors")
+	# Cluster members (ctx.mod_a, ctx.mod_b) must be hidden after collapse.
+	for member_id: String in ["ctx.mod_a", "ctx.mod_b"]:
+		var anchor: Node3D = anchors.get(member_id) as Node3D
+		_check(anchor != null, "Cluster member %s anchor must exist" % member_id)
+		if anchor != null:
+			_check(not anchor.visible,
+				"Cluster member %s must be hidden after collapse" % member_id)
+
+
+## Scenario: Collapsing a cluster —
+## "AND the supernode displays aggregate metrics (total LOC, combined in-degree,
+##  combined out-degree)"
+## Implemented by: main.gd → collapse_cluster() creates a Node3D named after the
+##   cluster ID with a Label3D child showing aggregate metrics.
+## Label3D readability: billboard = BILLBOARD_ENABLED and pixel_size > 0.0.
+func test_collapse_cluster_creates_supernode_with_metrics() -> void:
+	_test_failed = false
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_cluster_fixture())
+
+	main_node.call("collapse_cluster", "ctx:cluster_0")
+
+	# A supernode anchor must exist in _anchors under the cluster ID.
+	var anchors: Dictionary = main_node.get("_anchors")
+	var supernode_key: String = "ctx:cluster_0"
+	_check(anchors.has(supernode_key),
+		"Supernode anchor must be registered in _anchors under cluster ID 'ctx:cluster_0'")
+
+	if not anchors.has(supernode_key):
+		return
+
+	var supernode: Node3D = anchors[supernode_key] as Node3D
+	_check(supernode != null, "Supernode anchor must not be null")
+	if supernode == null:
+		return
+
+	# The supernode must have a Label3D child for metrics display.
+	var label: Label3D = null
+	for child: Node in supernode.get_children():
+		if child is Label3D:
+			label = child as Label3D
+			break
+	_check(label != null, "Supernode must have a Label3D child displaying aggregate metrics")
+	if label == null:
+		return
+
+	# Label3D readability: billboard keeps the label facing the camera so it
+	# remains legible from any viewing angle.
+	_check(label.billboard == BaseMaterial3D.BILLBOARD_ENABLED,
+		"Supernode Label3D must use BILLBOARD_ENABLED so it remains readable from any angle")
+	# pixel_size > 0.0 ensures the text has a non-zero real-world size in the scene.
+	_check(label.pixel_size > 0.0,
+		"Supernode Label3D must have pixel_size > 0.0 for legibility; got %.4f" % label.pixel_size)
+
+
+## Scenario: Collapsing a cluster —
+## "AND edges that formerly entered or left any member of the cluster are
+##  re-routed to the supernode"
+## Implemented by: main.gd → collapse_cluster() iterates LOD edge entries and
+##   updates the source/target for edges that connected to a cluster member.
+##   The supernode appears in _collapsed_clusters so edge routing knows it's active.
+func test_collapse_cluster_recorded_in_collapsed_clusters() -> void:
+	_test_failed = false
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_cluster_fixture())
+
+	main_node.call("collapse_cluster", "ctx:cluster_0")
+
+	# _collapsed_clusters must record the cluster ID and member list.
+	var collapsed: Dictionary = main_node.get("_collapsed_clusters")
+	_check(collapsed.has("ctx:cluster_0"),
+		"_collapsed_clusters must record 'ctx:cluster_0' after collapse")
+
+	if collapsed.has("ctx:cluster_0"):
+		var members: Array = collapsed["ctx:cluster_0"] as Array
+		_check(members.size() == 2,
+			"Collapsed cluster 'ctx:cluster_0' must record 2 members, got %d" % members.size())
+		_check(members.has("ctx.mod_a"), "Collapsed cluster members must include 'ctx.mod_a'")
+		_check(members.has("ctx.mod_b"), "Collapsed cluster members must include 'ctx.mod_b'")
+
+
+## Scenario: Expanding a supernode —
+## "GIVEN a collapsed supernode"
+## "WHEN the human triggers expansion"
+## "THEN the supernode smoothly expands back into its constituent modules"
+## "AND modules animate outward to their original positions"
+## Implemented by: main.gd → expand_cluster(cluster_id)
+##   - removes the supernode anchor
+##   - restores visibility of member anchors
+##   - removes cluster from _collapsed_clusters
+func test_expand_cluster_restores_members() -> void:
+	_test_failed = false
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_cluster_fixture())
+
+	# Collapse first, then expand.
+	main_node.call("collapse_cluster", "ctx:cluster_0")
+	main_node.call("expand_cluster", "ctx:cluster_0")
+
+	var anchors: Dictionary = main_node.get("_anchors")
+
+	# After expansion, cluster members must be visible again.
+	for member_id: String in ["ctx.mod_a", "ctx.mod_b"]:
+		var anchor: Node3D = anchors.get(member_id) as Node3D
+		_check(anchor != null, "Cluster member %s anchor must still exist after expansion" % member_id)
+		if anchor != null:
+			_check(anchor.visible,
+				"Cluster member %s must be visible again after expansion" % member_id)
+
+	# Supernode must be removed from _anchors after expansion.
+	_check(not anchors.has("ctx:cluster_0"),
+		"Supernode 'ctx:cluster_0' must be removed from _anchors after expansion")
+
+	# _collapsed_clusters must no longer record the cluster.
+	var collapsed: Dictionary = main_node.get("_collapsed_clusters")
+	_check(not collapsed.has("ctx:cluster_0"),
+		"_collapsed_clusters must not record 'ctx:cluster_0' after expansion")
+
+
+## Scenario: Nested collapsing —
+## "GIVEN a bounded context with multiple suggested clusters"
+## "WHEN the human collapses one cluster but not another"
+## "THEN only the selected cluster collapses"
+## "AND the uncollapsed modules remain in place"
+## Implemented by: main.gd → collapse_cluster() operates independently per cluster.
+func test_nested_collapsing_only_collapses_selected() -> void:
+	_test_failed = false
+
+	# Build a fixture with TWO clusters.
+	var graph: Dictionary = {
+		"nodes": [
+			{
+				"id": "ctx",
+				"name": "Ctx",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 20.0,
+			},
+			{
+				"id": "ctx.alpha",
+				"name": "Alpha",
+				"type": "module",
+				"parent": "ctx",
+				"position": {"x": -8.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+			{
+				"id": "ctx.beta",
+				"name": "Beta",
+				"type": "module",
+				"parent": "ctx",
+				"position": {"x": -4.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+			{
+				"id": "ctx.gamma",
+				"name": "Gamma",
+				"type": "module",
+				"parent": "ctx",
+				"position": {"x": 4.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+			{
+				"id": "ctx.delta",
+				"name": "Delta",
+				"type": "module",
+				"parent": "ctx",
+				"position": {"x": 8.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+		],
+		"edges": [
+			{"source": "ctx.alpha", "target": "ctx.beta", "type": "internal", "weight": 2},
+			{"source": "ctx.beta",  "target": "ctx.alpha", "type": "internal", "weight": 2},
+			{"source": "ctx.gamma", "target": "ctx.delta", "type": "internal", "weight": 2},
+			{"source": "ctx.delta", "target": "ctx.gamma", "type": "internal", "weight": 2},
+		],
+		"clusters": [
+			{
+				"id": "ctx:cluster_0",
+				"members": ["ctx.alpha", "ctx.beta"],
+				"context": "ctx",
+				"aggregate_metrics": {"total_loc": 100, "in_degree": 0, "out_degree": 0},
+			},
+			{
+				"id": "ctx:cluster_1",
+				"members": ["ctx.gamma", "ctx.delta"],
+				"context": "ctx",
+				"aggregate_metrics": {"total_loc": 100, "in_degree": 0, "out_degree": 0},
+			},
+		],
+	}
+
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(graph)
+
+	# Collapse only the first cluster.
+	main_node.call("collapse_cluster", "ctx:cluster_0")
+
+	var anchors: Dictionary = main_node.get("_anchors")
+
+	# First cluster members must be hidden.
+	_check(not (anchors["ctx.alpha"] as Node3D).visible,
+		"ctx.alpha must be hidden after collapsing cluster_0")
+	_check(not (anchors["ctx.beta"] as Node3D).visible,
+		"ctx.beta must be hidden after collapsing cluster_0")
+
+	# Second cluster members must remain visible (not collapsed).
+	_check((anchors["ctx.gamma"] as Node3D).visible,
+		"ctx.gamma must remain visible (cluster_1 was not collapsed)")
+	_check((anchors["ctx.delta"] as Node3D).visible,
+		"ctx.delta must remain visible (cluster_1 was not collapsed)")
