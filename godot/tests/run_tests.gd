@@ -72,6 +72,12 @@ func _init() -> void:
 	# Cross-context independence: BCs with no transitive dep highlighted.
 	_run_suite(preload("res://tests/test_orthogonal_independence.gd").new())
 
+	# --- task-089: Tint Primitive (core/visual-primitives.spec.md §Tint Primitive) ---
+	# Domain tinting: bounded contexts receive distinct desaturated fill colors.
+	# One dimension at a time: re-applying replaces prior assignment, not layers.
+	# Legend: get_legend_entries() returns entries when Tint is active.
+	_run_suite(preload("res://tests/test_tint_controller.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 

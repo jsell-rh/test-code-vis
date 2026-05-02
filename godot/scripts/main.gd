@@ -24,6 +24,7 @@ const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
 const LodManager = preload("res://scripts/lod_manager.gd")
 const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
 const VisualPrimitives = preload("res://scripts/visual_primitives.gd")
+const TintController = preload("res://scripts/tint_controller.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -66,6 +67,11 @@ var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
 
 ## Visual primitives renderer — attaches badge, landmark, and power rail decorations.
 var _visual_primitives: VisualPrimitives = VisualPrimitives.new()
+
+## Tint primitive controller — applies categorical domain tints to bounded_context
+## containers and maintains the legend entries.
+## Spec: visual-primitives.spec.md §Requirement: Tint Primitive.
+var _tint_controller: TintController = TintController.new()
 
 ## Tracks Node3D visuals for suppressed ubiquitous edges.
 ## These are created but hidden by default; toggled with the T key.
@@ -198,6 +204,14 @@ func build_from_graph(graph: Dictionary) -> void:
 	_cluster_suggestions = graph.get("clusters", [])
 	_apply_cluster_suggestions(_cluster_suggestions)
 
+	# Apply Tint Primitive — categorical domain tinting on bounded_context containers.
+	# Spec: visual-primitives.spec.md §Requirement: Tint Primitive —
+	#   "each context has a distinct desaturated fill color"
+	#   "the previous Tint assignment is replaced, not layered"
+	# apply_domain_tints() clears prior overlays before adding new ones,
+	# satisfying the "one tint dimension at a time" requirement.
+	_tint_controller.apply_domain_tints(nodes, _anchors)
+
 	# Reposition camera to frame the whole graph.
 	_frame_camera()
 
@@ -231,6 +245,24 @@ func _animate_node_to_position(nd: Dictionary) -> void:
 ## Exposed for tests that verify smooth regrouping preserves anchor identity.
 func get_anchors() -> Dictionary:
 	return _anchors
+
+
+## Return legend entries for the currently active Tint dimension.
+##
+## Each entry is a Dictionary: {label: String, color: Color, dimension: String}.
+## Returns an empty array when no tints are active.
+##
+## Spec: visual-primitives.spec.md §Tint is the only symbolic primitive —
+##   "the legend is always visible when Tint is active"
+## Exposed for legend HUD panels and tests.
+func get_tint_legend() -> Array:
+	return _tint_controller.get_legend_entries()
+
+
+## Return true if the Tint primitive is currently active (at least one context tinted).
+## Spec: visual-primitives.spec.md §Tint is the only symbolic primitive.
+func is_tint_active() -> bool:
+	return _tint_controller.is_active()
 
 
 # ---------------------------------------------------------------------------
