@@ -906,6 +906,25 @@ guidelines: |
   the highlight color in one loop with no delay. "Animates from selected module
   outward" was PARTIAL — simultaneous, not outward.
 
+  ## COMMENT-ONLY THEN-CLAUSE ACKNOWLEDGMENT IS MISSING, NOT PARTIAL
+
+  When a test file contains a comment that names a THEN-clause (e.g.,
+  `# AND Edges connect to Ports, not directly to the Container body`) but has
+  NO corresponding test function body for that clause, the clause is MISSING —
+  not PARTIAL. A comment is documentation of a gap, not a test.
+
+  Observed failure (task-082): test_visual_primitives.gd line 1120 had a comment
+  block acknowledging "AND Edges connect to Ports, not directly to the Container
+  body." No `func test_...():` existed for this clause. No routing function was
+  called in any test. The verifier correctly classified it MISSING.
+
+  Verification protocol:
+  1. For each THEN-clause the implementer maps to a test, grep for the test function
+     name: `grep -n "func test_" <test_file>.gd | grep <keyword>`.
+  2. If no function exists — only a comment — the clause is MISSING.
+  3. If a function exists but has no assertion body (only `pass` or a comment inside),
+     the clause is MISSING — empty stubs are not coverage.
+
   ## ROUTING/WIRING CONTRACT VERIFICATION — CALL THE FUNCTION, NOT JUST PREREQUISITES
 
   When a spec THEN-clause says "edges connect to Ports", "X routes to Y", or "the
@@ -970,6 +989,32 @@ guidelines: |
 
   Do NOT accept "functions are rendered at tier-2 LOD" as Port coverage when the spec
   requires "Ports anchored to the Container membrane." These are architecturally distinct.
+
+  ## PRE-COMMIT SCOPE SECTION VERIFICATION (mandatory — before committing worker-result.yaml)
+
+  Before staging or committing `.hyperloop/worker-result.yaml`, run:
+
+    bash .hyperloop/checks/check-report-scope-section.sh
+
+  This check reads the WORKING TREE file. It must exit 0 before you commit. A committed
+  worker-result.yaml that is missing the `## Scope Check Output` section header will
+  propagate as a RACF failure (via `check-racf-prior-cycle.sh`) into the NEXT cycle,
+  penalizing a future implementer for a verifier ordering mistake.
+
+  The `## Scope Check Output` header MUST be written as a standalone markdown heading
+  (not a bullet, not inline text) and must be followed by the VERBATIM stdout of
+  `check-not-in-scope.sh`. The check greps for the exact string `^## Scope Check Output`.
+
+  Observed failure (task-029 FAIL-P3): the prior verifier committed a worker-result.yaml
+  without this header. `check-racf-prior-cycle.sh` recovered the failure, and
+  `check-report-scope-section.sh` still failed in the next cycle — blocking the
+  implementer with a process violation they did not cause.
+
+  Add this as the FINAL step before `git add .hyperloop/worker-result.yaml`:
+
+    bash .hyperloop/checks/check-report-scope-section.sh   # must exit 0
+    git add .hyperloop/worker-result.yaml
+    git commit ...
 
   ## RELOAD PATH TEST VERIFICATION
 

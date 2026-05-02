@@ -1041,6 +1041,16 @@ guidelines: |
   If you cannot write a failing test for a THEN-clause, escalate — it may be
   untestable in the current environment and requires PASS-WITH-NOTE treatment.
 
+  A comment in a test file that names a THEN-clause (e.g., `# AND Edges connect
+  to Ports`) is NOT a test stub — it is documentation of a gap and is treated as
+  MISSING by the verifier. A stub is a failing `func test_<name>():` function body.
+  A comment alone never satisfies a THEN-clause.
+
+  Observed failure (task-082): test_visual_primitives.gd contained a comment block
+  at line 1120 acknowledging "AND Edges connect to Ports, not directly to the
+  Container body" but no test function covered this clause. The verifier correctly
+  classified it MISSING.
+
   ## PERCEPTUAL CHANNEL FIDELITY
 
   When the spec names a specific perceptual channel for a visual property, use
@@ -1427,6 +1437,15 @@ guidelines: |
   different spec sections. Both were legitimate unimplemented features, but neither
   was the assigned task. The correct action was to stop and report the supersession.
 
+  Observed failure (task-082): task assigned "Extractor — structural significance
+  (hub, bridge, peripheral, community)". The implementer found compute_structural_
+  significance() on main and, without verifying whether it fully satisfies the spec,
+  redirected effort to implementing Port Primitive rendering (task-088 scope). Zero
+  extractor/ files were changed. The correct action: run
+  `bash .hyperloop/checks/check-task-deliverable-auto.sh` — it would have failed
+  immediately — then stop and report the potential supersession to the orchestrator.
+  Do NOT implement any other spec section as a substitute.
+
   Observed failure (task-027): the implementer wrote `build_dependency_edges()` weight
   logic. Running `git grep "raw_edge_count" origin/main` would have shown task-063 had
   already merged the identical feature. Checking this before coding would have revealed
@@ -1707,6 +1726,78 @@ guidelines: |
   `create_tween` / `is_inside_tree()` branch when the spec says endpoints "slide not
   jump" or animate "smoothly"; run `bash .hyperloop/checks/check-reposition-function-has-tween.sh`
   before submitting.
+
+  ## SPATIAL "BETWEEN" POSITION ASSERTIONS
+
+  When a spec THEN-clause says a node is "positioned between" two reference structures
+  (subsystems, modules, bounded contexts), the test MUST place BOTH reference structures
+  at DISTINCT, NON-ZERO world positions and assert the positioned node's coordinate value
+  falls numerically between them (e.g., `a_pos.x < bridge_pos.x < b_pos.x`).
+
+  A fixture with either reference at origin (0, 0, 0) makes the "between" assertion
+  trivially satisfied by any position — it verifies nothing.
+
+  Required pattern:
+    subsystem_a = Vector3(2.0, 0.0, 0.0)  # NON-ZERO
+    subsystem_b = Vector3(8.0, 0.0, 0.0)  # NON-ZERO, distinct from A
+    bridge_pos = ...  # position assigned by layout algorithm
+    assert subsystem_a.x < bridge_pos.x and bridge_pos.x < subsystem_b.x
+
+  Observed failure (task-029 REQ-C7): The bridge landmark fixture had one or both
+  subsystems at world origin; the "between" assertion passed vacuously for any
+  bridge coordinate, providing zero coverage of the positioning contract.
+
+  Before marking any "positioned between" THEN-clause as COVERED:
+  1. Confirm both reference structures are at NON-ZERO and DISTINCT world positions.
+  2. Confirm the assertion checks both inequalities (lower < value AND value < upper).
+  3. A signed-inequality assertion (e.g., using `<` not `is_equal_approx`) is required.
+
+  ## INVARIANT / "DOES NOT CHANGE" CLAUSES
+
+  When a spec THEN-clause states that property X "does NOT change", "is unchanged",
+  or "remains stable" under operation Y (e.g., "the underlying topology does NOT change
+  when an overlay is applied"), the test MUST:
+
+  1. Record the value of X BEFORE invoking Y.
+  2. Invoke Y.
+  3. Assert X equals the recorded pre-Y value (e.g., `assert pos_after == pos_before`).
+
+  A test that only asserts X is correct AFTER Y cannot distinguish "unchanged" from
+  "coincidentally the same value" — it does not verify the invariant. Both the
+  before-state capture AND the equality assertion are required.
+
+  Observed failure (task-029 REQ-P1): no test captured node world positions before
+  calling `apply_overlay()` and asserted they were unchanged after. The spec clause
+  "the underlying topology (Container nesting, Node positions) does NOT change" was PARTIAL.
+
+  Common spec phrases that trigger this rule:
+  - "does NOT change", "remains unchanged", "is stable", "is preserved"
+  - "layout is NOT affected", "positions are NOT modified"
+  Write a before/after equality assertion for every such clause.
+
+  ## CONSUMER-SIDE COVERAGE FOR INTER-LAYER DATA FLOWS
+
+  When a spec describes data flowing from a producer (e.g., extractor) to a consumer
+  (e.g., composition layer) for a named purpose (e.g., "the symbol table provides
+  human-readable identity for edge endpoint labels"), tests must cover BOTH sides:
+
+  1. Producer test: verifies the data is emitted with the expected field and value.
+  2. Consumer test: calls the consuming function with fixture data that includes the
+     field and asserts the OUTPUT uses the data value (not a raw ID or None).
+
+  A test that only confirms the field is embedded in the source dict does NOT verify
+  the consumer reads and uses it. Add a test that retrieves the labeling data for a
+  call-graph edge's source/target endpoint and asserts the name matches the symbol
+  table entry — not the node ID.
+
+  Observed failure (task-029 REQ-EX3): `test_symbols_embedded_in_module_node` confirmed
+  the symbol dict is stored on the node. No test verified that the composition layer
+  resolves symbol names when constructing edge endpoint labels. The "labeling layer"
+  scenario was untested.
+
+  Before marking any data-flow THEN-clause COVERED: confirm a test exercises the
+  CONSUMING function (not just the producing function) and asserts the output uses the
+  produced value.
 
   ## EDGE/CONNECTION RE-ROUTING IS A DISTINCT IMPLEMENTATION REQUIREMENT
 
