@@ -126,12 +126,12 @@ func _handle_motion(event: InputEventMouseMotion) -> void:
 	_last_mouse = event.position
 
 	if _orbiting:
-		# Orbit sign derivation (azimuth) — drag right (delta.x > 0):
-		#   drag right → delta.x > 0 → subtract positive → _phi decreases
-		#   → camera sweeps clockwise (from above) around the pivot ✓
-		# Drag left (delta.x < 0):
-		#   drag left → delta.x < 0 → subtract negative → _phi increases
-		#   → camera sweeps counter-clockwise ✓
+		# Orbit sign derivation — horizontal drag (delta.x > 0 = drag right):
+		#   drag right → delta.x > 0 → _phi -= positive → phi decreases
+		#   → azimuth rotates clockwise from above → camera swings to the left of scene ✓
+		# Orbit sign derivation — vertical drag (delta.y > 0 = drag down):
+		#   drag down → delta.y > 0 → _theta -= positive → theta decreases
+		#   → polar angle from Y-axis decreases → camera rises toward overhead view ✓
 		_phi -= delta.x * orbit_speed
 		# Orbit sign derivation (elevation) — drag down (delta.y > 0):
 		#   drag down → delta.y > 0 → subtract positive → _theta decreases

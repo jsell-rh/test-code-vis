@@ -34,6 +34,7 @@ extends RefCounted
 const MainScript := preload("res://scripts/main.gd")
 const CameraScript := preload("res://scripts/camera_controller.gd")
 const LodManager := preload("res://scripts/lod_manager.gd")
+const AggregateEdgeRenderer := preload("res://scripts/aggregate_edge_renderer.gd")
 
 var _runner: Object = null
 var _test_failed: bool = false
@@ -916,7 +917,6 @@ func test_membrane_permeability_reflects_public_private_ratio() -> void:
 		+ "got opaque=%.3f, porous=%.3f" % [alpha_opaque, alpha_porous]
 	)
 
-
 # ---------------------------------------------------------------------------
 # Requirement: Cluster Collapsing
 # specs/visualization/spatial-structure.spec.md
@@ -1424,3 +1424,236 @@ func test_expand_cluster_restores_edge_endpoints() -> void:
 	var restored_to: Vector3 = _get_arrow_to_pos(main_node)
 	_check(restored_to == Vector3(-4.0, 0.0, 0.0),
 		"After expand: arrow to_pos must be restored to (-4,0,0); got %s" % str(restored_to))
+
+
+# Scenario: Far — bounded context architecture (aggregate edges)
+# Spec: "cross-context dependencies are shown as single aggregate edges per
+#        context pair, with weight indicating total import count"
+#        "individual module-level edges are not visible"
+# ---------------------------------------------------------------------------
+
+## Fixture: three bounded contexts with multiple cross-context edges between
+## the same context pair (ctx_a → ctx_b has 2 edges via modules) and one
+## direct edge to a third context (ctx_a → ctx_c).
+## Demonstrates: aggregate grouping collapses two edges into one per pair.
+func _make_aggregate_edge_fixture() -> Dictionary:
+	return {
+		"nodes": [
+			{
+				"id": "ctx_a",
+				"name": "ContextA",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": -30.0, "y": 0.0, "z": 0.0},
+				"size": 15.0,
+			},
+			{
+				"id": "ctx_b",
+				"name": "ContextB",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 30.0, "y": 0.0, "z": 0.0},
+				"size": 12.0,
+			},
+			{
+				"id": "ctx_c",
+				"name": "ContextC",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 30.0},
+				"size": 10.0,
+			},
+			{
+				"id": "ctx_a.mod1",
+				"name": "Mod1",
+				"type": "module",
+				"parent": "ctx_a",
+				"position": {"x": -5.0, "y": 0.0, "z": 0.0},
+				"size": 4.0,
+			},
+			{
+				"id": "ctx_a.mod2",
+				"name": "Mod2",
+				"type": "module",
+				"parent": "ctx_a",
+				"position": {"x": 5.0, "y": 0.0, "z": 0.0},
+				"size": 3.5,
+			},
+			{
+				"id": "ctx_b.mod1",
+				"name": "Mod3",
+				"type": "module",
+				"parent": "ctx_b",
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 4.0,
+			},
+		],
+		"edges": [
+			# Two module-level cross-context edges between ctx_a and ctx_b.
+			# The aggregate renderer must group these into one summary edge.
+			{"source": "ctx_a.mod1", "target": "ctx_b.mod1", "type": "cross_context"},
+			{"source": "ctx_a.mod2", "target": "ctx_b.mod1", "type": "cross_context"},
+			# Direct context-to-context edge from ctx_a to ctx_c (separate pair).
+			{"source": "ctx_a", "target": "ctx_c", "type": "cross_context"},
+		],
+	}
+
+
+## Spec: "single aggregate edges per context pair"
+## The aggregate renderer must produce exactly one MeshInstance3D per unique
+## (source_context, target_context) pair — not one per individual edge.
+## Fixture has 3 cross-context edges across 2 distinct context pairs:
+##   ctx_a → ctx_b (2 edges via modules) → 1 aggregate
+##   ctx_a → ctx_c (1 direct edge)       → 1 aggregate
+## Total expected: 2 aggregate entries.
+func test_aggregate_edges_one_per_context_pair() -> void:
+	var renderer: AggregateEdgeRenderer = AggregateEdgeRenderer.new()
+	var fixture: Dictionary = _make_aggregate_edge_fixture()
+	var nodes: Array = fixture["nodes"]
+	var edges: Array = fixture["edges"]
+
+	# Build world positions for top-level (parent=null) nodes from their JSON positions.
+	var world_positions: Dictionary = {}
+	for nd: Dictionary in nodes:
+		if nd["parent"] == null:
+			var p: Dictionary = nd["position"]
+			world_positions[nd["id"]] = Vector3(float(p["x"]), float(p["y"]), float(p["z"]))
+		else:
+			var parent_p: Dictionary = {}
+			for pnd: Dictionary in nodes:
+				if pnd["id"] == nd["parent"]:
+					parent_p = pnd["position"]
+					break
+			var p: Dictionary = nd["position"]
+			world_positions[nd["id"]] = Vector3(
+				float(parent_p.get("x", 0.0)) + float(p["x"]),
+				float(parent_p.get("y", 0.0)) + float(p["y"]),
+				float(parent_p.get("z", 0.0)) + float(p["z"]),
+			)
+
+	var parent_node: Node3D = Node3D.new()
+	var entries: Array = renderer.build_aggregate_edges(edges, nodes, world_positions, parent_node)
+
+	_check(entries.size() == 2,
+		"Aggregate renderer must produce exactly 2 entries (one per context pair), got %d" % entries.size())
+
+	# Verify both entries are MeshInstance3D visuals.
+	for entry: Dictionary in entries:
+		_check(entry.has("visual"), "Each aggregate entry must have a 'visual' key")
+		_check(entry.has("source_context"), "Each aggregate entry must have 'source_context'")
+		_check(entry.has("target_context"), "Each aggregate entry must have 'target_context'")
+		_check(entry.has("count"), "Each aggregate entry must have 'count'")
+		_check(entry["visual"] is MeshInstance3D,
+			"Aggregate edge visual must be a MeshInstance3D")
+
+	parent_node.free()
+
+
+## Spec: "weight indicating total import count"
+## The ctx_a → ctx_b pair has 2 individual cross-context edges (mod1→mod1 and mod2→mod1).
+## The aggregate entry for this pair must record count=2 to drive visual weight.
+func test_aggregate_edge_count_matches_edges_between_pair() -> void:
+	var renderer: AggregateEdgeRenderer = AggregateEdgeRenderer.new()
+	var fixture: Dictionary = _make_aggregate_edge_fixture()
+	var nodes: Array = fixture["nodes"]
+	var edges: Array = fixture["edges"]
+
+	var world_positions: Dictionary = {}
+	for nd: Dictionary in nodes:
+		if nd["parent"] == null:
+			var p: Dictionary = nd["position"]
+			world_positions[nd["id"]] = Vector3(float(p["x"]), float(p["y"]), float(p["z"]))
+		else:
+			var parent_p: Dictionary = {}
+			for pnd: Dictionary in nodes:
+				if pnd["id"] == nd["parent"]:
+					parent_p = pnd["position"]
+					break
+			var p: Dictionary = nd["position"]
+			world_positions[nd["id"]] = Vector3(
+				float(parent_p.get("x", 0.0)) + float(p["x"]),
+				float(parent_p.get("y", 0.0)) + float(p["y"]),
+				float(parent_p.get("z", 0.0)) + float(p["z"]),
+			)
+
+	var parent_node: Node3D = Node3D.new()
+	var entries: Array = renderer.build_aggregate_edges(edges, nodes, world_positions, parent_node)
+
+	# Find the ctx_a → ctx_b aggregate entry and confirm its count is 2.
+	var ab_entry: Dictionary = {}
+	for entry: Dictionary in entries:
+		if entry["source_context"] == "ctx_a" and entry["target_context"] == "ctx_b":
+			ab_entry = entry
+			break
+
+	_check(not ab_entry.is_empty(),
+		"Aggregate entry for ctx_a → ctx_b pair must exist")
+	if not ab_entry.is_empty():
+		_check(ab_entry["count"] == 2,
+			"ctx_a → ctx_b aggregate must have count=2 (two individual cross-context edges), got %d" % ab_entry["count"])
+
+	parent_node.free()
+
+
+## Spec: "cross-context dependencies are shown as single aggregate edges per
+##        context pair" at FAR LOD.
+## After _update_aggregate_visibility(0) (FAR level), aggregate edge visuals
+## must be visible (MeshInstance3D.visible == true).
+## In headless mode (no scene tree), show_edges() sets .visible directly so
+## tests can assert state without a running scene-tree process loop.
+func test_aggregate_edges_visible_after_far_lod_transition() -> void:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_aggregate_edge_fixture())
+
+	# Trigger the FAR LOD aggregate visibility update (lod_level=0 → show).
+	main_node.call("_update_aggregate_visibility", 0)
+
+	var agg_entries: Array = main_node.get("_aggregate_edge_entries")
+	_check(agg_entries.size() > 0,
+		"Aggregate entries must be populated after build_from_graph")
+
+	for entry: Dictionary in agg_entries:
+		var mesh: MeshInstance3D = entry["visual"]
+		_check(mesh.visible,
+			"Aggregate edge MeshInstance3D must be visible after FAR LOD transition")
+
+
+## Spec: aggregate edges are hidden at MEDIUM distance — individual edges take over.
+## After _update_aggregate_visibility(1) (MEDIUM level), aggregate edge visuals
+## must be hidden (MeshInstance3D.visible == false).
+func test_aggregate_edges_hidden_after_medium_lod_transition() -> void:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_aggregate_edge_fixture())
+
+	# First show them (as if coming from FAR), then hide (switching to MEDIUM).
+	main_node.call("_update_aggregate_visibility", 0)  # FAR → show
+	main_node.call("_update_aggregate_visibility", 1)  # MEDIUM → hide
+
+	var agg_entries: Array = main_node.get("_aggregate_edge_entries")
+	_check(agg_entries.size() > 0,
+		"Aggregate entries must be populated after build_from_graph")
+
+	for entry: Dictionary in agg_entries:
+		var mesh: MeshInstance3D = entry["visual"]
+		_check(not mesh.visible,
+			"Aggregate edge MeshInstance3D must be hidden at MEDIUM LOD level")
+
+
+## Spec: "individual module-level edges are not visible" at FAR distance.
+## Confirmed via LodManager: at FAR_THRESHOLD + distance, all edges (including
+## cross_context type) in _lod_edge_entries are hidden by _apply_far().
+func test_individual_edges_hidden_at_far_lod_in_aggregate_fixture() -> void:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_aggregate_edge_fixture())
+
+	var lod: LodManager = main_node.get("_lod")
+	var node_entries: Array = main_node.get("_lod_node_entries")
+	var edge_entries: Array = main_node.get("_lod_edge_entries")
+
+	# Apply FAR LOD: hides all individual edges.
+	lod.update_lod(node_entries, edge_entries, LodManager.FAR_THRESHOLD + 30.0)
+
+	for entry: Dictionary in edge_entries:
+		var vis: Node3D = entry["visual"]
+		_check(not vis.visible,
+			"Individual edge visual must be hidden at FAR distance (aggregate edges show instead)")

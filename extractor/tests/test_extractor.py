@@ -461,6 +461,43 @@ class TestDependencyExtraction:
             )
             assert e["weight"] >= 1, f"internal edge 'weight' must be >= 1: {e}"
 
+    def test_cross_context_edge_weight_accumulates(self, tmp_path: Path) -> None:
+        """cross_context weight is 2 when two modules in BC A both import from BC B."""
+        # BC alpha: two modules each importing from beta.domain
+        alpha = tmp_path / "alpha"
+        (alpha / "service").mkdir(parents=True)
+        (alpha / "repository").mkdir(parents=True)
+        for d in [alpha, alpha / "service", alpha / "repository"]:
+            (d / "__init__.py").write_text("")
+        (alpha / "service" / "api.py").write_text("from beta.domain import Model\n")
+        (alpha / "repository" / "store.py").write_text(
+            "from beta.domain import Model\n"
+        )
+
+        # BC beta: target domain module
+        beta = tmp_path / "beta"
+        (beta / "domain").mkdir(parents=True)
+        for d in [beta, beta / "domain"]:
+            (d / "__init__.py").write_text("")
+        (beta / "domain" / "model.py").write_text("class Model:\n    pass\n")
+
+        all_nodes: list[Node] = discover_bounded_contexts(tmp_path)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(tmp_path, bc["id"]))
+
+        edges = build_dependency_edges(tmp_path, all_nodes)
+        cc = [
+            e
+            for e in edges
+            if e["type"] == "cross_context"
+            and e["source"] == "alpha"
+            and e["target"] == "beta"
+        ]
+        assert cc, "Expected cross_context edge alpha→beta"
+        assert cc[0]["weight"] == 2, (
+            f"Expected weight=2 (two modules import from beta), got {cc[0]['weight']}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Requirement: Layout
