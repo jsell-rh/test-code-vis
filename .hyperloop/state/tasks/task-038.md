@@ -4,14 +4,14 @@ title: Implement Port primitive renderer in Godot (public interface points on Co
   membrane)
 spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
 status: in_progress
-phase: implement
+phase: verify
 deps:
 - task-023
 - task-012
 - task-014
 round: 0
 branch: hyperloop/task-038
-pr: null
+pr: https://github.com/jsell-rh/test-code-vis/pull/240
 pr_title: 'feat(godot): render Port primitives on Container membrane (public symbol
   interface points)'
 pr_description: "## What and Why\n\nImplements the Port primitive renderer in Godot.\

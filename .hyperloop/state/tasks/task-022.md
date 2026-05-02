@@ -3,7 +3,7 @@ id: task-022
 title: Implement independence queryable property (click-to-highlight independent peers)
 spec_ref: specs/visualization/orthogonal-independence.spec.md@ca0ad7afad8d95361892fbfba84f55049cf288fd
 status: in_progress
-phase: spec-review
+phase: mark-ready
 deps:
 - task-005
 - task-011
