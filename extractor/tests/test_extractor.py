@@ -3115,3 +3115,137 @@ class TestUbiquitousDependencyDetection:
         # All edges must be dicts (not malformed).
         for e in graph["edges"]:
             assert isinstance(e, dict), f"Edge must be a dict; got {type(e)}"
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Ubiquitous Dependency Detection — metadata ubiquitous_deps section
+# spec: visual-primitives.spec.md § Requirement: Ubiquitous Dependency Detection
+# Scenario: Threshold — "AND the threshold is recorded in extraction metadata"
+#
+# The metadata MUST contain an 'ubiquitous_deps' section recording:
+#   - threshold_pct: the numeric threshold used (e.g. 50 for 50%)
+#   - flagged: list of module IDs that exceeded the threshold
+# ---------------------------------------------------------------------------
+
+
+class TestUbiquitousDepsMetadata:
+    """Spec: visual-primitives.spec.md § Ubiquitous Dependency Detection / Threshold.
+
+    GIVEN a configurable threshold (default: imported by >50% of modules)
+    WHEN a dependency exceeds the threshold
+    THEN it is flagged as ubiquitous
+    AND the threshold is recorded in extraction metadata
+    """
+
+    def _make_ubiquitous_src(self, tmp_path: Path) -> Path:
+        """Build a source tree where 'shared_kernel' is imported by >50% of nodes.
+
+        Three bounded contexts with no sub-modules:
+          - shared_kernel (target)
+          - svc_a  (imports shared_kernel)
+          - svc_b  (imports shared_kernel)
+
+        All three are bounded_context nodes; detect_ubiquitous_dependencies()
+        counts them all in its denominator.  Two of the three (2/3 ≈ 67%)
+        import shared_kernel, which exceeds the default >50% threshold.
+
+        No sub-modules are created so the denominator stays at 3 (all BCs) and
+        the import fraction stays well above the threshold.
+        """
+        # Bounded context: shared_kernel (the ubiquitous dependency)
+        sk = tmp_path / "shared_kernel"
+        sk.mkdir()
+        (sk / "__init__.py").write_text("class Token:\n    pass\n")
+
+        # Bounded context: svc_a (flat — no sub-modules; imports shared_kernel)
+        svc_a = tmp_path / "svc_a"
+        svc_a.mkdir()
+        (svc_a / "__init__.py").write_text("")
+        (svc_a / "service.py").write_text("from shared_kernel import Token\n")
+
+        # Bounded context: svc_b (flat — no sub-modules; imports shared_kernel)
+        svc_b = tmp_path / "svc_b"
+        svc_b.mkdir()
+        (svc_b / "__init__.py").write_text("")
+        (svc_b / "service.py").write_text("from shared_kernel import Token\n")
+
+        return tmp_path
+
+    def test_metadata_has_ubiquitous_deps_section(self, tmp_path: Path) -> None:
+        """build_scene_graph metadata MUST contain 'ubiquitous_deps' dict.
+
+        Spec: 'AND the threshold is recorded in extraction metadata'
+        (visual-primitives.spec.md § Scenario: Threshold)
+        """
+        src = self._make_ubiquitous_src(tmp_path)
+        graph = build_scene_graph(src)
+        meta = graph["metadata"]
+        assert "ubiquitous_deps" in meta, (
+            "metadata must contain 'ubiquitous_deps' section; "
+            f"got keys: {list(meta.keys())}"
+        )
+
+    def test_metadata_ubiquitous_deps_has_threshold_pct(self, tmp_path: Path) -> None:
+        """ubiquitous_deps must record threshold_pct (integer percentage, e.g. 50).
+
+        Spec: 'AND the threshold is recorded in extraction metadata'
+        """
+        src = self._make_ubiquitous_src(tmp_path)
+        graph = build_scene_graph(src)
+        ubiq = graph["metadata"]["ubiquitous_deps"]
+        assert "threshold_pct" in ubiq, (
+            "ubiquitous_deps must contain 'threshold_pct'; "
+            f"got keys: {list(ubiq.keys())}"
+        )
+        assert isinstance(ubiq["threshold_pct"], int), (
+            f"threshold_pct must be int (e.g. 50), got {type(ubiq['threshold_pct'])}"
+        )
+        assert ubiq["threshold_pct"] == 50, (
+            f"default threshold_pct must be 50 (default 50%); got {ubiq['threshold_pct']}"
+        )
+
+    def test_metadata_ubiquitous_deps_has_flagged_list(self, tmp_path: Path) -> None:
+        """ubiquitous_deps must record 'flagged' list of module IDs.
+
+        Spec: 'AND the threshold is recorded in extraction metadata'
+        """
+        src = self._make_ubiquitous_src(tmp_path)
+        graph = build_scene_graph(src)
+        ubiq = graph["metadata"]["ubiquitous_deps"]
+        assert "flagged" in ubiq, (
+            "ubiquitous_deps must contain 'flagged' list; "
+            f"got keys: {list(ubiq.keys())}"
+        )
+        assert isinstance(ubiq["flagged"], list), (
+            f"ubiquitous_deps.flagged must be a list, got {type(ubiq['flagged'])}"
+        )
+
+    def test_metadata_flagged_contains_ubiquitous_module(self, tmp_path: Path) -> None:
+        """When shared_kernel is imported by 100% of modules, it appears in flagged.
+
+        Spec: 'THEN it is flagged as ubiquitous'
+        Uses a bounded-context node ('shared_kernel') as the target so it
+        appears in both the node list and the edge list.
+        """
+        src = self._make_ubiquitous_src(tmp_path)
+        graph = build_scene_graph(src)
+        flagged = graph["metadata"]["ubiquitous_deps"]["flagged"]
+        assert "shared_kernel" in flagged, (
+            "shared_kernel (imported by 100% of modules) must appear in "
+            f"ubiquitous_deps.flagged; got {flagged}"
+        )
+
+    def test_metadata_flagged_empty_when_no_ubiquitous(self, src: Path) -> None:
+        """When no module exceeds the threshold, flagged is an empty list.
+
+        The standard src fixture has shared_kernel imported by 2 of 4 modules
+        (iam.domain and graph.infrastructure out of 4 total modules) — 50%
+        which is NOT above the >50% default threshold — so flagged must be [].
+        """
+        graph = build_scene_graph(src)
+        ubiq = graph["metadata"]["ubiquitous_deps"]
+        flagged = ubiq["flagged"]
+        assert flagged == [], (
+            "No module in the standard fixture exceeds the >50% threshold; "
+            f"flagged must be empty, got {flagged}"
+        )

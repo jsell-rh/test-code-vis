@@ -289,6 +289,28 @@ class Edge(TypedDict):
     """
 
 
+class UbiquitousDeps(TypedDict):
+    """Ubiquitous dependency detection results recorded in extraction metadata.
+
+    Records the threshold used and the list of module IDs that exceeded it.
+    Spec: visual-primitives.spec.md § Ubiquitous Dependency Detection / Threshold.
+    """
+
+    threshold_pct: int
+    """Integer percentage threshold (e.g. 50 for the default 50% rule).
+
+    A dependency is flagged ubiquitous when it is imported by more than
+    this percentage of modules.
+    """
+
+    flagged: list[str]
+    """Sorted list of module IDs flagged as ubiquitous.
+
+    These are the targets of edges that carry ``ubiquitous: true``.
+    Empty when no dependency exceeds the threshold.
+    """
+
+
 class Metadata(TypedDict):
     """Extraction metadata recorded alongside the graph."""
 
@@ -304,6 +326,14 @@ class Metadata(TypedDict):
 
     Recorded so the Godot renderer and human can understand which suppression
     rule was applied.
+    Spec: visual-primitives.spec.md § Ubiquitous Dependency Detection / Threshold.
+    """
+
+    ubiquitous_deps: NotRequired[UbiquitousDeps]
+    """Ubiquitous dependency detection results.
+
+    Records the threshold used (as an integer percentage) and the sorted list
+    of module IDs whose edges carry ``ubiquitous: true``.
     Spec: visual-primitives.spec.md § Ubiquitous Dependency Detection / Threshold.
     """
 
