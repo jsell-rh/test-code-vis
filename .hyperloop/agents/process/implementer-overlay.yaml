@@ -182,6 +182,38 @@ guidelines: |
   This second sync is the LAST action before `run-all-checks.sh`. Do not
   write additional code after it — only run checks and commit results.
 
+  ## CHECK SYNC ≠ REBASE — TWO DISTINCT GIT OPERATIONS, BOTH REQUIRED
+
+  `git checkout main -- .hyperloop/checks/` copies CHECK SCRIPT FILES into your
+  working tree. It does NOT change your branch's commit ancestry. These are
+  completely different git operations.
+
+  `check-rebased-onto-main.sh` checks commit ancestry, NOT file content. It will
+  still EXIT 1 after a sync commit if you have not run `git rebase origin/main`,
+  even if every check-script file is byte-identical to main.
+
+  **Observed failure (task-108, round 9):** sync commit f287ddfd made
+  check-checks-in-sync.sh pass but check-rebased-onto-main.sh still failed —
+  the branch was 5 commits behind origin/main in ancestry even though all check
+  script files were current.
+
+  Mandatory rule: after EVERY `git checkout main -- .hyperloop/checks/` sync,
+  immediately also run:
+
+    bash .hyperloop/checks/check-rebased-onto-main.sh
+
+  If it exits non-zero, rebase BEFORE committing the sync:
+
+    git fetch origin main:main
+    git rebase origin/main
+    # resolve conflicts — keep all main additions (see REBASE HYGIENE above)
+    git checkout origin/main -- .hyperloop/checks/   # re-sync after rebase
+    bash .hyperloop/checks/check-checks-in-sync.sh   # must exit 0
+    bash .hyperloop/checks/check-rebased-onto-main.sh  # must exit 0
+
+  A sync commit that is not accompanied by a passing rebase check is INCOMPLETE.
+  Never submit with check-rebased-onto-main.sh failing.
+
   ## SCOPE COMPLIANCE
 
   `specs/prototype/prototype-scope.spec.md` is the PROTOTYPE-SCOPE AUTHORITY.
