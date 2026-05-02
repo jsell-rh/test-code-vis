@@ -65,6 +65,11 @@ func _init() -> void:
 	# Power Rail: ubiquitous edges suppressed, indicator added to source node.
 	_run_suite(preload("res://tests/test_visual_primitives.gd").new())
 
+
+	# --- task-029: Node Primitive renderer (core/visual-primitives.spec.md) ---
+	# Function/method/class nodes rendered with identity (name label) and
+	# no type-specific shape — only Badges differentiate them.
+	_run_suite(preload("res://tests/test_node_primitive.gd").new())
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
