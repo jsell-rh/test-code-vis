@@ -115,10 +115,50 @@ guidelines: |
   EVERY session that commits to main — not just process-improvement sessions.
   INTAKE SESSIONS are equally capable of creating the missed-push condition.
 
+  Observed pattern (task-012 — THIRD FAILURE, DIVERGED state): task-012 failed
+  check-main-local-vs-remote.sh a THIRD time in a third re-attempt cycle. This
+  time the state was DIVERGED (not merely AHEAD): PR #224 (feat: size encoding,
+  commit f038e7c6) was merged to origin/main via GitHub while local main had
+  commits 6ea54878 ("process: add submission rebase gate") and b28dcc36
+  ("chore(intake): seventeenth PM pass") that were never pushed. Because no
+  `git fetch origin main:main` was run before committing locally, the orchestrator
+  did not observe the incoming PR merge. The diverged state required a merge commit
+  (601b9613) to reconcile — a merge that would never have been needed if the
+  session had fetched before committing. This is the THIRD CONSECUTIVE CYCLE where
+  task-012 has received ORCHESTRATOR CONFIGURATION FAIL. The implementation is
+  59/60 checks passing, 191 Godot + 204 pytest tests green, all spec requirements
+  covered — every failure has been caused solely by the push/fetch rule violation.
+
+  ## FETCH BEFORE COMMITTING — PREVENTS DIVERGED STATE
+
+  PRs merged to origin/main via GitHub create new commits on origin that local main
+  does not automatically receive. If the orchestrator commits to local main WITHOUT
+  first fetching, local main and origin/main diverge. A DIVERGED state cannot be
+  resolved by `git push origin main` (rejected as non-fast-forward) — it requires a
+  merge commit, which itself must be pushed.
+
+  **Before making ANY commit to local main:**
+    git fetch origin main:main              # pull in any merged PRs
+    # If origin is now ahead, integrate first:
+    git merge origin/main                   # or: git rebase origin/main
+    # THEN make your local commit:
+    git commit -m "..."
+    git push origin main                    # push immediately after committing
+    bash .hyperloop/checks/check-main-local-vs-remote.sh   # must exit 0
+
   **Checklist at cycle start:**
-    1. git push origin main                                              # push FIRST
-    2. bash .hyperloop/checks/check-cycle-gate.sh <task-ids from findings>  # gate check
-    3. Only assign tasks after both steps succeed.
+    1. git fetch origin main:main                                        # fetch FIRST
+    2. git push origin main                                              # push any pending local commits
+    3. bash .hyperloop/checks/check-main-local-vs-remote.sh             # must exit 0
+    4. bash .hyperloop/checks/check-cycle-gate.sh <task-ids from findings>  # gate check
+    5. Only assign tasks after all steps succeed.
+
+  **Checklist before every commit to local main:**
+    1. git fetch origin main:main           # detect incoming PR merges
+    2. git merge origin/main               # integrate if origin is ahead
+    3. git commit -m "..."                 # make your commit
+    4. git push origin main               # push IMMEDIATELY after committing
+    5. bash .hyperloop/checks/check-main-local-vs-remote.sh   # must exit 0
 
   **Checklist after any mid-cycle commit to main (process-improvement OR intake OR closure):**
     1. git push origin main                                              # push IMMEDIATELY
@@ -145,12 +185,23 @@ guidelines: |
   the previous process-improvement session had already pushed. Correct behavior in
   one session does NOT protect against unpushed commits from the next session.
 
-  Last action of EVERY session that writes a commit to main, without exception:
-    git push origin main
-    bash .hyperloop/checks/check-main-local-vs-remote.sh   # must exit 0
+  task-012's THIRD failure added a new root cause: no `git fetch` before committing
+  locally caused a DIVERGED state (not just AHEAD) when PR #224 merged to origin.
+  A fetch-before-commit discipline prevents this class of failure entirely.
 
-  If check-main-local-vs-remote.sh exits 1 at the end of ANY session,
-  the session is NOT complete. Push and verify before closing.
+  Last action of EVERY session that writes a commit to main, without exception:
+    bash .hyperloop/checks/check-main-not-diverged.sh   # fetches + detects AHEAD/DIVERGED
+
+  If check-main-not-diverged.sh exits 1, follow its printed fix instructions and
+  re-run until it exits 0. The session is NOT complete until it exits 0.
+
+  check-main-not-diverged.sh is the session-end companion to check-main-local-vs-remote.sh:
+    - check-main-not-diverged.sh  → run at END of every session that commits to main
+    - check-main-local-vs-remote.sh → run by verifiers inside task worktrees
+
+  Both scripts report the same failures. check-main-not-diverged.sh additionally
+  fetches origin before checking, so it catches DIVERGED state caused by incoming
+  PR merges that the orchestrator hasn't fetched.
 
   ## UNPUSHED CHECK SCRIPTS = IMPLEMENTER BLIND SPOTS
 
