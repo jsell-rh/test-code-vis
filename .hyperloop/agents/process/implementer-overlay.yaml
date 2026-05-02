@@ -139,6 +139,45 @@ guidelines: |
     origin/main -- <file>) when the conflict contains BOTH duplicate code (take
     main's) AND your unique additions (keep yours). Use block-by-block resolution.
 
+  - **Additive conflicts — KEEP ALL UNIQUE ADDITIONS FROM BOTH SIDES:**
+    When BOTH origin/main AND your branch add DIFFERENT features to the same file
+    region (neither side is a duplicate of the other), include ALL unique additions
+    from BOTH sides. This is distinct from the PARALLEL-TASK case above (same
+    feature on both sides — take main's, discard yours).
+
+    Recognition pattern — additive conflict in godot/scripts/main.gd:
+      <<<<<<< HEAD (your branch)
+      var _tint_controller: TintController = TintController.new()
+      =======
+      var _port_renderer: PortRenderer = PortRenderer.new()
+      >>>>>>> origin/main
+    Resolution: KEEP BOTH — result contains both declarations.
+
+    How to distinguish additive from duplicate:
+    - ADDITIVE: each side's block implements a DIFFERENT named class or feature
+      (e.g., TintController vs PortRenderer — logically independent).
+    - DUPLICATE: both sides implement the SAME feature, possibly with different code.
+
+    Files where additive conflicts occur every cycle:
+    - `godot/scripts/main.gd`: multiple tasks wire independent controllers.
+      Keep ALL wiring sections — main's additions AND your branch's additions.
+    - `godot/tests/run_tests.gd`: multiple tasks register independent test suites.
+      The `_run_suite()` count after resolution MUST equal main's count PLUS your
+      branch's new suites. A count below main is always wrong.
+    - `extractor/tests/test_extractor.py`: multiple tasks add tests to the same
+      class. Keep ALL test functions from both sides.
+
+    Immediately after resolving any additive conflict, run:
+      bash .hyperloop/checks/check-run-tests-suite-count.sh   # must exit 0
+      bash .hyperloop/checks/check-class-test-count.sh        # must exit 0
+
+    Observed failures (task-082, task-089, task-029): all three branched before
+    task-038 (Port Primitive) merged to main. During conflict resolution, each
+    dropped main's PortRenderer wiring from main.gd, the test_port_renderer.gd
+    suite from run_tests.gd, and 2 class-method tests from test_extractor.py.
+    Running the two checks above immediately after conflict resolution would have
+    caught these regressions before any implementation code was written.
+
   **After rebase, if `check-run-tests-suite-count.sh` exits non-zero:**
   The diagnostic diff identifies which `_run_suite()` registrations are missing.
   For each missing suite, also restore the test file itself from origin/main —
@@ -154,11 +193,20 @@ guidelines: |
   rebase, a missing test file is NOT automatically restored when the conflict was
   in a different file — explicitly restore it from origin/main.
 
-  After rebase, run both regression guards before `run-all-checks.sh`:
+  After rebase, run all regression guards before `run-all-checks.sh`:
 
-    bash .hyperloop/checks/check-run-tests-suite-count.sh   # GDScript suite count
-    bash .hyperloop/checks/check-pytest-test-count.sh       # Python test count
+    bash .hyperloop/checks/check-post-rebase-regression.sh  # GDScript suites + all Python tests
     bash .hyperloop/checks/run-all-checks.sh
+
+  `check-post-rebase-regression.sh` bundles four guards:
+  `check-rebased-onto-main.sh`, `check-run-tests-suite-count.sh`,
+  `check-class-test-count.sh`, and `check-pytest-test-count.sh`.
+  All four must exit 0 before you write any implementation code.
+
+  Observed failure (task-082, task-089, task-029): the post-rebase sequence
+  listed only two of the four guards. `check-class-test-count.sh` was omitted,
+  so the missing 2 class-method tests (added by task-038 to test_extractor.py)
+  were not caught until verifier review.
 
   ## COMMIT TRAILER DISCIPLINE — VERIFY AFTER EVERY COMMIT
 
