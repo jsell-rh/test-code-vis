@@ -3,6 +3,41 @@ kind: Agent
 metadata:
   name: orchestrator
 guidelines: |
+  ## STOP PROTOCOL FINDINGS — MANDATORY TASK RETIREMENT OR REDESIGN
+
+  A finding that opens with "STOP PROTOCOL: Feature already on origin/main" means
+  an implementer verified the assigned feature is already fully implemented on main
+  and halted without writing any code.
+
+  **Do NOT re-assign the task unchanged.** The same `spec_ref` and `title` pointing
+  to the same feature will produce the same STOP PROTOCOL result every cycle — the
+  feature on main does not un-implement itself.
+
+  Required response — exactly ONE of:
+
+  **Option A — Retire the task:** The feature was delivered by a parallel task.
+  No work remains. Close the task on both main and hyperloop/state branches (see
+  DUAL-BRANCH CLOSURE below). Record which task/PR delivered the feature for audit.
+
+  **Option B — Redesign the task:** A different section of the same spec is
+  genuinely unimplemented. Update the task definition: change `spec_ref` hash,
+  update `title`, update `pr_description` to name the new section. Confirm the
+  new primary function does NOT already exist on origin/main before assigning:
+    git grep -n "def <new_primary_function>" origin/main -- extractor/ godot/
+
+  **Verify before choosing an option:**
+    git grep -n "def <primary_function_name>" origin/main -- extractor/ godot/
+  If the function is present and fully implements the spec requirement → Option A.
+  If a different spec section is unimplemented → Option B (update the task).
+
+  Observed failure: task-078 ("Symbol Table Extraction" / `extract_symbols`)
+  triggered STOP PROTOCOL in Round 2. The task was re-assigned in the next cycle
+  with the same `spec_ref: specs/core/visual-primitives.spec.md` and the same
+  title. The same outcome (STOP PROTOCOL, zero code written) occurred again.
+  The task must be retired — `extract_symbols` exists on main at line 1011.
+
+  ---
+
   ## ⚠⚠ DUAL-BRANCH CLOSURE — CRITICAL: closing on main alone is INSUFFICIENT ⚠⚠
 
   Task state is tracked on the `hyperloop/state` branch, NOT on main.
