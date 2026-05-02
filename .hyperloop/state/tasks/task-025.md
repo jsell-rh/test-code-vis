@@ -5,11 +5,41 @@ spec_ref: "specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da
 status: not-started
 phase: null
 deps: [task-002, task-003, task-006, task-007]
-round: 0
+round: 1
 branch: null
 pr: null
 pr_title: "feat(extractor): implement type topology extraction (inherits, has_a, implements)"
 pr_description: |
+  ## ⚠ Retry Prescription (Round 1 — Rebase Only)
+
+  The prior attempt (`hyperloop/task-025`) completed a correct implementation that passed
+  234 pytest tests and 230 Godot behavioral tests, and satisfied all checks **except one**:
+  `check-rebased-onto-main.sh` exited 1 because the branch forked before commit `61c9117a`,
+  which deleted 3 test functions from `extractor/tests/test_extractor.py`.
+
+  **Do NOT start from scratch.** The implementation is complete. The only required action is:
+
+  ```bash
+  git fetch origin
+  git checkout hyperloop/task-025        # the completed implementation branch
+  git rebase origin/main
+  # Conflict will occur in extractor/tests/test_extractor.py.
+  # KEEP MAIN'S VERSION: accept the deletion of these three functions:
+  #   test_bounded_context_nodes_have_metrics_with_loc
+  #   test_cross_context_edge_direction_encodes_importer_to_imported
+  #   test_internal_edge_distinguishable_from_cross_context
+  # Apply the task-025 additions on top. Do NOT use 'ours' strategy.
+  git add extractor/tests/test_extractor.py
+  git rebase --continue
+  bash .hyperloop/checks/check-run-tests-suite-count.sh   # must stay >= 19
+  bash .hyperloop/checks/run-all-checks.sh                # all checks must be EXIT 0
+  ```
+
+  After the rebase, open a PR from the rebased `hyperloop/task-025` branch. No other
+  changes are required.
+
+  ---
+
   ## What and Why
 
   Adds a type topology extraction pass to the Python extractor. This pass analyzes class
