@@ -277,6 +277,55 @@ guidelines: |
   do not review implementation quality." Fix process issues first. Never submit
   with these checks failing.
 
+  ## STANDARD REBASE FAIL — REBASE BEFORE APPLYING PRESCRIBED FIXES
+
+  When your prior FAIL report lists BOTH a rebase failure AND implementation
+  findings (missing Tween, missing BFS animation, incomplete test), you MUST
+  complete the rebase BEFORE applying any implementation fix from the prior report.
+  Do NOT fix implementations first and rebase afterward.
+
+  **Why order matters:** The missing main commit may modify the SAME files your
+  branch touches. Applying your implementation fixes to the stale base and then
+  rebasing produces a harder three-way conflict than rebasing first and applying
+  fixes cleanly to the current base. Some prior FAIL findings may also be
+  partially or fully resolved by the parallel task's commit — you need to see
+  the rebased state before deciding what still needs fixing.
+
+  **Mandatory order for any re-attempt where the prior FAIL cited a rebase failure:**
+
+  1. Run Sync Point 1 (every re-attempt, every time — do not skip):
+
+       git fetch origin main:main
+       git checkout main -- .hyperloop/checks/
+       git checkout main -- .hyperloop/agents/process/
+       bash .hyperloop/checks/check-checks-in-sync.sh   # must exit 0
+
+  2. Rebase BEFORE reading the prior FAIL report's implementation findings:
+
+       bash .hyperloop/checks/check-rebased-onto-main.sh
+       # If non-zero, rebase immediately:
+       git rebase origin/main
+       # Apply the PARALLEL-TASK CONFLICTS protocol: keep origin/main's
+       # version of overlapping code sections; keep your unique additions.
+       bash .hyperloop/checks/check-rebased-onto-main.sh   # must exit 0
+
+  3. Run all checks against the rebased state BEFORE touching any code:
+
+       bash .hyperloop/checks/run-all-checks.sh
+
+     Some prior FAIL findings may now be resolved by the parallel task's commit.
+     Only apply fixes for findings that STILL fail after this baseline run.
+
+  4. Apply remaining implementation fixes, then complete Sync Point 2 and the
+     post-draft rebase check before submitting.
+
+  Observed failure (task-070, Round 2): prior FAIL (Round 1) cited missing Tween
+  and BFS animation. Round 2 correctly fixed both. However, task-067 had merged to
+  origin/main during Round 2 work, modifying extractor/extractor.py — the same file
+  task-070 touches. The branch was submitted without rebasing. The conflict was in
+  separate function regions and would have resolved cleanly, but the rebase was
+  skipped entirely. Sole blocking reason: check-rebased-onto-main.sh FAIL.
+
   ## SINGLE-IMPLEMENTATION-CHECK FAIL — CHECK-FIRST PROTOCOL
 
   When your prior FAIL report shows exactly ONE implementation check exiting
@@ -1430,6 +1479,27 @@ guidelines: |
   3. Plan to wire edges to port node IDs (not container IDs) in the rendering pass.
   4. Write test stubs FIRST that assert (a) port exists on membrane, (b) port has label
      matching function name, (c) edge endpoint is port position, not container center.
+
+  ## DEFERRAL COMMENTS ON MUST CLAUSES — FORBIDDEN
+
+  A `# future improvement` or `# TODO` comment placed on a code path required by a
+  spec MUST/SHALL THEN-clause is a blocking gap — implement the Tween branch now, or
+  escalate via a FAIL report explaining the architectural constraint (never defer silently).
+
+  ## DOCSTRINGS MUST MATCH ACTUAL FUNCTION BEHAVIOR
+
+  Do not write a docstring claiming animated behavior (e.g., "In scene-tree contexts
+  a Tween slides the visual") when the function body contains no `create_tween` call —
+  false docstrings mask PARTIAL gaps and cause verifiers to mis-classify them as
+  PASS-WITH-NOTE.
+
+  ## REPOSITIONING FUNCTIONS REQUIRE TWEEN WHEN SPEC SAYS "SLIDES NOT JUMPS"
+
+  Any function named `_reposition_*`, `_reroute_*`, `_relocate_*`, or `_slide_*` that
+  is called from `collapse_cluster()` or `expand_cluster()` MUST contain a
+  `create_tween` / `is_inside_tree()` branch when the spec says endpoints "slide not
+  jump" or animate "smoothly"; run `bash .hyperloop/checks/check-reposition-function-has-tween.sh`
+  before submitting.
 
   ## EDGE/CONNECTION RE-ROUTING IS A DISTINCT IMPLEMENTATION REQUIREMENT
 

@@ -266,6 +266,31 @@ guidelines: |
   non-.hyperloop/ path): this is NOT a process-only race — issue a standard FAIL
   and assess the implementation impact fully.
 
+  ## FEATURE-SUPERSESSION NOTE — MANDATORY WHEN MISSING COMMIT IS FEATURE-OVERLAPPING
+
+  When check-rebased-onto-main.sh fails and the missing origin/main commit implements
+  the SAME feature or modifies the SAME functions as the branch under review:
+
+  1. Classify as STANDARD REBASE FAIL (not REBASE-ONLY FAIL) — the missing commit
+     touches implementation files, so apparent test pass counts are unreliable.
+
+  2. Include a note to the orchestrator in your FAIL report:
+     "ORCHESTRATOR NOTE: Commit <hash> (task-NNN, PR #X) on origin/main implements
+     overlapping functionality [describe: which functions, which files]. After the
+     implementer rebases and resolves conflicts, evaluate whether remaining work is
+     needed or the task can be closed as superseded."
+
+  3. Provide conflict resolution guidance specific to the overlap:
+     - State which function regions the parallel commit changed.
+     - State which function regions this branch uniquely adds.
+     - State whether the regions are disjoint (rebase resolves cleanly) or
+       overlapping (manual block-by-block merge required, per the
+       PARALLEL-TASK CONFLICTS protocol in the implementer overlay).
+
+  This practice was observed to occur naturally in task-027's verifier report
+  (where task-067 superseded task-027's edge weight work) and is now mandatory.
+  It prevents the orchestrator from unknowingly re-assigning work already on main.
+
   ## Pipeline Integration — Compute Functions Must Be Called
 
   For every `compute_*()` function defined in the extractor:
