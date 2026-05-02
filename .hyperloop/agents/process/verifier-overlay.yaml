@@ -328,6 +328,41 @@ guidelines: |
     modulate.a anywhere is implementing instant pops, not animated transitions —
     FAIL every THEN-clause that mentions animation or smooth fading.
 
+  ## ALL-VARIANTS FIELD COVERAGE AUDIT — "EACH EDGE" MEANS EVERY EDGE TYPE
+
+  Run `bash .hyperloop/checks/check-individual-edge-weight.sh` and include its
+  complete output verbatim in your findings when the task touches dependency edge
+  construction.
+
+  When a spec says a field applies to "each edge", "every edge", or "each [entity]",
+  audit EVERY distinct type variant independently — finding the field on one variant
+  does NOT satisfy "each."
+
+  Blocking failure pattern (task-023): spec said "each edge carries the import count."
+  `test_aggregate_edge_has_weight` passed. The reviewer saw "weight is implemented"
+  and did not check that individual `cross_context` / `internal` edges also lacked the
+  field. The aggregate test gave false confidence.
+
+  **For any spec requirement using "each", "every", or "all" to scope a field:**
+
+  1. List EVERY type variant the entity can have. For edges: `cross_context`,
+     `internal`, `aggregate`. For nodes: `bounded_context`, `module`.
+  2. For EACH variant, independently verify:
+     (a) The emitter code adds the field to that specific variant.
+     (b) A test asserts the field's VALUE on that specific variant.
+  3. A test that only covers one variant (e.g., aggregate) leaves all other
+     variants UNCOVERED. Each variant needs its own test assertion.
+  4. The verifier must NOT accept "the field is implemented (on one variant)" as
+     satisfying a "each/every/all" requirement. Check each variant explicitly.
+
+  Example — spec says "each edge carries the import count":
+    WRONG audit: test_aggregate_edge_has_weight passes → requirement COVERED
+    RIGHT audit:
+      - Check cross_context edges: do they have "weight"? Is there a test? → PARTIAL
+      - Check internal edges: do they have "weight"? Is there a test? → PARTIAL
+      - Check aggregate edges: weight present, test passes → COVERED
+      Overall verdict: PARTIAL (BLOCKING) because the field is missing on 2 of 3 variants.
+
   ## AGGREGATE EDGE VERIFICATION
 
   Run `bash .hyperloop/checks/check-aggregate-edge-impl.sh` and include its

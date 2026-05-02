@@ -762,6 +762,33 @@ guidelines: |
   Omitting one source because it "seemed less common" or "was not in the
   examples" is always a FAIL — the spec enumeration is exhaustive.
 
+  ## ALL-VARIANTS FIELD COVERAGE — "EACH EDGE" MEANS EVERY EDGE TYPE
+
+  When a spec says a field applies to "each edge", "every edge", or "each [entity]",
+  the field MUST be emitted on ALL distinct type variants — not just the most complex
+  or aggregated one.
+
+  Blocking failure pattern (task-023): spec said "each edge carries the import count."
+  `build_dependency_edges()` emitted `weight` on `aggregate` edges only.
+  Individual `cross_context` and `internal` edges had no `weight` field and no
+  per-(source,target) import-count accumulator. `test_aggregate_edge_has_weight`
+  passed, giving false confidence. Individual edges were untested for this field.
+
+  **Before implementing any field that the spec requires on "each [entity]":**
+
+  1. List EVERY type variant the entity can have (e.g., `cross_context`, `internal`,
+     `aggregate` for edges; `bounded_context`, `module` for nodes).
+  2. Confirm the emitter code adds the field to ALL variants — not just one.
+     Search for every construction site (list comprehension, loop, dict literal)
+     that creates any variant, and verify the field appears in each.
+  3. Write one test per variant that asserts the field's value (not just presence):
+       - test_cross_context_edge_has_weight
+       - test_internal_edge_has_weight
+     A single test for one variant (e.g., aggregate) is PARTIAL — not COVERED.
+
+  Run `bash .hyperloop/checks/check-individual-edge-weight.sh` before submitting
+  when the task touches dependency edge construction.
+
   ## TEST VALUE ASSERTIONS — ASSERT FIELD VALUES, NOT JUST PRESENCE
 
   Tests for spec-required data fields must assert the field's VALUE (or that
