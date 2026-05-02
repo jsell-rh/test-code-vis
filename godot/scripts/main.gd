@@ -26,6 +26,17 @@ const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
 const VisualPrimitives = preload("res://scripts/visual_primitives.gd")
 const PortRenderer = preload("res://scripts/port_renderer.gd")
 
+## Colour applied to modules in OTHER independence groups than the selected module.
+## spec: orthogonal-independence.spec.md § Independence as Queryable Property
+## "all modules in other independence groups within the same bounded context are highlighted"
+## Cyan signals "free to change — orthogonal complement."
+const INDEPENDENT_PEER_COLOR := Color(0.00, 0.80, 0.90, 1.0)
+
+## Colour applied to modules in the SAME independence group as the selected module.
+## spec: "modules in A's own group are visually distinguished as co-dependent"
+## Amber signals "coupled — co-dependent with the selection."
+const CODEPENDENT_COLOR := Color(0.90, 0.60, 0.10, 1.0)
+
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
 ## Node id → Node3D anchor that owns the volume and label.
@@ -114,6 +125,12 @@ var _cluster_edge_reroutes: Dictionary = {}
 ## The parsed cluster suggestion list loaded with the scene graph.
 ## Each entry follows the Cluster TypedDict: {id, members, context, aggregate_metrics}.
 var _cluster_suggestions: Array = []
+
+## Independence highlight state.
+## Stores original mesh colors (node_id → Color) so clear_independence_highlight()
+## can restore them after a highlight session ends.
+## spec: orthogonal-independence.spec.md § Independence as Queryable Property
+var _independence_original_colors: Dictionary = {}
 
 @onready var _camera: Camera3D = $Camera3D
 
@@ -1390,6 +1407,7 @@ func _frame_camera() -> void:
 ##   J → apply quality overlay  (quality-metrics — shows coupling and centrality).
 ##   K → apply failure impact overlay (cascade-injection — shows impact from first node).
 ##   T → toggle ubiquitous (power rail) edges on/off.
+##   I → apply independence overlay (orthogonal-independence — shows safe-change peers).
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed:
 		return
@@ -1403,6 +1421,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_T:
 			# spec §Power Rail Toggle — "T key toggles ubiquitous edges on/off"
 			toggle_ubiquitous_edges()
+		KEY_I:
+			# spec §Independence — "I key shows orthogonal complement of first module"
+			var nodes: Array = _graph.get("nodes", [])
+			for nd in nodes:
+				if nd.get("type", "") == "module":
+					highlight_independence(nd.get("id", ""))
+					break
 
 
 # ---------------------------------------------------------------------------
@@ -1438,4 +1463,219 @@ func _apply_failure_impact_overlay() -> void:
 	if not target_id.is_empty():
 		_understanding_overlay.apply_failure_overlay(target_id, _graph, _anchors, self)
 
+
+
+# ---------------------------------------------------------------------------
+# Independence highlighting (orthogonal-independence.spec.md)
+# ---------------------------------------------------------------------------
+
+
+## Highlight the orthogonal complement of *node_id*.
+##
+## spec: orthogonal-independence.spec.md § Independence as Queryable Property
+## "The human MUST be able to select a module and see its orthogonal complement —
+##  everything that can change without affecting it."
+##
+## THEN all modules in other independence groups within the same bounded context
+##      are highlighted with INDEPENDENT_PEER_COLOR.
+## AND  modules in A's own group are visually distinguished with CODEPENDENT_COLOR.
+## AND  the transition between default and independence-highlighted states is
+##      animated smoothly (Tween when in tree; direct when headless).
+## AND  bounded contexts with no transitive dependency on the selected context are
+##      highlighted, with the animation radiating outward from the selection.
+func highlight_independence(node_id: String) -> void:
+	var nodes: Array = _graph.get("nodes", [])
+
+	# Find the independence group and parent context of the selected node.
+	var selected_group: String = ""
+	var selected_context: String = ""
+	for nd: Dictionary in nodes:
+		if nd["id"] == node_id:
+			selected_group = nd.get("independence_group", "")
+			selected_context = nd.get("parent", "")
+			break
+
+	# Apply colour to each module within the same bounded context.
+	# Delay increases slightly per node so the highlight radiates outward from
+	# the selected module — spec: "the highlight animates in from the selected
+	# module outward".
+	var delay: float = 0.0
+	for nd: Dictionary in nodes:
+		if nd["type"] != "module":
+			continue
+		if nd.get("parent", "") != selected_context:
+			continue  # only modules within the selected context
+
+		var anchor: Node3D = _anchors.get(nd["id"])
+		if anchor == null:
+			continue
+
+		# Save the original color so clear_independence_highlight() can restore it.
+		if not _independence_original_colors.has(nd["id"]):
+			_independence_original_colors[nd["id"]] = _get_mesh_color(anchor)
+
+		var ig: String = nd.get("independence_group", "")
+		var target_color: Color
+		if ig == selected_group and not selected_group.is_empty():
+			# Same group → co-dependent with the selected module.
+			target_color = CODEPENDENT_COLOR
+		else:
+			# Different group → orthogonal / independent peer.
+			target_color = INDEPENDENT_PEER_COLOR
+
+		# spec: "the transition is animated smoothly" — Tween fades to target color.
+		_animate_mesh_color(anchor, target_color, 0.30, delay)
+		delay += 0.05  # slight per-node delay for outward-radiation effect
+
+	# Cross-context independence: highlight bounded contexts that are fully
+	# orthogonal to the selected context (no transitive dependency in either
+	# direction).  These highlights start slightly after the module highlights so
+	# the animation appears to radiate outward from the selected module.
+	_highlight_cross_context_independence(selected_context, delay)
+
+
+## Clear all independence highlighting and restore original mesh colors.
+##
+## spec: orthogonal-independence.spec.md § Independence as Queryable Property
+## "the transition between default and independence-highlighted states is animated
+##  smoothly" — the reverse (clearing) also uses Tween.
+func clear_independence_highlight() -> void:
+	for node_id: String in _independence_original_colors:
+		var anchor: Node3D = _anchors.get(node_id)
+		if anchor != null:
+			_animate_mesh_color(anchor, _independence_original_colors[node_id], 0.25, 0.0)
+	_independence_original_colors.clear()
+
+
+## Highlight bounded contexts fully independent of *selected_context*.
+##
+## spec: orthogonal-independence.spec.md § Cross-context independence
+## "THEN bounded contexts with no transitive dependency on context X are
+##  highlighted as fully independent"
+## "AND the highlight animates in from the selected module outward"
+func _highlight_cross_context_independence(selected_context: String, start_delay: float) -> void:
+	if selected_context.is_empty():
+		return
+	var independent_contexts: Array = _compute_context_independence(selected_context)
+	var delay: float = start_delay
+	for ctx_id: String in independent_contexts:
+		var anchor: Node3D = _anchors.get(ctx_id)
+		if anchor == null:
+			continue
+		if not _independence_original_colors.has(ctx_id):
+			_independence_original_colors[ctx_id] = _get_mesh_color(anchor)
+		_animate_mesh_color(anchor, INDEPENDENT_PEER_COLOR, 0.30, delay)
+		delay += 0.05
+
+
+## Return a list of bounded-context IDs that are fully independent of *selected_context*.
+##
+## A context is "fully independent" when it has no transitive dependency path to
+## *selected_context* AND *selected_context* has no transitive path to it.
+## This is the orthogonal complement at the bounded-context level.
+##
+## spec: orthogonal-independence.spec.md § Cross-context independence
+## "bounded contexts with no transitive dependency on context X are highlighted"
+func _compute_context_independence(selected_context: String) -> Array:
+	var edges: Array = _graph.get("edges", [])
+	var nodes: Array = _graph.get("nodes", [])
+
+	# Collect all bounded context IDs.
+	var all_contexts: Array = []
+	for nd: Dictionary in nodes:
+		if nd["type"] == "bounded_context":
+			all_contexts.append(nd["id"])
+
+	# Build forward adjacency: ctx → [contexts it depends on].
+	# Only cross_context and aggregate edges represent BC-level dependencies.
+	var bc_deps: Dictionary = {}
+	for ed: Dictionary in edges:
+		if ed["type"] == "cross_context" or ed["type"] == "aggregate":
+			var src_bc: String = (ed["source"] as String).split(".")[0]
+			var tgt_bc: String = (ed["target"] as String).split(".")[0]
+			if src_bc != tgt_bc:
+				if not bc_deps.has(src_bc):
+					bc_deps[src_bc] = []
+				if not (tgt_bc in bc_deps[src_bc]):
+					(bc_deps[src_bc] as Array).append(tgt_bc)
+
+	# BFS forward: all contexts reachable FROM selected_context (it depends on them).
+	var selected_depends_on: Dictionary = {}
+	var frontier: Array = bc_deps.get(selected_context, [])
+	while not frontier.is_empty():
+		var next_frontier: Array = []
+		for ctx: String in frontier:
+			if not selected_depends_on.has(ctx):
+				selected_depends_on[ctx] = true
+				for dep: String in bc_deps.get(ctx, []):
+					next_frontier.append(dep)
+		frontier = next_frontier
+
+	# Build reverse adjacency: ctx → [contexts that depend on it].
+	var bc_reverse: Dictionary = {}
+	for src_bc: String in bc_deps:
+		for tgt_bc: String in bc_deps[src_bc]:
+			if not bc_reverse.has(tgt_bc):
+				bc_reverse[tgt_bc] = []
+			(bc_reverse[tgt_bc] as Array).append(src_bc)
+
+	# BFS reverse: all contexts from which selected_context is reachable.
+	var depends_on_selected: Dictionary = {}
+	frontier = bc_reverse.get(selected_context, [])
+	while not frontier.is_empty():
+		var next_frontier: Array = []
+		for ctx: String in frontier:
+			if not depends_on_selected.has(ctx):
+				depends_on_selected[ctx] = true
+				for dep: String in bc_reverse.get(ctx, []):
+					next_frontier.append(dep)
+		frontier = next_frontier
+
+	# Fully independent: not in either reachability set and not the selected itself.
+	var result: Array = []
+	for ctx: String in all_contexts:
+		if ctx == selected_context:
+			continue
+		if not selected_depends_on.has(ctx) and not depends_on_selected.has(ctx):
+			result.append(ctx)
+	return result
+
+
+## Animate the albedo_color of the first MeshInstance3D child's material on *anchor*.
+##
+## Uses Tween when the node is in the scene tree (smooth animated transition).
+## Falls back to immediate assignment in headless unit tests (no scene tree).
+##
+## spec: "the transition between default and independence-highlighted states is
+##        animated smoothly" (orthogonal-independence.spec.md § Queryable Property)
+## spec: "the highlight animates in from the selected module outward"
+##       (achieved by incrementing *delay* per node at the call site)
+func _animate_mesh_color(
+	anchor: Node3D, target_color: Color, duration: float, delay: float
+) -> void:
+	for child in anchor.get_children():
+		if child is MeshInstance3D:
+			var mat = (child as MeshInstance3D).material_override
+			if mat is StandardMaterial3D:
+				if is_inside_tree():
+					# spec: smooth animated transition — Tween interpolates albedo_color.
+					var tween: Tween = create_tween()
+					if delay > 0.0:
+						tween.tween_interval(delay)
+					tween.tween_property(mat, "albedo_color", target_color, duration)
+				else:
+					# Headless tests: no scene tree, set directly for immediate assertion.
+					(mat as StandardMaterial3D).albedo_color = target_color
+			break  # one material per anchor is sufficient
+
+
+## Return the albedo_color of the first MeshInstance3D child's material on *anchor*.
+## Used internally to save original colors before applying the independence highlight.
+func _get_mesh_color(anchor: Node3D) -> Color:
+	for child in anchor.get_children():
+		if child is MeshInstance3D:
+			var mat = (child as MeshInstance3D).material_override
+			if mat is StandardMaterial3D:
+				return (mat as StandardMaterial3D).albedo_color
+	return Color.TRANSPARENT
 

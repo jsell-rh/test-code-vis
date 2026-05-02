@@ -1563,6 +1563,206 @@ class TestComputeClusters:
 
 
 # ---------------------------------------------------------------------------
+# Requirement: Spatial Separation of Independent Groups
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def src_two_independent_groups(tmp_path: Path) -> Path:
+    """A BC with modules A, B (group 0) and C, D (group 1) — no cross-group imports.
+
+    spec scenario: "A imports B, C imports D, but neither {A,B} nor {C,D} imports the other"
+    THEN {A,B} and {C,D} are identified as independent groups AND spatially separated.
+    """
+    bc = tmp_path / "mybc"
+    for mod in ["mod_a", "mod_b", "mod_c", "mod_d"]:
+        (bc / mod).mkdir(parents=True)
+        (bc / mod / "__init__.py").write_text("")
+    (bc / "__init__.py").write_text("")
+    # Group 0: mod_a imports mod_b
+    (bc / "mod_a" / "service.py").write_text("from mybc.mod_b import X
+")
+    (bc / "mod_b" / "models.py").write_text("class X: pass
+")
+    # Group 1: mod_c imports mod_d
+    (bc / "mod_c" / "service.py").write_text("from mybc.mod_d import Y
+")
+    (bc / "mod_d" / "models.py").write_text("class Y: pass
+")
+    return tmp_path
+
+
+class TestApplyIndependenceSpatialLayout:
+    """Modules in different independence groups must occupy distinct spatial regions.
+
+    spec: orthogonal-independence.spec.md § Spatial Separation of Independent Groups
+    "Independent groups within a bounded context MUST be spatially separated
+     so that independence is visible without interaction."
+    """
+
+    def test_two_groups_have_distinct_positions(
+        self, src_two_independent_groups: Path
+    ) -> None:
+        """GIVEN two independent groups THEN they occupy distinct spatial regions.
+
+        spec: 'the groups occupy distinct spatial regions within the context's volume
+        AND a visible gap separates the groups'.
+        """
+        nodes: list[Node] = discover_bounded_contexts(src_two_independent_groups)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_two_independent_groups, bc["id"]))
+        edges = build_dependency_edges(src_two_independent_groups, nodes)
+        compute_layout(nodes, edges)
+        compute_independence_groups(nodes, edges)
+        apply_independence_spatial_layout(nodes)
+
+        module_nodes = [n for n in nodes if n["type"] == "module"]
+        positions = [(n["position"]["x"], n["position"]["z"]) for n in module_nodes]
+        assert len(set(positions)) >= 2, (
+            "Modules in different independence groups must have distinct spatial positions; "
+            f"got {positions}"
+        )
+
+    def test_independent_groups_are_angularly_separated(
+        self, src_two_independent_groups: Path
+    ) -> None:
+        """GIVEN two independence groups THEN a visible gap separates them (>5°).
+
+        spec: 'a visible gap separates the groups'.
+        """
+        import math as _math
+
+        nodes: list[Node] = discover_bounded_contexts(src_two_independent_groups)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_two_independent_groups, bc["id"]))
+        edges = build_dependency_edges(src_two_independent_groups, nodes)
+        compute_layout(nodes, edges)
+        compute_independence_groups(nodes, edges)
+        apply_independence_spatial_layout(nodes)
+
+        groups: dict[str, list[tuple[float, float]]] = {}
+        for n in nodes:
+            if n["type"] != "module":
+                continue
+            g = n["independence_group"]
+            groups.setdefault(g, []).append((n["position"]["x"], n["position"]["z"]))
+
+        assert len(groups) >= 2, "Fixture must produce at least 2 independence groups"
+
+        def group_centre_angle(pts: list[tuple[float, float]]) -> float:
+            avg_x = sum(p[0] for p in pts) / len(pts)
+            avg_z = sum(p[1] for p in pts) / len(pts)
+            return _math.atan2(avg_z, avg_x)
+
+        group_ids = list(groups.keys())
+        a0 = group_centre_angle(groups[group_ids[0]])
+        a1 = group_centre_angle(groups[group_ids[1]])
+        diff = abs(a1 - a0)
+        diff = min(diff, 2 * _math.pi - diff)
+        assert diff > _math.radians(5.0), (
+            f"Independence groups must have a visible angular gap (>5°); got {_math.degrees(diff):.1f}°"
+        )
+
+    def test_single_group_positions_unchanged(self, tmp_path: Path) -> None:
+        """GIVEN a single independence group THEN positions are not altered.
+
+        spec: 'the entire context is a single group AND no independence separation is applied'.
+        """
+        bc_dir = tmp_path / "monolith"
+        mod_a = bc_dir / "a"
+        mod_b = bc_dir / "b"
+        for d in [bc_dir, mod_a, mod_b]:
+            d.mkdir(parents=True)
+            (d / "__init__.py").write_text("")
+        (mod_a / "logic.py").write_text("from monolith.b import X
+")
+        (mod_b / "models.py").write_text("class X: pass
+")
+
+        nodes: list[Node] = discover_bounded_contexts(tmp_path)
+        for bc_node in list(nodes):
+            nodes.extend(discover_submodules(tmp_path, bc_node["id"]))
+        edges = build_dependency_edges(tmp_path, nodes)
+        compute_layout(nodes, edges)
+        compute_independence_groups(nodes, edges)
+
+        positions_before = {n["id"]: dict(n["position"]) for n in nodes if n["type"] == "module"}
+        apply_independence_spatial_layout(nodes)
+        positions_after = {n["id"]: dict(n["position"]) for n in nodes if n["type"] == "module"}
+
+        assert positions_before == positions_after, (
+            "Single-group contexts: apply_independence_spatial_layout must not move modules"
+        )
+
+    def test_modules_within_group_remain_close(
+        self, src_two_independent_groups: Path
+    ) -> None:
+        """GIVEN two independence groups THEN within-group distance < cross-group distance.
+
+        spec: 'modules within each group remain close to each other'.
+        """
+        import math as _math
+
+        nodes: list[Node] = discover_bounded_contexts(src_two_independent_groups)
+        for bc in list(nodes):
+            nodes.extend(discover_submodules(src_two_independent_groups, bc["id"]))
+        edges = build_dependency_edges(src_two_independent_groups, nodes)
+        compute_layout(nodes, edges)
+        compute_independence_groups(nodes, edges)
+        apply_independence_spatial_layout(nodes)
+
+        by_group: dict[str, list[Node]] = {}
+        for n in nodes:
+            if n["type"] == "module":
+                by_group.setdefault(n.get("independence_group", ""), []).append(n)
+
+        assert len(by_group) >= 2, "Fixture must produce at least 2 independence groups"
+
+        def dist2d(a: Node, b: Node) -> float:
+            return _math.sqrt(
+                (a["position"]["x"] - b["position"]["x"]) ** 2
+                + (a["position"]["z"] - b["position"]["z"]) ** 2
+            )
+
+        group_keys = sorted(by_group.keys())
+        g0 = by_group[group_keys[0]]
+        g1 = by_group[group_keys[1]]
+
+        max_intra = (
+            max(dist2d(a, b) for grp in [g0, g1] for i, a in enumerate(grp) for b in grp[i + 1:])
+            if any(len(grp) > 1 for grp in [g0, g1])
+            else 0.0
+        )
+        min_inter = min(dist2d(a, b) for a in g0 for b in g1)
+
+        assert max_intra < min_inter, (
+            f"Within-group max dist ({max_intra:.3f}) must be less than cross-group min dist ({min_inter:.3f})."
+        )
+
+    def test_build_scene_graph_spatially_separates_independent_groups(
+        self, src_two_independent_groups: Path
+    ) -> None:
+        """build_scene_graph end-to-end: modules in different groups at distinct positions.
+
+        spec: 'WHEN the context is rendered THEN the groups occupy distinct spatial regions'.
+        """
+        graph = build_scene_graph(src_two_independent_groups)
+        module_nodes = [n for n in graph["nodes"] if n["type"] == "module"]
+        groups: dict[str, list[dict]] = {}
+        for n in module_nodes:
+            g = n.get("independence_group", "single")
+            groups.setdefault(g, []).append(n)
+
+        # The positions of modules in different groups must not all be identical.
+        all_positions = [
+            (n["position"]["x"], n["position"]["z"]) for pts in groups.values() for n in pts
+        ]
+        assert len(set(all_positions)) > 1, (
+            "Independence groups must produce spatially distinct module positions"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Requirement: Cascade Depth
 # ---------------------------------------------------------------------------
 
