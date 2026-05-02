@@ -182,6 +182,35 @@ guidelines: |
   This second sync is the LAST action before `run-all-checks.sh`. Do not
   write additional code after it — only run checks and commit results.
 
+  ## PROCESS-ONLY FAIL — REBASE-ONLY FIX PROTOCOL
+
+  When your prior FAIL report lists ONLY `check-rebased-onto-main.sh` and/or
+  `check-checks-in-sync.sh` as failing checks (every implementation check
+  passes), execute this EXACT sequence and NOTHING ELSE:
+
+    git fetch origin main:main
+    git rebase origin/main
+    # Resolve any conflicts — keep all .hyperloop/checks/ changes from origin/main:
+    git checkout origin/main -- .hyperloop/checks/
+    bash .hyperloop/checks/check-checks-in-sync.sh     # must exit 0
+    bash .hyperloop/checks/check-rebased-onto-main.sh  # must exit 0
+    bash .hyperloop/checks/run-all-checks.sh           # must exit 0
+
+  Do NOT add implementation commits. Do NOT modify any implementation files.
+  A rebase-only fix has zero implementation changes — the only new content is
+  the check-sync commit and the rebase itself. Adding gratuitous implementation
+  commits to a branch that only needs a rebase introduces new risk and can
+  reset check-no-zero-commit-reattempt.sh baselines in unexpected ways.
+
+  **Why process-check failures are especially damaging:**
+  A FAIL verdict from check-rebased-onto-main.sh or check-checks-in-sync.sh
+  causes the verifier to STOP READING immediately — your implementation quality
+  is NOT evaluated at all. Ten rounds of solid implementation work can be
+  blocked indefinitely by a single missing rebase. The verifier protocol states:
+  "If [check-rebased-onto-main.sh] exits non-zero, issue FAIL immediately —
+  do not review implementation quality." Fix process issues first. Never submit
+  with these checks failing.
+
   ## CHECK SYNC ≠ REBASE — TWO DISTINCT GIT OPERATIONS, BOTH REQUIRED
 
   `git checkout main -- .hyperloop/checks/` copies CHECK SCRIPT FILES into your
