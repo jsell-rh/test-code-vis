@@ -326,6 +326,41 @@ guidelines: |
   separate function regions and would have resolved cleanly, but the rebase was
   skipped entirely. Sole blocking reason: check-rebased-onto-main.sh FAIL.
 
+  ## FIX COMMITS ON STALE BRANCHES — A FIX COMMIT IS NOT A REBASE
+
+  A fix commit authored on a non-rebased branch does NOT make the branch rebased.
+  Committing your implementation fix and failing to run `git rebase origin/main`
+  leaves check-rebased-onto-main.sh failing — the two operations are completely
+  independent.
+
+  `check-rebased-onto-main.sh` verifies branch ANCESTRY, not file content. A commit
+  that adds new tests or fixes a bug does not move the fork point onto origin/main.
+  Only `git rebase origin/main` does that. No other action satisfies it.
+
+  **Self-check before authoring ANY fix commit in a re-attempt:**
+
+    bash .hyperloop/checks/check-rebased-onto-main.sh   # must exit 0 FIRST
+    bash .hyperloop/checks/check-checks-in-sync.sh      # must exit 0 FIRST
+
+  If either exits non-zero: resolve it before writing a single line of code. Do not
+  commit the fix to a stale base and expect to rebase afterward — rebase first, then
+  commit the fix on top of the current base.
+
+  **Check scripts added to main between Round N and Round N+1 will be absent from
+  your branch.** Run Sync Point 1 at the very start of EVERY re-attempt, before
+  reading the prior FAIL report's implementation findings. A check added after your
+  Round 1 Sync Point 2 will surface as a blocking failure at Round 2 submission even
+  when it would EXIT 0 against your code — a purely avoidable process violation.
+
+  Observed failure (task-065, Round 2): prior FAIL listed (a) check-rebased-onto-main.sh
+  FAIL and (b) missing test_smooth_regrouping_updates_anchor_positions(). The implementer
+  correctly authored the missing test — but committed it to the stale base without
+  rebasing. The branch remained 3 commits behind origin/main after the fix commit.
+  check-reposition-function-has-tween.sh (added to main after Round 1's review) was
+  absent because Sync Point 1 was skipped at the start of Round 2. Both blockers
+  required zero implementation changes: (1) git rebase origin/main, then (2)
+  git checkout origin/main -- .hyperloop/checks/.
+
   ## SINGLE-IMPLEMENTATION-CHECK FAIL — CHECK-FIRST PROTOCOL
 
   When your prior FAIL report shows exactly ONE implementation check exiting
