@@ -401,24 +401,15 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
     its ``weight``.  Internal edges are created at the module level (e.g.
     ``iam.application → iam.domain``).
 
-    Every individual edge (cross_context or internal) carries a ``weight``
-    field equal to the number of unique module-level import statements
-    between the pair.  This lets humans assess coupling strength without
-    reading code (spec §Understanding Without Writing Code).
-
-    Duplicate edges are deduplicated; their weights are summed.
+    Duplicate edges are deduplicated.
     """
     all_ids = {n["id"] for n in all_nodes}
     context_ids = {n["id"] for n in all_nodes if n["type"] == "bounded_context"}
 
-    # Count unique module-level imports per edge triple (src, tgt, type).
-    # Replaces the previous raw_edges set so weight is accumulated alongside
-    # deduplication.  Each unique (source_module, imported_module) pair that
-    # resolves to an edge triple increments its count by 1.
-    raw_edge_count: dict[tuple[str, str, EdgeType], int] = {}
+    raw_edges: set[tuple[str, str, EdgeType]] = set()
 
     # Count unique module-level cross-context imports per BC pair.
-    # Keyed by (source_bc, target_bc) → import count (for aggregate edges).
+    # Keyed by (source_bc, target_bc) → import count.
     bc_pair_weight: dict[tuple[str, str], int] = {}
 
     for node in all_nodes:
@@ -451,8 +442,7 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
                 edge_tgt = target_context
                 if edge_src not in context_ids or edge_tgt not in context_ids:
                     continue
-                key: tuple[str, str, EdgeType] = (edge_src, edge_tgt, "cross_context")
-                raw_edge_count[key] = raw_edge_count.get(key, 0) + 1
+                raw_edges.add((edge_src, edge_tgt, "cross_context"))
                 # Count weight from module-level scans only to avoid
                 # double-counting the BC-level rglob that also sees module files.
                 if node["type"] == "module":
@@ -466,14 +456,12 @@ def build_dependency_edges(src_path: Path, all_nodes: list[Node]) -> list[Edge]:
                 if target_id == source_context:
                     # The import resolves only to the BC itself — skip.
                     continue
-                int_key: tuple[str, str, EdgeType] = (source_id, target_id, "internal")
-                raw_edge_count[int_key] = raw_edge_count.get(int_key, 0) + 1
+                raw_edges.add((source_id, target_id, "internal"))
 
-    # Individual cross-context and internal edges — each carries its import count
-    # as weight so humans can assess coupling strength without reading source code.
+    # Individual cross-context and internal edges.
     edges: list[Edge] = [
-        {"source": src, "target": tgt, "type": etype, "weight": count}
-        for (src, tgt, etype), count in sorted(raw_edge_count.items())
+        {"source": src, "target": tgt, "type": etype}
+        for src, tgt, etype in sorted(raw_edges)
     ]
 
     # Aggregate edges: one per BC-pair, carrying the total import count as weight.
@@ -1415,74 +1403,12 @@ def _detect_communities(module_ids: list[str], edges: list[Edge]) -> dict[str, s
     return result
 
 
-def _compute_betweenness_centrality(
-    adj: dict[str, list[str]],
-) -> dict[str, float]:
-    """Compute normalised betweenness centrality for all nodes (Brandes algorithm).
-
-    For an undirected graph the betweenness centrality of node v is the fraction
-    of shortest paths between all ordered pairs (s, t) with s ≠ t that pass
-    through v (excluding s and t themselves).  The normalisation factor is
-    ``1 / ((n-1) * (n-2))`` for directed graphs; for n ≤ 2 no normalisation is
-    applied and all scores remain 0.0.
-
-    Args:
-        adj: Adjacency mapping ``{node_id: [neighbour_id, …]}``.  The mapping
-             must cover every node (even those with no neighbours) so that the
-             output dict has an entry for every node.
-
-    Returns:
-        A dict ``{node_id: centrality_score}`` where each score is in [0.0, 1.0].
-    """
-    nodes = list(adj.keys())
-    bc: dict[str, float] = {n: 0.0 for n in nodes}
-
-    for s in nodes:
-        # BFS to find shortest paths from s.
-        stack: list[str] = []
-        predecessors: dict[str, list[str]] = {n: [] for n in nodes}
-        sigma: dict[str, int] = {n: 0 for n in nodes}
-        dist: dict[str, int] = {n: -1 for n in nodes}
-        sigma[s] = 1
-        dist[s] = 0
-        queue: list[str] = [s]
-        while queue:
-            v = queue.pop(0)
-            stack.append(v)
-            for w in adj.get(v, []):
-                if dist[w] < 0:
-                    queue.append(w)
-                    dist[w] = dist[v] + 1
-                if dist[w] == dist[v] + 1:
-                    sigma[w] += sigma[v]
-                    predecessors[w].append(v)
-
-        # Accumulate dependencies (back-propagation).
-        delta: dict[str, float] = {n: 0.0 for n in nodes}
-        while stack:
-            w = stack.pop()
-            for v in predecessors[w]:
-                if sigma[w] > 0:
-                    delta[v] += (sigma[v] / sigma[w]) * (1.0 + delta[w])
-            if w != s:
-                bc[w] += delta[w]
-
-    # Normalise: divide by (n-1)*(n-2) so scores fall in [0.0, 1.0].
-    n = len(nodes)
-    if n > 2:
-        scale = 1.0 / ((n - 1) * (n - 2))
-        for v in bc:
-            bc[v] *= scale
-
-    return bc
-
-
 def compute_structural_significance(nodes: list[Node], edges: list[Edge]) -> None:
     """Compute and embed structural significance metrics for all code nodes (in-place).
 
     For each bounded-context and module node, computes:
     - ``in_degree`` / ``out_degree``
-    - ``betweenness_centrality`` (Brandes BFS) — numeric float in [0.0, 1.0]
+    - ``betweenness_centrality`` (Brandes BFS)
     - ``is_hub`` (in_degree > threshold)
     - ``is_bridge`` (betweenness_centrality > threshold)
     - ``is_peripheral`` (in_degree == 0 and out_degree <= 1)
@@ -1561,11 +1487,6 @@ def compute_structural_significance(nodes: list[Node], edges: list[Edge]) -> Non
             ]
             bcs_in_community = {m.split(".")[0] for m in same_community_mods}
             sig["community_drift"] = len(bcs_in_community) > 1
-
-        # Betweenness centrality: numeric float in [0.0, 1.0] — set as a top-level
-        # node field so it is directly accessible (spec: the module is annotated
-        # with its betweenness centrality score).
-        node["betweenness_centrality"] = bc
 
         node["structural_significance"] = sig
 
