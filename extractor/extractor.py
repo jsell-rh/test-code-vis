@@ -215,6 +215,13 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
     render time — storing absolute coordinates here would cause double-offset
     rendering.
 
+    When module nodes carry ``independence_group`` identifiers (set by
+    :func:`compute_independence_groups`), modules in different independence
+    groups are placed in **distinct spatial sub-regions** within the bounded
+    context's volume, separated by a visible gap.  Modules in the same group
+    remain close to each other (coupling-aware layout still applies within each
+    group).  This makes structural independence visible without interaction.
+
     Spec nodes are placed in a row beyond the far edge of the code circle so
     that the intended design (specs) is spatially distinct from the realized
     design (code).  See :func:`_position_spec_nodes`.
@@ -240,19 +247,71 @@ def compute_layout(nodes: list[Node], edges: list[Edge] | None = None) -> None:
             parent_children.setdefault(n["parent"], []).append(n)
 
     for parent_id, children in parent_children.items():
-        mod_radius = min(
-            max(1.5, len(children) * 0.9), bc_radius * 0.4
-        )  # cap inside parent
-        mod_positions = _circular_positions(len(children), mod_radius, y=0.0)
-        # Store LOCAL offsets only (relative to the parent BC's origin).
-        # main.gd resolves world positions by adding parent world pos + local offset,
-        # so storing absolute coords here would cause double-offset rendering.
-        for child, pos in zip(children, mod_positions):
-            child["position"] = {
-                "x": pos[0],
-                "y": pos[1],
-                "z": pos[2],
-            }
+        # Attempt to separate modules by independence group.
+        # If independence_group is available, use sub-region placement so
+        # groups occupy distinct spatial regions (spec: "independent groups
+        # occupy distinct spatial regions within the context's volume" and
+        # "a visible gap separates the groups").
+        groups: dict[str, list[Node]] = {}
+        for child in children:
+            grp = child.get("independence_group", "")  # type: ignore[call-overload]
+            groups.setdefault(grp if grp else "__unset__", []).append(child)
+
+        num_groups = len(groups)
+        if num_groups <= 1:
+            # Single group or no group info: use original circular layout.
+            mod_radius = min(
+                max(1.5, len(children) * 0.9), bc_radius * 0.4
+            )  # cap inside parent
+            mod_positions = _circular_positions(len(children), mod_radius, y=0.0)
+            # Store LOCAL offsets only (relative to the parent BC's origin).
+            # main.gd resolves world positions by adding parent world pos + local
+            # offset, so storing absolute coords would cause double-offset rendering.
+            for child, pos in zip(children, mod_positions):
+                child["position"] = {
+                    "x": pos[0],
+                    "y": pos[1],
+                    "z": pos[2],
+                }
+        else:
+            # Multiple independent groups: place each group in a distinct
+            # sub-region.  Each sub-region centre is computed on a coarse
+            # circle whose radius is scaled to keep all groups within the BC
+            # boundary.  A visible gap between sub-region centres is maintained
+            # by the inter-group separation (the coarse circle radius).
+            # Within each sub-region, modules are arranged on a smaller circle
+            # (coupling-aware layout within group).
+            #
+            # The inter-group circle radius is chosen so that adjacent group
+            # centres are separated by at least the intra-group radius, creating
+            # the required visible spatial gap.
+            max_group_size = max(len(g) for g in groups.values())
+            # Intra-group radius: how far modules spread within their group.
+            intra_radius = min(
+                max(1.0, max_group_size * 0.7), bc_radius * 0.2
+            )  # cap to 20% of BC radius → keeps within parent
+            # Inter-group radius: distance between group sub-region centres.
+            # Must be > 2 * intra_radius to ensure a visible gap between groups.
+            # The → derivation: gap = inter_r - 2*intra_r > 0 → inter_r > 2*intra_r.
+            inter_radius = min(
+                max(intra_radius * 2.5, len(children) * 0.6),
+                bc_radius * 0.35,
+            )  # cap to 35% of BC radius → groups fit inside parent
+            # Place each group's sub-region centre on the inter-group circle.
+            group_names = sorted(groups.keys())
+            group_centres = _circular_positions(num_groups, inter_radius, y=0.0)
+            for grp_name, (cx, _cy, cz) in zip(group_names, group_centres):
+                grp_members = groups[grp_name]
+                grp_positions = _circular_positions(
+                    len(grp_members), intra_radius, y=0.0
+                )
+                for child, (lx, ly, lz) in zip(grp_members, grp_positions):
+                    # LOCAL offset = sub-region centre + intra-group offset.
+                    child["position"] = {
+                        "x": cx + lx,
+                        "y": ly,
+                        "z": cz + lz,
+                    }
 
     # Position spec nodes beyond the code circle so intended and realized
     # design occupy distinct spatial regions.
@@ -1697,12 +1756,17 @@ def build_scene_graph(src_path: Path) -> SceneGraph:
     spec_nodes = discover_spec_nodes(src_path)
     nodes.extend(spec_nodes)
 
-    # 5. Compute layout with coupling-aware BC ordering (mutates positions in-place).
-    #    Spec nodes are positioned beyond the code circle by compute_layout().
-    compute_layout(nodes, edges)
-
-    # 6. Assign independence groups to module nodes (mutates nodes in-place).
+    # 5. Assign independence groups to module nodes (mutates nodes in-place).
+    #    Must run BEFORE compute_layout so that the layout can separate
+    #    independent groups spatially (spec: "independent groups occupy distinct
+    #    spatial regions within the context's volume").
     compute_independence_groups(nodes, edges)
+
+    # 6. Compute layout with coupling-aware BC ordering (mutates positions in-place).
+    #    Spec nodes are positioned beyond the code circle by compute_layout().
+    #    Independence group info (set in step 5) is used to place module nodes in
+    #    separated spatial sub-regions within each bounded context.
+    compute_layout(nodes, edges)
 
     # 7. Compute cluster suggestions for tightly-coupled module groups.
     clusters = compute_clusters(nodes, edges)

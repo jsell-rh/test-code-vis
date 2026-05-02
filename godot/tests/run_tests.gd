@@ -65,6 +65,13 @@ func _init() -> void:
 	# Power Rail: ubiquitous edges suppressed, indicator added to source node.
 	_run_suite(preload("res://tests/test_visual_primitives.gd").new())
 
+	# --- task-070: Orthogonal Independence spec (visualization/orthogonal-independence.spec.md) ---
+	# Independence detection: modules in different groups identified as orthogonal.
+	# Spatial separation: independent groups occupy distinct spatial regions.
+	# Queryable property: select a module → highlight orthogonal complement.
+	# Cross-context independence: BCs with no transitive dep highlighted.
+	_run_suite(preload("res://tests/test_orthogonal_independence.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 

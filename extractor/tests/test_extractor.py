@@ -2349,6 +2349,338 @@ class TestUbiquitousFlags:
 
 
 # ---------------------------------------------------------------------------
+# Requirement: Independence Detection — additional scenarios
+# spec: orthogonal-independence.spec.md
+#
+# Scenario: Fully connected context
+# GIVEN a bounded context where every module transitively depends on every other
+# WHEN independence analysis runs
+# THEN the entire context is a single group
+# AND no independence separation is applied
+#
+# Scenario: Two independent module clusters
+# GIVEN modules A, B, C, D where A→B and C→D but {A,B} ∦ {C,D}
+# WHEN independence analysis runs
+# THEN {A,B} and {C,D} are identified as independent groups
+# AND each module carries its group identifier in the scene graph
+# ---------------------------------------------------------------------------
+
+
+class TestIndependenceDetectionScenarios:
+    """Spec: orthogonal-independence.spec.md § Requirement: Independence Detection."""
+
+    def test_fully_connected_context_is_single_group(self, tmp_path: Path) -> None:
+        """GIVEN every module transitively depends on every other
+        THEN the entire context is a single group.
+
+        Scenario: A→B, B→C, C→A (cycle → all transitively connected).
+        """
+        bc = tmp_path / "ctx"
+        mod_a = bc / "alpha"
+        mod_b = bc / "beta"
+        mod_c = bc / "gamma"
+        for d in [bc, mod_a, mod_b, mod_c]:
+            d.mkdir(parents=True)
+            (d / "__init__.py").write_text("")
+        (mod_a / "code.py").write_text("from ctx.beta import B\n")
+        (mod_b / "code.py").write_text("from ctx.gamma import C\n")
+        (mod_c / "code.py").write_text("from ctx.alpha import A\n")
+
+        nodes = discover_bounded_contexts(tmp_path)
+        for bc_node in list(nodes):
+            nodes.extend(discover_submodules(tmp_path, bc_node["id"]))
+        edges = build_dependency_edges(tmp_path, nodes)
+        compute_independence_groups(nodes, edges)
+
+        groups = {
+            n["id"]: n.get("independence_group") for n in nodes if n["type"] == "module"
+        }
+        assert groups, "Expected module nodes in the fully-connected context"
+        # All three modules must share the same group (all transitively connected).
+        group_values = set(groups.values())
+        assert len(group_values) == 1, (
+            f"Fully connected context must be a single group; got {groups}"
+        )
+
+    def test_two_independent_clusters_identified(self, tmp_path: Path) -> None:
+        """GIVEN modules A,B in one cluster and C,D in another with no cross deps
+        THEN {A,B} and {C,D} are in different independence groups.
+
+        Spec Scenario: A imports B, C imports D, but {A,B} ∦ {C,D}.
+        """
+        bc = tmp_path / "ctx"
+        mod_a = bc / "alpha"
+        mod_b = bc / "beta"
+        mod_c = bc / "gamma"
+        mod_d = bc / "delta"
+        for d in [bc, mod_a, mod_b, mod_c, mod_d]:
+            d.mkdir(parents=True)
+            (d / "__init__.py").write_text("")
+        (mod_a / "code.py").write_text("from ctx.beta import B\n")
+        (mod_b / "code.py").write_text("")
+        (mod_c / "code.py").write_text("from ctx.delta import D\n")
+        (mod_d / "code.py").write_text("")
+
+        nodes = discover_bounded_contexts(tmp_path)
+        for bc_node in list(nodes):
+            nodes.extend(discover_submodules(tmp_path, bc_node["id"]))
+        edges = build_dependency_edges(tmp_path, nodes)
+        compute_independence_groups(nodes, edges)
+
+        groups = {
+            n["id"]: n.get("independence_group") for n in nodes if n["type"] == "module"
+        }
+        assert len(groups) == 4, f"Expected 4 module nodes; got {groups}"
+        # {alpha, beta} must be in the same group.
+        assert groups["ctx.alpha"] == groups["ctx.beta"], (
+            f"ctx.alpha and ctx.beta import each other → same group; got {groups}"
+        )
+        # {gamma, delta} must be in the same group.
+        assert groups["ctx.gamma"] == groups["ctx.delta"], (
+            f"ctx.gamma and ctx.delta import each other → same group; got {groups}"
+        )
+        # The two clusters must be in DIFFERENT groups.
+        assert groups["ctx.alpha"] != groups["ctx.gamma"], (
+            f"Independent clusters {{alpha,beta}} and {{gamma,delta}} must differ; "
+            f"got {groups}"
+        )
+
+    def test_each_module_carries_group_id_in_scene_graph(self, tmp_path: Path) -> None:
+        """THEN each module carries its group identifier in the scene graph.
+
+        Spec: 'each module carries its group identifier in the scene graph'.
+        """
+        bc = tmp_path / "svc"
+        mod = bc / "core"
+        for d in [bc, mod]:
+            d.mkdir(parents=True)
+            (d / "__init__.py").write_text("")
+        (mod / "logic.py").write_text("")
+
+        graph = build_scene_graph(tmp_path)
+        module_nodes = [n for n in graph["nodes"] if n["type"] == "module"]
+        assert module_nodes, "Expected at least one module node"
+        for node in module_nodes:
+            assert "independence_group" in node, (
+                f"Module {node['id']} must carry independence_group in scene graph"
+            )
+            grp = node["independence_group"]
+            assert isinstance(grp, str) and ":" in grp, (
+                f"independence_group must be '<context>:<index>' string; got {grp!r}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Spatial Separation of Independent Groups
+# spec: orthogonal-independence.spec.md
+#
+# Scenario: Visual gap between independent groups
+# GIVEN a bounded context with two independent groups
+# WHEN layout is computed
+# THEN the groups occupy distinct spatial regions
+# AND a visible gap separates the groups
+# AND modules within each group remain close to each other
+# ---------------------------------------------------------------------------
+
+
+class TestSpatialSeparation:
+    """Spec: orthogonal-independence.spec.md § Requirement: Spatial Separation."""
+
+    @pytest.fixture()
+    def src_two_groups(self, tmp_path: Path) -> Path:
+        """Source tree with two independent module clusters in the same BC."""
+        bc = tmp_path / "ctx"
+        mod_a = bc / "alpha"
+        mod_b = bc / "beta"
+        mod_c = bc / "gamma"
+        mod_d = bc / "delta"
+        for d in [bc, mod_a, mod_b, mod_c, mod_d]:
+            d.mkdir(parents=True)
+            (d / "__init__.py").write_text("")
+        # Group 1: alpha ↔ beta (internal dep)
+        (mod_a / "code.py").write_text("from ctx.beta import B\n")
+        (mod_b / "code.py").write_text("")
+        # Group 2: gamma ↔ delta (internal dep)
+        (mod_c / "code.py").write_text("from ctx.delta import D\n")
+        (mod_d / "code.py").write_text("")
+        return tmp_path
+
+    def _pos(self, node: "Node") -> tuple[float, float, float]:
+        p = node["position"]
+        return float(p["x"]), float(p["y"]), float(p["z"])
+
+    def _dist(self, a: "Node", b: "Node") -> float:
+        ax, ay, az = self._pos(a)
+        bx, by, bz = self._pos(b)
+        return math.sqrt((ax - bx) ** 2 + (ay - by) ** 2 + (az - bz) ** 2)
+
+    def test_independent_groups_are_spatially_separated(
+        self, src_two_groups: Path
+    ) -> None:
+        """GIVEN two independent groups, modules in different groups must be
+        farther apart than modules in the same group (visible gap exists).
+
+        Spec: "the groups occupy distinct spatial regions within the context's
+        volume AND a visible gap separates the groups".
+        """
+        nodes = discover_bounded_contexts(src_two_groups)
+        for bc_node in list(nodes):
+            nodes.extend(discover_submodules(src_two_groups, bc_node["id"]))
+        edges = build_dependency_edges(src_two_groups, nodes)
+        # compute_independence_groups before compute_layout so layout can use groups.
+        compute_independence_groups(nodes, edges)
+        compute_layout(nodes, edges)
+
+        by_id = {n["id"]: n for n in nodes if n["type"] == "module"}
+        assert by_id, "Expected module nodes after layout"
+
+        # Within-group distances.
+        d_alpha_beta = self._dist(by_id["ctx.alpha"], by_id["ctx.beta"])
+        d_gamma_delta = self._dist(by_id["ctx.gamma"], by_id["ctx.delta"])
+
+        # Cross-group distances.
+        d_alpha_gamma = self._dist(by_id["ctx.alpha"], by_id["ctx.gamma"])
+        d_alpha_delta = self._dist(by_id["ctx.alpha"], by_id["ctx.delta"])
+        d_beta_gamma = self._dist(by_id["ctx.beta"], by_id["ctx.gamma"])
+
+        # Modules in different groups must be farther apart than modules in the
+        # same group — the visible gap separates the two clusters.
+        assert d_alpha_gamma > d_alpha_beta, (
+            f"Cross-group distance (alpha↔gamma={d_alpha_gamma:.3f}) must be "
+            f"greater than intra-group distance (alpha↔beta={d_alpha_beta:.3f}) "
+            "— independent groups must be spatially separated with a visible gap"
+        )
+        assert d_alpha_gamma > d_gamma_delta, (
+            f"Cross-group distance (alpha↔gamma={d_alpha_gamma:.3f}) must be "
+            f"greater than intra-group distance (gamma↔delta={d_gamma_delta:.3f})"
+        )
+        # At least one cross-group distance exceeds all intra-group distances.
+        cross_min = min(d_alpha_gamma, d_alpha_delta, d_beta_gamma)
+        intra_max = max(d_alpha_beta, d_gamma_delta)
+        assert cross_min > intra_max, (
+            f"Minimum cross-group distance ({cross_min:.3f}) must exceed "
+            f"maximum intra-group distance ({intra_max:.3f}) — visible gap required"
+        )
+
+    def test_build_scene_graph_separates_groups_spatially(
+        self, src_two_groups: Path
+    ) -> None:
+        """build_scene_graph positions modules so independent groups are separated.
+
+        This end-to-end test verifies the full pipeline wires independence
+        detection before layout so spatial separation is guaranteed.
+        """
+        graph = build_scene_graph(src_two_groups)
+        module_nodes = [n for n in graph["nodes"] if n["type"] == "module"]
+        by_id = {n["id"]: n for n in module_nodes}
+        assert by_id, "Expected module nodes in built scene graph"
+
+        # All modules must have independence_group AND positions.
+        for node in module_nodes:
+            assert "independence_group" in node, (
+                f"{node['id']} missing independence_group in full scene graph"
+            )
+            p = node["position"]
+            assert all(k in p for k in ("x", "y", "z")), (
+                f"{node['id']} missing position coordinates"
+            )
+
+        # Verify spatial separation: cross-group distances > intra-group distances.
+        def dist(a_id: str, b_id: str) -> float:
+            a, b = by_id[a_id], by_id[b_id]
+            dx = a["position"]["x"] - b["position"]["x"]
+            dz = a["position"]["z"] - b["position"]["z"]
+            dy = a["position"]["y"] - b["position"]["y"]
+            return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+        d_intra_1 = dist("ctx.alpha", "ctx.beta")
+        d_intra_2 = dist("ctx.gamma", "ctx.delta")
+        d_cross = dist("ctx.alpha", "ctx.gamma")
+
+        assert d_cross > d_intra_1, (
+            f"Cross-group distance ({d_cross:.3f}) must exceed "
+            f"intra-group distance ({d_intra_1:.3f})"
+        )
+        assert d_cross > d_intra_2, (
+            f"Cross-group distance ({d_cross:.3f}) must exceed "
+            f"intra-group distance ({d_intra_2:.3f})"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Individual edge weight (cross_context and internal edges)
+# spec: orthogonal-independence.spec.md (and cross-referenced by check-individual-edge-weight)
+#
+# Each edge must carry a 'weight' field equal to the import count.
+# ---------------------------------------------------------------------------
+
+
+class TestIndividualEdgeWeight:
+    """Every cross_context and internal edge carries a 'weight' field."""
+
+    def test_cross_context_edge_has_weight(self, src: Path) -> None:
+        """Every cross_context edge carries a weight field (import count).
+
+        Spec: 'each edge carries the import count (number of individual
+        import statements between the pair).'
+        """
+        nodes = discover_bounded_contexts(src)
+        for bc_node in list(nodes):
+            nodes.extend(discover_submodules(src, bc_node["id"]))
+        edges = build_dependency_edges(src, nodes)
+        cc_edges = [e for e in edges if e["type"] == "cross_context"]
+        assert cc_edges, "Expected at least one cross_context edge in src fixture"
+        for e in cc_edges:
+            assert "weight" in e, f"cross_context edge missing weight: {e}"
+            assert e["weight"] >= 1, f"weight must be >= 1; got {e['weight']}"
+
+    def test_internal_edge_has_weight(self, src: Path) -> None:
+        """Every internal edge carries a weight field (import count).
+
+        Spec: 'each edge carries the import count'.
+        """
+        nodes = discover_bounded_contexts(src)
+        for bc_node in list(nodes):
+            nodes.extend(discover_submodules(src, bc_node["id"]))
+        edges = build_dependency_edges(src, nodes)
+        internal_edges = [e for e in edges if e["type"] == "internal"]
+        assert internal_edges, "Expected at least one internal edge in src fixture"
+        for e in internal_edges:
+            assert "weight" in e, f"internal edge missing weight: {e}"
+            assert e["weight"] >= 1, f"weight must be >= 1; got {e['weight']}"
+
+    def test_cross_context_edge_weight_counts_imports(self, tmp_path: Path) -> None:
+        """Weight reflects how many module-level import statements cross the boundary.
+
+        GIVEN iam.application imports shared_kernel once
+        THEN the cross_context edge iam→shared_kernel has weight >= 1.
+        """
+        iam = tmp_path / "iam"
+        app = iam / "application"
+        sk = tmp_path / "shared_kernel"
+        for d in [iam, app, sk]:
+            d.mkdir(parents=True)
+            (d / "__init__.py").write_text("")
+        (app / "svc.py").write_text("from shared_kernel.auth import AuthToken\n")
+
+        nodes = discover_bounded_contexts(tmp_path)
+        for bc_node in list(nodes):
+            nodes.extend(discover_submodules(tmp_path, bc_node["id"]))
+        edges = build_dependency_edges(tmp_path, nodes)
+        cc_edges = [e for e in edges if e["type"] == "cross_context"]
+        assert cc_edges, "Expected cross_context edge iam→shared_kernel"
+        for e in cc_edges:
+            if e["source"] == "iam" and e["target"] == "shared_kernel":
+                assert e["weight"] >= 1, (
+                    f"iam→shared_kernel cross_context edge must have weight >= 1; "
+                    f"got {e['weight']}"
+                )
+                break
+        else:
+            pytest.fail("No iam→shared_kernel cross_context edge found")
+
+
+# ---------------------------------------------------------------------------
 # Requirement: CLI entry point
 # ---------------------------------------------------------------------------
 
