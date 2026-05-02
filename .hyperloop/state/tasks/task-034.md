@@ -3,7 +3,7 @@ id: task-034
 title: Implement type topology extraction (inheritance, composition, has-a edges)
 spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
 status: in_progress
-phase: implement
+phase: verify
 deps:
 - task-006
 round: 4
