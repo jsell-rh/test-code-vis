@@ -3,7 +3,7 @@ id: task-068
 title: Godot — cluster collapse/expand supernode animation
 spec_ref: specs/visualization/spatial-structure.spec.md@359dbcb1d7f64009e6dd64084a8bcbb5fa325cb4
 status: in_progress
-phase: mark-ready
+phase: merge
 deps:
 - task-061
 - task-009
