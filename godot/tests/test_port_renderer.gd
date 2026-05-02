@@ -761,3 +761,42 @@ func test_port_renderer_registered_per_container_in_main() -> void:
 	)
 
 	root.free()
+
+
+func test_find_port_or_centroid_returns_port_not_centroid() -> void:
+	## _find_port_or_centroid("ctx_a", true) must return a Port world position,
+	## not the Container centroid, when ctx_a has public symbols with registered ports.
+	##
+	## Spec: visual-primitives.spec.md § Port Primitive —
+	##   "Edges connect to Ports, not directly to the Container body"
+	##   "falls back to Container centroid when Ports are hidden/unavailable"
+	_test_failed = false
+	var root := Main.new()
+	root.build_from_graph(_make_full_graph_with_ports())
+
+	var port_world: Dictionary = root.get_port_world_positions()
+	var world_pos: Dictionary = root.get("_world_positions")
+
+	# ctx_a centroid.
+	var ctx_a_centroid: Vector3 = world_pos.get("ctx_a", Vector3.ZERO)
+
+	# Call _find_port_or_centroid directly — must return a port position, not centroid.
+	var from_pos: Vector3 = root._find_port_or_centroid("ctx_a", true)
+
+	_check(
+		not from_pos.is_equal_approx(ctx_a_centroid),
+		"_find_port_or_centroid must return port position, not centroid, when ports exist"
+	)
+
+	# Also verify the returned position matches a registered port world position.
+	var found_match: bool = false
+	for key: String in port_world:
+		if key.begins_with("ctx_a/") and key.ends_with("_out"):
+			if from_pos.is_equal_approx(port_world[key]):
+				found_match = true
+	_check(
+		found_match,
+		"from_pos returned by _find_port_or_centroid must match a registered port world position"
+	)
+
+	root.free()
