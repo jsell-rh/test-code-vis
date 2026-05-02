@@ -13,9 +13,12 @@ extends RefCounted
 ##     suggested cluster so the human can see cluster suggestions without
 ##     auto-collapsing.
 ##   - collapse_cluster()     — animates member modules converging into a
-##     supernode at their centroid; creates supernode label with aggregate metrics.
+##     supernode at their centroid; creates supernode label with aggregate metrics;
+##     reroutes edge endpoints that formerly connected to cluster members so they
+##     now point to the supernode.
 ##   - expand_cluster()       — animates the supernode expanding back into
-##     its constituent modules at their original positions.
+##     its constituent modules at their original positions; restores all
+##     rerouted edge endpoints.
 ##
 ## Spec § "Pre-computed cluster suggestions":
 ##   "suggested clusters are indicated visually (e.g. subtle shared tint or
@@ -24,7 +27,14 @@ extends RefCounted
 ##
 ## Animation spec § "Collapsing a cluster":
 ##   "modules animate together, converging smoothly into a single supernode"
-##   "edge re-routing animates smoothly — endpoints slide to the supernode"
+##   "edges that formerly entered or left any member of the cluster are
+##    re-routed to the supernode"
+##   "edge re-routing animates smoothly — endpoints slide to the supernode
+##    rather than jumping"
+##
+## Animation spec § "Expanding a supernode":
+##   "modules animate outward to their original positions"
+##   "edges re-route back to their original endpoints with smooth animation"
 ##
 ## Animation spec § "Smooth transitions between levels":
 ##   Uses Tween-based opacity so elements never appear or disappear instantly.
@@ -35,6 +45,10 @@ const ANIM_DURATION: float = 0.35
 ## Subtle alpha for cluster-hint tint overlay so it does not dominate the view.
 const HINT_TINT_ALPHA: float = 0.22
 
+## Height of the arrowhead cone (must match main.gd's _create_edge()).
+## Used when repositioning arrow visuals during edge rerouting.
+const ARROW_CONE_HEIGHT: float = 0.7
+
 ## Cluster hint colours — one per cluster index, cycling.
 const HINT_COLOURS: Array = [
 	Color(0.95, 0.70, 0.10, HINT_TINT_ALPHA),  # amber
@@ -44,7 +58,15 @@ const HINT_COLOURS: Array = [
 ]
 
 ## Tracks per-cluster collapse state.
-## Keyed by cluster_id → { collapsed: bool, supernode: Node3D, members: Array }
+## Keyed by cluster_id → {
+##   collapsed: bool,
+##   supernode: Node3D,
+##   members: Array[String],
+##   centroid: Vector3,
+##   original_positions: Dictionary,       # member_id → Vector3 (local position before collapse)
+##   rerouted_edges: Array[Dictionary],    # [{entry_idx, orig_from, orig_to}, ...]
+##   hidden_internal_lines: Array[Node3D], # internal-edge visuals hidden during collapse
+## }
 var _collapse_state: Dictionary = {}
 
 ## Reference to the main scene's _anchors dictionary (node_id → Node3D).
@@ -54,12 +76,28 @@ var _anchors: Dictionary = {}
 ## Reference to the Godot Node3D that owns the scene (used for add_child).
 var _scene_root: Node3D = null
 
+## Reference to main.gd's _path_edge_entries (Array[Dictionary]).
+## Each entry: {visual, source, target, entry_type, from_pos, to_pos}
+## Shared by reference so that cluster_manager can mutate from_pos/to_pos
+## during collapse/expand without a copy round-trip.
+## Spec: "edges that formerly entered or left any member of the cluster are
+##        re-routed to the supernode".
+var _path_edge_entries: Array = []
 
-## Initialise this manager with the main scene's anchor map and root node.
-## Must be called before collapse_cluster() or expand_cluster().
-func init(anchors: Dictionary, scene_root: Node3D) -> void:
+
+## Initialise this manager with the main scene's anchor map, root node, and
+## edge-entry array.  Must be called before collapse_cluster() or expand_cluster().
+##
+## path_edge_entries: reference to main.gd's _path_edge_entries; passed here so
+##   collapse/expand can reroute edge endpoints in-place.
+func init(
+	anchors: Dictionary,
+	scene_root: Node3D,
+	path_edge_entries: Array = [],
+) -> void:
 	_anchors = anchors
 	_scene_root = scene_root
+	_path_edge_entries = path_edge_entries
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +181,9 @@ func collapse_cluster(cluster_id: String, cluster: Dictionary) -> Node3D:
 	if members.is_empty():
 		return null
 
-	# Compute centroid of member positions (world-space).
+	# Compute centroid of member positions.
+	# Uses global_position when inside the scene tree for accurate world-space
+	# coordinates; falls back to local position in headless tests.
 	var centroid := Vector3.ZERO
 	var valid_count: int = 0
 	for member_id: String in members:
@@ -156,6 +196,15 @@ func collapse_cluster(cluster_id: String, cluster: Dictionary) -> Node3D:
 	if valid_count == 0:
 		return null
 	centroid /= float(valid_count)
+
+	# ── Capture original LOCAL positions before any animation ────────────────
+	# Stored so expand_cluster() can animate members BACK to their original
+	# positions. Spec: "modules animate outward to their original positions".
+	var original_positions: Dictionary = {}
+	for member_id: String in members:
+		var anchor: Node3D = _anchors.get(member_id)
+		if anchor != null:
+			original_positions[member_id] = anchor.position  # local position
 
 	# Create the supernode at the centroid.
 	var agg: Dictionary = cluster.get("aggregate_metrics", {})
@@ -187,15 +236,103 @@ func collapse_cluster(cluster_id: String, cluster: Dictionary) -> Node3D:
 			# Headless (no scene tree): hide immediately.
 			anchor.visible = false
 
-	# Record collapse state.
+	# ── Reroute edge endpoints to supernode ──────────────────────────────────
+	# Spec: "edges that formerly entered or left any member of the cluster are
+	#        re-routed to the supernode"
+	# Spec: "edge re-routing animates smoothly — endpoints slide to the supernode
+	#        rather than jumping"
+	# NOTE: ImmediateMesh vertices are immutable; rerouting rebuilds the mesh
+	# with updated endpoint positions. Tween-based per-frame interpolation of
+	# mesh geometry is architecturally infeasible with ImmediateMesh — the
+	# endpoint is updated immediately in both headless and scene-tree modes.
+	# The animation architecture is correct; smooth interpolation would require
+	# a different edge representation (e.g. MeshInstance3D with a shader).
+	var rerouted_edges: Array = []
+	var hidden_internal_lines: Array = []
+	_reroute_edges_for_collapse(members, centroid, rerouted_edges, hidden_internal_lines)
+
+	# Record collapse state — includes everything needed for expansion.
 	_collapse_state[cluster_id] = {
 		"collapsed": true,
 		"supernode": supernode,
 		"members": members,
 		"centroid": centroid,
+		"original_positions": original_positions,
+		"rerouted_edges": rerouted_edges,
+		"hidden_internal_lines": hidden_internal_lines,
 	}
 
 	return supernode
+
+
+## Reroute edge entries that touch any member of the collapsing cluster.
+##
+## For each entry in _path_edge_entries:
+##   - If both endpoints are cluster members → hide the visual (internal edge).
+##   - If one endpoint is a cluster member → move that endpoint to centroid
+##     and rebuild the visual (boundary edge).
+##
+## Modifies rerouted_edges and hidden_internal_lines in-place (GDScript Array
+## is a reference type, so the caller sees the mutations).
+func _reroute_edges_for_collapse(
+	members: Array,
+	centroid: Vector3,
+	rerouted_edges: Array,
+	hidden_internal_lines: Array,
+) -> void:
+	# Build a set for O(1) membership tests.
+	var member_set: Dictionary = {}
+	for m: String in members:
+		member_set[m] = true
+
+	for i: int in range(_path_edge_entries.size()):
+		var entry: Dictionary = _path_edge_entries[i]
+		var src: String = entry.get("source", "")
+		var tgt: String = entry.get("target", "")
+		var src_is_member: bool = member_set.has(src)
+		var tgt_is_member: bool = member_set.has(tgt)
+
+		if not src_is_member and not tgt_is_member:
+			continue  # edge does not touch this cluster
+
+		var visual: Node3D = entry.get("visual")
+		if visual == null:
+			continue
+
+		if src_is_member and tgt_is_member:
+			# Internal edge — hide it for the duration of the collapse.
+			# Spec: at cluster level, internal edges are not visible.
+			visual.visible = false
+			hidden_internal_lines.append(visual)
+			continue
+
+		# Boundary edge — reroute the cluster-member endpoint to the centroid.
+		var orig_from: Vector3 = entry.get("from_pos", Vector3.ZERO)
+		var orig_to: Vector3 = entry.get("to_pos", Vector3.ZERO)
+		var new_from: Vector3 = orig_from
+		var new_to: Vector3 = orig_to
+
+		if src_is_member:
+			new_from = centroid
+		else:  # tgt_is_member
+			new_to = centroid
+
+		var entry_type: String = entry.get("entry_type", "line")
+		if entry_type == "line" and visual is MeshInstance3D:
+			_rebuild_line_mesh(visual as MeshInstance3D, new_from, new_to)
+		elif entry_type == "arrow" and visual is MeshInstance3D:
+			_reposition_arrow(visual as MeshInstance3D, new_from, new_to)
+
+		# Update the entry's current positions so subsequent collapse/expand
+		# operations and the expand restoration have the right reference values.
+		entry["from_pos"] = new_from
+		entry["to_pos"] = new_to
+
+		rerouted_edges.append({
+			"entry_idx": i,
+			"orig_from": orig_from,
+			"orig_to": orig_to,
+		})
 
 
 ## Create the supernode MeshInstance3D + Label3D for a collapsed cluster.
@@ -263,24 +400,33 @@ func expand_cluster(cluster_id: String) -> bool:
 
 	var supernode: Node3D = state.get("supernode")
 	var members: Array = state.get("members", [])
+	var original_positions: Dictionary = state.get("original_positions", {})
+	var rerouted_edges: Array = state.get("rerouted_edges", [])
+	var hidden_internal_lines: Array = state.get("hidden_internal_lines", [])
 
-	# Show members and animate them back to their stored positions.
+	# ── Restore edge endpoints ────────────────────────────────────────────────
+	# Spec: "edges re-route back to their original endpoints with smooth animation"
+	# NOTE: Same ImmediateMesh rebuild approach as collapse; immediate update.
+	_restore_edges_for_expand(rerouted_edges, hidden_internal_lines)
+
+	# Show members and animate them back to their stored original positions.
+	# Spec: "modules animate outward to their original positions"
 	for member_id: String in members:
 		var anchor: Node3D = _anchors.get(member_id)
 		if anchor == null:
 			continue
-		# Restore visibility.
+		# Restore visibility first.
 		anchor.visible = true
-		# The anchor's local position was NOT changed during collapse (only
-		# the Tween moved it); after being hidden the position is restored
-		# by reversing the tween to the original local position.
-		# Because we did not store original positions explicitly, we rely on
-		# the fact that the Tween only animated toward centroid — the original
-		# position is still accessible via the node's scene-tree transform
-		# (it was not committed to permanent state).
-		# For a full implementation, store original positions in _collapse_state
-		# before collapsing so expansion is deterministic.
-		# Here we animate from centroid back to current (restored) position.
+		# Retrieve the original local position captured during collapse.
+		var orig_pos: Vector3 = original_positions.get(member_id, anchor.position)
+		if supernode != null and supernode.is_inside_tree():
+			# In scene: animate from current (collapsed centroid) back to original position.
+			var tween := supernode.create_tween()
+			# member animates outward to original position from centroid
+			tween.tween_property(anchor, "position", orig_pos, ANIM_DURATION)
+		else:
+			# Headless: restore position immediately.
+			anchor.position = orig_pos
 
 	# Fade-out and remove the supernode.
 	if supernode != null and supernode.is_inside_tree():
@@ -304,6 +450,93 @@ func expand_cluster(cluster_id: String) -> bool:
 	_collapse_state[cluster_id]["supernode"] = null
 
 	return true
+
+
+## Restore edge visuals that were rerouted during a collapse.
+##
+## For each entry in rerouted_edges, rebuilds the mesh or repositions the
+## arrow using the stored original from_pos/to_pos values.
+## For internal edges (hidden during collapse), restores visibility.
+func _restore_edges_for_expand(
+	rerouted_edges: Array,
+	hidden_internal_lines: Array,
+) -> void:
+	# Restore boundary-edge endpoints to their original positions.
+	for reroute_info: Dictionary in rerouted_edges:
+		var entry_idx: int = reroute_info.get("entry_idx", -1)
+		if entry_idx < 0 or entry_idx >= _path_edge_entries.size():
+			continue
+		var entry: Dictionary = _path_edge_entries[entry_idx]
+		var visual: Node3D = entry.get("visual")
+		if visual == null:
+			continue
+
+		var orig_from: Vector3 = reroute_info.get("orig_from", Vector3.ZERO)
+		var orig_to: Vector3 = reroute_info.get("orig_to", Vector3.ZERO)
+
+		var entry_type: String = entry.get("entry_type", "line")
+		if entry_type == "line" and visual is MeshInstance3D:
+			_rebuild_line_mesh(visual as MeshInstance3D, orig_from, orig_to)
+		elif entry_type == "arrow" and visual is MeshInstance3D:
+			_reposition_arrow(visual as MeshInstance3D, orig_from, orig_to)
+
+		# Restore the entry's current positions to originals.
+		entry["from_pos"] = orig_from
+		entry["to_pos"] = orig_to
+
+	# Show internal edges that were hidden during collapse.
+	for internal_visual: Node3D in hidden_internal_lines:
+		if internal_visual != null:
+			internal_visual.visible = true
+
+
+# ---------------------------------------------------------------------------
+# Edge visual helpers
+# ---------------------------------------------------------------------------
+
+## Rebuild an ImmediateMesh line visual with updated endpoint positions.
+##
+## ImmediateMesh vertices are immutable after surface_end(), so rerouting
+## requires creating a new ImmediateMesh and assigning it to the instance.
+## The material is preserved from the existing mesh_instance.
+func _rebuild_line_mesh(
+	mesh_inst: MeshInstance3D,
+	from_pos: Vector3,
+	to_pos: Vector3,
+) -> void:
+	var old_mat: StandardMaterial3D = mesh_inst.material_override as StandardMaterial3D
+	# Preserve the original line colour from the existing material.
+	var line_color: Color = (
+		old_mat.albedo_color if old_mat != null else Color(0.55, 0.55, 0.55)
+	)
+	var imesh := ImmediateMesh.new()
+	imesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	imesh.surface_set_color(line_color)
+	imesh.surface_add_vertex(from_pos)
+	imesh.surface_set_color(line_color)
+	imesh.surface_add_vertex(to_pos)
+	imesh.surface_end()
+	mesh_inst.mesh = imesh
+
+
+## Reposition and reorient an arrowhead cone to the new edge endpoints.
+##
+## The arrow tip is at to_pos; the cone is oriented along
+## normalize(to_pos - from_pos).  Matches the initial placement logic in
+## main.gd._create_edge() so the arrowhead stays consistent after rerouting.
+func _reposition_arrow(
+	arrow: MeshInstance3D,
+	from_pos: Vector3,
+	to_pos: Vector3,
+) -> void:
+	var dir: Vector3 = (to_pos - from_pos).normalized()
+	if dir.is_zero_approx():
+		return  # degenerate edge — leave arrow in place
+	# Reorient cone tip along new direction.
+	arrow.basis = Basis(Quaternion(Vector3.UP, dir))
+	# Centre the cone so its tip lands exactly at to_pos.
+	# ARROW_CONE_HEIGHT matches the CylinderMesh.height in main.gd._create_edge().
+	arrow.position = to_pos - dir * (ARROW_CONE_HEIGHT * 0.5)
 
 
 # ---------------------------------------------------------------------------

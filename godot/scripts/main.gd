@@ -176,7 +176,11 @@ func build_from_graph(graph: Dictionary) -> void:
 	# Spec: "suggested clusters are indicated visually (e.g. subtle shared tint or
 	#        proximity grouping) AND suggestions never auto-collapse"
 	var clusters: Array = graph.get("clusters", [])
-	_cluster_manager.init(_anchors, self)
+	# Pass _path_edge_entries by reference so cluster_manager can reroute edge endpoints
+	# when collapse_cluster() or expand_cluster() is called.
+	# Spec: "edges that formerly entered or left any member of the cluster are re-routed
+	#        to the supernode" / "edges re-route back to their original endpoints".
+	_cluster_manager.init(_anchors, self, _path_edge_entries)
 	_cluster_manager.apply_cluster_hints(_anchors, clusters)
 
 	# Reposition camera to frame the whole graph.
@@ -709,7 +713,17 @@ func _create_edge(ed: Dictionary) -> void:
 	else:
 		add_child(body)
 		_lod_edge_entries.append({"visual": body, "edge_type": edge_type})
-		_path_edge_entries.append({"visual": body, "source": src, "target": tgt})
+		# entry_type/from_pos/to_pos allow cluster_manager to reroute edge endpoints on
+		# collapse/expand (spatial-structure.spec.md § "edges that formerly entered or left
+		# any member of the cluster are re-routed to the supernode").
+		_path_edge_entries.append({
+			"visual": body,
+			"source": src,
+			"target": tgt,
+			"entry_type": "line",
+			"from_pos": from_pos,
+			"to_pos": to_pos,
+		})
 
 	# Arrowhead: a cone (CylinderMesh, top_radius=0 = pointed tip) placed at the
 	# target end, oriented along the edge direction, indicating dependency flow.
@@ -739,8 +753,15 @@ func _create_edge(ed: Dictionary) -> void:
 		add_child(arrow)
 		# Register arrowhead with LOD manager (same edge_type as the line).
 		_lod_edge_entries.append({"visual": arrow, "edge_type": edge_type})
-		# Track arrowhead direction for dependency direction verification.
-		_path_edge_entries.append({"visual": arrow, "source": src, "target": tgt})
+		# Track arrowhead direction for dependency direction verification and cluster rerouting.
+		_path_edge_entries.append({
+			"visual": arrow,
+			"source": src,
+			"target": tgt,
+			"entry_type": "arrow",
+			"from_pos": from_pos,
+			"to_pos": to_pos,
+		})
 
 
 # ---------------------------------------------------------------------------

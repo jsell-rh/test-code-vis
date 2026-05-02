@@ -593,3 +593,312 @@ func test_cluster_manager_collapse_empty_members() -> void:
 	var result: Node3D = cm.collapse_cluster("ctx:cluster_0", cluster)
 	_check(result == null,
 		"collapse_cluster() with empty members list must return null")
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for edge rerouting tests
+# ---------------------------------------------------------------------------
+
+## A scene graph with cluster members AND a cross-boundary edge.
+## Cluster: svc.mod_a + svc.mod_b (centroid = (0,0,0) in headless).
+## External: svc.mod_c — connected to mod_a by a boundary edge.
+## Internal: svc.mod_a → svc.mod_b (internal to the cluster).
+##
+## In headless mode, anchors use local positions:
+##   mod_a.position = (-3,0,0), mod_b.position = (3,0,0)
+##   centroid (headless) = avg(-3,3)/avg(0)/avg(0) = (0,0,0)
+##
+## World positions (_world_positions, svc at origin):
+##   svc.mod_a = (-3,0,0), svc.mod_b = (3,0,0), svc.mod_c = (0,0,5)
+##
+## Boundary edge (svc.mod_c → svc.mod_a):
+##   from_pos = (0,0,5), to_pos = (-3,0,0)
+##   After collapse: to_pos must change to centroid (0,0,0).
+func _make_graph_with_crossing_edges() -> Dictionary:
+	return {
+		"nodes": [
+			{
+				"id": "svc",
+				"name": "Service",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 12.0,
+			},
+			{
+				"id": "svc.mod_a",
+				"name": "ModuleA",
+				"type": "module",
+				"parent": "svc",
+				"position": {"x": -3.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+			{
+				"id": "svc.mod_b",
+				"name": "ModuleB",
+				"type": "module",
+				"parent": "svc",
+				"position": {"x": 3.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+			{
+				"id": "svc.mod_c",
+				"name": "ModuleC",
+				"type": "module",
+				"parent": "svc",
+				"position": {"x": 0.0, "y": 0.0, "z": 5.0},
+				"size": 2.5,
+			},
+		],
+		"edges": [
+			# Internal edge (both cluster members): must be hidden on collapse.
+			{"source": "svc.mod_a", "target": "svc.mod_b", "type": "internal"},
+			# Boundary edge (external → cluster member): to_pos must move to centroid.
+			{"source": "svc.mod_c", "target": "svc.mod_a", "type": "internal"},
+		],
+		"clusters": [
+			{
+				"id": "svc:cluster_0",
+				"members": ["svc.mod_a", "svc.mod_b"],
+				"context": "svc",
+				"aggregate_metrics": {
+					"total_loc": 250,
+					"in_degree": 1,
+					"out_degree": 0,
+				},
+			},
+		],
+	}
+
+
+# ---------------------------------------------------------------------------
+# Scenario: Collapsing a cluster — edge re-routing
+# THEN edges that formerly entered or left any member are re-routed to the supernode
+# ---------------------------------------------------------------------------
+
+## Boundary edge endpoint moves to the cluster centroid after collapse.
+## Spec: "edges that formerly entered or left any member of the cluster
+##        are re-routed to the supernode"
+##
+## In headless: centroid = avg of mod_a.position(-3,0,0) and mod_b.position(3,0,0) = (0,0,0).
+## The boundary edge (svc.mod_c → svc.mod_a) had to_pos = (-3,0,0);
+## after collapse it must be (0,0,0) (the supernode centroid).
+func test_collapse_reroutes_boundary_edge_to_centroid() -> void:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_graph_with_crossing_edges())
+
+	main_node.call("collapse_cluster", "svc:cluster_0")
+
+	# Inspect the _path_edge_entries to verify rerouting.
+	var entries: Array = main_node.get("_path_edge_entries")
+	var found_rerouted: bool = false
+	for entry: Dictionary in entries:
+		if (entry.get("source", "") == "svc.mod_c"
+				and entry.get("target", "") == "svc.mod_a"
+				and entry.get("entry_type", "") == "line"):
+			var to_pos: Vector3 = entry.get("to_pos", Vector3(999, 999, 999))
+			# Centroid in headless: avg((-3,0,0),(3,0,0)) = (0,0,0)
+			_check(
+				to_pos.is_equal_approx(Vector3(0.0, 0.0, 0.0)),
+				(
+					"Boundary edge to_pos must be rerouted to cluster centroid (0,0,0)"
+					+ " after collapse, got %s" % str(to_pos)
+				)
+			)
+			found_rerouted = true
+			break
+	_check(found_rerouted,
+		"Must find a 'line' entry for boundary edge svc.mod_c → svc.mod_a in _path_edge_entries")
+
+
+## Internal edge (both endpoints in cluster) is hidden after collapse.
+## Spec: implied by cluster collapsing — internal structure is abstracted away.
+func test_collapse_hides_internal_edges_between_cluster_members() -> void:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_graph_with_crossing_edges())
+
+	main_node.call("collapse_cluster", "svc:cluster_0")
+
+	# The internal edge (svc.mod_a → svc.mod_b) must not be visible.
+	var entries: Array = main_node.get("_path_edge_entries")
+	var found_internal: bool = false
+	for entry: Dictionary in entries:
+		if (entry.get("source", "") == "svc.mod_a"
+				and entry.get("target", "") == "svc.mod_b"
+				and entry.get("entry_type", "") == "line"):
+			var visual: Node3D = entry.get("visual")
+			_check(visual != null,
+				"Internal edge must have a visual in _path_edge_entries")
+			if visual != null:
+				_check(not visual.visible,
+					"Internal edge visual must be hidden (visible=false) after cluster collapse")
+			found_internal = true
+			break
+	_check(found_internal,
+		"Must find a 'line' entry for internal edge svc.mod_a → svc.mod_b in _path_edge_entries")
+
+
+# ---------------------------------------------------------------------------
+# Scenario: Expanding a supernode — edge restoration
+# THEN edges re-route back to their original endpoints with smooth animation
+# ---------------------------------------------------------------------------
+
+## After expand, boundary edge endpoint is restored to the original node position.
+## Spec: "edges re-route back to their original endpoints with smooth animation"
+func test_expand_restores_edge_endpoints() -> void:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_graph_with_crossing_edges())
+
+	# Record original to_pos before collapse.
+	var entries: Array = main_node.get("_path_edge_entries")
+	var orig_to_pos: Vector3 = Vector3(999, 999, 999)
+	for entry: Dictionary in entries:
+		if (entry.get("source", "") == "svc.mod_c"
+				and entry.get("target", "") == "svc.mod_a"
+				and entry.get("entry_type", "") == "line"):
+			orig_to_pos = entry.get("to_pos", Vector3(999, 999, 999))
+			break
+
+	# Collapse then expand.
+	main_node.call("collapse_cluster", "svc:cluster_0")
+	main_node.call("expand_cluster", "svc:cluster_0")
+
+	# Verify the boundary edge endpoint is restored.
+	for entry: Dictionary in entries:
+		if (entry.get("source", "") == "svc.mod_c"
+				and entry.get("target", "") == "svc.mod_a"
+				and entry.get("entry_type", "") == "line"):
+			var restored_to_pos: Vector3 = entry.get("to_pos", Vector3(999, 999, 999))
+			_check(
+				restored_to_pos.is_equal_approx(orig_to_pos),
+				(
+					"Boundary edge to_pos must be restored to original %s after expand, got %s"
+					% [str(orig_to_pos), str(restored_to_pos)]
+				)
+			)
+			break
+
+
+## After expand, internal edge visibility is restored.
+## Spec: members and their internal connections return after expansion.
+func test_expand_restores_internal_edge_visibility() -> void:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_graph_with_crossing_edges())
+
+	# Collapse then expand.
+	main_node.call("collapse_cluster", "svc:cluster_0")
+	main_node.call("expand_cluster", "svc:cluster_0")
+
+	var entries: Array = main_node.get("_path_edge_entries")
+	var found: bool = false
+	for entry: Dictionary in entries:
+		if (entry.get("source", "") == "svc.mod_a"
+				and entry.get("target", "") == "svc.mod_b"
+				and entry.get("entry_type", "") == "line"):
+			var visual: Node3D = entry.get("visual")
+			if visual != null:
+				_check(visual.visible,
+					"Internal edge must be visible again after expand_cluster()")
+			found = true
+			break
+	_check(found, "Must find the internal-edge line entry in _path_edge_entries")
+
+
+# ---------------------------------------------------------------------------
+# Scenario: Expanding a supernode — member position restoration
+# THEN modules animate outward to their original positions
+# ---------------------------------------------------------------------------
+
+## expand_cluster() restores member anchors to their original positions.
+## Spec: "modules animate outward to their original positions"
+##
+## In headless mode Tween is not executed (no scene tree), so positions are
+## restored immediately to stored original_positions.
+## The test manually moves mod_a to simulate the collapsed state, then
+## verifies expand_cluster() restores it using the captured original position.
+func test_expand_restores_member_positions() -> void:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_graph_with_crossing_edges())
+	var anchors: Dictionary = main_node.get("_anchors")
+
+	var mod_a: Node3D = anchors.get("svc.mod_a")
+	_check(mod_a != null, "svc.mod_a anchor must exist")
+	if mod_a == null:
+		return
+
+	# Record the original local position before collapse (-3, 0, 0).
+	var orig_pos: Vector3 = mod_a.position
+
+	# Collapse (stores original_positions internally).
+	main_node.call("collapse_cluster", "svc:cluster_0")
+
+	# Simulate what the Tween would do during collapse: move anchor to centroid.
+	# In headless the Tween is not executed, so we move manually.
+	mod_a.position = Vector3(0.0, 0.0, 0.0)  # centroid in this fixture
+
+	# Expand — must restore mod_a.position to orig_pos (-3, 0, 0).
+	main_node.call("expand_cluster", "svc:cluster_0")
+
+	_check(
+		mod_a.position.is_equal_approx(orig_pos),
+		(
+			"expand_cluster() must restore svc.mod_a.position to original %s, got %s"
+			% [str(orig_pos), str(mod_a.position)]
+		)
+	)
+
+
+## collapse_cluster() captures original member positions in _collapse_state.
+## This ensures expand_cluster() can always restore positions deterministically,
+## even when the Tween is not available (headless) or has already completed.
+func test_original_positions_captured_before_collapse() -> void:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_graph_with_crossing_edges())
+	var anchors: Dictionary = main_node.get("_anchors")
+
+	var mod_a: Node3D = anchors.get("svc.mod_a")
+	var mod_b: Node3D = anchors.get("svc.mod_b")
+	if mod_a == null or mod_b == null:
+		return
+
+	var expected_a: Vector3 = mod_a.position  # (-3, 0, 0)
+	var expected_b: Vector3 = mod_b.position  # (3, 0, 0)
+
+	main_node.call("collapse_cluster", "svc:cluster_0")
+
+	# Access collapse state via the cluster_manager.
+	var cm: Object = main_node.get("_cluster_manager")
+	_check(cm != null, "_cluster_manager must exist on main_node")
+	if cm == null:
+		return
+
+	var collapse_state: Dictionary = cm.get("_collapse_state")
+	_check(collapse_state.has("svc:cluster_0"),
+		"_collapse_state must contain an entry for svc:cluster_0 after collapse")
+	if not collapse_state.has("svc:cluster_0"):
+		return
+
+	var state: Dictionary = collapse_state.get("svc:cluster_0")
+	var orig_positions: Dictionary = state.get("original_positions", {})
+
+	_check(orig_positions.has("svc.mod_a"),
+		"original_positions must contain svc.mod_a")
+	_check(orig_positions.has("svc.mod_b"),
+		"original_positions must contain svc.mod_b")
+
+	if orig_positions.has("svc.mod_a"):
+		_check(
+			(orig_positions["svc.mod_a"] as Vector3).is_equal_approx(expected_a),
+			(
+				"original_positions[svc.mod_a] must be %s, got %s"
+				% [str(expected_a), str(orig_positions["svc.mod_a"])]
+			)
+		)
+	if orig_positions.has("svc.mod_b"):
+		_check(
+			(orig_positions["svc.mod_b"] as Vector3).is_equal_approx(expected_b),
+			(
+				"original_positions[svc.mod_b] must be %s, got %s"
+				% [str(expected_b), str(orig_positions["svc.mod_b"])]
+			)
+		)
