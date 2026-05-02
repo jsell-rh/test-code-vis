@@ -98,8 +98,7 @@ func _make_anchors(nodes: Array) -> Dictionary:
 # Scenario: Domain tinting — distinct desaturated fill colors, palette 4–6
 # ---------------------------------------------------------------------------
 
-# Spec: "each context has a distinct desaturated fill color"
-# Spec: "the palette is limited to 4-6 categorical colors"
+# Spec: "the palette is limited to 4-6 categorical colors (preattentive discrimination limit)"
 func test_palette_has_4_to_6_colors() -> void:
 	_test_failed = false
 	var tc := TintController.new()
@@ -108,8 +107,6 @@ func test_palette_has_4_to_6_colors() -> void:
 		count >= 4 and count <= 6,
 		"TINT_PALETTE must have 4-6 entries for preattentive discrimination; got %d" % count
 	)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_palette_has_4_to_6_colors")
 
 
 # Spec: "each context has a distinct desaturated fill color"
@@ -123,7 +120,6 @@ func test_domain_tint_assigns_distinct_colors_to_contexts() -> void:
 	_check(entries.size() == 3,
 		"Three bounded contexts must produce 3 legend entries; got %d" % entries.size())
 	if _test_failed:
-		if _runner != null: _runner.record_failure("test_domain_tint_assigns_distinct_colors_to_contexts")
 		return
 	# Check all assigned colors are unique.
 	var seen_colors: Array = []
@@ -135,8 +131,6 @@ func test_domain_tint_assigns_distinct_colors_to_contexts() -> void:
 				"Contexts must receive distinct tint colors; found duplicate %s" % str(col)
 			)
 		seen_colors.append(col)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_domain_tint_assigns_distinct_colors_to_contexts")
 
 
 # Spec: colors must be desaturated (low saturation) so they are legible alongside
@@ -153,8 +147,6 @@ func test_palette_colors_are_desaturated() -> void:
 			saturation <= 0.55,
 			"Palette color %s has saturation %.2f — must be desaturated (<= 0.55)" % [str(col), saturation]
 		)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_palette_colors_are_desaturated")
 
 
 # Spec: "each context has a distinct desaturated fill color" — the overlay
@@ -176,8 +168,6 @@ func test_tint_overlay_mesh_added_to_context_anchor() -> void:
 			found_overlay,
 			"Context '%s' anchor must have a DomainTintOverlay child after apply_domain_tints()" % ctx_id
 		)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_tint_overlay_mesh_added_to_context_anchor")
 
 
 # Spec: overlay is a MeshInstance3D (not just any node) — verifies visual nature.
@@ -197,8 +187,6 @@ func test_tint_overlay_is_mesh_instance() -> void:
 			)
 			found_mesh = true
 	_check(found_mesh, "auth anchor must have DomainTintOverlay")
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_tint_overlay_is_mesh_instance")
 
 
 # Spec: the overlay uses a BoxMesh (flat slab) for the fill floor.
@@ -218,8 +206,6 @@ func test_tint_overlay_uses_box_mesh() -> void:
 					mi.mesh is BoxMesh,
 					"DomainTintOverlay mesh must be BoxMesh; got %s" % str(mi.mesh)
 				)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_tint_overlay_uses_box_mesh")
 
 
 # Spec: overlay position is the LOCAL offset only (relative to parent anchor),
@@ -260,8 +246,6 @@ func test_tint_overlay_position_is_local_offset_not_world_absolute() -> void:
 				absf(overlay.position.x) < 0.001,
 				"Overlay x position must be 0 (local); got %.3f" % overlay.position.x
 			)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_tint_overlay_position_is_local_offset_not_world_absolute")
 
 
 # Spec: "module" nodes must NOT receive a tint overlay — only bounded_contexts.
@@ -281,8 +265,6 @@ func test_module_nodes_do_not_receive_tint() -> void:
 				str(child.name) != TintController.TINT_NODE_NAME,
 				"Module node 'auth.users' must not receive a DomainTintOverlay"
 			)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_module_nodes_do_not_receive_tint")
 
 
 # ---------------------------------------------------------------------------
@@ -310,8 +292,6 @@ func test_single_tint_dimension_at_a_time() -> void:
 			entry.get("dimension", "") == "Coverage",
 			"Legend entry dimension must be 'Coverage' after reassignment; got '%s'" % entry.get("dimension", "")
 		)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_single_tint_dimension_at_a_time")
 
 
 # Spec: "the previous Tint assignment is replaced, not layered"
@@ -335,8 +315,6 @@ func test_reassign_tint_replaces_not_layers() -> void:
 			overlay_count == 1,
 			"Context '%s' must have EXACTLY 1 DomainTintOverlay after re-apply; got %d" % [ctx_id, overlay_count]
 		)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_reassign_tint_replaces_not_layers")
 
 
 # Spec: clear_tints() removes all overlays from all anchors.
@@ -354,8 +332,6 @@ func test_clear_tints_removes_all_overlays() -> void:
 				str(child.name) != TintController.TINT_NODE_NAME,
 				"clear_tints() must remove DomainTintOverlay from '%s'" % ctx_id
 			)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_clear_tints_removes_all_overlays")
 
 
 # is_active() returns true when tints are applied, false after clear.
@@ -367,17 +343,9 @@ func test_is_active_reflects_tint_state() -> void:
 	var anchors := _make_anchors(nodes)
 	tc.apply_domain_tints(nodes, anchors)
 	_check(tc.is_active(), "is_active() must be true after apply_domain_tints()")
-	tc.clear_tints(anchors)
-	# After clear, assignments are not cleared by clear_tints() alone —
-	# is_active() checks _assignments, which are cleared by apply_domain_tints().
-	# But after apply+clear the assignments still exist in memory (they were assigned).
-	# Verify via is_active() which uses _assignments.size() > 0.
-	# This is correct: the user would call apply_domain_tints with new data to reset.
-	# Re-apply with empty set to test false:
+	# Re-apply with empty nodes set to confirm is_active becomes false.
 	tc.apply_domain_tints([], anchors)
 	_check(not tc.is_active(), "is_active() must be false when no contexts were tinted")
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_is_active_reflects_tint_state")
 
 
 # ---------------------------------------------------------------------------
@@ -397,8 +365,6 @@ func test_legend_entries_returned_for_each_tinted_context() -> void:
 	_check(entries.size() > 0, "get_legend_entries() must return at least one entry when Tint is active")
 	_check(entries.size() == 3,
 		"get_legend_entries() must return 3 entries for 3 bounded contexts; got %d" % entries.size())
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_legend_entries_returned_for_each_tinted_context")
 
 
 # Spec: legend must show WHAT Tint encodes (the dimension label).
@@ -423,8 +389,6 @@ func test_legend_entries_carry_dimension_label() -> void:
 			entry.get("dimension", "") == "Domain",
 			"Legend entry dimension must match apply_domain_tints() argument; got '%s'" % entry.get("dimension", "")
 		)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_legend_entries_carry_dimension_label")
 
 
 # Spec: legend entries carry label and color (what Tint encodes per entry).
@@ -443,8 +407,6 @@ func test_legend_entries_have_label_and_color() -> void:
 			(entry.get("label", "") as String) != "",
 			"Legend entry label must be non-empty"
 		)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_legend_entries_have_label_and_color")
 
 
 # Spec: "the legend is always visible when Tint is active" — implies legend
@@ -454,8 +416,6 @@ func test_legend_empty_when_no_tints_applied() -> void:
 	var tc := TintController.new()
 	_check(tc.get_legend_entries().size() == 0,
 		"get_legend_entries() must return empty array before any tints are applied")
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_legend_empty_when_no_tints_applied")
 
 
 # ---------------------------------------------------------------------------
@@ -487,8 +447,6 @@ func test_build_from_graph_applies_domain_tints() -> void:
 		found_tint,
 		"build_from_graph must apply DomainTintOverlay to bounded_context anchors"
 	)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_build_from_graph_applies_domain_tints")
 
 
 # Spec: §One tint dimension per view — reload (second build_from_graph call)
@@ -514,8 +472,6 @@ func test_build_from_graph_reload_replaces_tints_not_layers() -> void:
 			overlay_count <= 1,
 			"Context '%s' must have at most 1 DomainTintOverlay after reload; got %d" % [ctx_id, overlay_count]
 		)
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_build_from_graph_reload_replaces_tints_not_layers")
 
 
 # ---------------------------------------------------------------------------
@@ -540,7 +496,6 @@ func test_overlay_material_color_matches_legend_entry() -> void:
 	var entries: Array = tc.get_legend_entries()
 	_check(entries.size() == 1, "Expect exactly 1 legend entry for 1 context")
 	if entries.size() < 1:
-		if _runner != null: _runner.record_failure("test_overlay_material_color_matches_legend_entry")
 		return
 	var expected_color: Color = entries[0]["color"]
 	# Find the overlay child and verify material color.
@@ -561,5 +516,3 @@ func test_overlay_material_color_matches_legend_entry() -> void:
 					)
 			found = true
 	_check(found, "auth anchor must have DomainTintOverlay child")
-	if not _test_failed and _runner != null:
-		_runner.record_pass("test_overlay_material_color_matches_legend_entry")
