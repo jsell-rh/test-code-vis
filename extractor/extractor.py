@@ -623,6 +623,81 @@ def compute_independence_groups(nodes: list[Node], edges: list[Edge]) -> None:
             node["independence_group"] = f"{context_id}:{root_to_index[root]}"
 
 
+def apply_independence_spatial_layout(nodes: list[Node]) -> None:
+    """Place independence groups in distinct angular sectors within each bounded context.
+
+    After ``compute_independence_groups`` assigns group IDs, this function re-positions
+    module nodes so that each independence group occupies a compact, non-overlapping
+    angular sector of its bounded-context's disk, separated by visible gaps.
+
+    Within each sector, modules are spread evenly across the sector arc.  The sector arc
+    is sized so that the within-group maximum distance is always smaller than the
+    cross-group minimum distance, making independence visible at a glance.
+
+    If a context has only one independence group no positions are changed.
+
+    Args:
+        nodes: All scene-graph nodes (mutated in-place).
+    """
+    # Fraction of each group's allocated slice that the sector occupies.
+    # The remaining fraction becomes a gap between adjacent groups.
+    # 0.25 → sector uses 25% of the slice, 75% is gap → cross-group gap >> intra-group span.
+    _SECTOR_FRACTION: float = 0.25
+
+    # Build a mapping: context → group_id → list of module nodes.
+    by_context: dict[str, dict[str, list[Node]]] = {}
+    for node in nodes:
+        if node["type"] != "module":
+            continue
+        ctx = node.get("parent")
+        if not ctx:
+            continue
+        gid = node.get("independence_group", "")
+        by_context.setdefault(ctx, {}).setdefault(gid, []).append(node)
+
+    for _ctx, groups in by_context.items():
+        if len(groups) <= 1:
+            continue  # Single group — no separation needed.
+
+        # Context centroid: average (x, z) of all modules in this context.
+        all_modules = [n for grp in groups.values() for n in grp]
+        centroid_x = sum(n["position"]["x"] for n in all_modules) / len(all_modules)
+        centroid_z = sum(n["position"]["z"] for n in all_modules) / len(all_modules)
+
+        # Average radius from the centroid (used as the re-placement radius).
+        radii = [
+            math.sqrt(
+                (n["position"]["x"] - centroid_x) ** 2
+                + (n["position"]["z"] - centroid_z) ** 2
+            )
+            for n in all_modules
+        ]
+        avg_radius = sum(radii) / len(radii) if radii else 1.0
+        avg_radius = avg_radius if avg_radius > 0.0 else 1.0
+
+        # Sort groups by their ID for a stable, deterministic sector assignment.
+        group_ids = sorted(groups.keys())
+        num_groups = len(group_ids)
+        slice_angle = 2 * math.pi / num_groups
+        sector_size = slice_angle * _SECTOR_FRACTION  # compact arc per group
+
+        for i, gid in enumerate(group_ids):
+            grp_nodes = groups[gid]
+            num_in_group = len(grp_nodes)
+            # Centre of this group's sector arc.
+            sector_centre = i * slice_angle
+            # Place modules evenly across the sector arc (single module → centre).
+            for j, n in enumerate(grp_nodes):
+                if num_in_group == 1:
+                    angle = sector_centre
+                else:
+                    # Spread modules symmetrically around the sector centre.
+                    half = sector_size / 2.0
+                    angle = sector_centre - half + sector_size * j / (num_in_group - 1)
+                n["position"]["x"] = centroid_x + avg_radius * math.cos(angle)
+                n["position"]["z"] = centroid_z + avg_radius * math.sin(angle)
+
+
 # ---------------------------------------------------------------------------
 # Cluster computation
 # ---------------------------------------------------------------------------
@@ -1767,6 +1842,12 @@ def build_scene_graph(src_path: Path) -> SceneGraph:
     #    Independence group info (set in step 5) is used to place module nodes in
     #    separated spatial sub-regions within each bounded context.
     compute_layout(nodes, edges)
+
+    # 6b. Spatially separate independence groups within each bounded context.
+    #     apply_independence_spatial_layout re-positions modules using sector-based
+    #     layout so that each group occupies a distinct angular sector with a
+    #     visible gap (spec: "a visible gap separates the groups").
+    apply_independence_spatial_layout(nodes)
 
     # 7. Compute cluster suggestions for tightly-coupled module groups.
     clusters = compute_clusters(nodes, edges)

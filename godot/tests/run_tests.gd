@@ -78,6 +78,11 @@ func _init() -> void:
 	# Edge routing: edges connect to Port positions rather than Container centroid.
 	_run_suite(preload("res://tests/test_port_renderer.gd").new())
 
+	# --- task-065: Orthogonal Independence spec (visualization/orthogonal-independence.spec.md) ---
+	# Independence highlighting: selecting a module highlights its orthogonal complement.
+	# Cross-context independence: contexts with no transitive dep on selection highlighted.
+	_run_suite(preload("res://tests/test_independence_highlight.gd").new())
+
 	print("")
 	print("Results: %d passed, %d failed" % [_passes, _failures])
 
