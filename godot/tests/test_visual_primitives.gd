@@ -1275,8 +1275,11 @@ func test_route_creates_highlight_overlay_for_route_segments() -> void:
 func test_route_has_name_label() -> void:
 	## GIVEN a route with name "Order Submission"
 	## WHEN build_from_graph is called
-	## THEN a Label3D child named "RouteLabel_Order_Submission" exists
+	## THEN a Label3D child named "RouteLabel_..." exists
+	## AND the label has billboard enabled (BILLBOARD_ENABLED) for readability
+	## AND the label has pixel_size > 0.0 for legibility in 3D space
 	## Spec §Scenario: Request path — "the Route has a name"
+	## Guidelines: "Label3D readability: billboard = BILLBOARD_ENABLED and pixel_size > 0.0"
 	_test_failed = false
 	var root := Main.new()
 	root.build_from_graph(_make_route_fixture())
@@ -1289,6 +1292,16 @@ func test_route_has_name_label() -> void:
 				child is Label3D,
 				"RouteLabel_ child must be a Label3D; got %s" % child.get_class()
 			)
+			if child is Label3D:
+				var lbl: Label3D = child as Label3D
+				_check(
+					lbl.billboard == BaseMaterial3D.BILLBOARD_ENABLED,
+					"RouteLabel_ billboard must be BILLBOARD_ENABLED for readability"
+				)
+				_check(
+					lbl.pixel_size > 0.0,
+					"RouteLabel_ pixel_size must be > 0.0 for legibility; got %.4f" % lbl.pixel_size
+				)
 			break
 
 	_check(found_label, "Route must create a RouteLabel_ Label3D child for its name")
