@@ -2,13 +2,13 @@
 id: task-023
 title: Implement symbol table extraction and node symbols schema field
 spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
-status: not_started
-phase: null
+status: in_progress
+phase: implement
 deps:
 - task-002
 - task-006
 round: 0
-branch: null
+branch: hyperloop/task-023
 pr: null
 pr_title: 'feat(extractor): add symbol table extraction and node symbols schema field'
 pr_description: "## What and Why\n\nThis PR implements **Symbol Table Extraction**\
