@@ -1415,12 +1415,74 @@ def _detect_communities(module_ids: list[str], edges: list[Edge]) -> dict[str, s
     return result
 
 
+def _compute_betweenness_centrality(
+    adj: dict[str, list[str]],
+) -> dict[str, float]:
+    """Compute normalised betweenness centrality for all nodes (Brandes algorithm).
+
+    For an undirected graph the betweenness centrality of node v is the fraction
+    of shortest paths between all ordered pairs (s, t) with s ≠ t that pass
+    through v (excluding s and t themselves).  The normalisation factor is
+    ``1 / ((n-1) * (n-2))`` for directed graphs; for n ≤ 2 no normalisation is
+    applied and all scores remain 0.0.
+
+    Args:
+        adj: Adjacency mapping ``{node_id: [neighbour_id, …]}``.  The mapping
+             must cover every node (even those with no neighbours) so that the
+             output dict has an entry for every node.
+
+    Returns:
+        A dict ``{node_id: centrality_score}`` where each score is in [0.0, 1.0].
+    """
+    nodes = list(adj.keys())
+    bc: dict[str, float] = {n: 0.0 for n in nodes}
+
+    for s in nodes:
+        # BFS to find shortest paths from s.
+        stack: list[str] = []
+        predecessors: dict[str, list[str]] = {n: [] for n in nodes}
+        sigma: dict[str, int] = {n: 0 for n in nodes}
+        dist: dict[str, int] = {n: -1 for n in nodes}
+        sigma[s] = 1
+        dist[s] = 0
+        queue: list[str] = [s]
+        while queue:
+            v = queue.pop(0)
+            stack.append(v)
+            for w in adj.get(v, []):
+                if dist[w] < 0:
+                    queue.append(w)
+                    dist[w] = dist[v] + 1
+                if dist[w] == dist[v] + 1:
+                    sigma[w] += sigma[v]
+                    predecessors[w].append(v)
+
+        # Accumulate dependencies (back-propagation).
+        delta: dict[str, float] = {n: 0.0 for n in nodes}
+        while stack:
+            w = stack.pop()
+            for v in predecessors[w]:
+                if sigma[w] > 0:
+                    delta[v] += (sigma[v] / sigma[w]) * (1.0 + delta[w])
+            if w != s:
+                bc[w] += delta[w]
+
+    # Normalise: divide by (n-1)*(n-2) so scores fall in [0.0, 1.0].
+    n = len(nodes)
+    if n > 2:
+        scale = 1.0 / ((n - 1) * (n - 2))
+        for v in bc:
+            bc[v] *= scale
+
+    return bc
+
+
 def compute_structural_significance(nodes: list[Node], edges: list[Edge]) -> None:
     """Compute and embed structural significance metrics for all code nodes (in-place).
 
     For each bounded-context and module node, computes:
     - ``in_degree`` / ``out_degree``
-    - ``betweenness_centrality`` (Brandes BFS)
+    - ``betweenness_centrality`` (Brandes BFS) — numeric float in [0.0, 1.0]
     - ``is_hub`` (in_degree > threshold)
     - ``is_bridge`` (betweenness_centrality > threshold)
     - ``is_peripheral`` (in_degree == 0 and out_degree <= 1)
@@ -1499,6 +1561,11 @@ def compute_structural_significance(nodes: list[Node], edges: list[Edge]) -> Non
             ]
             bcs_in_community = {m.split(".")[0] for m in same_community_mods}
             sig["community_drift"] = len(bcs_in_community) > 1
+
+        # Betweenness centrality: numeric float in [0.0, 1.0] — set as a top-level
+        # node field so it is directly accessible (spec: the module is annotated
+        # with its betweenness centrality score).
+        node["betweenness_centrality"] = bc
 
         node["structural_significance"] = sig
 
