@@ -175,11 +175,13 @@ guidelines: |
   ### Sync Point 1 — Absolute first action (before spec, before code)
 
   Before reading the assigned spec, before running any check, before writing
-  any code: sync check scripts from main AND verify the sync is complete.
+  any code: sync check scripts from main, verify the sync is complete, and
+  confirm your branch is rebased onto current main.
 
     git fetch origin main:main
     git checkout main -- .hyperloop/checks/
     bash .hyperloop/checks/check-checks-in-sync.sh
+    bash .hyperloop/checks/check-rebased-onto-main.sh
 
   `git fetch origin main:main` MUST run first — it updates local `main` to
   match the remote. Without the fetch, `git checkout main -- .hyperloop/checks/`
@@ -188,9 +190,26 @@ guidelines: |
   indistinguishable from a current one without fetching first.
 
   The third command MUST exit 0 before you proceed. If it exits non-zero,
-  re-run the full three-command sequence above and check again.
-  Do not proceed until `check-checks-in-sync.sh` is clean. Apply this on BOTH
-  first attempts AND re-attempts.
+  re-run the full four-command sequence above and check again.
+  Do not proceed until `check-checks-in-sync.sh` is clean.
+
+  The fourth command (`check-rebased-onto-main.sh`) MUST also exit 0 before
+  you write a single line of code. If it exits non-zero, rebase immediately —
+  do NOT write any implementation code first:
+
+    git rebase origin/main
+    # Resolve conflicts — keep all .hyperloop/checks/ changes from origin/main:
+    git checkout origin/main -- .hyperloop/checks/
+    bash .hyperloop/checks/check-checks-in-sync.sh    # must exit 0
+    bash .hyperloop/checks/check-rebased-onto-main.sh # must exit 0
+
+  Observed failure (task-065): assignment explicitly stated "MUST run git rebase
+  before any other work." Implementer wrote implementation code without rebasing.
+  Branch was 5 commits behind origin/main at submission. The sole blocking failure
+  was check-rebased-onto-main.sh — all implementation work was correct but the
+  submission was rejected because the rebase precondition was skipped entirely.
+
+  Apply all four commands on BOTH first attempts AND re-attempts.
 
   ### Sync Point 2 — Immediately before final submission
 
