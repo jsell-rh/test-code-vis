@@ -1286,3 +1286,141 @@ func test_nested_collapsing_only_collapses_selected() -> void:
 		"ctx.gamma must remain visible (cluster_1 was not collapsed)")
 	_check((anchors["ctx.delta"] as Node3D).visible,
 		"ctx.delta must remain visible (cluster_1 was not collapsed)")
+
+
+# ---------------------------------------------------------------------------
+# Edge re-routing tests
+# specs/visualization/spatial-structure.spec.md § Cluster Collapsing —
+#   "edges that formerly entered or left any member of the cluster are
+#    re-routed to the supernode"
+#   "edge re-routing animates smoothly — endpoints slide to the supernode
+#    rather than jumping"
+#
+# § Expanding a supernode —
+#   "edges re-route back to their original endpoints with smooth animation"
+# ---------------------------------------------------------------------------
+
+## Build a fixture with an external node whose edge connects to a cluster member.
+## The external node "ext" is at (20, 0, 0).  The cluster members ctx.mod_a and
+## ctx.mod_b are at world positions (-4, 0, 0) and (4, 0, 0) respectively.
+## The edge from "ext" to "ctx.mod_a" is what we will track through collapse/expand.
+func _make_reroute_fixture() -> Dictionary:
+	return {
+		"nodes": [
+			{
+				"id": "ctx",
+				"name": "Ctx",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 15.0,
+			},
+			{
+				"id": "ctx.mod_a",
+				"name": "ModA",
+				"type": "module",
+				"parent": "ctx",
+				"position": {"x": -4.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+			{
+				"id": "ctx.mod_b",
+				"name": "ModB",
+				"type": "module",
+				"parent": "ctx",
+				"position": {"x": 4.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+			{
+				"id": "ext",
+				"name": "External",
+				"type": "module",
+				"parent": null,
+				"position": {"x": 20.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+			},
+		],
+		# Edge from ext → ctx.mod_a: the source "ext" is NOT a cluster member,
+		# the target "ctx.mod_a" IS a cluster member.  After collapse the target
+		# endpoint must slide from (-4,0,0) to the supernode centroid (0,0,0).
+		"edges": [
+			{"source": "ext", "target": "ctx.mod_a", "type": "internal", "weight": 1},
+		],
+		"clusters": [
+			{
+				"id": "ctx:cluster_0",
+				"members": ["ctx.mod_a", "ctx.mod_b"],
+				"context": "ctx",
+				"aggregate_metrics": {
+					"total_loc": 100,
+					"in_degree": 1,
+					"out_degree": 0,
+				},
+			},
+		],
+	}
+
+
+## Helper: find the arrow visual in _path_edge_entries for the edge
+## from "ext" to a cluster member and return its cached to_pos.
+## The arrow role entry corresponds to the arrowhead placed at the target endpoint.
+func _get_arrow_to_pos(main_node: Node3D) -> Vector3:
+	var entries: Array = main_node.get("_path_edge_entries")
+	for entry: Dictionary in entries:
+		if entry.get("role", "") == "arrow" and entry.get("source", "") == "ext":
+			return entry.get("to_pos", Vector3.ZERO)
+	return Vector3.INF
+
+
+## Scenario: Collapsing a cluster — edge re-routing.
+##
+## "edges that formerly entered or left any member of the cluster are
+##  re-routed to the supernode"
+##
+## After collapse, the edge from "ext" to "ctx.mod_a" must have its target
+## endpoint moved to the supernode centroid (average of mod_a and mod_b world
+## positions).
+##
+## Implemented by: main.gd → collapse_cluster() → _reposition_edge_visual().
+## The cached to_pos in _path_edge_entries is the ground truth used by both the
+## visual reposition and this test assertion.
+func test_collapse_cluster_reroutes_edges_to_supernode() -> void:
+	_test_failed = false
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_reroute_fixture())
+
+	# Verify the original arrow to_pos equals ctx.mod_a world position (-4, 0, 0).
+	var orig_to: Vector3 = _get_arrow_to_pos(main_node)
+	_check(orig_to == Vector3(-4.0, 0.0, 0.0),
+		"Before collapse: arrow to_pos must equal ctx.mod_a world pos (-4,0,0); got %s" % str(orig_to))
+
+	main_node.call("collapse_cluster", "ctx:cluster_0")
+
+	# The supernode centroid is the average of mod_a (-4,0,0) and mod_b (4,0,0) = (0,0,0).
+	# After re-routing, the arrow to_pos must equal the centroid.
+	var rerouted_to: Vector3 = _get_arrow_to_pos(main_node)
+	_check(rerouted_to == Vector3(0.0, 0.0, 0.0),
+		"After collapse: arrow to_pos must equal supernode centroid (0,0,0); got %s" % str(rerouted_to))
+
+
+## Scenario: Expanding a supernode — edge endpoint restoration.
+##
+## "edges re-route back to their original endpoints with smooth animation"
+##
+## After collapse then expand, the arrow to_pos must return to the original
+## ctx.mod_a world position (-4, 0, 0).
+##
+## Implemented by: main.gd → expand_cluster() → _reposition_edge_visual().
+func test_expand_cluster_restores_edge_endpoints() -> void:
+	_test_failed = false
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_reroute_fixture())
+
+	# Collapse, then immediately expand.
+	main_node.call("collapse_cluster", "ctx:cluster_0")
+	main_node.call("expand_cluster", "ctx:cluster_0")
+
+	# The arrow to_pos must be restored to its pre-collapse value: (-4, 0, 0).
+	var restored_to: Vector3 = _get_arrow_to_pos(main_node)
+	_check(restored_to == Vector3(-4.0, 0.0, 0.0),
+		"After expand: arrow to_pos must be restored to (-4,0,0); got %s" % str(restored_to))
