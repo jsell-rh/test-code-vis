@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 from extractor.extractor import build_scene_graph
+from extractor.schema import validate_scene_graph
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -52,6 +53,15 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Extracting scene graph from: {src_path}", file=sys.stderr)
     graph = build_scene_graph(src_path)
+
+    # Validate the scene graph conforms to the schema contract before writing.
+    # This ensures the JSON output always satisfies the interface contract between
+    # the Python extractor and the Godot application (scene-graph-schema.spec.md).
+    try:
+        validate_scene_graph(graph)
+    except ValueError as exc:
+        print(f"error: scene graph validation failed: {exc}", file=sys.stderr)
+        return 1
 
     output_path: Path = args.output
     output_path.parent.mkdir(parents=True, exist_ok=True)
