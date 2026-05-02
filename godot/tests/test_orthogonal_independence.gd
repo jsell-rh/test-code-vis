@@ -613,3 +613,117 @@ func test_context_highlight_headless_colors_all_independent() -> void:
 	_check(iso_b_color.b > 0.7,
 		"'iso_b' headless path: must have CONTEXT_INDEPENDENT_COLOR (cyan, b>0.7); "
 		+ "got b=%.2f" % iso_b_color.b)
+
+
+# ===========================================================================
+# Requirement: Spatial Separation — Visual gap in Godot rendering
+# ===========================================================================
+
+## Spec scenario: "Visual gap between independent groups"
+##   GIVEN a bounded context containing two independent groups
+##   WHEN the context is rendered
+##   THEN the groups occupy distinct spatial regions within the context's volume
+##   AND a visible gap separates the groups
+##   AND modules within each group remain close to each other
+##
+## This test verifies the RENDERING side: after build_from_graph(), the
+## Node3D anchor positions for cross-group modules must be farther apart
+## than same-group modules — confirming the extractor's spatial separation
+## is faithfully propagated into the scene tree.
+func test_rendered_independent_groups_are_spatially_separated() -> void:
+	_test_failed = false
+
+	# Fixture: two independence groups, spatially separated.
+	# Group ctx:0: alpha (-2, 0, 0) and beta (-1.5, 0, 0) — left cluster.
+	# Group ctx:1: gamma (1.5, 0, 0) and delta (2.0, 0, 0) — right cluster.
+	# Intra-group spread: 0.5 units.  Cross-group gap: 3.5 units.
+	var graph: Dictionary = {
+		"nodes": [
+			{
+				"id": "ctx", "name": "Ctx", "type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 5.0,
+			},
+			{
+				"id": "ctx.alpha", "name": "Alpha", "type": "module",
+				"parent": "ctx",
+				"position": {"x": -2.0, "y": 0.0, "z": 0.0},
+				"size": 0.5, "independence_group": "ctx:0",
+			},
+			{
+				"id": "ctx.beta", "name": "Beta", "type": "module",
+				"parent": "ctx",
+				"position": {"x": -1.5, "y": 0.0, "z": 0.0},
+				"size": 0.5, "independence_group": "ctx:0",
+			},
+			{
+				"id": "ctx.gamma", "name": "Gamma", "type": "module",
+				"parent": "ctx",
+				"position": {"x": 1.5, "y": 0.0, "z": 0.0},
+				"size": 0.5, "independence_group": "ctx:1",
+			},
+			{
+				"id": "ctx.delta", "name": "Delta", "type": "module",
+				"parent": "ctx",
+				"position": {"x": 2.0, "y": 0.0, "z": 0.0},
+				"size": 0.5, "independence_group": "ctx:1",
+			},
+		],
+		"edges": [
+			{"source": "ctx.alpha", "target": "ctx.beta", "type": "internal", "weight": 1},
+			{"source": "ctx.gamma", "target": "ctx.delta", "type": "internal", "weight": 1},
+		],
+		"metadata": {"source_path": "/tmp/test", "timestamp": "2026-05-02T00:00:00Z"},
+		"clusters": [],
+	}
+
+	var main_node := Main.new()
+	main_node.build_from_graph(graph)
+	var anchors: Dictionary = main_node.get_anchors()
+
+	# All four module anchors must be present.
+	for mod_id: String in ["ctx.alpha", "ctx.beta", "ctx.gamma", "ctx.delta"]:
+		_check(anchors.has(mod_id),
+			"Module anchor '%s' must exist after build_from_graph" % mod_id)
+
+	var alpha: Node3D = anchors.get("ctx.alpha") as Node3D
+	var beta: Node3D = anchors.get("ctx.beta") as Node3D
+	var gamma: Node3D = anchors.get("ctx.gamma") as Node3D
+	var delta: Node3D = anchors.get("ctx.delta") as Node3D
+
+	if alpha == null or beta == null or gamma == null or delta == null:
+		_check(false, "One or more module anchors is null — cannot measure distances")
+		main_node.free()
+		return
+
+	# Measure distances between rendered Node3D positions (LOCAL to parent BC).
+	var d_alpha_beta: float = alpha.position.distance_to(beta.position)   # intra-group-0
+	var d_gamma_delta: float = gamma.position.distance_to(delta.position) # intra-group-1
+	var d_alpha_gamma: float = alpha.position.distance_to(gamma.position) # cross-group
+	var d_beta_delta: float = beta.position.distance_to(delta.position)   # cross-group
+
+	# THEN the groups occupy distinct spatial regions with a visible gap:
+	# cross-group distances must exceed intra-group distances.
+	_check(d_alpha_gamma > d_alpha_beta,
+		("Cross-group distance (alpha↔gamma=%.2f) must exceed "
+		+ "intra-group-0 distance (alpha↔beta=%.2f) — "
+		+ "independent groups must occupy distinct spatial regions with a visible gap")
+		% [d_alpha_gamma, d_alpha_beta])
+
+	_check(d_alpha_gamma > d_gamma_delta,
+		("Cross-group distance (alpha↔gamma=%.2f) must exceed "
+		+ "intra-group-1 distance (gamma↔delta=%.2f) — "
+		+ "visible gap required between independent groups")
+		% [d_alpha_gamma, d_gamma_delta])
+
+	# AND modules within each group remain close to each other:
+	# minimum cross-group distance must exceed maximum intra-group distance.
+	var cross_min: float = minf(d_alpha_gamma, d_beta_delta)
+	var intra_max: float = maxf(d_alpha_beta, d_gamma_delta)
+	_check(cross_min > intra_max,
+		("Minimum cross-group distance (%.2f) must exceed maximum intra-group distance "
+		+ "(%.2f) — coupling-aware layout keeps same-group modules closer together")
+		% [cross_min, intra_max])
+
+	main_node.free()
