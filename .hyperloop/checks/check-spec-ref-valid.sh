@@ -30,6 +30,12 @@ mapfile -t SPEC_REFS < <(
         if echo "$body" | grep -qE '^Task-Ref:[[:space:]]*process-improvement'; then
             continue
         fi
+        # Skip intake commits — they list specs under review as bare paths (no @hash),
+        # not pinned spec versions.  Requiring path@hash form here produces systematic
+        # false failures on every branch that carries intake chore history.
+        if echo "$body" | grep -qE '^Task-Ref:[[:space:]]*intake'; then
+            continue
+        fi
         echo "$body" | grep -oP '(?<=Spec-Ref: )\S+'
     done < <(git log "$MAIN_BRANCH"..HEAD --format="%H" 2>/dev/null) \
     | sort -u

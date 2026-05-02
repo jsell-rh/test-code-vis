@@ -550,6 +550,38 @@ guidelines: |
 
   Run `bash .hyperloop/checks/check-lod-opacity-animation.sh` before submitting.
 
+  ## EDGE ENDPOINT ANIMATION — IMMEDIATEMESH IS ARCHITECTURALLY INCOMPATIBLE
+
+  `ImmediateMesh` vertices are IMMUTABLE after `surface_end()` is called.
+  You cannot interpolate an ImmediateMesh edge endpoint position frame-by-frame —
+  every "update" requires a full mesh teardown and reconstruction, producing an
+  instant jump, not a smooth slide.
+
+  When a spec THEN-clause says edge endpoints must "animate smoothly", "slide",
+  or transition "without jumping" during a collapse/expand operation, you MUST
+  choose a rendering primitive that supports per-frame interpolation:
+
+  - **`_process`-based lerp (recommended):** store `from_pos`, `to_pos`, and
+    `target` per edge entry; each `_process` frame rebuild the ImmediateMesh
+    with the lerped position until the target is reached.  The full-rebuild cost
+    per frame is acceptable for a prototype with O(100) edges.
+  - **`ArrayMesh` with surface update:** mutable geometry — replace the surface
+    data each frame without destroying the mesh node.
+  - **`MeshDataTool`:** allows in-place vertex mutation on an existing mesh.
+
+  Acknowledging the limitation in a code comment (e.g., "Tween-based
+  interpolation is architecturally infeasible with ImmediateMesh") does NOT
+  satisfy the THEN-clause — it documents the gap without closing it.
+
+  Before choosing ImmediateMesh for any rendered element that the spec requires
+  to animate, ask: "Will I need to interpolate this element's geometry over
+  time?"  If yes, choose a different primitive BEFORE writing any rendering code.
+
+  Observed failure (task-019): edge endpoints jumped to the supernode position
+  during collapse instead of sliding.  The implementer recognised the
+  ImmediateMesh constraint and commented on it, but did not switch primitives.
+  Both animation THEN-clauses (C5 and E4) were marked PARTIAL at review.
+
   ## AGGREGATE EDGES ARE A SEPARATE RENDERED SET
 
   When a spec LOD scenario requires "aggregate edges per [group] pair" (e.g.
