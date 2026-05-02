@@ -3,13 +3,13 @@ id: task-035
 title: Implement Node Primitive renderer (labeled entities at tier-2 LOD)
 spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
 status: in_progress
-phase: verify
+phase: implement
 deps:
 - task-011
 - task-014
 round: 0
 branch: hyperloop/task-035
-pr: https://github.com/jsell-rh/test-code-vis/pull/235
+pr: null
 pr_title: 'feat(godot): implement Node primitive renderer for tier-2 LOD (functions/classes)'
 pr_description: "## What and Why\n\nAt tier-2 LOD (near zoom), the scene must show\
   \ individual functions and classes\nas distinct visual entities within their parent\
