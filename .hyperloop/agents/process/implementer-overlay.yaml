@@ -97,6 +97,36 @@ guidelines: |
     and check-run-tests-suite-count.sh; conflict resolution left stale versions on the
     branch, causing both scripts to fail at review.
 
+  - **Parallel-task conflicts — KEEP main's duplicate, PRESERVE your unique additions:**
+    When a parallel task merged to main implements the SAME feature your branch
+    implements, the rebase will produce conflicts in the overlapping code area.
+    Observed failure (task-034 / task-040): both branches independently implemented
+    individual edge weight. task-040 merged first, producing conflicts in
+    `extractor/extractor.py` and `extractor/tests/test_extractor.py`.
+
+    Conflict resolution protocol:
+
+    Step 1 — Classify every conflicted block as DUPLICATE or UNIQUE:
+      - DUPLICATE: code that implements the same feature as the parallel task
+        (e.g., both branches add `weight` to `build_dependency_edges()`).
+      - UNIQUE: code only YOUR branch introduces — your task's actual deliverable
+        (e.g., `extract_type_topology()` is task-034's unique addition).
+
+    Step 2 — Apply the rule per block:
+      - For DUPLICATE blocks: KEEP ORIGIN/MAIN, DISCARD YOURS. The parallel task
+        was already reviewed and merged; replacing it with your unreviewed version
+        is a silent regression.
+      - For UNIQUE blocks: PRESERVE YOURS. This is what your task actually delivers.
+
+    Step 3 — Verify both sides survived:
+      git grep "def your_unique_function"  # must still exist
+      git grep "def parallel_task_function"  # must be main's version
+      pytest extractor/tests/  # both main's tests and your new tests must pass
+
+    NEVER resolve a conflict file by taking one side entirely (git checkout
+    origin/main -- <file>) when the conflict contains BOTH duplicate code (take
+    main's) AND your unique additions (keep yours). Use block-by-block resolution.
+
   **After rebase, if `check-run-tests-suite-count.sh` exits non-zero:**
   The diagnostic diff identifies which `_run_suite()` registrations are missing.
   For each missing suite, also restore the test file itself from origin/main —
