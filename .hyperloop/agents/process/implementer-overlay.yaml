@@ -433,9 +433,21 @@ guidelines: |
      check before submitting.
   4. Never stage files under `.hyperloop/state/` — use `git add <file>` for specific files.
 
-  Observed failure (task-013): branch was clean at all prior check points, but
-  main received 3 process-only commits after the implementer's last sync. The
-  branch was submitted without a final rebase check, causing FAIL on review.
+  **POST-DRAFT REBASE CHECK (mandatory):** Writing a submission report takes time.
+  Main can advance while you write. After drafting your report and immediately
+  before submitting it, run one final check:
+
+    bash .hyperloop/checks/check-rebased-onto-main.sh
+
+  If it exits non-zero at this point, execute the PROCESS-ONLY REBASE protocol
+  (see above), update your report accordingly, and re-run this check before
+  submitting. Do NOT submit a report on a branch that fails this check even if
+  all implementation checks passed earlier in the session.
+
+  Observed failure (task-013, task-067): branch was clean at all prior check
+  points, but main received process-only commits after the implementer's last
+  sync. The branches were submitted without a post-draft rebase check, causing
+  FAIL on review despite correct implementations.
 
   ## COORDINATE FRAME — PRODUCTION SOURCE CODE
 
