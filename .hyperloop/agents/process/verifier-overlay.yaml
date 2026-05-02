@@ -1041,3 +1041,53 @@ guidelines: |
   change" scenario called `build_from_graph()` exactly once. The reload path
   was never exercised. The clause was PARTIAL. The verifier provided the exact
   test body needed; the fix required only adding one test function.
+
+  ## HEADLESS-UNTESTABLE REQUIREMENTS — CLASSIFY AS PASS-WITH-NOTE
+
+  When a spec THEN-clause requires a runtime measurement that is physically
+  impossible in headless Godot (frame rate, render latency, GPU timing — any
+  value requiring a display server), classify as PASS-WITH-NOTE — NOT MISSING
+  or FAIL — when ALL of the following hold:
+
+  1. The structural prerequisite code exists (LOD system, scale scene build
+     completes without error, correct geometry is created at the target scale).
+  2. The test file or a code comment explicitly acknowledges the headless
+     constraint (e.g., `test_nfr_scale.gd` documents the FPS gap).
+  3. The spec clause uses qualitative language ("above 30fps", "no perceptible
+     stutter") that cannot be expressed as a headless assertion.
+
+  Required text in your report for each such clause:
+    PASS-WITH-NOTE: [clause text] — physically untestable in headless Godot
+    (no display server). Architectural evidence: [describe the code that
+    provides the structural guarantee: LOD system, scale node count, etc.]
+
+  Do NOT issue FAIL solely because no test asserts `fps > 30`. Headless Godot
+  cannot produce a frame rate; requiring such a test is requiring the impossible.
+
+  Observed case (task-027): "frame rate remains above 30fps" and "no perceptible
+  stutter or pop-in" are headless-untestable THEN-clauses. `lod_manager.gd` exists
+  and 60 anchors build at kartograph scale. The verifier issued FAIL because no
+  fps assertion existed — the correct classification is PASS-WITH-NOTE.
+
+  ## DEPENDENCY-BLOCKED MISSING REQUIREMENTS — INCLUDE ORCHESTRATOR NOTE
+
+  When a MISSING requirement is directly caused by a prerequisite task being
+  "not-started" (e.g., the Port Primitive renderer task is not-started when
+  the spec requires Port Primitive scenes to exist), include an ORCHESTRATOR
+  NOTE alongside the MISSING classification:
+
+    MISSING (DEPENDENCY-BLOCKED): [requirement name] — NOT an implementer
+    omission. Task <task-id> ([title]) has status not-started; that task
+    must complete before [requirement] can be implemented.
+
+  This classification does NOT change the FAIL verdict — it tells the
+  orchestrator the correct response is to assign the prerequisite task first,
+  not to re-assign the current task to another implementer.
+
+  Do NOT classify a DEPENDENCY-BLOCKED gap as PARTIAL — the requirement
+  cannot be partially implemented when its foundational renderer does not exist.
+
+  Observed case (task-076): Port Primitive was MISSING because task-038
+  (Port Primitive renderer in Godot) had status not-started. The verifier
+  issued FAIL but should have included an ORCHESTRATOR NOTE directing
+  the orchestrator to assign task-038 before re-attempting task-076.

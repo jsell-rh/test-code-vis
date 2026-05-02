@@ -591,3 +591,71 @@ guidelines: |
   5. Confirm cleanup:
        bash .hyperloop/checks/check-cycle-gate.sh
      Exit 0 = queue is clean AND no prohibited branches remain.  Exit 1 lists survivors.
+
+  ---
+
+  ## TASK DEPENDENCY ORDERING — VERIFY PREREQUISITES BEFORE ASSIGNMENT
+
+  Before assigning any task whose spec section covers multiple named visual
+  primitives (Container, Node, Badge, Edge, Port, Landmark, Power Rail, Route),
+  verify that all named primitive renderer tasks are in `done` status.
+
+  For each named primitive required by the task's spec section:
+    1. Identify the renderer task for that primitive (e.g., task-038 = Port
+       Primitive renderer in Godot).
+    2. Check its status:
+         grep 'status:' .hyperloop/state/tasks/task-038.md
+    3. If status is `not-started` or `in_progress`: assign THAT primitive task
+       first. Do NOT assign the higher-level task until the renderer is `done`.
+
+  Assigning a task to cover spec scenarios that require a not-started primitive
+  renderer guarantees MISSING FAIL for all scenarios of that primitive — this
+  is an ASSIGNMENT ERROR, not an implementer failure.
+
+  Observed failure (task-076): assigned to cover visual-primitives.spec.md which
+  includes Port Primitive scenarios. task-038 (Port Primitive renderer in Godot)
+  was not-started. All three Port scenarios (placement, direction, LOD visibility)
+  were MISSING. The verifier classified the gaps as DEPENDENCY-BLOCKED.
+  Correct fix: assign task-038 first; re-assign task-076 after task-038 is done.
+
+  ---
+
+  ## STOP PROTOCOL — THIRD OCCURRENCE REQUIRES IMMEDIATE TASK FILE DELETION
+
+  When a STOP PROTOCOL finding ("STOP PROTOCOL: Feature already on origin/main")
+  appears for the SAME task for the THIRD TIME (or beyond), the ABSOLUTE FIRST
+  action — before reading any other finding in the cycle — is to delete the task
+  file from BOTH branches:
+
+    # On hyperloop/state:
+    git checkout hyperloop/state
+    rm .hyperloop/state/tasks/<task-id>.md
+    git add .hyperloop/state/tasks/<task-id>.md
+    git commit -m "chore(tasks): delete superseded task <task-id> — 3x STOP PROTOCOL"
+    git push origin hyperloop/state
+    git checkout main
+
+    # On main:
+    rm -f .hyperloop/state/tasks/<task-id>.md
+    git add .hyperloop/state/tasks/<task-id>.md
+    git commit -m "chore(tasks): delete superseded task <task-id> — 3x STOP PROTOCOL"
+    git push origin main
+
+  Do NOT re-read the finding. Do NOT create a replacement task. Do NOT re-assign
+  under any task ID or framing. The feature is already on origin/main — it was
+  delivered by a prior task. Deletion is the only action that prevents Round 4.
+
+  How to count rounds: Round 1 = first STOP PROTOCOL report, Round 2 = second
+  report on the same task, Round 3 = third report. The verifier's preamble will
+  state "Round 2 confirmation" or "Round 3 confirmation" explicitly.
+
+  The existing STOP PROTOCOL section (top of this overlay) specifies what to do
+  for Rounds 1 and 2 — retire or redesign. This section adds the Round 3+
+  escalation: deletion without re-assignment, no exceptions.
+
+  Observed failure: task-078 triggered STOP PROTOCOL in Round 1, Round 2, AND
+  Round 3. The orchestrator-overlay documented Round 2 and required retirement.
+  The task was NOT retired. Round 3 produced identical output. The overlay rule
+  existed and was not followed. Task file deletion is the only action that stops
+  the loop — a rule that says "retire the task" without deleting the file leaves
+  the task in the candidate pool and produces a Round 4.
