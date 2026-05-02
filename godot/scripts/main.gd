@@ -24,6 +24,7 @@ const SceneGraphLoader = preload("res://scripts/scene_graph_loader.gd")
 const LodManager = preload("res://scripts/lod_manager.gd")
 const UnderstandingOverlay = preload("res://scripts/understanding_overlay.gd")
 const VisualPrimitives = preload("res://scripts/visual_primitives.gd")
+const ClusterManager = preload("res://scripts/cluster_manager.gd")
 
 @export var scene_graph_path: String = "res://data/scene_graph.json"
 
@@ -75,6 +76,10 @@ var _ubiquitous_edge_visuals: Array = []
 
 ## Whether ubiquitous edges are currently shown (toggled by T key).
 var _ubiquitous_edges_visible: bool = false
+
+## Cluster manager — handles cluster-suggestion hints and collapse/expand operations.
+## Implements spatial-structure.spec.md § "Cluster Collapsing".
+var _cluster_manager: ClusterManager = ClusterManager.new()
 
 @onready var _camera: Camera3D = $Camera3D
 
@@ -165,6 +170,14 @@ func build_from_graph(graph: Dictionary) -> void:
 
 	# Build aggregate edges (one line per context pair, shown at FAR LOD).
 	_build_aggregate_edges(edges)
+
+	# Apply cluster suggestion hints — subtle tints on members of each suggested
+	# cluster so the human can see which modules are coupled without auto-collapsing.
+	# Spec: "suggested clusters are indicated visually (e.g. subtle shared tint or
+	#        proximity grouping) AND suggestions never auto-collapse"
+	var clusters: Array = graph.get("clusters", [])
+	_cluster_manager.init(_anchors, self)
+	_cluster_manager.apply_cluster_hints(_anchors, clusters)
 
 	# Reposition camera to frame the whole graph.
 	_frame_camera()
@@ -928,3 +941,37 @@ func _apply_failure_impact_overlay() -> void:
 		_understanding_overlay.apply_failure_overlay(target_id, _graph, _anchors, self)
 
 
+
+# ---------------------------------------------------------------------------
+# Cluster collapse / expand (spatial-structure.spec.md § "Cluster Collapsing")
+# ---------------------------------------------------------------------------
+
+## Collapse the cluster identified by *cluster_id* into a single supernode.
+##
+## Spec: "modules animate together, converging smoothly into a single supernode"
+##       "the supernode displays aggregate metrics (total LOC, combined in-degree,
+##        combined out-degree)"
+##       "suggestions never auto-collapse — the human always initiates"
+##
+## Returns the supernode Node3D, or null if already collapsed / not found.
+func collapse_cluster(cluster_id: String) -> Node3D:
+	var clusters: Array = _graph.get("clusters", [])
+	for cluster: Dictionary in clusters:
+		if cluster.get("id", "") == cluster_id:
+			return _cluster_manager.collapse_cluster(cluster_id, cluster)
+	return null
+
+
+## Expand the supernode identified by *cluster_id* back to its constituent modules.
+##
+## Spec: "the supernode smoothly expands back into its constituent modules"
+##       "modules animate outward to their original positions"
+##
+## Returns true if the cluster was in a collapsed state and expansion was initiated.
+func expand_cluster(cluster_id: String) -> bool:
+	return _cluster_manager.expand_cluster(cluster_id)
+
+
+## Return true if the cluster identified by *cluster_id* is currently collapsed.
+func is_cluster_collapsed(cluster_id: String) -> bool:
+	return _cluster_manager.is_collapsed(cluster_id)
