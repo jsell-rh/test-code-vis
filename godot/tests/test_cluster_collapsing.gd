@@ -902,3 +902,60 @@ func test_original_positions_captured_before_collapse() -> void:
 				% [str(expected_b), str(orig_positions["svc.mod_b"])]
 			)
 		)
+
+
+# ---------------------------------------------------------------------------
+# C5/E4: Edge endpoint animation — _edge_animations tracking
+# ---------------------------------------------------------------------------
+
+## After collapse, _edge_animations is non-empty (boundary edge queued for lerp).
+## Spec: "edge re-routing animates smoothly — endpoints slide to the supernode
+##        rather than jumping"
+## Proof: the animation queue has an entry for the boundary edge immediately
+## after collapse_cluster() returns, before _process() fires.
+## (In headless mode _process() is never called by the engine, so the queue
+##  persists until explicitly drained or ignored.)
+func test_collapse_edge_animation_tracked() -> void:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_graph_with_crossing_edges())
+
+	main_node.call("collapse_cluster", "svc:cluster_0")
+
+	# Access _edge_animations through the cluster_manager.
+	var cm: Object = main_node.get("_cluster_manager")
+	_check(cm != null, "_cluster_manager must exist on main_node")
+	if cm == null:
+		return
+
+	var edge_anims: Dictionary = cm.get("_edge_animations")
+	_check(not edge_anims.is_empty(),
+		"_edge_animations must be non-empty after collapse — proves animation was queued"
+		+ " (C5: endpoints slide rather than jump)")
+
+
+## After expand, _edge_animations gains an entry for the boundary edge restore.
+## Spec: "edges re-route back to their original endpoints with smooth animation"
+## (E4 animation tracking)
+func test_expand_edge_animation_tracked() -> void:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_graph_with_crossing_edges())
+
+	# Collapse first (this queues collapse animations).
+	main_node.call("collapse_cluster", "svc:cluster_0")
+
+	# Drain collapse animations by calling _process on the cluster manager.
+	var cm: Object = main_node.get("_cluster_manager")
+	_check(cm != null, "_cluster_manager must exist on main_node")
+	if cm == null:
+		return
+
+	# Advance past the collapse animations (duration = ANIM_DURATION = 0.35s).
+	cm.call("_process", 1.0)
+
+	# Expand — should queue restore animations.
+	main_node.call("expand_cluster", "svc:cluster_0")
+
+	var edge_anims: Dictionary = cm.get("_edge_animations")
+	_check(not edge_anims.is_empty(),
+		"_edge_animations must be non-empty after expand — proves animation was queued"
+		+ " (E4: endpoints slide back to original positions)")

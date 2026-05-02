@@ -84,6 +84,13 @@ var _scene_root: Node3D = null
 ##        re-routed to the supernode".
 var _path_edge_entries: Array = []
 
+## In-progress edge endpoint animations.
+## Keyed by a unique edge animation id (string) →
+##   {from_pos, to_pos, target_from, target_to, progress, duration, entry}
+## Populated by _reroute_edges_for_collapse() and _restore_edges_for_expand().
+## Drained each frame by _process().
+var _edge_animations: Dictionary = {}
+
 
 ## Initialise this manager with the main scene's anchor map, root node, and
 ## edge-entry array.  Must be called before collapse_cluster() or expand_cluster().
@@ -241,12 +248,9 @@ func collapse_cluster(cluster_id: String, cluster: Dictionary) -> Node3D:
 	#        re-routed to the supernode"
 	# Spec: "edge re-routing animates smoothly — endpoints slide to the supernode
 	#        rather than jumping"
-	# NOTE: ImmediateMesh vertices are immutable; rerouting rebuilds the mesh
-	# with updated endpoint positions. Tween-based per-frame interpolation of
-	# mesh geometry is architecturally infeasible with ImmediateMesh — the
-	# endpoint is updated immediately in both headless and scene-tree modes.
-	# The animation architecture is correct; smooth interpolation would require
-	# a different edge representation (e.g. MeshInstance3D with a shader).
+	# Implementation: queues _process-based lerp animations in _edge_animations so
+	# endpoints slide each frame toward the supernode centroid. Entry data is also
+	# updated immediately so headless tests and subsequent operations are correct.
 	var rerouted_edges: Array = []
 	var hidden_internal_lines: Array = []
 	_reroute_edges_for_collapse(members, centroid, rerouted_edges, hidden_internal_lines)
@@ -313,18 +317,26 @@ func _reroute_edges_for_collapse(
 		var new_to: Vector3 = orig_to
 
 		if src_is_member:
-			new_from = centroid
+			new_from = centroid  # source-endpoint slides to supernode centroid
 		else:  # tgt_is_member
-			new_to = centroid
+			new_to = centroid  # target-endpoint slides to supernode centroid
 
-		var entry_type: String = entry.get("entry_type", "line")
-		if entry_type == "line" and visual is MeshInstance3D:
-			_rebuild_line_mesh(visual as MeshInstance3D, new_from, new_to)
-		elif entry_type == "arrow" and visual is MeshInstance3D:
-			_reposition_arrow(visual as MeshInstance3D, new_from, new_to)
+		# Queue a smooth lerp animation so the endpoint slides rather than jumps.
+		# Spec: "edge re-routing animates smoothly — endpoints slide to the supernode
+		#        rather than jumping"
+		var anim_id: String = "collapse_%d" % i
+		_edge_animations[anim_id] = {
+			"from_pos": orig_from,
+			"to_pos": orig_to,
+			"target_from": new_from,
+			"target_to": new_to,
+			"progress": 0.0,
+			"duration": ANIM_DURATION,
+			"entry": entry,
+		}
 
-		# Update the entry's current positions so subsequent collapse/expand
-		# operations and the expand restoration have the right reference values.
+		# Also update entry data immediately so headless tests and subsequent
+		# operations (expand restoration) see the correct final positions.
 		entry["from_pos"] = new_from
 		entry["to_pos"] = new_to
 
@@ -406,7 +418,9 @@ func expand_cluster(cluster_id: String) -> bool:
 
 	# ── Restore edge endpoints ────────────────────────────────────────────────
 	# Spec: "edges re-route back to their original endpoints with smooth animation"
-	# NOTE: Same ImmediateMesh rebuild approach as collapse; immediate update.
+	# Implementation: queues _process-based lerp animations in _edge_animations so
+	# endpoints slide each frame back to original positions. Entry data also restored
+	# immediately so headless tests and subsequent operations are correct.
 	_restore_edges_for_expand(rerouted_edges, hidden_internal_lines)
 
 	# Show members and animate them back to their stored original positions.
@@ -474,13 +488,25 @@ func _restore_edges_for_expand(
 		var orig_from: Vector3 = reroute_info.get("orig_from", Vector3.ZERO)
 		var orig_to: Vector3 = reroute_info.get("orig_to", Vector3.ZERO)
 
-		var entry_type: String = entry.get("entry_type", "line")
-		if entry_type == "line" and visual is MeshInstance3D:
-			_rebuild_line_mesh(visual as MeshInstance3D, orig_from, orig_to)
-		elif entry_type == "arrow" and visual is MeshInstance3D:
-			_reposition_arrow(visual as MeshInstance3D, orig_from, orig_to)
+		# Current collapsed positions (the centroid) are the start of the restore anim.
+		var cur_from: Vector3 = entry.get("from_pos", Vector3.ZERO)
+		var cur_to: Vector3 = entry.get("to_pos", Vector3.ZERO)
 
-		# Restore the entry's current positions to originals.
+		# Queue a smooth lerp animation so the endpoint slides back rather than jumps.
+		# Spec: "edges re-route back to their original endpoints with smooth animation"
+		var anim_id: String = "expand_%d" % entry_idx
+		_edge_animations[anim_id] = {
+			"from_pos": cur_from,
+			"to_pos": cur_to,
+			"target_from": orig_from,
+			"target_to": orig_to,
+			"progress": 0.0,
+			"duration": ANIM_DURATION,
+			"entry": entry,
+		}
+
+		# Also restore entry data immediately so headless tests and subsequent
+		# operations see the correct final positions.
 		entry["from_pos"] = orig_from
 		entry["to_pos"] = orig_to
 
@@ -548,3 +574,60 @@ func is_collapsed(cluster_id: String) -> bool:
 	if not _collapse_state.has(cluster_id):
 		return false
 	return bool(_collapse_state[cluster_id].get("collapsed", false))
+
+
+# ---------------------------------------------------------------------------
+# Per-frame edge animation (_process)
+# ---------------------------------------------------------------------------
+
+## Advance all in-progress edge endpoint animations each frame.
+##
+## Spec: "edge re-routing animates smoothly — endpoints slide to the supernode
+##        rather than jumping"
+## Spec: "edges re-route back to their original endpoints with smooth animation"
+##
+## Each animation entry interpolates from_pos/to_pos toward target_from/target_to
+## using linear interpolation over `duration` seconds.  When progress reaches 1.0
+## the entry is removed from _edge_animations.
+##
+## This method is called automatically by the Godot engine each frame when
+## the node is inside the scene tree.  In headless tests the engine does NOT
+## call _process, so tests simply check the final data values that were
+## applied immediately in _reroute_edges_for_collapse / _restore_edges_for_expand.
+func _process(delta: float) -> void:
+	if _edge_animations.is_empty():
+		return
+	var completed: Array = []
+	for anim_id: String in _edge_animations:
+		var anim: Dictionary = _edge_animations[anim_id]
+		# Advance progress (clamped to [0, 1]).
+		anim["progress"] = min(anim["progress"] + delta / anim["duration"], 1.0)
+		var t: float = anim["progress"]
+		# Linearly interpolate endpoints toward targets.
+		var interp_from: Vector3 = (anim["from_pos"] as Vector3).lerp(anim["target_from"], t)
+		var interp_to: Vector3 = (anim["to_pos"] as Vector3).lerp(anim["target_to"], t)
+		# Rebuild the mesh visual at the interpolated positions.
+		_rebuild_edge_mesh_at(anim["entry"], interp_from, interp_to)
+		if t >= 1.0:
+			completed.append(anim_id)
+	for anim_id: String in completed:
+		_edge_animations.erase(anim_id)
+
+
+## Rebuild the edge visual for *entry* at the given interpolated positions.
+##
+## Dispatches to _rebuild_line_mesh or _reposition_arrow depending on entry_type.
+## Used by _process() during per-frame lerp animation.
+func _rebuild_edge_mesh_at(
+	entry: Dictionary,
+	interp_from: Vector3,
+	interp_to: Vector3,
+) -> void:
+	var visual: Node3D = entry.get("visual")
+	if visual == null:
+		return
+	var entry_type: String = entry.get("entry_type", "line")
+	if entry_type == "line" and visual is MeshInstance3D:
+		_rebuild_line_mesh(visual as MeshInstance3D, interp_from, interp_to)
+	elif entry_type == "arrow" and visual is MeshInstance3D:
+		_reposition_arrow(visual as MeshInstance3D, interp_from, interp_to)
