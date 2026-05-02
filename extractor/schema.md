@@ -132,6 +132,121 @@ Pre-computed coupling group suggestions for tightly-coupled module groups.
 
 ---
 
+---
+
+## Annotation Fields
+
+These three optional node fields bridge the gap between mechanism (what the code does)
+and meaning (what the code is for).  They implement the **Purpose-Level Annotation**
+primitive from `specs/core/visual-primitives.spec.md`.
+
+**Important:** annotation fields are populated by LLM-based annotation agents, **not**
+by the deterministic extractor pipeline.  The extractor's own analysis steps do NOT
+populate these fields; they remain absent in purely extractor-produced outputs.
+
+---
+
+### `purpose_annotation` (string | null | absent)
+
+A human-readable sentence or short paragraph describing what this module or context
+is **for**, not what it mechanically does.
+
+| Value | Meaning |
+|-------|---------|
+| string | Authored purpose description |
+| `null` | Annotation key present but intentionally blank |
+| absent | Annotation has not been computed for this node |
+
+Present on `module` and `bounded_context` nodes only.
+
+**Worked example — bounded_context node:**
+
+```json
+{
+  "id": "iam",
+  "name": "IAM",
+  "type": "bounded_context",
+  "purpose_annotation": "Identity and Access Management — ensures every request is authenticated before reaching business logic, and enforces role-based access control across all bounded contexts."
+}
+```
+
+---
+
+### `beacons` (array | absent)
+
+Each entry identifies a well-known programming pattern recognized in this node's
+implementation.  Computed by the LLM or a future pattern-recognizer.
+
+| State | Meaning |
+|-------|---------|
+| absent | No beacon analysis has run |
+| `[]` | Analysis ran but no patterns were recognized |
+| array of entries | Each entry is a `BeaconInfo` object |
+
+**BeaconInfo object fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pattern` | string (non-empty) | yes | Short canonical name of the recognized pattern, e.g. `"retry_loop"`, `"accumulator"`, `"observer_dispatch"`, `"circuit_breaker"`, `"command_pattern"`, `"repository_pattern"`. Open vocabulary — the LLM names what it finds. |
+| `description` | string | yes | One sentence explaining the specific instance. |
+
+Unlike Badges (which have a closed fixed vocabulary), beacon `pattern` values are
+**open strings**: the LLM names what it finds.  The validator does NOT check pattern
+names against any fixed list.  New patterns are naturally discovered without a schema
+change.
+
+**Worked example — module node:**
+
+```json
+{
+  "id": "iam.application",
+  "beacons": [
+    {
+      "pattern": "retry_loop",
+      "description": "Retries the token validation call up to 3 times with exponential backoff on transient failures."
+    }
+  ]
+}
+```
+
+---
+
+### `invariants` (array | absent)
+
+Each entry is a business rule or structural constraint that the validation logic
+within this node collectively enforces.
+
+| State | Meaning |
+|-------|---------|
+| absent | No invariant analysis has run |
+| `[]` | Analysis ran but no invariants were identified |
+| array of entries | Each entry is an `InvariantInfo` object |
+
+**InvariantInfo object fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `rule` | string (non-empty) | yes | One sentence stating the invariant in domain language. E.g. `"Order cannot ship if payment is pending."` |
+| `enforced_by` | array of strings | yes | Node IDs of the modules or functions that enforce this invariant. May be empty if the enforcement path is unclear. |
+
+Present on `module` and `bounded_context` nodes only.
+
+**Worked example — module node:**
+
+```json
+{
+  "id": "iam.domain",
+  "invariants": [
+    {
+      "rule": "A token cannot be issued unless the requesting identity has passed all active policy checks.",
+      "enforced_by": ["iam.domain", "iam.application"]
+    }
+  ]
+}
+```
+
+---
+
 ## Validation rules
 
 The `validate_scene_graph()` function in `schema.py` enforces the following rules
@@ -148,3 +263,7 @@ at runtime (raises `ValueError` on any violation):
 9. If a node's `metrics` field is present, it must be a `dict`.
 10. If `metrics` is present and contains `loc`, that value must be a non-negative integer (`>= 0`).
 11. If a node's `betweenness_centrality` field is present, it must be a numeric float or int (not a bool).
+12. If a node's `purpose_annotation` field is present, it must be a string or `null`.
+13. If a node's `beacons` field is present, it must be a list.  Each entry must be a dict with `pattern` (non-empty string) and `description` (string).  The `pattern` value is NOT validated against a fixed vocabulary.
+14. If a node's `invariants` field is present, it must be a list.  Each entry must be a dict with `rule` (non-empty string) and `enforced_by` (list of strings, may be empty).
+15. None of `purpose_annotation`, `beacons`, or `invariants` is required on any node.  Absent means the annotation has not been computed; the validator does NOT error on absence.

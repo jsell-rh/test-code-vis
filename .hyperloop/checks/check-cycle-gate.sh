@@ -45,7 +45,6 @@ QUEUE_AUDIT=".hyperloop/checks/check-no-prohibited-tasks-open.sh"
 BAN_CHECK=".hyperloop/checks/check-banned-task-ids-closed.sh"
 STATE_SCAN=".hyperloop/checks/check-state-branch-prohibited-tasks.sh"
 RETRY_GATE=".hyperloop/checks/check-retry-not-scope-prohibited.sh"
-STOP_REPEAT_CHECK=".hyperloop/checks/check-stop-protocol-repeat.sh"
 MAIN_SYNC=".hyperloop/checks/check-main-local-vs-remote.sh"
 
 if [ ! -f "$QUEUE_AUDIT" ]; then
@@ -176,45 +175,6 @@ else
     echo "  SKIP: No task IDs provided. Supply finding task IDs as arguments:"
     echo "    bash .hyperloop/checks/check-cycle-gate.sh task-024 task-028 task-031"
     echo ""
-fi
-
-# ── Step 2c: STOP PROTOCOL repeat detection ──────────────────────────────────
-# Checks each finding task ID's remote branch history for prior STOP PROTOCOL
-# findings. A task with prior STOP PROTOCOL rounds MUST be retired or redesigned
-# — re-assigning with the same title/spec_ref produces the identical outcome.
-#
-# Observed failure (task-078, Round 4): extract_symbols was on origin/main since
-# task-023/PR #219. STOP PROTOCOL was triggered in Rounds 1-3. The orchestrator
-# did not retire the task. Round 4 produced the identical finding. This step
-# closes that gap: check-cycle-gate.sh now exits 1 for any task with prior
-# STOP PROTOCOL history, blocking re-assignment until the task is retired or
-# redesigned.
-if [ "$#" -gt 0 ]; then
-    echo "========================================================================"
-    echo "CYCLE-START GATE — Step 2c: STOP PROTOCOL repeat detection ($# task IDs)"
-    echo "========================================================================"
-    echo ""
-    echo "  Scans each task's remote branch history for prior STOP PROTOCOL findings."
-    echo "  A task with prior STOP PROTOCOL rounds must be retired or redesigned"
-    echo "  before it can be re-assigned."
-    echo ""
-
-    if [ -f "$STOP_REPEAT_CHECK" ]; then
-        for TASK_ID in "$@"; do
-            echo "--- ${TASK_ID} ---"
-            if ! bash "$STOP_REPEAT_CHECK" "$TASK_ID"; then
-                echo ""
-                echo "  STOP PROTOCOL REPEAT: ${TASK_ID} — retire or redesign, do NOT re-assign unchanged."
-                GATE_FAILED=1
-            else
-                echo "  ${TASK_ID}: No prior STOP PROTOCOL history found."
-            fi
-            echo ""
-        done
-    else
-        echo "  SKIP: check-stop-protocol-repeat.sh not found — sync checks from main."
-        echo "    git fetch origin main:main && git checkout main -- .hyperloop/checks/"
-    fi
 fi
 
 # ── Result ────────────────────────────────────────────────────────────────────

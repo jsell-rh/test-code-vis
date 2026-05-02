@@ -10,8 +10,10 @@ import json
 
 from extractor.schema import (
     AggregateMetrics,
+    BeaconInfo,
     Cluster,
     Edge,
+    InvariantInfo,
     Metadata,
     Node,
     Position,
@@ -816,3 +818,468 @@ class TestValidateSceneGraphContract:
             assert False, "Expected ValueError for missing aggregate_metrics"
         except ValueError as exc:
             assert "aggregate_metrics" in str(exc)
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Annotation Fields — purpose_annotation, beacons, invariants
+# Spec: visual-primitives.spec.md § Requirement: Purpose-Level Annotation
+# Task: task-095
+# ---------------------------------------------------------------------------
+
+
+class TestPurposeAnnotationField:
+    """purpose_annotation MAY appear on module and bounded_context nodes.
+
+    Spec requirement: The system MUST support attaching purpose-level annotations
+    to structural elements.
+    - absent: annotation not computed — validator MUST NOT error.
+    - string: human-readable purpose sentence.
+    - null: annotation key present but intentionally blank.
+    """
+
+    def test_bounded_context_node_without_purpose_annotation_is_valid(self) -> None:
+        """Absence of purpose_annotation is valid — annotation not computed."""
+        graph = make_scene_graph()
+        validate_scene_graph(graph)  # must not raise
+
+    def test_bounded_context_node_with_purpose_annotation_string_is_valid(self) -> None:
+        """purpose_annotation may be a non-empty string."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["purpose_annotation"] = (  # type: ignore[typeddict-unknown-key]
+            "Identity and Access Management — ensures every request is authenticated."
+        )
+        validate_scene_graph(graph)  # must not raise
+
+    def test_bounded_context_node_with_purpose_annotation_null_is_valid(self) -> None:
+        """purpose_annotation may be null (key present, intentionally blank)."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["purpose_annotation"] = None  # type: ignore[typeddict-unknown-key]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_module_node_with_purpose_annotation_string_is_valid(self) -> None:
+        """purpose_annotation may appear on module nodes with a string value."""
+        graph = make_scene_graph()
+        graph["nodes"][1]["purpose_annotation"] = (  # type: ignore[typeddict-unknown-key]
+            "Domain logic for IAM — enforces policy checks before token issuance."
+        )
+        validate_scene_graph(graph)  # must not raise
+
+    def test_purpose_annotation_wrong_type_raises(self) -> None:
+        """purpose_annotation must be string or null — integer is invalid."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["purpose_annotation"] = 42  # type: ignore[typeddict-unknown-key]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for purpose_annotation=42"
+        except ValueError as exc:
+            assert "purpose_annotation" in str(exc)
+
+    def test_purpose_annotation_list_raises(self) -> None:
+        """purpose_annotation must be string or null — list is invalid."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["purpose_annotation"] = ["bad"]  # type: ignore[typeddict-unknown-key]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for purpose_annotation=['bad']"
+        except ValueError as exc:
+            assert "purpose_annotation" in str(exc)
+
+    def test_purpose_annotation_typeddict_field_on_node(self) -> None:
+        """Node TypedDict declares purpose_annotation as a NotRequired field."""
+        annotations = Node.__annotations__
+        assert "purpose_annotation" in annotations, (
+            "Node TypedDict must declare 'purpose_annotation'"
+        )
+
+    def test_purpose_annotation_schema_example(self) -> None:
+        """Verify the spec's worked JSON example is representable in the schema."""
+        node: Node = {
+            "id": "iam",
+            "name": "IAM",
+            "type": "bounded_context",
+            "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "size": 3.2,
+            "parent": None,
+            "purpose_annotation": (  # type: ignore[typeddict-unknown-key]
+                "Identity and Access Management — ensures every request is"
+                " authenticated before reaching business logic, and enforces"
+                " role-based access control across all bounded contexts."
+            ),
+        }
+        assert node["purpose_annotation"].startswith("Identity")  # type: ignore[typeddict-item]
+
+
+class TestBeaconsField:
+    """beacons MAY appear on any node type.
+
+    Spec requirement: The system MUST support attaching beacons — recognized
+    programming patterns — to structural elements.
+    - absent: no beacon analysis run — validator MUST NOT error.
+    - empty array: analysis ran but no patterns recognized.
+    - array of BeaconInfo entries: each has pattern (non-empty string) and
+      description (string).  pattern is NOT validated against a fixed vocabulary.
+    """
+
+    def test_node_without_beacons_is_valid(self) -> None:
+        """Absence of beacons is valid — beacon analysis has not run."""
+        graph = make_scene_graph()
+        validate_scene_graph(graph)  # must not raise
+
+    def test_node_with_empty_beacons_array_is_valid(self) -> None:
+        """Empty beacons array is valid — analysis ran, no patterns recognized."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["beacons"] = []  # type: ignore[typeddict-unknown-key]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_node_with_single_beacon_is_valid(self) -> None:
+        """A node with one beacon entry is valid."""
+        graph = make_scene_graph()
+        graph["nodes"][1]["beacons"] = [  # type: ignore[typeddict-unknown-key]
+            {
+                "pattern": "retry_loop",
+                "description": (
+                    "Retries the token validation call up to 3 times with"
+                    " exponential backoff on transient failures."
+                ),
+            }
+        ]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_node_with_multiple_beacons_is_valid(self) -> None:
+        """A node with multiple beacon entries is valid."""
+        graph = make_scene_graph()
+        graph["nodes"][1]["beacons"] = [  # type: ignore[typeddict-unknown-key]
+            {"pattern": "retry_loop", "description": "Retries token validation."},
+            {"pattern": "circuit_breaker", "description": "Trips after 5 failures."},
+        ]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_beacon_pattern_open_vocabulary_is_valid(self) -> None:
+        """beacon pattern is open-vocabulary — novel pattern names are accepted."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["beacons"] = [  # type: ignore[typeddict-unknown-key]
+            {
+                "pattern": "novel_pattern_not_in_any_list",
+                "description": "A pattern the spec author did not anticipate.",
+            }
+        ]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_beacons_not_array_raises(self) -> None:
+        """beacons must be an array — string is invalid."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["beacons"] = "retry_loop"  # type: ignore[typeddict-unknown-key]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for beacons='retry_loop'"
+        except ValueError as exc:
+            assert "beacons" in str(exc)
+
+    def test_beacon_entry_missing_pattern_raises(self) -> None:
+        """Each beacon entry MUST have a pattern field."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["beacons"] = [  # type: ignore[typeddict-unknown-key]
+            {"description": "Missing pattern field."}
+        ]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for beacon missing 'pattern'"
+        except ValueError as exc:
+            assert "pattern" in str(exc)
+
+    def test_beacon_entry_missing_description_raises(self) -> None:
+        """Each beacon entry MUST have a description field."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["beacons"] = [  # type: ignore[typeddict-unknown-key]
+            {"pattern": "retry_loop"}
+        ]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for beacon missing 'description'"
+        except ValueError as exc:
+            assert "description" in str(exc)
+
+    def test_beacon_pattern_empty_string_raises(self) -> None:
+        """beacon pattern must be a non-empty string."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["beacons"] = [  # type: ignore[typeddict-unknown-key]
+            {"pattern": "", "description": "Empty pattern is invalid."}
+        ]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for empty beacon pattern"
+        except ValueError as exc:
+            assert "pattern" in str(exc)
+
+    def test_beacon_pattern_non_string_raises(self) -> None:
+        """beacon pattern must be a string — integer is invalid."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["beacons"] = [  # type: ignore[typeddict-unknown-key]
+            {"pattern": 42, "description": "Non-string pattern."}
+        ]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for beacon pattern=42"
+        except ValueError as exc:
+            assert "pattern" in str(exc)
+
+    def test_beacon_description_non_string_raises(self) -> None:
+        """beacon description must be a string — integer is invalid."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["beacons"] = [  # type: ignore[typeddict-unknown-key]
+            {"pattern": "retry_loop", "description": 99}
+        ]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for beacon description=99"
+        except ValueError as exc:
+            assert "description" in str(exc)
+
+    def test_beacons_typeddict_field_on_node(self) -> None:
+        """Node TypedDict declares beacons as a NotRequired field."""
+        annotations = Node.__annotations__
+        assert "beacons" in annotations, "Node TypedDict must declare 'beacons'"
+
+    def test_beacon_info_typeddict_has_pattern_and_description(self) -> None:
+        """BeaconInfo TypedDict declares pattern and description."""
+        beacon: BeaconInfo = {
+            "pattern": "accumulator",
+            "description": "Accumulates payments into a running total.",
+        }
+        assert beacon["pattern"] == "accumulator"
+        assert beacon["description"].startswith("Accumulates")
+
+    def test_beacon_spec_example_is_representable(self) -> None:
+        """Verify the spec's worked beacon JSON example is representable."""
+        node: Node = {
+            "id": "iam.application",
+            "name": "Application",
+            "type": "module",
+            "position": {"x": 1.0, "y": 0.0, "z": 1.0},
+            "size": 2.0,
+            "parent": "iam",
+            "beacons": [  # type: ignore[typeddict-unknown-key]
+                {
+                    "pattern": "retry_loop",
+                    "description": (
+                        "Retries the token validation call up to 3 times with"
+                        " exponential backoff on transient failures."
+                    ),
+                }
+            ],
+        }
+        assert len(node["beacons"]) == 1  # type: ignore[typeddict-item]
+        assert node["beacons"][0]["pattern"] == "retry_loop"  # type: ignore[typeddict-item]
+
+
+class TestInvariantsField:
+    """invariants MAY appear on module and bounded_context nodes.
+
+    Spec requirement: The system MUST support attaching invariants — business
+    rules collectively enforced by the node — to structural elements.
+    - absent: no invariant analysis run — validator MUST NOT error.
+    - empty array: analysis ran but no invariants identified.
+    - array of InvariantInfo entries: each has rule (non-empty string) and
+      enforced_by (array of node id strings, may be empty).
+    """
+
+    def test_node_without_invariants_is_valid(self) -> None:
+        """Absence of invariants is valid — invariant analysis has not run."""
+        graph = make_scene_graph()
+        validate_scene_graph(graph)  # must not raise
+
+    def test_node_with_empty_invariants_array_is_valid(self) -> None:
+        """Empty invariants array is valid — analysis ran, no invariants found."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["invariants"] = []  # type: ignore[typeddict-unknown-key]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_node_with_single_invariant_is_valid(self) -> None:
+        """A node with one invariant entry is valid."""
+        graph = make_scene_graph()
+        graph["nodes"][1]["invariants"] = [  # type: ignore[typeddict-unknown-key]
+            {
+                "rule": "A token cannot be issued unless the requesting identity"
+                " has passed all active policy checks.",
+                "enforced_by": ["iam.domain", "iam.application"],
+            }
+        ]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_node_with_multiple_invariants_is_valid(self) -> None:
+        """A node with multiple invariant entries is valid."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["invariants"] = [  # type: ignore[typeddict-unknown-key]
+            {
+                "rule": "Order cannot ship if payment is pending.",
+                "enforced_by": ["payments.domain"],
+            },
+            {
+                "rule": "No refund issued if order not yet delivered.",
+                "enforced_by": ["payments.domain", "fulfillment.domain"],
+            },
+        ]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_invariant_enforced_by_may_be_empty_list(self) -> None:
+        """enforced_by may be an empty array when enforcement path is unclear."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["invariants"] = [  # type: ignore[typeddict-unknown-key]
+            {"rule": "Some constraint is upheld.", "enforced_by": []}
+        ]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_invariants_not_array_raises(self) -> None:
+        """invariants must be an array — string is invalid."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["invariants"] = "some rule"  # type: ignore[typeddict-unknown-key]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for invariants='some rule'"
+        except ValueError as exc:
+            assert "invariants" in str(exc)
+
+    def test_invariant_entry_missing_rule_raises(self) -> None:
+        """Each invariant entry MUST have a rule field."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["invariants"] = [  # type: ignore[typeddict-unknown-key]
+            {"enforced_by": ["iam.domain"]}
+        ]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for invariant missing 'rule'"
+        except ValueError as exc:
+            assert "rule" in str(exc)
+
+    def test_invariant_entry_missing_enforced_by_raises(self) -> None:
+        """Each invariant entry MUST have an enforced_by field."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["invariants"] = [  # type: ignore[typeddict-unknown-key]
+            {"rule": "Order cannot ship if payment is pending."}
+        ]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for invariant missing 'enforced_by'"
+        except ValueError as exc:
+            assert "enforced_by" in str(exc)
+
+    def test_invariant_rule_empty_string_raises(self) -> None:
+        """invariant rule must be a non-empty string."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["invariants"] = [  # type: ignore[typeddict-unknown-key]
+            {"rule": "", "enforced_by": []}
+        ]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for empty invariant rule"
+        except ValueError as exc:
+            assert "rule" in str(exc)
+
+    def test_invariant_rule_non_string_raises(self) -> None:
+        """invariant rule must be a string — integer is invalid."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["invariants"] = [  # type: ignore[typeddict-unknown-key]
+            {"rule": 99, "enforced_by": []}
+        ]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for invariant rule=99"
+        except ValueError as exc:
+            assert "rule" in str(exc)
+
+    def test_invariant_enforced_by_not_list_raises(self) -> None:
+        """enforced_by must be a list — string is invalid."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["invariants"] = [  # type: ignore[typeddict-unknown-key]
+            {"rule": "Some rule.", "enforced_by": "iam.domain"}
+        ]
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for enforced_by='iam.domain'"
+        except ValueError as exc:
+            assert "enforced_by" in str(exc)
+
+    def test_invariants_typeddict_field_on_node(self) -> None:
+        """Node TypedDict declares invariants as a NotRequired field."""
+        annotations = Node.__annotations__
+        assert "invariants" in annotations, "Node TypedDict must declare 'invariants'"
+
+    def test_invariant_info_typeddict_has_rule_and_enforced_by(self) -> None:
+        """InvariantInfo TypedDict declares rule and enforced_by."""
+        inv: InvariantInfo = {
+            "rule": "Order cannot ship if payment is pending.",
+            "enforced_by": ["payments.domain"],
+        }
+        assert inv["rule"].startswith("Order")
+        assert inv["enforced_by"] == ["payments.domain"]
+
+    def test_invariant_spec_example_is_representable(self) -> None:
+        """Verify the spec's worked invariant JSON example is representable."""
+        node: Node = {
+            "id": "iam.domain",
+            "name": "Domain",
+            "type": "module",
+            "position": {"x": 1.0, "y": 0.0, "z": 1.0},
+            "size": 2.0,
+            "parent": "iam",
+            "invariants": [  # type: ignore[typeddict-unknown-key]
+                {
+                    "rule": (
+                        "A token cannot be issued unless the requesting identity"
+                        " has passed all active policy checks."
+                    ),
+                    "enforced_by": ["iam.domain", "iam.application"],
+                }
+            ],
+        }
+        assert len(node["invariants"]) == 1  # type: ignore[typeddict-item]
+        assert "token" in node["invariants"][0]["rule"]  # type: ignore[typeddict-item]
+
+
+class TestAnnotationFieldsAbsenceIsValid:
+    """All three annotation fields (purpose_annotation, beacons, invariants) are optional.
+
+    Spec: 'None of the three fields is required on any node.
+    Absent means the annotation has not been computed; the validator
+    MUST NOT error on absence.'
+    """
+
+    def test_all_three_absent_passes_validation(self) -> None:
+        """Nodes with none of the three annotation fields pass validation."""
+        graph = make_scene_graph()
+        # Neither node has any annotation field
+        assert "purpose_annotation" not in graph["nodes"][0]
+        assert "beacons" not in graph["nodes"][0]
+        assert "invariants" not in graph["nodes"][0]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_all_three_present_passes_validation(self) -> None:
+        """Nodes with all three annotation fields simultaneously pass validation."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["purpose_annotation"] = "Payment safety gateway."  # type: ignore[typeddict-unknown-key]
+        graph["nodes"][0]["beacons"] = [  # type: ignore[typeddict-unknown-key]
+            {"pattern": "circuit_breaker", "description": "Trips after 5 failures."}
+        ]
+        graph["nodes"][0]["invariants"] = [  # type: ignore[typeddict-unknown-key]
+            {
+                "rule": "Order cannot ship if payment is pending.",
+                "enforced_by": ["payments.domain"],
+            }
+        ]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_only_beacons_present_passes_validation(self) -> None:
+        """Having only beacons (without purpose_annotation or invariants) is valid."""
+        graph = make_scene_graph()
+        graph["nodes"][1]["beacons"] = [  # type: ignore[typeddict-unknown-key]
+            {"pattern": "accumulator", "description": "Accumulates running total."}
+        ]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_only_invariants_present_passes_validation(self) -> None:
+        """Having only invariants (without purpose_annotation or beacons) is valid."""
+        graph = make_scene_graph()
+        graph["nodes"][0]["invariants"] = [  # type: ignore[typeddict-unknown-key]
+            {"rule": "All orders must have a valid address.", "enforced_by": []}
+        ]
+        validate_scene_graph(graph)  # must not raise
