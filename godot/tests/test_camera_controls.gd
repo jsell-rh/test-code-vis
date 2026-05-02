@@ -26,6 +26,7 @@
 extends RefCounted
 
 const CameraScript := preload("res://scripts/camera_controller.gd")
+const MainScript := preload("res://scripts/main.gd")
 
 
 ## THEN the camera defaults to a top-down view —
@@ -184,3 +185,53 @@ func test_theta_clamped_at_ceiling_prevents_south_pole_flip() -> bool:
 	cam._handle_motion(up_motion)
 
 	return cam._theta <= PI - 0.01
+
+
+## THEN the camera defaults to a top-down view SHOWING THE ENTIRE SYSTEM —
+## _frame_camera() in main.gd must position the camera pivot at the scene
+## centre and set a distance large enough to encompass all nodes.
+##
+## This test bypasses the @onready null-guard on _camera (which is always null
+## in headless tests because the node is never added to the scene tree) by
+## injecting a live CameraScript instance via Node.set() before calling
+## build_from_graph(). Without injection _frame_camera() returns immediately
+## on the null-guard and the "showing the entire system" THEN-clause has zero
+## test coverage.
+##
+## Fixture: two bounded contexts at world positions x=−30 and x=+30
+##   → span = 60 units, expected distance = 60 * 1.5 = 90 > 60
+##   → scene centre = (0, 0, 0) (midpoint of both positions)
+func test_frame_camera_frames_entire_system_after_build_from_graph() -> bool:
+	var main_node: Node3D = MainScript.new()
+	var cam = CameraScript.new()
+	# Inject camera so _frame_camera()'s null-guard does not short-circuit.
+	main_node.set("_camera", cam)
+
+	var fixture := {
+		"nodes": [
+			{
+				"id": "ctx_a",
+				"name": "ContextA",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": -30.0, "y": 0.0, "z": 0.0},
+				"size": 10.0,
+			},
+			{
+				"id": "ctx_b",
+				"name": "ContextB",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 30.0, "y": 0.0, "z": 0.0},
+				"size": 10.0,
+			},
+		],
+		"edges": [],
+	}
+	main_node.build_from_graph(fixture)
+
+	# Scene centre: midpoint of (-30,0,0) and (30,0,0) = (0,0,0).
+	# Distance: span = 60, distance = 60 * 1.5 = 90 > 60 — frames the full scene.
+	var pivot_ok: bool = cam._pivot.is_equal_approx(Vector3(0.0, 0.0, 0.0))
+	var dist_ok: bool = cam._distance > 60.0
+	return pivot_ok and dist_ok

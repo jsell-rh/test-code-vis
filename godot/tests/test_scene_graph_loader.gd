@@ -400,3 +400,88 @@ func test_spec_nodes_have_id_prefixed_with_spec() -> void:
 	var result = SceneGraphLoader.load_from_dict(data)
 	var node: Dictionary = result["nodes"][0]
 	_check(node["id"].begins_with("spec."), "Spec node id should begin with 'spec.'")
+
+
+# ---------------------------------------------------------------------------
+# Pipeline field pass-through: structural significance fields must survive the
+# loader so main.gd landmark detection and Power Rail renderer can use them.
+# The extractor sets is_hub, is_bridge, in_degree, ubiquitous on nodes/edges;
+# if scene_graph_loader.gd strips them, the Godot renderer never sees them.
+# ---------------------------------------------------------------------------
+
+## Structural significance fields (is_hub, is_bridge, in_degree) must be
+## passed through verbatim from the raw JSON so landmark detection in main.gd
+## can identify hub and bridge nodes without recomputing the graph.
+func test_structural_significance_fields_pass_through() -> void:
+	var data: Dictionary = {
+		"nodes": [
+			{
+				"id": "hub_ctx",
+				"name": "HubContext",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 3.0,
+				"metrics": {"loc": 500},
+				"is_hub": true,
+				"is_bridge": false,
+				"in_degree": 5,
+				"out_degree": 2,
+				"is_peripheral": false,
+			}
+		],
+		"edges": [],
+		"metadata": {},
+	}
+	var result = SceneGraphLoader.load_from_dict(data)
+	var node: Dictionary = result["nodes"][0]
+	_check(node.get("is_hub") == true,
+		"is_hub must pass through from raw JSON (was: %s)" % str(node.get("is_hub")))
+	_check(node.get("is_bridge") == false,
+		"is_bridge must pass through from raw JSON")
+	_check(node.get("in_degree") == 5,
+		"in_degree must pass through from raw JSON (was: %s)" % str(node.get("in_degree")))
+	_check(node.get("out_degree") == 2,
+		"out_degree must pass through from raw JSON")
+	_check(node.get("is_peripheral") == false,
+		"is_peripheral must pass through from raw JSON")
+
+
+## The 'ubiquitous' flag on edges must pass through so the Power Rail renderer
+## (_create_edge in main.gd) can suppress ubiquitous edges and add glyphs.
+func test_edge_ubiquitous_flag_passes_through() -> void:
+	var data: Dictionary = {
+		"nodes": [
+			{
+				"id": "svc",
+				"name": "Svc",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 2.0,
+			},
+			{
+				"id": "dep",
+				"name": "Dep",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 10.0, "y": 0.0, "z": 0.0},
+				"size": 1.0,
+			},
+		],
+		"edges": [
+			# Normal edge — ubiquitous flag absent.
+			{"source": "svc", "target": "dep", "type": "cross_context"},
+			# Ubiquitous edge — must carry ubiquitous=true through loader.
+			{"source": "svc", "target": "dep", "type": "cross_context", "ubiquitous": true},
+		],
+		"metadata": {},
+	}
+	var result = SceneGraphLoader.load_from_dict(data)
+	_check(result["edges"].size() == 2, "Must have 2 edges")
+	var normal_edge: Dictionary = result["edges"][0]
+	var ubiq_edge: Dictionary = result["edges"][1]
+	_check(not normal_edge.has("ubiquitous") or normal_edge.get("ubiquitous") == false,
+		"Normal edge must not have ubiquitous=true")
+	_check(ubiq_edge.get("ubiquitous") == true,
+		"Ubiquitous edge must preserve ubiquitous=true flag (was: %s)" % str(ubiq_edge.get("ubiquitous")))
