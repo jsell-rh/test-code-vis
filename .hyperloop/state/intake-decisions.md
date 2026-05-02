@@ -4,6 +4,27 @@ Records cases where specs were reviewed but no tasks were created, with rational
 
 ---
 
+## 2026-05-02 — Full batch of 5 modified specs (reviewed nine times, same day)
+
+All five specs present in `resolved-specs.json` with blob SHAs unchanged since
+2026-05-01 baseline. No reopen conditions triggered. **No tasks created.**
+
+Ninth review (HEAD: `20461a84`): all blob SHAs identical, all in-scope requirements
+confirmed covered. Task-025 failure is a rebase-only issue; fix is `git rebase origin/main`.
+No decomposition change needed.
+
+| Spec | Blob SHA | Decision |
+|---|---|---|
+| `specs/core/system-purpose.spec.md` | `f1f52d80` (unchanged) | **No tasks. Permanently resolved.** |
+| `specs/core/visual-primitives.spec.md` | `82d048ec` (unchanged) | **No tasks. All in-scope requirements covered.** |
+| `specs/extraction/scene-graph-schema.spec.md` | `4ea7e337` (unchanged) | **No tasks. Permanently resolved.** |
+| `specs/visualization/orthogonal-independence.spec.md` | `ca0ad7af` (unchanged) | **No tasks. Permanently resolved.** |
+| `specs/visualization/spatial-structure.spec.md` | `359dbcb1` (unchanged) | **No tasks. Permanently resolved.** |
+
+HEAD at ninth review: `20461a84`
+
+---
+
 ## 2026-05-02 — Full batch of 5 modified specs (reviewed seven times, same day)
 
 All five specs present in `resolved-specs.json` with blob SHAs unchanged. No reopen
