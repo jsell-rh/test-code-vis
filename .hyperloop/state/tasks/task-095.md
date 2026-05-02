@@ -2,12 +2,12 @@
 id: task-095
 title: Schema — purpose-level annotation fields (purpose, beacon, invariant)
 spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
-status: not_started
-phase: null
+status: in_progress
+phase: implement
 deps:
 - task-061
 round: 0
-branch: null
+branch: hyperloop/task-095
 pr: null
 pr_title: null
 pr_description: null

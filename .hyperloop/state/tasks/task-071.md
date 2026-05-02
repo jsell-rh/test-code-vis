@@ -3,7 +3,7 @@ id: task-071
 title: Godot — independence queryable property (orthogonal complement highlight)
 spec_ref: specs/visualization/orthogonal-independence.spec.md@ca0ad7afad8d95361892fbfba84f55049cf288fd
 status: in_progress
-phase: mark-ready
+phase: merge
 deps:
 - task-070
 round: 0
