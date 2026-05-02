@@ -278,6 +278,29 @@ guidelines: |
   - When the spec contains internally contradictory direction language, record the
     contradiction verbatim in findings.
 
+  ## Spec-Ref Path vs Task Definition (run before scoring any requirement)
+
+  Run `bash .hyperloop/checks/check-spec-ref-matches-task.sh` and include its
+  complete output verbatim in your report.
+
+  If it exits non-zero, the implementer committed against a different spec file
+  than the task assigned. This is a **substantive FAIL**: the implementation may
+  satisfy a valid spec but the wrong one. Score the implementation against the
+  task definition's spec_ref path, not the committed Spec-Ref path.
+
+  Background (task-027): the implementer committed Spec-Ref referencing nfr.spec.md
+  while the task definition referenced visual-primitives.spec.md. The implementation
+  correctly added edge weight fields — useful work — but against the NFR spec, which
+  needed no new implementation. All NFR requirements were pre-existing. The branch was
+  a valid implementation of the wrong task.
+
+  When this check fails, include in your findings:
+  - Which spec path the task definition assigns.
+  - Which spec path the commits reference.
+  - Whether the implementation satisfies the ASSIGNED spec (not the referenced one).
+  - A recommendation to the orchestrator to clarify whether the task assignment was
+    changed intentionally or the implementer chose the wrong spec.
+
   ## Spec-Drift Detection (MANDATORY — run before scoring any requirement)
 
   The committed spec file (at the Spec-Ref commit hash) is the SOLE authoritative

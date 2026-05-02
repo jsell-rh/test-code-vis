@@ -175,13 +175,27 @@ guidelines: |
   ### Sync Point 1 — Absolute first action (before spec, before code)
 
   Before reading the assigned spec, before running any check, before writing
-  any code: sync check scripts from main, verify the sync is complete, and
-  confirm your branch is rebased onto current main.
+  any code: sync check scripts AND overlay files from main, verify the sync
+  is complete, and confirm your branch is rebased onto current main.
 
     git fetch origin main:main
     git checkout main -- .hyperloop/checks/
+    git checkout main -- .hyperloop/agents/process/
     bash .hyperloop/checks/check-checks-in-sync.sh
     bash .hyperloop/checks/check-rebased-onto-main.sh
+
+  **After syncing overlay files**: immediately read the updated implementer
+  guidelines to pick up any rules added since your branch was created:
+
+    cat .hyperloop/agents/process/implementer-overlay.yaml
+
+  Observed failure (task-027): the post-draft rebase rule was added to the
+  overlay via commit 17ac862 AFTER the branch was created. The implementer's
+  spawned agent never saw the rule because overlay files were not synced at
+  Sync Point 1. The branch was submitted without the post-draft check, causing
+  a blocking FAIL for being 1 commit behind origin/main. Syncing overlay files
+  closes this gap: implementers on any branch will pick up new rules added to
+  main during the session.
 
   `git fetch origin main:main` MUST run first — it updates local `main` to
   match the remote. Without the fetch, `git checkout main -- .hyperloop/checks/`
@@ -214,10 +228,12 @@ guidelines: |
   ### Sync Point 2 — Immediately before final submission
 
   After all implementation is complete and immediately before running
-  `run-all-checks.sh` for your submission check, sync checks from main again:
+  `run-all-checks.sh` for your submission check, sync check scripts AND
+  overlay files from main again:
 
     git fetch origin main:main
     git checkout main -- .hyperloop/checks/
+    git checkout main -- .hyperloop/agents/process/
     bash .hyperloop/checks/check-checks-in-sync.sh
 
   The fetch is required here too — new checks may have been pushed to origin/main
@@ -423,15 +439,18 @@ guidelines: |
 
   Execute in this exact order immediately before writing your report:
 
-  1. Sync Point 2 — sync check scripts and verify rebase (see CHECK SYNC and
-     CHECK SYNC ≠ REBASE sections above for the full three-command sequence).
-  2. `bash .hyperloop/checks/run-all-checks.sh` — must exit 0.
-  3. `bash .hyperloop/checks/check-rebased-onto-main.sh` — run THIS AGAIN as
+  1. Sync Point 2 — sync check scripts and overlay files, verify rebase (see
+     CHECK SYNC and CHECK SYNC ≠ REBASE sections above for the full sequence).
+  2. `bash .hyperloop/checks/check-spec-ref-matches-task.sh` — must exit 0.
+     This confirms every Spec-Ref path on your branch matches the task definition.
+     A mismatch means you implemented the wrong spec; fix before running further checks.
+  3. `bash .hyperloop/checks/run-all-checks.sh` — must exit 0.
+  4. `bash .hyperloop/checks/check-rebased-onto-main.sh` — run THIS AGAIN as
      the FINAL command, after run-all-checks.sh passes. Main can advance between
      your sync and your submission; this final check catches that race.
      If it exits non-zero: rebase, re-run run-all-checks.sh, and re-run this
      check before submitting.
-  4. Never stage files under `.hyperloop/state/` — use `git add <file>` for specific files.
+  5. Never stage files under `.hyperloop/state/` — use `git add <file>` for specific files.
 
   **POST-DRAFT REBASE CHECK (mandatory):** Writing a submission report takes time.
   Main can advance while you write. After drafting your report and immediately
@@ -1082,6 +1101,39 @@ guidelines: |
   If it exits non-zero the hash is not a commit. Re-run the `git log` command above
   and use its output instead. `check-spec-ref-valid.sh` enforces this mechanically
   and will FAIL your submission if a blob hash is present.
+
+  ## SPEC-REF PATH MUST MATCH TASK DEFINITION — VERIFY BEFORE FIRST COMMIT
+
+  Every `Spec-Ref:` commit trailer MUST reference the same spec FILE PATH as the
+  `spec_ref:` field in your task definition (`.hyperloop/state/tasks/<task-id>.md`).
+
+  Observed failure (task-027): the implementer committed `Spec-Ref: specs/prototype/nfr.spec.md@...`
+  while the task definition contained `spec_ref: "specs/core/visual-primitives.spec.md@..."`.
+  The entire implementation targeted the wrong spec. `check-spec-ref-valid.sh` passed
+  (the hash resolved) but no check caught the path mismatch — it was only caught at review.
+
+  **Before writing your first implementation commit:**
+
+  1. Open `.hyperloop/state/tasks/<your-task-id>.md` and read the `spec_ref:` line.
+     Extract the spec file path (the portion before `@`):
+       grep 'spec_ref:' .hyperloop/state/tasks/<task-id>.md
+     Example: `spec_ref: "specs/core/visual-primitives.spec.md@82d048ec"` → path is
+     `specs/core/visual-primitives.spec.md`
+
+  2. Confirm the spec file at that path exists and is the one you are implementing:
+       git show <hash>:<path>   # read the spec you will work from
+
+  3. Form the Spec-Ref trailer using ONLY that file path (with correct commit hash):
+       Spec-Ref: specs/core/visual-primitives.spec.md@$(git log --format=%H -1 -- specs/core/visual-primitives.spec.md)
+
+  4. After committing, run:
+       bash .hyperloop/checks/check-spec-ref-matches-task.sh
+     This check exits non-zero if any Spec-Ref path on the branch disagrees with
+     the task definition. Fix immediately — do not proceed past the first commit
+     with a mismatched spec path.
+
+  Never infer the spec from an unimplemented requirement you notice in a related file.
+  The assigned spec is authoritative; everything else is out-of-scope work for another task.
 
   ## BIDIRECTIONAL OPERATIONS — COMPLETE STATE CAPTURE AND REVERSAL
 
