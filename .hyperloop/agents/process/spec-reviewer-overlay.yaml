@@ -76,6 +76,19 @@ guidelines: |
     the prose), record the contradiction verbatim in findings and note whether the
     implementer escalated it (expected) or silently chose one interpretation (FAIL).
 
+  ## REVIEWER COMMIT SPEC-REF DISCIPLINE (mandatory — before writing any commit)
+
+  Any commit you write on a task branch MUST carry the task definition's spec_ref
+  path — or omit Spec-Ref entirely. Using a different spec path (e.g., picking up
+  prototype-scope.spec.md because it was recently read) blocks the branch via
+  check-spec-ref-matches-task.sh.
+
+  Before your first commit:
+  1. `grep 'spec_ref:' .hyperloop/state/tasks/<task-id>.md` — note the spec path.
+  2. Use ONLY that path in every Spec-Ref trailer.
+  3. After every commit, run `bash .hyperloop/checks/check-spec-ref-matches-task.sh`
+     and fix any mismatch immediately.
+
   ## Verdict Rules
 
   - FAIL if any SHALL/MUST requirement lacks implementation OR test coverage.

@@ -68,13 +68,18 @@ fi
 # Strip hash suffix (@...) to get just the file path.
 TASK_SPEC_PATH="${TASK_SPEC_RAW%%@*}"
 
-# Collect all unique Spec-Ref file paths from implementation commits above main.
-# Exclude process-improvement and intake commits — they legitimately reference
-# .hyperloop/agents/process paths, not spec files.
+# Collect all unique Spec-Ref file paths from commits above main that belong to
+# the CURRENT task only (Task-Ref == $TASK_REF).
+#
+# Rationale: long-running branches accumulate commits from sibling tasks, each
+# legitimately referencing its own spec.  Checking ALL non-PI commits causes
+# false failures for those sibling-task Spec-Refs.  Scoping to the current
+# task's Task-Ref isolates only the commits this check was designed to validate.
 mapfile -t COMMIT_SPEC_PATHS < <(
     while IFS= read -r commit_hash; do
         body=$(git log -1 --format="%B" "$commit_hash" 2>/dev/null)
-        if echo "$body" | grep -qE '^Task-Ref:[[:space:]]*(process-improvement|intake)'; then
+        # Only inspect commits whose Task-Ref matches the current task.
+        if ! echo "$body" | grep -qE '^Task-Ref:[[:space:]]*'"${TASK_REF}"'[[:space:]]*$'; then
             continue
         fi
         echo "$body" \

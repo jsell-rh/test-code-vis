@@ -278,6 +278,27 @@ guidelines: |
   - When the spec contains internally contradictory direction language, record the
     contradiction verbatim in findings.
 
+  ## VERIFIER COMMIT SPEC-REF DISCIPLINE (mandatory — before writing any commit)
+
+  Verifier commits written on a task branch (e.g., writing worker-result.yaml,
+  syncing check scripts, recording findings) MUST use the task definition's
+  spec_ref path — or omit Spec-Ref entirely.
+
+  **Before writing your first commit on any task branch:**
+  1. Read the task definition: `grep 'spec_ref:' .hyperloop/state/tasks/<task-id>.md`
+  2. Extract the spec file path (portion before `@`).
+  3. Use ONLY that path in every `Spec-Ref:` trailer you write.
+     WRONG: `Spec-Ref: specs/prototype/prototype-scope.spec.md@...`
+     RIGHT:  `Spec-Ref: specs/core/visual-primitives.spec.md@$(git log --format=%H -1 -- specs/core/visual-primitives.spec.md)`
+  4. After every commit, immediately run:
+       bash .hyperloop/checks/check-spec-ref-matches-task.sh
+     Fix any mismatch before writing your next commit.
+
+  Observed failures (task-029, task-034): verifier commits used
+  specs/core/system-purpose.spec.md and specs/prototype/prototype-scope.spec.md
+  respectively, while both tasks' definitions specified specs/core/visual-primitives.spec.md.
+  These wrong-path trailers blocked submission via check-spec-ref-matches-task.sh.
+
   ## Spec-Ref Path vs Task Definition (run before scoring any requirement)
 
   Run `bash .hyperloop/checks/check-spec-ref-matches-task.sh` and include its
