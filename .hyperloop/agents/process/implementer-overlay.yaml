@@ -1388,6 +1388,24 @@ guidelines: |
     writing a single line of code.
   - If NO: the existing function is unrelated — proceed normally.
 
+  **When the assigned feature is already on main — STOP PROTOCOL:**
+
+  1. Write ZERO implementation code on this branch.
+  2. Do NOT implement a different spec section as a substitute. Implementing any
+     unassigned spec section is still a WRONG-FEATURE FAIL — the task assigned
+     a specific section, not "pick something unimplemented from the same spec file."
+  3. Submit a FAIL report stating:
+     - The assigned feature (task title + primary function name)
+     - The commit hash where it already exists on origin/main
+     - That no implementation code was written
+  4. Request orchestrator clarification before re-attempting.
+
+  Observed failure (task-078): task assigned "Symbol Table Extraction" (`extract_symbols`).
+  The implementer found it already on main (task-023). Instead of stopping, they
+  implemented Data Flow Spine Extraction AND Port Primitive rendering — two entirely
+  different spec sections. Both were legitimate unimplemented features, but neither
+  was the assigned task. The correct action was to stop and report the supersession.
+
   Observed failure (task-027): the implementer wrote `build_dependency_edges()` weight
   logic. Running `git grep "raw_edge_count" origin/main` would have shown task-063 had
   already merged the identical feature. Checking this before coding would have revealed
@@ -1425,6 +1443,42 @@ guidelines: |
 
   Never infer the spec from an unimplemented requirement you notice in a related file.
   The assigned spec is authoritative; everything else is out-of-scope work for another task.
+
+  ## ROUTING/WIRING CONTRACT TESTS — CALL THE FUNCTION, NOT JUST ITS PREREQUISITES
+
+  When a spec THEN-clause says "X routes to Y", "edges connect to Ports", or
+  "the lookup returns Z when ports are available", the test MUST:
+
+  1. CALL the routing or lookup function directly (e.g., `_find_port_or_centroid()`).
+  2. ASSERT the return value matches the expected result (e.g., port position, not centroid).
+
+  Verifying that the input data structures are correctly populated is INSUFFICIENT.
+  A test that asserts `_port_world_positions.has("ctx_a/func_out")` proves that
+  registration happened — it does NOT prove the routing function reads and returns
+  the correct value from those structures.
+
+  Observed failure (task-038): `test_edge_endpoint_uses_port_position_when_available`
+  verified that `_port_world_positions` contained output-port keys that differed from
+  the centroid. It did NOT call `_find_port_or_centroid()` and assert the return value.
+  The THEN-clause "Edges connect to Ports, not directly to the Container body" was PARTIAL.
+
+  Required pattern (GDScript):
+    var from_pos := root._find_port_or_centroid("ctx_a", true)
+    _check(
+        not from_pos.is_equal_approx(ctx_a_centroid),
+        "find_port_or_centroid must return port position, not centroid, when ports exist"
+    )
+    var found_match := false
+    for key in port_world:
+        if key.begins_with("ctx_a/") and key.ends_with("_out"):
+            if from_pos.is_equal_approx(port_world[key]):
+                found_match = true
+    _check(found_match, "returned position must match a registered port world position")
+
+  Self-check before marking any routing/wiring THEN-clause COVERED:
+  - Does the test call the routing function? (not just read the data structure?)
+  - Does the test assert the return value? (not just assert preconditions?)
+  Both must be YES. Either alone is a PARTIAL — not COVERED.
 
   ## BIDIRECTIONAL OPERATIONS — COMPLETE STATE CAPTURE AND REVERSAL
 

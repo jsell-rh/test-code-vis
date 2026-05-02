@@ -880,6 +880,36 @@ guidelines: |
   the highlight color in one loop with no delay. "Animates from selected module
   outward" was PARTIAL — simultaneous, not outward.
 
+  ## ROUTING/WIRING CONTRACT VERIFICATION — CALL THE FUNCTION, NOT JUST PREREQUISITES
+
+  When a spec THEN-clause says "edges connect to Ports", "X routes to Y", or "the
+  lookup returns Z when ports are available", the test must CALL the routing/lookup
+  function and assert its RETURN VALUE — not merely assert that the input data
+  structures contain correct values.
+
+  Observed failure (task-038): `test_edge_endpoint_uses_port_position_when_available`
+  asserted (1) `_port_world_positions` contained output-port keys for ctx_a, and (2)
+  those positions differed from the centroid. It did NOT call `_find_port_or_centroid()`
+  and assert the return value was a port position rather than the centroid. The THEN-
+  clause "Edges connect to Ports, not directly to the Container body" was PARTIAL because
+  precondition correctness does not prove that the routing function uses those
+  preconditions correctly.
+
+  Verification protocol for routing/wiring THEN-clauses:
+  1. Identify the function responsible for the routing contract (e.g., `_find_port_or_centroid`).
+  2. Search the test file for a call to that function:
+       grep -n "_find_port_or_centroid\|find_port\|route_edge" godot/tests/*.gd
+  3. If no such call exists, the THEN-clause is PARTIAL regardless of how many
+     assertions verify that port data structures are correctly populated.
+  4. If a call exists, read the assertion that follows it. Does it assert the return
+     value matches a port position (not the centroid)? If not, it is PARTIAL.
+
+  Mark routing/wiring THEN-clauses PARTIAL (not COVERED) when:
+  - Tests only verify that the routing function's input data is correct, OR
+  - The routing function is never called in the test at all.
+  Mark COVERED only when the test explicitly calls the routing function AND asserts
+  the return value matches the spec-required destination.
+
   ## NAMED PRIMITIVE AUDIT — EACH PRIMITIVE IS AN INDEPENDENT COVERAGE REQUIREMENT
 
   When a spec defines multiple named primitive types (e.g., Container, Node, Badge,
