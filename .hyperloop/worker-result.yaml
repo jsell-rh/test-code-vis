@@ -28,6 +28,14 @@ Grep and script confirm no prohibited features are present:
 
 ---
 
+## Scope Check Output
+
+```
+OK: No prohibited (not-in-scope) features detected.
+```
+
+---
+
 ## Requirement Status
 
 ### R1: Target Codebase — COVERED
