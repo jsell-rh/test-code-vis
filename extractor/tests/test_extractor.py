@@ -417,6 +417,82 @@ class TestDependencyExtraction:
             f"Expected aggregate edge iam→shared_kernel, found aggregate pairs: {agg}"
         )
 
+    def test_cross_context_edge_has_weight(self, src: Path) -> None:
+        """Every cross_context edge carries a weight field (import count).
+
+        Spec §Understanding Without Writing Code: "each edge carries the import
+        count (number of individual import statements between the pair)."
+        The weight lets humans assess coupling strength without reading code.
+        """
+        all_nodes: list[Node] = discover_bounded_contexts(src)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(src, bc["id"]))
+
+        edges = build_dependency_edges(src, all_nodes)
+        cc_edges = [e for e in edges if e["type"] == "cross_context"]
+        assert cc_edges, (
+            "Expected at least one cross_context edge — iam imports shared_kernel"
+        )
+        for e in cc_edges:
+            assert "weight" in e, (
+                f"cross_context edge must carry a 'weight' field so humans can "
+                f"assess coupling strength without reading code; edge missing weight: {e}"
+            )
+            assert isinstance(e["weight"], int), (
+                f"cross_context edge 'weight' must be int, got {type(e['weight'])}: {e}"
+            )
+            assert e["weight"] >= 1, (
+                f"cross_context edge 'weight' must be >= 1 (at least one import), "
+                f"got {e['weight']}: {e}"
+            )
+
+    def test_internal_edge_has_weight(self, src: Path) -> None:
+        """Every internal edge carries a weight field (import count).
+
+        Spec §Understanding Without Writing Code: "each edge carries the import
+        count (number of individual import statements between the pair)."
+        Internal coupling is visible without reading module source code.
+        """
+        all_nodes: list[Node] = discover_bounded_contexts(src)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(src, bc["id"]))
+
+        edges = build_dependency_edges(src, all_nodes)
+        internal_edges = [e for e in edges if e["type"] == "internal"]
+        if not internal_edges:
+            pytest.skip("No internal edges in fixture — cannot verify weight field")
+        for e in internal_edges:
+            assert "weight" in e, (
+                f"internal edge must carry a 'weight' field so humans can "
+                f"assess intra-context coupling without reading code; edge missing weight: {e}"
+            )
+            assert isinstance(e["weight"], int), (
+                f"internal edge 'weight' must be int, got {type(e['weight'])}: {e}"
+            )
+            assert e["weight"] >= 1, (
+                f"internal edge 'weight' must be >= 1 (at least one import), "
+                f"got {e['weight']}: {e}"
+            )
+
+    def test_cross_context_weight_value_is_nonzero(self, src: Path) -> None:
+        """cross_context edge weight reflects actual import count, not a placeholder.
+
+        A weight of 0 would mean the edge was emitted without any measured imports,
+        which is a bug. Every detected edge must have been caused by at least one
+        import statement.
+        """
+        all_nodes: list[Node] = discover_bounded_contexts(src)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(src, bc["id"]))
+
+        edges = build_dependency_edges(src, all_nodes)
+        cc_edges = [e for e in edges if e["type"] == "cross_context"]
+        assert cc_edges, "Expected at least one cross_context edge"
+        for e in cc_edges:
+            assert e.get("weight", 0) > 0, (
+                f"cross_context edge weight must be > 0; got {e.get('weight')}: {e}"
+            )
+
 
 # ---------------------------------------------------------------------------
 # Requirement: Layout
