@@ -621,3 +621,198 @@ class TestValidateSceneGraphDepth:
         # First node: affected (depth=1), second node: not affected (no depth)
         graph["nodes"][0]["depth"] = 1  # type: ignore[typeddict-unknown-key]
         validate_scene_graph(graph)  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Spec Scenario: Cluster does not prescribe collapsed position
+# spec: scene-graph-schema.spec.md § Cluster Schema
+# THEN the cluster entry does not prescribe the collapsed position —
+# Godot computes the supernode position as the centroid of member positions.
+# ---------------------------------------------------------------------------
+
+
+class TestClusterNoPosition:
+    """Cluster entries produced by the schema MUST NOT carry a position field.
+
+    The Godot application computes the supernode position as the centroid of
+    member positions at render time — the cluster entry is a grouping hint only.
+    Spec: scene-graph-schema.spec.md § Cluster Schema.
+    """
+
+    def test_cluster_typeddict_has_no_position_key(self) -> None:
+        """The Cluster TypedDict does not define a position field."""
+        from extractor.schema import Cluster
+
+        annotations = Cluster.__annotations__
+        assert "position" not in annotations, (
+            "Cluster TypedDict must not define a 'position' key — "
+            "the Godot app computes supernode position as member centroid."
+        )
+
+    def test_cluster_instance_has_no_position_field(self) -> None:
+        """A constructed cluster dict must not carry a position key."""
+        cluster = make_cluster()
+        assert "position" not in cluster, (
+            "Cluster dict must not carry 'position' — Godot computes centroid."
+        )
+
+
+# ---------------------------------------------------------------------------
+# Spec Scenario: Aggregate edge weight is the total import count
+# spec: scene-graph-schema.spec.md § Edge Schema / Weighted edge
+# THEN ... the extractor also emits an aggregate edge with weight: N
+# where N is the total number of individual import statements.
+# ---------------------------------------------------------------------------
+
+
+class TestAggregateEdgeWeight:
+    """Aggregate edge weight represents the number of individual import statements.
+
+    The schema requires weight to be a non-negative integer.  A weight of 0 is
+    logically invalid (an aggregate edge with no imports would not be emitted).
+    Spec: scene-graph-schema.spec.md § Edge Schema.
+    """
+
+    def test_aggregate_edge_weight_is_positive_int(self) -> None:
+        """Aggregate edge weight must be a positive integer (>= 1)."""
+        edge = make_aggregate_edge()
+        assert isinstance(edge["weight"], int), (
+            f"aggregate edge weight must be int; got {type(edge['weight'])}"
+        )
+        assert edge["weight"] >= 1, (
+            f"aggregate edge weight must be >= 1; got {edge['weight']}"
+        )
+
+    def test_aggregate_edge_type_literal(self) -> None:
+        """The type field of an aggregate edge must be exactly 'aggregate'."""
+        edge = make_aggregate_edge()
+        assert edge["type"] == "aggregate"
+
+    def test_aggregate_edge_source_and_target_are_bc_ids(self) -> None:
+        """Aggregate edge source and target reference bounded-context IDs.
+
+        Spec: 'the extractor also emits an aggregate edge with source: "A",
+        target: "B"' — both are bounded-context level IDs (no dots).
+        """
+        edge = make_aggregate_edge()
+        # In the fixture: source="graph", target="shared_kernel" (no dots = BC-level IDs)
+        assert "." not in edge["source"], (
+            f"aggregate edge source should be a bounded-context ID (no dots); "
+            f"got '{edge['source']}'"
+        )
+        assert "." not in edge["target"], (
+            f"aggregate edge target should be a bounded-context ID (no dots); "
+            f"got '{edge['target']}'"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Spec Scenario: Schema Structure — validate_scene_graph called at write time
+# spec: scene-graph-schema.spec.md § Schema Structure
+# The validator ensures the interface contract is honoured at the boundary.
+# ---------------------------------------------------------------------------
+
+
+class TestValidateSceneGraphContract:
+    """validate_scene_graph enforces the interface contract at the output boundary.
+
+    The function is the runtime guard that ensures the JSON written by the
+    extractor is always schema-conformant before it reaches the Godot app.
+    """
+
+    def test_validator_accepts_minimal_valid_graph(self) -> None:
+        """A minimal scene graph (one BC node, no edges, no clusters) is valid."""
+        graph: dict = {
+            "nodes": [make_bounded_context_node()],
+            "edges": [],
+            "metadata": make_metadata(),
+            "clusters": [],
+        }
+        validate_scene_graph(graph)  # must not raise
+
+    def test_validator_rejects_missing_edges_key(self) -> None:
+        """A graph missing the 'edges' key fails validation."""
+        graph: dict = {
+            "nodes": [make_bounded_context_node()],
+            "metadata": make_metadata(),
+            "clusters": [],
+        }
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for missing 'edges'"
+        except ValueError as exc:
+            assert "edges" in str(exc)
+
+    def test_validator_rejects_node_missing_position(self) -> None:
+        """A node without a 'position' field fails validation."""
+        node = make_bounded_context_node()
+        del node["position"]
+        graph: dict = {
+            "nodes": [node],
+            "edges": [],
+            "metadata": make_metadata(),
+            "clusters": [],
+        }
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for missing 'position'"
+        except ValueError as exc:
+            assert "position" in str(exc)
+
+    def test_validator_rejects_position_without_z(self) -> None:
+        """A position missing the 'z' coordinate fails validation."""
+        node = make_bounded_context_node()
+        node["position"] = {"x": 1.0, "y": 0.0}  # type: ignore[typeddict-item]
+        graph: dict = {
+            "nodes": [node],
+            "edges": [],
+            "metadata": make_metadata(),
+            "clusters": [],
+        }
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for position missing 'z'"
+        except ValueError as exc:
+            assert "z" in str(exc)
+
+    def test_validator_rejects_non_numeric_position_coordinate(self) -> None:
+        """A position with a non-numeric coordinate fails validation."""
+        node = make_bounded_context_node()
+        node["position"] = {"x": "one", "y": 0.0, "z": 0.0}  # type: ignore[typeddict-item]
+        graph: dict = {
+            "nodes": [node],
+            "edges": [],
+            "metadata": make_metadata(),
+            "clusters": [],
+        }
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for non-numeric x coordinate"
+        except ValueError as exc:
+            assert "x" in str(exc)
+
+    def test_validator_accepts_graph_with_clusters(self) -> None:
+        """A valid graph with cluster entries passes validation."""
+        graph = make_scene_graph()
+        graph["clusters"] = [make_cluster()]
+        validate_scene_graph(graph)  # must not raise
+
+    def test_validator_rejects_cluster_missing_aggregate_metrics(self) -> None:
+        """A cluster without aggregate_metrics fails validation."""
+        cluster: dict = {
+            "id": "x:cluster_0",
+            "members": ["x.a", "x.b"],
+            "context": "x",
+            # aggregate_metrics intentionally absent
+        }
+        graph: dict = {
+            "nodes": [],
+            "edges": [],
+            "metadata": make_metadata(),
+            "clusters": [cluster],
+        }
+        try:
+            validate_scene_graph(graph)
+            assert False, "Expected ValueError for missing aggregate_metrics"
+        except ValueError as exc:
+            assert "aggregate_metrics" in str(exc)
