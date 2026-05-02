@@ -1528,3 +1528,56 @@ func test_ports_hidden_at_far_lod_distance() -> void:
 		_check(all_ports_hidden, "Port markers must be hidden at FAR LOD distance")
 
 	root.free()
+
+
+func test_port_labels_have_billboard_enabled() -> void:
+	## GIVEN a Container with a public function
+	## WHEN render_ports() is called
+	## THEN the PortLabel_ Label3D child has billboard == BILLBOARD_ENABLED.
+	## Label3D readability spec: billboard = BILLBOARD_ENABLED (always face camera).
+	_test_failed = false
+	var anchor: Node3D = Node3D.new()
+	var symbols: Array = _make_symbols_fixture(["get_data"], [])
+	var lod_entries: Array = []
+
+	_vp.render_ports(symbols, anchor, 5.0, lod_entries)
+
+	var found_billboard: bool = false
+	for child: Node in anchor.get_children():
+		if child is Label3D and str((child as Label3D).name).begins_with("PortLabel_"):
+			found_billboard = (
+				(child as Label3D).billboard == BaseMaterial3D.BILLBOARD_ENABLED
+			)
+			break
+
+	_check(found_billboard, "Port label must have billboard == BILLBOARD_ENABLED for legibility")
+	anchor.free()
+
+
+func test_port_labels_have_positive_pixel_size() -> void:
+	## GIVEN a Container with a public function
+	## WHEN render_ports() is called
+	## THEN the PortLabel_ Label3D child has pixel_size > 0.0.
+	## Label3D readability spec: pixel_size > 0.0 (required for legibility in 3D).
+	_test_failed = false
+	var anchor: Node3D = Node3D.new()
+	var symbols: Array = _make_symbols_fixture(["submit_order"], [])
+	var lod_entries: Array = []
+
+	_vp.render_ports(symbols, anchor, 5.0, lod_entries)
+
+	var label_pixel_size: float = 0.0
+	var found_label: bool = false
+	for child: Node in anchor.get_children():
+		if child is Label3D and str((child as Label3D).name).begins_with("PortLabel_"):
+			label_pixel_size = (child as Label3D).pixel_size
+			found_label = true
+			break
+
+	_check(found_label, "PortLabel_ child must exist")
+	if found_label:
+		_check(
+			label_pixel_size > 0.0,
+			"Port label must have pixel_size > 0.0; got %.4f" % label_pixel_size
+		)
+	anchor.free()
