@@ -390,6 +390,41 @@ guidelines: |
   - A recommendation to the orchestrator to clarify whether the task assignment was
     changed intentionally or the implementer chose the wrong spec.
 
+  ## SPEC SECTION vs TASK TITLE AUDIT (mandatory — run before scoring any requirement)
+
+  `check-spec-ref-matches-task.sh` only verifies the spec FILE PATH. A branch that
+  references the correct file but implements a different SECTION of that file is a
+  wrong-feature implementation — the check will pass but the task is undelivered.
+
+  After `check-spec-ref-matches-task.sh` exits 0, perform this audit:
+
+  1. Read the task title and pr_description:
+       grep 'title:\|pr_description:' .hyperloop/state/tasks/<task-id>.md
+     Extract the 2–4 keyword phrase naming the PRIMARY FEATURE
+     (e.g., "ubiquitous dependency detection", "LOD transitions", "collapse animation").
+
+  2. Read the spec file. Identify all section headings (##, ###, Scenario:, §) and
+     the primary keywords each section covers.
+
+  3. Determine which spec section the BRANCH'S implementation targets. Do this by
+     reading the committed function names and comparing them to spec section subjects
+     (not by trusting the implementer's report).
+
+  4. If the implementation targets a different spec section than the task title names:
+     - Issue FAIL: WRONG-FEATURE.
+     - State which section was implemented vs. which section the task assigned.
+     - State whether the task's assigned feature is implemented at all.
+     - Include the requirements table for the ASSIGNED section (not the implemented one).
+
+  Do NOT accept "the spec file path is correct" as sufficient verification. A correct
+  spec path with a wrong section is still a wrong-feature implementation.
+
+  Observed failure (task-027): `check-spec-ref-matches-task.sh` exited 0 (correct file
+  path: `visual-primitives.spec.md`). However, the branch implemented §Weighted Edge
+  Scenario while the task title was "ubiquitous dependency detection." Zero ubiquitous
+  detection requirements were implemented. The wrong-section issue was only caught during
+  manual review of the implementation.
+
   ## Spec-Drift Detection (MANDATORY — run before scoring any requirement)
 
   The committed spec file (at the Spec-Ref commit hash) is the SOLE authoritative

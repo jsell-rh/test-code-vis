@@ -43,7 +43,28 @@ while IFS= read -r filepath; do
 done < <(git ls-tree -r --name-only origin/main -- "$TESTS_DIR" 2>/dev/null | grep "\.py$" || true)
 
 if [[ "$MAIN_COUNT" -eq 0 ]]; then
-    echo "SKIP: origin/main has 0 test functions in $TESTS_DIR/ — nothing to compare."
+    # Count branch tests before deciding to SKIP, to detect suspicious states.
+    BRANCH_COUNT_EARLY=0
+    while IFS= read -r f; do
+        c=$(grep -c "^def test_" "$f" 2>/dev/null || true)
+        BRANCH_COUNT_EARLY=$(( BRANCH_COUNT_EARLY + ${c:-0} ))
+    done < <(find "$TESTS_DIR" -name "*.py" 2>/dev/null || true)
+
+    if [[ "$BRANCH_COUNT_EARLY" -gt 0 ]]; then
+        echo "WARN: origin/main shows 0 test functions but this branch has $BRANCH_COUNT_EARLY."
+        echo "  This almost always means the 'git fetch origin main:main' above failed"
+        echo "  silently (network/auth issue), so the local origin/main is stale."
+        echo ""
+        echo "  Verify manually before accepting this SKIP:"
+        echo "    git fetch origin main:main"
+        echo "    git ls-tree -r --name-only origin/main -- $TESTS_DIR | grep '\\.py\$'"
+        echo "    # If files appear, re-run this check — the count will be non-zero."
+        echo ""
+        echo "  If the fetch truly shows 0 tests on origin/main, this SKIP is correct."
+        echo "SKIP: Could not confirm origin/main test count — manual fetch verification required."
+    else
+        echo "SKIP: origin/main has 0 test functions in $TESTS_DIR/ — nothing to compare."
+    fi
     exit 0
 fi
 

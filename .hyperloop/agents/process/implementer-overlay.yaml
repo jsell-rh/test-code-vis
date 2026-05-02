@@ -1261,6 +1261,58 @@ guidelines: |
   "I declared the array" is not coverage. "I appended to it in _create_edge()" is not
   coverage. The array must be CONSUMED during the operation that re-routes edges.
 
+  ## SPEC SECTION ALIGNMENT — TASK TITLE IS YOUR COMPASS
+
+  The assigned spec file may contain multiple named sections (e.g.,
+  `§Weighted Edge Scenario`, `§Ubiquitous Dependency Detection`, `§LOD Transitions`).
+  Only ONE section matches your task assignment.
+
+  **Before reading the spec file in detail:**
+
+  1. Open your task definition and read the `title:` field — it names the PRIMARY FEATURE:
+       grep 'title:' .hyperloop/state/tasks/<task-id>.md
+     Example: `title: "Implement ubiquitous dependency detection and edge ubiquitous flag"`
+     → feature keywords: `ubiquitous dependency detection`, `ubiquitous flag`
+
+  2. Scan the spec file for section headings (`##`, `###`, `Scenario:`, `§`). Find
+     the section whose subject matches your title keywords. That is the ONLY section
+     you implement.
+
+  3. If you cannot find a section matching the task title keywords, STOP and escalate.
+     Do NOT default to implementing a different (nearby) section.
+
+  **Self-check before writing any code:** Write down your task `title:` keywords.
+  Write down the spec section heading you plan to implement. If the subjects do not
+  match, you are targeting the wrong section.
+
+  Observed failure (task-027): the task title was "ubiquitous dependency detection
+  and edge ubiquitous flag." The spec file (`visual-primitives.spec.md`) contains
+  both `§Ubiquitous Dependency Detection` and `§Weighted Edge Scenario`. The
+  implementer implemented `§Weighted Edge Scenario` — already present on main via
+  task-063. The task's actual deliverable (ubiquitous detection) was never implemented.
+
+  ## FEATURE EXISTENCE CHECK — VERIFY YOUR FEATURE IS NOT ALREADY ON MAIN
+
+  Before writing any implementation code, confirm the core function(s) your task
+  requires do NOT already exist on origin/main:
+
+    git fetch origin main:main
+    # Search for the primary function name your feature will introduce:
+    git grep -n "def compute_ubiquitous\|ubiquitous_deps\|ubiquitous_threshold" origin/main \
+        -- extractor/ godot/
+
+  If the function already exists on origin/main, a parallel task may have delivered
+  it before you. Re-read your task title and confirm:
+  - Is the existing main function implementing the SAME feature your task requires?
+  - If YES: your feature may already be done — escalate to the orchestrator before
+    writing a single line of code.
+  - If NO: the existing function is unrelated — proceed normally.
+
+  Observed failure (task-027): the implementer wrote `build_dependency_edges()` weight
+  logic. Running `git grep "raw_edge_count" origin/main` would have shown task-063 had
+  already merged the identical feature. Checking this before coding would have revealed
+  the supersession immediately.
+
   ## SPEC-REF PATH MUST MATCH TASK DEFINITION — VERIFY BEFORE FIRST COMMIT
 
   Every `Spec-Ref:` commit trailer MUST reference the same spec FILE PATH as the
