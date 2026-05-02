@@ -444,13 +444,16 @@ guidelines: |
   2. `bash .hyperloop/checks/check-spec-ref-matches-task.sh` — must exit 0.
      This confirms every Spec-Ref path on your branch matches the task definition.
      A mismatch means you implemented the wrong spec; fix before running further checks.
-  3. `bash .hyperloop/checks/run-all-checks.sh` — must exit 0.
-  4. `bash .hyperloop/checks/check-rebased-onto-main.sh` — run THIS AGAIN as
+  3. `bash .hyperloop/checks/check-deliverable-component.sh <your-task-id>` — must exit 0.
+     This confirms the branch diff contains files from the component the task title names.
+     A task titled "Implement X in Godot" with zero godot/ files is always FAIL.
+  4. `bash .hyperloop/checks/run-all-checks.sh` — must exit 0.
+  5. `bash .hyperloop/checks/check-rebased-onto-main.sh` — run THIS AGAIN as
      the FINAL command, after run-all-checks.sh passes. Main can advance between
      your sync and your submission; this final check catches that race.
      If it exits non-zero: rebase, re-run run-all-checks.sh, and re-run this
      check before submitting.
-  5. Never stage files under `.hyperloop/state/` — use `git add <file>` for specific files.
+  6. Never stage files under `.hyperloop/state/` — use `git add <file>` for specific files.
 
   **POST-DRAFT REBASE CHECK (mandatory):** Writing a submission report takes time.
   Main can advance while you write. After drafting your report and immediately
@@ -1101,6 +1104,65 @@ guidelines: |
   If it exits non-zero the hash is not a commit. Re-run the `git log` command above
   and use its output instead. `check-spec-ref-valid.sh` enforces this mechanically
   and will FAIL your submission if a blob hash is present.
+
+  ## WEIGHT TEST FIXTURE MUST PROVE N>1 ACCUMULATION
+
+  When writing tests for a `weight` field that represents an import or call count,
+  a fixture with only ONE import/call between a given (source, target) pair makes
+  `assert weight >= 1` vacuously pass — the assertion is satisfied trivially and
+  does NOT verify the accumulator handles N>1 correctly.
+
+  Observed failure (task-038 partial): cross_context and internal edge weight tests
+  used fixtures with one import per pair. `weight >= 1` passed but the accumulator
+  was never exercised for multiple imports between the same pair.
+
+  Required pattern for any weight-accumulation test:
+    - Fixture MUST include ≥2 import/call statements between the SAME (source, target) pair.
+    - Assertion MUST check the exact count: `assert e["weight"] == 2` (not `>= 1`).
+    - A `>= 1` assertion with a single-import fixture is PARTIAL — fix by adding a
+      second import in the fixture and asserting `== 2`.
+
+  ## COMPONENT DELIVERABLE GATE — RUN BEFORE WRITING ANY CODE
+
+  Immediately after branching and reading your task description, confirm your planned
+  deliverable matches the component the task names:
+
+    bash .hyperloop/checks/check-deliverable-component.sh <your-task-id>
+
+  If this exits non-zero, stop — your planned files are in the wrong component.
+
+  Observed failure (task-038): task titled "Implement Port primitive renderer in Godot."
+  The implementer wrote only Python extractor code (edge weight accumulation) and created
+  zero `godot/` files. The entire implementation was wrong-deliverable. All Godot THEN-
+  clauses were MISSING.
+
+  Rule: a task title containing "Godot" or "GDScript" REQUIRES at least one `godot/` file
+  on the branch. Zero `godot/` files with a Godot task is always a FAIL — regardless of
+  how correct the Python code is.
+
+  Also add this check to your SUBMISSION GATES sequence (step 3, before run-all-checks.sh):
+
+    bash .hyperloop/checks/check-deliverable-component.sh <your-task-id>
+
+  ## EDGE RE-ROUTING WIRING — ARRAY MUST BE READ, NOT ONLY WRITTEN
+
+  When you create a tracking array (e.g., `_path_edge_entries`) to support edge
+  re-routing during collapse/expand, verify the array is READ inside EVERY operation
+  that moves nodes. Populating an array without iterating it during collapse/expand
+  is dead state — re-routing cannot occur.
+
+  Observed failure (task-068): `_path_edge_entries` was declared and had `.append()`
+  calls in `_create_edge()`. But neither `collapse_cluster()` nor `expand_cluster()`
+  contained a `for entry in _path_edge_entries:` loop. Four edge re-routing THEN-clauses
+  were MISSING as a direct result.
+
+  Before marking any edge re-routing requirement COVERED:
+  1. Run `bash .hyperloop/checks/check-edge-rerouting-wired.sh` — must exit 0.
+  2. Confirm `for entry in _path_edge_entries:` appears INSIDE collapse_cluster() body.
+  3. Confirm the expand direction reads the captured state to restore endpoints.
+
+  "I declared the array" is not coverage. "I appended to it in _create_edge()" is not
+  coverage. The array must be CONSUMED during the operation that re-routes edges.
 
   ## SPEC-REF PATH MUST MATCH TASK DEFINITION — VERIFY BEFORE FIRST COMMIT
 

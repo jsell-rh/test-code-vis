@@ -655,6 +655,20 @@ guidelines: |
   restoration. The code comment inside the function explicitly acknowledged that
   original positions were not stored. Both expand THEN-clauses were PARTIAL/MISSING.
 
+  ## EDGE RE-ROUTING WIRING CHECK (run when spec involves collapse/expand)
+
+  Run `bash .hyperloop/checks/check-edge-rerouting-wired.sh` and include its
+  complete output verbatim in your findings when the branch touches cluster
+  collapse or expand code.
+
+  Observed failure (task-068): `_path_edge_entries` was declared and had `.append()`
+  calls in `_create_edge()`. collapse_cluster() and expand_cluster() were present.
+  But no `for entry in _path_edge_entries:` loop existed anywhere in the file —
+  the array was dead state. All four edge re-routing THEN-clauses were MISSING.
+
+  If the check exits non-zero: all edge re-routing THEN-clauses are MISSING — do not
+  mark any of them COVERED based on the data structure's existence or population alone.
+
   ## EDGE RE-ROUTING COVERAGE AUDIT
 
   When a spec THEN-clause uses the words "edge", "re-route", "reroute",
