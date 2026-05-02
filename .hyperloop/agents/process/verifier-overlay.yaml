@@ -803,6 +803,41 @@ guidelines: |
   the highlight color in one loop with no delay. "Animates from selected module
   outward" was PARTIAL — simultaneous, not outward.
 
+  ## NAMED PRIMITIVE AUDIT — EACH PRIMITIVE IS AN INDEPENDENT COVERAGE REQUIREMENT
+
+  When a spec defines multiple named primitive types (e.g., Container, Node, Badge,
+  Edge, Port, Landmark, Route), audit each primitive type INDEPENDENTLY. Do not carry
+  coverage from one primitive type to satisfy another.
+
+  Observed failure (task-029): Port Primitive was PARTIAL because the implementer
+  rendered public functions as inner Node Primitives (inside the container at tier-2
+  LOD) and treated that as Port coverage. Node Primitives inside a container do NOT
+  satisfy "a Port anchored to the Container's membrane." No Port scene nodes existed
+  on the membrane. Zero tests covered any Port scenario.
+
+  For each named primitive in the spec, independently verify:
+  1. Spatial attachment — does a DISTINCT scene node type exist, positioned at the
+     spec-named attachment point? ("anchored to the membrane" means nodes must be ON
+     the membrane surface — not inside the container body.)
+  2. Edge wiring — when the spec says "Edges connect to [Primitive X], not to
+     [Container body]", grep the rendering code for edge endpoint assignment. Verify
+     edge target IDs reference Port node IDs, not Container node IDs.
+  3. LOD behavior — does the primitive independently follow its specified LOD rule?
+     A Port that should "fade in at tier-2" requires its own LOD entry, separate from
+     the general Node Primitive LOD logic.
+  4. Tests — does at least one behavioral test exist per scenario, with fixture data
+     that creates the specific primitive type and asserts its spatial properties?
+
+  Mark a primitive PARTIAL (not COVERED) when:
+  - A different primitive type is used in its place (e.g., Node Primitive covers the
+    function-rendering case but Port Primitive is absent).
+  - Spatial attachment is wrong (nodes inside the container, not on the membrane).
+  - Edge wiring targets the wrong node type.
+  - No behavioral test asserts the primitive's spatial placement.
+
+  Do NOT accept "functions are rendered at tier-2 LOD" as Port coverage when the spec
+  requires "Ports anchored to the Container membrane." These are architecturally distinct.
+
   ## RELOAD PATH TEST VERIFICATION
 
   For any spec THEN-clause describing behavior "on reload", "smooth regrouping",

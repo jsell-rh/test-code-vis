@@ -1373,6 +1373,64 @@ guidelines: |
   twice with different node positions. The prior implementation of the same spec
   (task-022) included exactly this test; it was not carried forward.
 
+  ## NAMED PRIMITIVE DISTINCTNESS — EACH PRIMITIVE IS AN INDEPENDENT TARGET
+
+  When a spec defines multiple named primitive types (e.g., Container, Node, Badge,
+  Edge, Port, Landmark), each is a separate, independent implementation target.
+  Named primitives differ in: spatial attachment point, scene-node type, edge wiring
+  contract, and LOD visibility rules. They do NOT share implementations.
+
+  Observed failure (task-029): Port Primitive required "anchored to a Container's
+  membrane." The implementer rendered public functions as Node Primitives INSIDE the
+  container volume (tier-2 LOD) and treated that as Port coverage. No Port scene nodes
+  existed on the membrane surface. Zero tests covered any Port scenario.
+
+  Before implementing any named primitive:
+  1. Locate the spec's definition of that primitive. Extract three facts:
+     (a) Spatial attachment — WHERE does the scene node live? ("on the membrane",
+         "inside the container", "superposed on the edge", etc.)
+     (b) Edge wiring — what does the spec say edges connect TO for this primitive?
+         ("Edges connect to Ports, not to the Container body" is a distinct wiring rule.)
+     (c) LOD behavior — at what zoom level does this primitive appear/disappear?
+  2. Confirm your planned implementation differs from all OTHER named primitives on
+     all three axes. If two primitives share the same attachment point AND the same
+     edge wiring, you are implementing one primitive, not two.
+  3. Each named primitive needs its OWN row in your MUST-REQUIREMENT coverage table
+     with its OWN impl file/function AND its OWN test name. A single row covering
+     "rendering" cannot satisfy two architecturally distinct primitive types.
+
+  Self-check before marking any primitive COVERED:
+  - Where does the spec say this primitive's node lives? (membrane? interior? superposed?)
+  - Does the implementation create scene nodes AT that exact location?
+  - Do edges wire to the node type the spec specifies for this primitive?
+  - Are there tests with fixture data that assert all three points above?
+  All four must be YES. Any NO means the primitive is PARTIAL/MISSING.
+
+  ## ATTACHMENT POINT SPECIFICITY — "ANCHORED TO X" IS NOT "INSIDE X"
+
+  When a spec THEN-clause says a primitive is "anchored to", "on", "at", or "attached
+  to" a specific surface or boundary (membrane, edge face, perimeter), the implementation
+  MUST create scene nodes positioned AT that surface — NOT inside the enclosing volume.
+
+  "Near the boundary" is not "on the boundary." "Inside a container, near its wall" is
+  not "anchored to the container's membrane."
+
+  Required pattern when the spec says "anchored to the membrane":
+  - Create a distinct scene node parented to the container at its boundary position.
+  - The node's local position must place it ON the membrane surface (at the container
+    radius/edge), not at an interior coordinate.
+  - Write a test that: (a) asserts the port node exists as a child of the membrane, and
+    (b) asserts its position is at the container boundary, not interior.
+  - Write a second test that asserts edges target the port node's ID, not the container
+    body's node ID ("Edges connect to Ports, not directly to the Container body").
+
+  Before writing any code for a membrane-anchored primitive:
+  1. Identify the container node in the scene tree.
+  2. Plan to create port nodes as children positioned at the container's boundary radius.
+  3. Plan to wire edges to port node IDs (not container IDs) in the rendering pass.
+  4. Write test stubs FIRST that assert (a) port exists on membrane, (b) port has label
+     matching function name, (c) edge endpoint is port position, not container center.
+
   ## EDGE/CONNECTION RE-ROUTING IS A DISTINCT IMPLEMENTATION REQUIREMENT
 
   When a spec scenario involves collapsing, grouping, folding, or aggregating nodes:
