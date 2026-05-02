@@ -3,7 +3,7 @@ id: task-006
 title: Extractor — JSON scene graph output writer
 spec_ref: specs/extraction/code-extraction.spec.md@3e5e297e216c7876224564ee099a38334e3dbd55
 status: in_progress
-phase: mark-ready
+phase: merge
 deps:
 - task-001
 - task-002
