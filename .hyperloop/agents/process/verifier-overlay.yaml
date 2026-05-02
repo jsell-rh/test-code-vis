@@ -192,10 +192,13 @@ guidelines: |
   Run `bash .hyperloop/checks/check-rebased-onto-main.sh` and include its
   complete output verbatim in your report.
 
-  If it exits non-zero, issue FAIL immediately — do not review implementation
-  quality until the rebase issue is resolved. A non-rebased branch REVERTS
-  all commits main added after the fork point; the apparent test pass count
-  is unreliable because deleted test files simply never execute.
+  If it exits non-zero, issue FAIL. **Exception:** when check-rebased-onto-main.sh
+  is the SOLE failing check, inspect the missing commits first (see REBASE-ONLY FAIL
+  CLASSIFICATION below). If the advance is process-only, complete the full
+  implementation review and include it in the report — the implementer needs to know
+  their work is correct. For all other rebase failures (missing commits touch
+  implementation files), do not review implementation quality — the apparent test pass
+  count is unreliable because deleted test files simply never execute.
 
   Run `bash .hyperloop/checks/check-run-tests-suite-count.sh` and include
   its complete output verbatim in your report.
@@ -222,6 +225,46 @@ guidelines: |
   vs 18 on main. 161 tests passed. The missing suite (test_visual_primitives.gd)
   covered task-074 requirements that the branch had silently reverted. These
   mechanical checks catch this pattern before any manual review.
+
+  ## REBASE-ONLY FAIL CLASSIFICATION — PROCESS-ONLY ADVANCE RACE CONDITION
+
+  When `check-rebased-onto-main.sh` is the SOLE failing check (all other checks,
+  including all implementation checks, pass), diagnose the missing commits BEFORE
+  issuing an unqualified FAIL:
+
+    MERGE_BASE=$(git merge-base HEAD origin/main)
+    git log ${MERGE_BASE}..origin/main --oneline
+
+  If ALL commits in that list touch ONLY `.hyperloop/state/` or
+  `.hyperloop/agents/process/` files (intake commits, process-improvement commits
+  with no extractor/ or godot/ changes), classify this as **REBASE-ONLY FAIL**:
+
+  - State explicitly that all implementation checks pass.
+  - State that the implementation quality is correct (include your review findings).
+  - State that the ONLY required action is a rebase — no implementation changes needed.
+  - Provide these exact fix commands in the report:
+      git fetch origin main:main
+      git rebase origin/main
+      bash .hyperloop/checks/check-rebased-onto-main.sh
+      bash .hyperloop/checks/run-all-checks.sh
+
+  **This classification is informational — the verdict is still FAIL.** REBASE-ONLY
+  FAIL tells the implementer their implementation is correct and they MUST NOT modify
+  any implementation files. The re-attempt requires only the rebase sequence above.
+
+  **Context:** Main regularly receives process-only commits (intake reviews, overlay
+  updates) while task branches are under review. An implementer who passed the
+  post-draft rebase check at submission cannot prevent main from advancing during
+  the review window. REBASE-ONLY FAIL avoids misleading the implementer into
+  thinking their implementation has flaws.
+
+  Observed pattern (task-013, task-067, task-076): in each case main advanced by
+  one process-only commit between the implementer's submission and the verifier's
+  final run-all-checks.sh. The implementation was correct in all three cases.
+
+  If any missing commit touches implementation files (extractor/, godot/, or any
+  non-.hyperloop/ path): this is NOT a process-only race — issue a standard FAIL
+  and assess the implementation impact fully.
 
   ## Pipeline Integration — Compute Functions Must Be Called
 
