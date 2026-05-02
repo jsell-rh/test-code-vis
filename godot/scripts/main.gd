@@ -413,6 +413,16 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	# §Power Rail Notation.
 	_visual_primitives.attach_primitives(nd, anchor, sz)
 
+	# Port Primitive — public symbols rendered as small spheres on the membrane.
+	# Spec: visual-primitives.spec.md §Port Primitive.
+	# Ports are registered with the LOD manager (node_type="port") so they are
+	# hidden at FAR and MEDIUM distances and visible only at NEAR zoom level.
+	# Spec §Scenario: Port visibility at zoom levels — "Ports are hidden at far".
+	if is_context:
+		var port_nodes: Array = _visual_primitives.render_ports(nd, anchor, sz)
+		for port_node: Node3D in port_nodes:
+			_lod_node_entries.append({"anchor": port_node, "node_type": "port"})
+
 
 ## Add a Power Rail indicator glyph to an anchor node.
 ##

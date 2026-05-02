@@ -5,7 +5,7 @@ extends RefCounted
 ## Implements the composition layer of the visual-primitives specification:
 ##   specs/core/visual-primitives.spec.md
 ##
-## This module handles rendering of three primitive types that are layered
+## This module handles rendering of four primitive types that are layered
 ## on top of the base Container/Node/Edge rendered by main.gd:
 ##
 ##   Badge Primitive — small glyph docked to a node indicating a cross-cutting
@@ -20,9 +20,19 @@ extends RefCounted
 ##     dependencies.  The rail indicates the dependency exists without drawing
 ##     the edge.  Spec §Requirement: Power Rail Notation.
 ##
+##   Port Primitive — small visual elements anchored to a Container's membrane,
+##     representing interface points (public functions, API endpoints).
+##     Ports appear only at NEAR zoom level (LOD tier 2) and are hidden at
+##     FAR and MEDIUM distances.  Spec §Requirement: Port Primitive.
+##
 ## Usage: call attach_primitives(node_data, anchor) after the base volume has
 ## been created.  The function inspects the node_data dict and attaches the
 ## appropriate child nodes to the anchor.
+##
+## For Port Primitive: call render_ports(node_data, anchor, node_size) which
+## returns an Array of port Node3D anchors.  The caller (main.gd) registers
+## them with the LOD manager using node_type="port" so they are hidden at FAR
+## and MEDIUM zoom levels and appear only at NEAR.
 
 # ---------------------------------------------------------------------------
 # Badge colours
@@ -83,6 +93,34 @@ const POWER_RAIL_Y_OFFSET: float = -0.10
 ## Power rail colour: dim white — subtle enough not to compete with structure.
 const POWER_RAIL_COLOR: Color = Color(0.85, 0.85, 0.85, 0.70)
 
+# ---------------------------------------------------------------------------
+# Port constants
+# ---------------------------------------------------------------------------
+
+## Port Primitive — small spheres anchored to the Container membrane surface.
+## Spec §Requirement: Port Primitive.
+## Spec §Scenario: Port placement — "4 Ports appear on its membrane, each Port
+##   is labeled with the function name".
+## Spec §Scenario: Port visibility at zoom levels — "Ports are hidden at far,
+##   fade in on the membrane as the human zooms in".
+##
+## Port sphere radius in scene units.
+const PORT_RADIUS: float = 0.15
+## Port colour for public functions that accept parameters (interface entry points).
+## Cyan: "accepts input" / "receives calls" — input port colour.
+const PORT_INPUT_COLOR: Color = Color(0.20, 0.80, 0.90, 0.95)
+## Port colour for public functions with no parameters (pure queries / factories).
+## Amber: "emits output" / "called for result" — output port colour.
+const PORT_OUTPUT_COLOR: Color = Color(0.90, 0.65, 0.10, 0.95)
+## Ports sit on the membrane (XZ edge of the Container box) at Y=0 (ground plane).
+## The Y-position offset above the base plane.
+const PORT_Y_LEVEL: float = 0.0
+## Label pixel size — must be > 0.0 for legibility (billboard text).
+const PORT_LABEL_PIXEL_SIZE: float = 0.006
+## Maximum number of Ports rendered per Container.  Above this the membrane
+## becomes visually cluttered.  Excess public symbols are silently skipped.
+const PORT_MAX: int = 12
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -114,6 +152,114 @@ func attach_primitives(
 	# Power rail indicator: flat disc at the base.
 	if node_data.get("has_ubiquitous_dep", false):
 		_render_power_rail(anchor, node_size)
+
+
+## Render Port primitives on the Container membrane for each public symbol.
+##
+## Spec §Requirement: Port Primitive — "a small visual element anchored to a
+##   Container's membrane, representing an interface point (public function,
+##   API endpoint, event emitter)."
+## Spec §Scenario: Port placement — "4 Ports appear on its membrane, each
+##   Port is labeled with the function name."
+## Spec §Scenario: Port direction — "input Ports (parameters/dependencies)
+##   are visually distinct from output Ports (return values/emitted events)."
+## Spec §Scenario: Port visibility at zoom levels — "Ports are hidden at far,
+##   fade in on the membrane as the human zooms in (LOD Shell behaviour)."
+##
+## Only public symbols of kind "function" become Ports.  Private symbols and
+## non-callable symbols are NOT rendered as Ports.
+##
+## Ports are arranged in a ring around the perimeter of the Container at the
+## membrane edge (distance = node_size / 2).
+##
+## Parameters:
+##   node_data:  Dictionary — the raw node dict from the scene graph
+##   anchor:     Node3D     — the Container anchor to parent ports to
+##   node_size:  float      — the Container's 'size' field (determines orbit radius)
+##
+## Returns: Array of port Node3D anchors.  Caller MUST register each with the
+##   LOD manager (node_type="port") so they are hidden at FAR and MEDIUM
+##   distances and visible only at NEAR.
+func render_ports(
+	node_data: Dictionary, anchor: Node3D, node_size: float
+) -> Array:
+	var symbols: Array = node_data.get("symbols", [])
+	if symbols.is_empty():
+		return []
+
+	# Collect only public function symbols — these become Ports.
+	var public_funcs: Array = []
+	for sym: Dictionary in symbols:
+		if sym.get("visibility", "") == "public" and sym.get("kind", "") == "function":
+			public_funcs.append(sym)
+		if public_funcs.size() >= PORT_MAX:
+			break
+
+	if public_funcs.is_empty():
+		return []
+
+	# Place ports in a ring around the perimeter (XZ circle) of the Container.
+	# Orbit radius = half the Container's footprint size, placing ports on the membrane.
+	var orbit_r: float = node_size * 0.5
+	var n: int = public_funcs.size()
+	var port_nodes: Array = []
+
+	for i: int in range(n):
+		var sym: Dictionary = public_funcs[i]
+		var sym_name: String = str(sym.get("name", "?"))
+		# signature is a String like "(param1, param2) -> RetType" or "()" if absent.
+		var signature: String = str(sym.get("signature", ""))
+
+		# Has parameters? → input port (cyan). No params → output port (amber).
+		# "()" means no parameters — pure query / factory.
+		# input port: function accepts something (has parameters beyond self)
+		# output port: function takes no meaningful input — emits a result
+		var has_params: bool = signature != "()" and signature != ""
+		var port_color: Color = PORT_INPUT_COLOR if has_params else PORT_OUTPUT_COLOR
+
+		# Equidistant angle around the full circle.
+		var angle: float = TAU * float(i) / float(n)
+		# Port is placed on the membrane edge: orbit_r from centre in XZ plane.
+		var px: float = cos(angle) * orbit_r
+		var pz: float = sin(angle) * orbit_r
+
+		# Port anchor — Node3D parented to the Container anchor.
+		var port_anchor := Node3D.new()
+		port_anchor.name = "Port_" + sym_name
+		port_anchor.position = Vector3(px, PORT_Y_LEVEL, pz)
+		anchor.add_child(port_anchor)
+
+		# Port sphere mesh — small sphere to mark the interface point.
+		var sphere := SphereMesh.new()
+		sphere.radius = PORT_RADIUS
+		sphere.height = PORT_RADIUS * 2.0
+		sphere.radial_segments = 8
+		sphere.rings = 4
+
+		var port_mat := StandardMaterial3D.new()
+		port_mat.albedo_color = port_color
+		port_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+		var port_mesh := MeshInstance3D.new()
+		port_mesh.name = "PortMesh"
+		port_mesh.mesh = sphere
+		port_mesh.material_override = port_mat
+		port_anchor.add_child(port_mesh)
+
+		# Port label — shows the function name; billboard so it always faces camera.
+		var label := Label3D.new()
+		label.name = "PortLabel"
+		label.text = sym_name
+		label.pixel_size = PORT_LABEL_PIXEL_SIZE
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		label.no_depth_test = true
+		# Offset label slightly outward and upward from the sphere.
+		label.position = Vector3(0.0, PORT_RADIUS * 2.5, 0.0)
+		port_anchor.add_child(label)
+
+		port_nodes.append(port_anchor)
+
+	return port_nodes
 
 
 # ---------------------------------------------------------------------------
