@@ -345,6 +345,31 @@ func test_supernode_label_contains_aggregate_metrics() -> void:
 		"Supernode label must contain total LOC metric (250 in fixture)")
 
 
+## Supernode Label3D must use billboard mode and positive pixel_size for legibility.
+## Spec: labels must be readable at current zoom level.
+func test_supernode_label_billboard_and_pixel_size() -> void:
+	var main_node: Node3D = MainScript.new()
+	main_node.build_from_graph(_make_graph_with_clusters())
+	var supernode: Node3D = main_node.call("collapse_cluster", "svc:cluster_0")
+	if supernode == null:
+		return
+
+	var label: Label3D = null
+	for child: Node in supernode.get_children():
+		if child is Label3D:
+			label = child as Label3D
+			break
+	if label == null:
+		return
+
+	# Billboard mode makes the label always face the camera — required for readability.
+	_check(label.billboard == BaseMaterial3D.BILLBOARD_ENABLED,
+		"Supernode Label3D must use BILLBOARD_ENABLED so it faces the camera")
+	# pixel_size must be > 0 for the label to be visible at all.
+	_check(label.pixel_size > 0.0,
+		"Supernode Label3D must have pixel_size > 0.0 for legibility")
+
+
 ## After collapsing, is_cluster_collapsed() returns true.
 ## Implements the state-tracking requirement (idempotent collapse guard).
 func test_collapse_state_is_tracked() -> void:
