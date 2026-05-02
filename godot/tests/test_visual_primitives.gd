@@ -2,8 +2,9 @@
 ##
 ## Spec: Visual Primitives Specification
 ## Purpose: Verify that the VisualPrimitives renderer correctly attaches
-##   Badge, Landmark, and Power Rail visual elements to scene nodes.
-##   Also tests Landmark LOD persistence and Power Rail suppression via Main/LodManager.
+##   Badge, Landmark, Power Rail, and Port visual elements to scene nodes.
+##   Also tests Landmark LOD persistence and Power Rail suppression via Main/LodManager,
+##   and Port Primitive LOD visibility at NEAR zoom level only.
 ##
 ## Tests instantiate real Node3D trees and assert scene-tree properties —
 ## NOT just dict key existence.
@@ -1107,3 +1108,446 @@ func test_all_three_primitives_compose() -> void:
 		anchor.scale.x > 1.0,
 		"All-three node landmark scale must be > 1.0; got %.3f" % anchor.scale.x
 	)
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Port Primitive
+# Spec: visual-primitives.spec.md § Requirement: Port Primitive
+# GIVEN a module with 4 public functions
+# WHEN the Container is rendered
+# THEN 4 Ports appear on its membrane
+# AND each Port is labeled with the function name
+# AND Edges connect to Ports, not directly to the Container body
+# ---------------------------------------------------------------------------
+
+
+## Helper: build node_data with the given symbol list.
+func _make_node_with_symbols(symbols: Array) -> Dictionary:
+	return {
+		"id": "ctx.module",
+		"name": "Module",
+		"type": "bounded_context",
+		"parent": null,
+		"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+		"size": 4.0,
+		"symbols": symbols,
+	}
+
+
+## Helper: build a public function symbol entry.
+func _make_public_func(name: String, has_params: bool) -> Dictionary:
+	var sig: String = "(x: int)" if has_params else "()"
+	return {"name": name, "visibility": "public", "kind": "function", "signature": sig}
+
+
+## Helper: build a private function symbol entry.
+func _make_private_func(name: String) -> Dictionary:
+	return {"name": name, "visibility": "private", "kind": "function", "signature": "()"}
+
+
+## Helper: count Port_ anchor children of an anchor node.
+func _count_ports(anchor: Node3D) -> int:
+	var count: int = 0
+	for child in anchor.get_children():
+		if str(child.name).begins_with("Port_"):
+			count += 1
+	return count
+
+
+## Helper: find a Port_ anchor by function name.
+func _find_port(anchor: Node3D, func_name: String) -> Node3D:
+	for child in anchor.get_children():
+		if str(child.name) == "Port_" + func_name:
+			return child as Node3D
+	return null
+
+
+func test_public_functions_become_ports() -> void:
+	## Spec §Scenario: Port placement —
+	##   "4 Ports appear on its membrane"
+	## GIVEN a Container node with 4 public function symbols
+	## WHEN render_ports is called
+	## THEN 4 Port_ anchor children are created
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_node_with_symbols([
+		_make_public_func("process_order", true),
+		_make_public_func("validate_order", true),
+		_make_public_func("cancel_order", true),
+		_make_public_func("get_status", false),
+	])
+
+	var ports: Array = _vp.render_ports(node_data, anchor, 4.0)
+
+	_check(ports.size() == 4, "4 public functions must produce 4 port nodes; got %d" % ports.size())
+	_check(_count_ports(anchor) == 4, "anchor must have 4 Port_ children; got %d" % _count_ports(anchor))
+
+
+func test_private_functions_produce_no_ports() -> void:
+	## Spec §Scenario: Port placement — Ports represent PUBLIC interface points.
+	## GIVEN a Container node with only private function symbols
+	## WHEN render_ports is called
+	## THEN no Port_ anchor children are created
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_node_with_symbols([
+		_make_private_func("_validate_input"),
+		_make_private_func("_internal_check"),
+	])
+
+	var ports: Array = _vp.render_ports(node_data, anchor, 4.0)
+
+	_check(ports.size() == 0, "Private-only symbols must produce 0 port nodes; got %d" % ports.size())
+	_check(_count_ports(anchor) == 0, "anchor must have 0 Port_ children; got %d" % _count_ports(anchor))
+
+
+func test_port_is_labeled_with_function_name() -> void:
+	## Spec §Scenario: Port placement — "each Port is labeled with the function name"
+	## GIVEN a Container with a public function named "process_order"
+	## WHEN render_ports is called
+	## THEN the Port_process_order anchor has a Label3D child with text "process_order"
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_node_with_symbols([
+		_make_public_func("process_order", true),
+	])
+
+	_vp.render_ports(node_data, anchor, 4.0)
+
+	var port: Node3D = _find_port(anchor, "process_order")
+	_check(port != null, "Port_process_order anchor must exist")
+	if port == null:
+		return
+
+	var found_label: bool = false
+	var label_text: String = ""
+	for child in port.get_children():
+		if child is Label3D:
+			found_label = true
+			label_text = str((child as Label3D).text)
+			break
+
+	_check(found_label, "Port anchor must have a Label3D child")
+	_check(label_text == "process_order", "Port label must show function name; got '%s'" % label_text)
+
+
+func test_port_label_has_billboard_enabled() -> void:
+	## Label3D readability: billboard = BILLBOARD_ENABLED and pixel_size > 0.0
+	## GIVEN a Container with a public function
+	## WHEN render_ports is called
+	## THEN the port's Label3D uses billboard mode for camera-facing legibility
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_node_with_symbols([
+		_make_public_func("my_func", false),
+	])
+
+	_vp.render_ports(node_data, anchor, 4.0)
+
+	var port: Node3D = _find_port(anchor, "my_func")
+	_check(port != null, "Port_my_func must exist")
+	if port == null:
+		return
+
+	for child in port.get_children():
+		if child is Label3D:
+			var lbl := child as Label3D
+			_check(
+				lbl.billboard == BaseMaterial3D.BILLBOARD_ENABLED,
+				"Port label must have billboard=BILLBOARD_ENABLED"
+			)
+			_check(lbl.pixel_size > 0.0, "Port label pixel_size must be > 0")
+			return
+
+	_check(false, "No Label3D found on port anchor")
+
+
+func test_port_has_sphere_mesh() -> void:
+	## Spec §Scenario: Port placement — Ports are small visual elements.
+	## GIVEN a public function Port
+	## WHEN render_ports is called
+	## THEN the Port has a PortMesh MeshInstance3D child with a SphereMesh
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_node_with_symbols([
+		_make_public_func("some_func", true),
+	])
+
+	_vp.render_ports(node_data, anchor, 4.0)
+
+	var port: Node3D = _find_port(anchor, "some_func")
+	_check(port != null, "Port anchor must exist")
+	if port == null:
+		return
+
+	var found_sphere: bool = false
+	for child in port.get_children():
+		if child is MeshInstance3D and str(child.name) == "PortMesh":
+			found_sphere = (child as MeshInstance3D).mesh is SphereMesh
+			break
+
+	_check(found_sphere, "Port must have a PortMesh MeshInstance3D with a SphereMesh")
+
+
+func test_ports_on_membrane_perimeter() -> void:
+	## Spec §Scenario: Port placement — "Ports appear on its membrane"
+	## The membrane edge of a Container of size S is at distance S/2 from centre in XZ.
+	## GIVEN a Container of size 4.0
+	## WHEN render_ports is called
+	## THEN each port is positioned at XZ distance ≈ 2.0 from the anchor origin
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_size: float = 4.0
+	var orbit_r: float = node_size * 0.5  # = 2.0
+	var node_data: Dictionary = _make_node_with_symbols([
+		_make_public_func("func_a", true),
+		_make_public_func("func_b", false),
+	])
+
+	_vp.render_ports(node_data, anchor, node_size)
+
+	for child in anchor.get_children():
+		if not str(child.name).begins_with("Port_"):
+			continue
+		var port: Node3D = child as Node3D
+		var xz_dist: float = Vector2(port.position.x, port.position.z).length()
+		_check(
+			absf(xz_dist - orbit_r) < 0.01,
+			"Port %s must be at XZ distance %.2f from centre; got %.4f" % [
+				port.name, orbit_r, xz_dist
+			]
+		)
+
+
+func test_port_positions_are_distinct() -> void:
+	## GIVEN a Container with 3 public functions
+	## WHEN render_ports is called
+	## THEN all 3 Port_ anchors are at distinct XZ positions
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_node_with_symbols([
+		_make_public_func("func_a", true),
+		_make_public_func("func_b", false),
+		_make_public_func("func_c", true),
+	])
+
+	_vp.render_ports(node_data, anchor, 4.0)
+
+	var positions: Array = []
+	for child in anchor.get_children():
+		if str(child.name).begins_with("Port_"):
+			positions.append(Vector2((child as Node3D).position.x, (child as Node3D).position.z))
+
+	_check(positions.size() == 3, "Must have 3 port positions; got %d" % positions.size())
+	for i: int in range(positions.size()):
+		for j: int in range(i + 1, positions.size()):
+			var dist: float = (positions[i] - positions[j]).length()
+			_check(dist > 0.1, "Port positions must be distinct (i=%d, j=%d dist=%.4f)" % [i, j, dist])
+
+
+func test_input_port_color_differs_from_output_port() -> void:
+	## Spec §Scenario: Port direction —
+	##   "input Ports (parameters/dependencies) are visually distinct from
+	##    output Ports (return values/emitted events)"
+	## GIVEN a public function with parameters (input port) and one without (output port)
+	## WHEN render_ports is called
+	## THEN the PortMesh materials have different albedo colors
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = _make_node_with_symbols([
+		_make_public_func("receive_order", true),   # has params → input port
+		_make_public_func("get_total", false),       # no params  → output port
+	])
+
+	_vp.render_ports(node_data, anchor, 4.0)
+
+	var input_color: Color = Color(0.0, 0.0, 0.0)
+	var output_color: Color = Color(0.0, 0.0, 0.0)
+	var found_input: bool = false
+	var found_output: bool = false
+
+	for child in anchor.get_children():
+		if not str(child.name).begins_with("Port_"):
+			continue
+		for mesh_child in (child as Node3D).get_children():
+			if mesh_child is MeshInstance3D and str(mesh_child.name) == "PortMesh":
+				var mat: StandardMaterial3D = (mesh_child as MeshInstance3D).material_override as StandardMaterial3D
+				if mat == null:
+					continue
+				if str(child.name) == "Port_receive_order":
+					input_color = mat.albedo_color
+					found_input = true
+				elif str(child.name) == "Port_get_total":
+					output_color = mat.albedo_color
+					found_output = true
+
+	_check(found_input, "Port_receive_order must exist")
+	_check(found_output, "Port_get_total must exist")
+	if found_input and found_output:
+		_check(
+			input_color != output_color,
+			"Input port and output port must have different colors"
+		)
+
+
+func test_no_ports_when_no_symbols() -> void:
+	## GIVEN a Container node with no symbols key
+	## WHEN render_ports is called
+	## THEN no Port_ children are created
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	var node_data: Dictionary = {
+		"id": "ctx",
+		"name": "Ctx",
+		"type": "bounded_context",
+		"parent": null,
+		"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+		"size": 4.0,
+		# No "symbols" key at all
+	}
+
+	var ports: Array = _vp.render_ports(node_data, anchor, 4.0)
+
+	_check(ports.size() == 0, "No symbols → 0 port nodes; got %d" % ports.size())
+
+
+func test_port_lod_registration_in_main() -> void:
+	## Spec §Scenario: Port visibility at zoom levels —
+	##   "Ports are hidden (the Container appears as a solid region)"
+	##   "as the human zooms in, Ports fade in on the membrane"
+	##
+	## Integration test: build a scene via main.gd with a bounded_context node
+	## that has public symbols.  After build_from_graph, the LOD manager must
+	## have port entries registered (node_type="port").  At FAR distance, ports
+	## must be hidden; at NEAR distance, ports must be visible.
+	_test_failed = false
+	var main_node: Node3D = Main.new()
+	var graph: Dictionary = {
+		"nodes": [
+			{
+				"id": "ctx",
+				"name": "Ctx",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 6.0,
+				"symbols": [
+					{"name": "process_order", "visibility": "public", "kind": "function", "signature": "(order: Order)"},
+					{"name": "cancel_order",  "visibility": "public", "kind": "function", "signature": "(id: int)"},
+				],
+			},
+		],
+		"edges": [],
+	}
+
+	main_node.build_from_graph(graph)
+
+	# Inspect _lod_node_entries to confirm port entries were registered.
+	var lod_entries: Array = main_node.get("_lod_node_entries")
+	_check(lod_entries != null, "_lod_node_entries must exist on main node")
+	if lod_entries == null:
+		return
+
+	var port_entries: Array = []
+	for entry: Dictionary in lod_entries:
+		if entry.get("node_type", "") == "port":
+			port_entries.append(entry)
+
+	_check(
+		port_entries.size() == 2,
+		"2 public functions must produce 2 LOD port entries; got %d" % port_entries.size()
+	)
+
+
+func test_ports_hidden_at_far_lod() -> void:
+	## Spec §Scenario: Port visibility at zoom levels —
+	##   "Ports are hidden (the Container appears as a solid region)"
+	## GIVEN a Container with public symbols rendered via main.gd
+	## WHEN the LOD is set to FAR distance
+	## THEN all port nodes are not visible
+	_test_failed = false
+	var main_node: Node3D = Main.new()
+	var graph: Dictionary = {
+		"nodes": [
+			{
+				"id": "ctx",
+				"name": "Ctx",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 6.0,
+				"symbols": [
+					{"name": "public_func", "visibility": "public", "kind": "function", "signature": "(x: int)"},
+				],
+			},
+		],
+		"edges": [],
+	}
+
+	main_node.build_from_graph(graph)
+
+	# Apply FAR LOD manually — camera distance > FAR_THRESHOLD (80.0).
+	var lod_entries: Array = main_node.get("_lod_node_entries")
+	var edge_entries: Array = main_node.get("_lod_edge_entries")
+	_check(lod_entries != null, "_lod_node_entries must exist")
+	if lod_entries == null:
+		return
+
+	var lod: LodManager = LodManager.new()
+	lod.update_lod(lod_entries, edge_entries if edge_entries != null else [], 200.0)
+
+	# All port entries must be invisible after FAR LOD.
+	for entry: Dictionary in lod_entries:
+		if entry.get("node_type", "") == "port":
+			var port_node: Node3D = entry["anchor"] as Node3D
+			_check(
+				not port_node.visible,
+				"Port node must be hidden at FAR distance; visible=%s" % str(port_node.visible)
+			)
+
+
+func test_ports_visible_at_near_lod() -> void:
+	## Spec §Scenario: Port visibility at zoom levels —
+	##   "as the human zooms in, Ports fade in on the membrane"
+	## GIVEN a Container with public symbols rendered via main.gd
+	## WHEN the LOD is set to NEAR distance
+	## THEN all port nodes are visible
+	_test_failed = false
+	var main_node: Node3D = Main.new()
+	var graph: Dictionary = {
+		"nodes": [
+			{
+				"id": "ctx",
+				"name": "Ctx",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 6.0,
+				"symbols": [
+					{"name": "public_func", "visibility": "public", "kind": "function", "signature": "(x: int)"},
+				],
+			},
+		],
+		"edges": [],
+	}
+
+	main_node.build_from_graph(graph)
+
+	# Apply NEAR LOD — camera distance < NEAR_THRESHOLD (20.0).
+	var lod_entries: Array = main_node.get("_lod_node_entries")
+	var edge_entries: Array = main_node.get("_lod_edge_entries")
+	_check(lod_entries != null, "_lod_node_entries must exist")
+	if lod_entries == null:
+		return
+
+	var lod: LodManager = LodManager.new()
+	lod.update_lod(lod_entries, edge_entries if edge_entries != null else [], 5.0)
+
+	# All port entries must be visible after NEAR LOD.
+	for entry: Dictionary in lod_entries:
+		if entry.get("node_type", "") == "port":
+			var port_node: Node3D = entry["anchor"] as Node3D
+			_check(
+				port_node.visible,
+				"Port node must be visible at NEAR distance; visible=%s" % str(port_node.visible)
+			)
