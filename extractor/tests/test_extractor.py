@@ -418,6 +418,42 @@ class TestDependencyExtraction:
             f"Expected aggregate edge iam→shared_kernel, found aggregate pairs: {agg}"
         )
 
+    def test_cross_context_edge_has_weight(self, src: Path) -> None:
+        """Every cross_context edge carries a weight field (import count >= 1)."""
+        all_nodes: list[Node] = discover_bounded_contexts(src)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(src, bc["id"]))
+
+        edges = build_dependency_edges(src, all_nodes)
+        cc_edges = [e for e in edges if e["type"] == "cross_context"]
+        assert cc_edges, "Expected at least one cross_context edge"
+        for e in cc_edges:
+            assert "weight" in e, f"cross_context edge missing 'weight': {e}"
+            assert isinstance(e["weight"], int), (
+                f"cross_context edge 'weight' must be int, got {type(e['weight'])}: {e}"
+            )
+            assert e["weight"] >= 1, (
+                f"cross_context edge 'weight' must be >= 1, got {e['weight']}: {e}"
+            )
+
+    def test_internal_edge_has_weight(self, src: Path) -> None:
+        """Every internal edge carries a weight field (import count >= 1)."""
+        all_nodes: list[Node] = discover_bounded_contexts(src)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(src, bc["id"]))
+
+        edges = build_dependency_edges(src, all_nodes)
+        int_edges = [e for e in edges if e["type"] == "internal"]
+        assert int_edges, "Expected at least one internal edge"
+        for e in int_edges:
+            assert "weight" in e, f"internal edge missing 'weight': {e}"
+            assert isinstance(e["weight"], int), (
+                f"internal edge 'weight' must be int, got {type(e['weight'])}: {e}"
+            )
+            assert e["weight"] >= 1, (
+                f"internal edge 'weight' must be >= 1, got {e['weight']}: {e}"
+            )
+
 
 # ---------------------------------------------------------------------------
 # Requirement: Layout
