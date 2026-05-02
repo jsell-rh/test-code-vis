@@ -3,11 +3,11 @@ id: task-029
 title: Implement Node primitive renderer in Godot
 spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
 status: in_progress
-phase: verify
+phase: implement
 deps:
 - task-011
 - task-012
-round: 1
+round: 2
 branch: hyperloop/task-029
 pr: https://github.com/jsell-rh/test-code-vis/pull/237
 pr_title: 'feat(godot): implement Node primitive renderer (abstract volume for non-container
