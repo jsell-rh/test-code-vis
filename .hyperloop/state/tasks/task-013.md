@@ -1,7 +1,7 @@
 ---
 id: task-013
 title: Implement Edge primitive renderer
-spec_ref: "specs/core/visual-primitives.spec.md@82d048ec"
+spec_ref: "specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd"
 status: not-started
 phase: null
 deps: [task-011]

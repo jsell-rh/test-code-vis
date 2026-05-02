@@ -1,7 +1,7 @@
 ---
 id: task-007
 title: Implement edge schema fields in extractor output (including aggregate edges)
-spec_ref: "specs/extraction/scene-graph-schema.spec.md@4ea7e337"
+spec_ref: "specs/extraction/scene-graph-schema.spec.md@4ea7e33731b8eb0cd47c19012a9f7b5774420e21"
 status: not-started
 phase: null
 deps: [task-001, task-003]

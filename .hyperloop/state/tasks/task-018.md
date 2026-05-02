@@ -1,7 +1,7 @@
 ---
 id: task-018
 title: Implement top-down camera navigation
-spec_ref: "specs/visualization/spatial-structure.spec.md@359dbcb1"
+spec_ref: "specs/visualization/spatial-structure.spec.md@359dbcb1d7f64009e6dd64084a8bcbb5fa325cb4"
 status: not-started
 phase: null
 deps: [task-012]

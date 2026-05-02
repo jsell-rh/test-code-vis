@@ -1,7 +1,7 @@
 ---
 id: task-016
 title: Implement spatial separation of independent groups
-spec_ref: "specs/visualization/orthogonal-independence.spec.md@ca0ad7af"
+spec_ref: "specs/visualization/orthogonal-independence.spec.md@ca0ad7afad8d95361892fbfba84f55049cf288fd"
 status: not-started
 phase: null
 deps: [task-005, task-012]

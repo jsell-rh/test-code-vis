@@ -1,7 +1,7 @@
 ---
 id: task-009
 title: Implement cluster detection and cluster schema output
-spec_ref: "specs/extraction/scene-graph-schema.spec.md@4ea7e337"
+spec_ref: "specs/extraction/scene-graph-schema.spec.md@4ea7e33731b8eb0cd47c19012a9f7b5774420e21"
 status: not-started
 phase: null
 deps: [task-003, task-004]

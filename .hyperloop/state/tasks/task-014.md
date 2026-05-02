@@ -1,7 +1,7 @@
 ---
 id: task-014
 title: Implement LOD Shell (3-tier zoom with smooth transitions)
-spec_ref: "specs/core/visual-primitives.spec.md@82d048ec"
+spec_ref: "specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd"
 status: not-started
 phase: null
 deps: [task-012, task-013]

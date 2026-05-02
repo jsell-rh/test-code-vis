@@ -1,7 +1,7 @@
 ---
 id: task-017
 title: Implement cluster collapsing mechanic
-spec_ref: "specs/visualization/spatial-structure.spec.md@359dbcb1"
+spec_ref: "specs/visualization/spatial-structure.spec.md@359dbcb1d7f64009e6dd64084a8bcbb5fa325cb4"
 status: not-started
 phase: null
 deps: [task-009, task-011, task-013]

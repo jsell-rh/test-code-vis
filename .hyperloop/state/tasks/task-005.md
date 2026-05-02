@@ -1,7 +1,7 @@
 ---
 id: task-005
 title: Implement independence group detection
-spec_ref: "specs/visualization/orthogonal-independence.spec.md@ca0ad7af"
+spec_ref: "specs/visualization/orthogonal-independence.spec.md@ca0ad7afad8d95361892fbfba84f55049cf288fd"
 status: not-started
 phase: null
 deps: [task-003]
