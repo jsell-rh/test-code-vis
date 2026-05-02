@@ -677,6 +677,238 @@ class TestSceneGraphOutput:
             pos = n["position"]
             assert "x" in pos and "y" in pos and "z" in pos
 
+    def test_bounded_context_nodes_have_metrics_with_loc(self, src: Path) -> None:
+        """Spec scenario: JSON output — nodes include metrics with loc.
+
+        GIVEN a completed extraction
+        WHEN the output is written
+        THEN the JSON contains a list of nodes (id, name, type, parent, metrics)
+
+        The 'metrics' field MUST be present on bounded-context nodes and MUST
+        include 'loc' (lines of code) so the Godot visualizer can encode node
+        importance visually without recomputing from source.
+        """
+        graph = build_scene_graph(src)
+        bc_nodes = [n for n in graph["nodes"] if n["type"] == "bounded_context"]
+        assert bc_nodes, "Expected at least one bounded-context node in scene graph"
+        for node in bc_nodes:
+            assert "metrics" in node, (
+                f"Node {node['id']} missing 'metrics'. "
+                "Spec: 'the JSON contains a list of nodes (id, name, type, parent, metrics)'"
+            )
+            assert "loc" in node["metrics"], (
+                f"Node {node['id']} metrics missing 'loc'. "
+                "Spec: 'it computes the total lines of code for the module AND this "
+                "metric is included in the node\\'s metadata'"
+            )
+            assert isinstance(node["metrics"]["loc"], int), (
+                f"metrics['loc'] must be int; got {type(node['metrics']['loc'])}"
+            )
+            assert node["metrics"]["loc"] >= 0, (
+                f"metrics['loc'] must be non-negative; got {node['metrics']['loc']}"
+            )
+
+    def test_cross_context_edge_direction_encodes_importer_to_imported(
+        self, src: Path
+    ) -> None:
+        """Spec scenario: Cross-context dependency includes the direction.
+
+        GIVEN that the graph context imports from shared_kernel
+        WHEN the extractor analyzes imports
+        THEN a dependency edge is created from graph to shared_kernel
+        AND the edge includes the direction of the dependency
+
+        The src fixture has iam.domain importing from shared_kernel.auth.
+        The scene graph edge MUST have source='iam' and target='shared_kernel'
+        — NOT reversed — so Godot can render the arrow pointing from the
+        importing bounded context to the imported one.
+        """
+        graph = build_scene_graph(src)
+        matching = [
+            e
+            for e in graph["edges"]
+            if e["source"] == "iam"
+            and e["target"] == "shared_kernel"
+            and e["type"] == "cross_context"
+        ]
+        assert matching, (
+            "Scene graph must contain a cross_context edge with source='iam' and "
+            "target='shared_kernel'. "
+            "Spec: 'a dependency edge is created from graph to shared_kernel AND the "
+            "edge includes the direction of the dependency' — source is the importer, "
+            "target is the imported bounded context."
+        )
+
+    def test_internal_edge_distinguishable_from_cross_context(self, src: Path) -> None:
+        """Spec scenario: Internal dependency distinguishable from cross-context.
+
+        GIVEN that iam.application.services imports from iam.domain
+        WHEN the extractor analyzes imports
+        THEN a dependency edge is created within the iam context
+        AND the edge is distinguishable from cross-context dependencies
+
+        The edge type MUST be 'internal' (not 'cross_context') so the Godot
+        visualizer can render same-bounded-context imports differently from
+        cross-context imports.
+        """
+        graph = build_scene_graph(src)
+        matching = [
+            e
+            for e in graph["edges"]
+            if e["source"] == "iam.application"
+            and e["target"] == "iam.domain"
+            and e["type"] == "internal"
+        ]
+        assert matching, (
+            "Scene graph must contain an internal edge with source='iam.application' "
+            "and target='iam.domain' with type='internal'. "
+            "Spec: 'AND the edge is distinguishable from cross-context dependencies' — "
+            "type must be 'internal', not 'cross_context'."
+        )
+
+    def test_build_scene_graph_has_exactly_four_top_level_keys(self, src: Path) -> None:
+        """Spec §Schema Structure: no other top-level fields are present.
+
+        The extractor output MUST contain exactly nodes, edges, metadata, and
+        clusters at the top level — no additional fields are allowed.
+        This is the extractor-level complement of test_extra_top_level_key_raises
+        in test_schema.py which tests the validator; here we test the producer.
+        """
+        graph = build_scene_graph(src)
+        assert set(graph.keys()) == {"nodes", "edges", "metadata", "clusters"}, (
+            f"build_scene_graph must produce exactly 4 top-level keys; got {set(graph.keys())}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Requirement: Weighted Edge (spec §Edge Schema / §Weighted edge scenario)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def src_weighted(tmp_path: Path) -> Path:
+    """A source tree with two modules in 'alpha' both importing from 'beta'.
+
+    iam.domain imports from shared_kernel → 1 module-level cross-context import
+    iam.application also imports from shared_kernel → 2 module-level cross-context
+    imports in total.  The aggregate edge iam→shared_kernel should carry weight=2.
+
+    This fixture lets us verify the aggregate weight equals the import count rather
+    than just checking weight >= 1.
+    """
+    # Bounded context: iam with two modules that both import shared_kernel
+    iam = tmp_path / "iam"
+    domain = iam / "domain"
+    application = iam / "application"
+    for d in [iam, domain, application]:
+        d.mkdir(parents=True)
+        (d / "__init__.py").write_text("")
+
+    (domain / "models.py").write_text(
+        "from shared_kernel.auth import AuthToken\nclass User:\n    pass\n"
+    )
+    (application / "services.py").write_text(
+        "from shared_kernel.events import Event\nclass Svc:\n    pass\n"
+    )
+
+    # Bounded context: shared_kernel
+    sk = tmp_path / "shared_kernel"
+    sk.mkdir()
+    (sk / "__init__.py").write_text("")
+    (sk / "auth.py").write_text("class AuthToken:\n    pass\n")
+    (sk / "events.py").write_text("class Event:\n    pass\n")
+
+    return tmp_path
+
+
+class TestWeightedEdge:
+    """Spec §Edge Schema / §Weighted edge: weight on individual vs aggregate edges.
+
+    Spec THEN-clauses:
+    - Individual module-level edges each have weight: 1 (or weight omitted,
+      defaulting to 1).
+    - The extractor also emits an aggregate edge with source, target, type='aggregate',
+      and weight = total individual import count.
+    """
+
+    def test_individual_cross_context_edges_have_no_weight_field(
+        self, src: Path
+    ) -> None:
+        """Individual cross-context edges from the extractor have no 'weight' key.
+
+        Spec: 'individual module-level edges each have weight: 1 (or weight omitted,
+        defaulting to 1)'.  The extractor omits the field (implying default=1) so
+        that the Godot renderer can distinguish individual edges (no weight) from
+        aggregate edges (explicit weight > 1).
+        """
+        all_nodes: list[Node] = discover_bounded_contexts(src)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(src, bc["id"]))
+
+        edges = build_dependency_edges(src, all_nodes)
+        individual_cross_context = [e for e in edges if e["type"] == "cross_context"]
+        assert individual_cross_context, "Expected at least one cross_context edge"
+        for e in individual_cross_context:
+            assert "weight" not in e, (
+                f"Individual cross_context edge {e['source']}→{e['target']} "
+                f"must NOT carry a 'weight' field (weight=1 is implied by omission); "
+                f"got {e}"
+            )
+
+    def test_individual_internal_edges_have_no_weight_field(self, src: Path) -> None:
+        """Internal module edges from the extractor have no 'weight' key.
+
+        Spec: 'individual module-level edges each have weight: 1 (or weight omitted,
+        defaulting to 1)'.  The same omission rule applies to internal edges.
+        """
+        all_nodes: list[Node] = discover_bounded_contexts(src)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(src, bc["id"]))
+
+        edges = build_dependency_edges(src, all_nodes)
+        internal_edges = [e for e in edges if e["type"] == "internal"]
+        assert internal_edges, "Expected at least one internal edge"
+        for e in internal_edges:
+            assert "weight" not in e, (
+                f"Individual internal edge {e['source']}→{e['target']} "
+                f"must NOT carry a 'weight' field; got {e}"
+            )
+
+    def test_aggregate_edge_weight_equals_module_import_count(
+        self, src_weighted: Path
+    ) -> None:
+        """Aggregate edge weight equals the count of module-level cross-context imports.
+
+        Spec: 'context A has 12 individual import statements referencing modules in
+        context B … aggregate edge with … weight: 12'.
+
+        In this fixture, iam.domain AND iam.application both import from shared_kernel
+        → 2 unique module-level imports → aggregate iam→shared_kernel must carry weight=2.
+        """
+        all_nodes: list[Node] = discover_bounded_contexts(src_weighted)
+        for bc in list(all_nodes):
+            all_nodes.extend(discover_submodules(src_weighted, bc["id"]))
+
+        edges = build_dependency_edges(src_weighted, all_nodes)
+        agg = next(
+            (
+                e
+                for e in edges
+                if e["type"] == "aggregate"
+                and e["source"] == "iam"
+                and e["target"] == "shared_kernel"
+            ),
+            None,
+        )
+        assert agg is not None, (
+            "Expected an aggregate edge iam→shared_kernel; "
+            f"aggregate edges present: {[(e['source'], e['target']) for e in edges if e['type'] == 'aggregate']}"
+        )
+        assert agg["weight"] == 2, (
+            f"iam.domain and iam.application both import shared_kernel → weight must be 2; "
+            f"got weight={agg.get('weight')}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Requirement: Spec-Driven Context (specs/core/system-purpose.spec.md)
