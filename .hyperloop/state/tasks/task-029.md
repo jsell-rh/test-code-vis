@@ -3,7 +3,7 @@ id: task-029
 title: Implement Node primitive renderer in Godot
 spec_ref: specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd
 status: in_progress
-phase: spec-review
+phase: mark-ready
 deps:
 - task-011
 - task-012
