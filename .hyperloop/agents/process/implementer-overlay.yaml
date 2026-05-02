@@ -1308,6 +1308,71 @@ guidelines: |
   implementation is complete. New checks added to main since your last sync will
   only surface after the rebase brings them in.
 
+  ## ANIMATED TRANSITIONS — TWEEN CODE MUST EXIST IN THE RESPONSIBLE FUNCTION
+
+  When a spec THEN-clause says a transition "is animated smoothly", "animated
+  smoothly", "slides not jumps", "animates from X outward", or similar, the
+  function responsible for applying the change MUST contain a Tween branch:
+
+    if is_inside_tree():
+        var tween := create_tween()
+        tween.tween_property(node, "property", target, duration)
+    else:
+        node.property = target  # headless: direct assignment
+
+  **PASS-WITH-NOTE ≠ missing Tween.** PASS-WITH-NOTE applies ONLY when the
+  Tween code EXISTS in an `is_inside_tree()` branch and only the headless path
+  is used during tests — the architecture is correct, just unverifiable in CI.
+  If no `create_tween` call exists anywhere in the call path, the clause is
+  PARTIAL — architecture incomplete, NOT PASS-WITH-NOTE.
+
+  A comment "the caller should Tween" is NOT implementation. Delegation to a
+  non-existent caller is NOT implementation. The Tween code must be present
+  INSIDE the function responsible for applying the animated change — not
+  described, not deferred, not delegated.
+
+  **"Animates outward from X"** requires BFS-ordered staggered delays, not a
+  plain loop. Example pattern:
+    var hop_dist := _compute_hop_distances(context_id, nodes_data, edges_data)
+    for ctx_id: String in independent_contexts:
+        var delay := hop_dist.get(ctx_id, 0) * 0.15
+        var tween := create_tween()
+        tween.tween_interval(delay)
+        tween.tween_callback(func(): _apply_node_color(anchors[ctx_id], color))
+  Applying all changes simultaneously in a single loop (no delay) produces a
+  simultaneous flash — it is NOT "outward animation" and is PARTIAL.
+
+  Run `bash .hyperloop/checks/check-highlight-function-has-tween.sh` before
+  submitting whenever you implement highlight or color-change functions.
+
+  ## RELOAD / DATA-CHANGE SCENARIOS — CALL PRIMARY BUILD FUNCTION TWICE
+
+  When a spec THEN-clause describes behavior that occurs "on reload", "smooth
+  regrouping", "when new extraction produces different groups", or "nodes
+  animate to their new positions", the test MUST call the primary build
+  function (e.g., `build_from_graph()`) AT LEAST TWICE:
+
+  1. First call with initial fixture data. Record pre-state:
+       var anchor_before := main.get_anchors().get("ctx.module_id")
+       var pos_before := anchor_before.position
+
+  2. Second call with DIFFERENT fixture data (shifted positions, different
+     groupings). Assert BOTH:
+       a. State changed from the first call — position is different.
+       b. Node identity preserved — same Node3D object, not rebuilt:
+            assert anchor_after == anchor_before, "identity must be preserved"
+            assert not anchor_after.position.is_equal_approx(pos_before)
+
+  In headless mode, `_animate_node_to_position()` applies the direct assignment
+  path (`anchor.position = new_pos`). This IS testable — position changes are
+  observable after the second call without any Tween. A single-call test cannot
+  exercise the reload path and leaves this clause PARTIAL.
+
+  Observed failure (task-065): every test called `build_from_graph()` once. The
+  "smooth regrouping on data change" THEN-clause had no test that invoked it
+  twice with different node positions. The prior implementation of the same spec
+  (task-022) included exactly this test; it was not carried forward.
+
   ## EDGE/CONNECTION RE-ROUTING IS A DISTINCT IMPLEMENTATION REQUIREMENT
 
   When a spec scenario involves collapsing, grouping, folding, or aggregating nodes:

@@ -764,3 +764,67 @@ guidelines: |
   explicitly described edge re-routing. The implementer built correct supernode visuals
   and tinting. No edge re-routing code existed in either direction. Grep for rerouting
   patterns in changed files returned zero matches. All four clauses were MISSING.
+
+  ## ANIMATION CLAUSE AUDIT — PARTIAL vs PASS-WITH-NOTE (MANDATORY)
+
+  Run `bash .hyperloop/checks/check-highlight-function-has-tween.sh` and include
+  its complete output verbatim in your findings when any GDScript file defining
+  highlight or color-application functions is on the branch.
+
+  For any spec THEN-clause containing "animated smoothly", "transition animated",
+  "slides not jumps", or "animates from X outward":
+
+  1. Locate the implementation function responsible for applying the animated change.
+  2. Grep that function (and its file) for `create_tween` and `is_inside_tree`:
+       grep -n "create_tween\|is_inside_tree" godot/scripts/<file>.gd
+  3. Classify:
+     - `create_tween` present in an `is_inside_tree()` branch → architecture is
+       correct. PASS-WITH-NOTE: headless tests verify only the direct-assignment
+       path; the Tween path is untestable in CI.
+     - No `create_tween` anywhere in the file (only direct assignment, or comment
+       "caller should Tween") → architecture is INCOMPLETE. PARTIAL — not PASS-WITH-NOTE.
+  4. Do NOT accept an implementer's PASS-WITH-NOTE claim without independently
+     verifying `create_tween` appears in the implementation code.
+  5. A test that asserts only the final/steady-state outcome (color was applied,
+     position changed) does NOT verify animation architecture. Read the
+     implementation code directly; do not infer architecture from test assertions.
+
+  **Outward propagation clauses** ("animates from selected module outward",
+  "highlight propagates outward") additionally require BFS-ordered staggered
+  delays. A loop applying all changes simultaneously with no per-hop delay is
+  PARTIAL even when `create_tween` is present — simultaneity is not outward
+  propagation.
+
+  Observed failure (task-070, Finding 1): `_apply_node_color()` set
+  `albedo_color` directly with no Tween code anywhere in the file. The spec
+  clause "transition animated smoothly" was PARTIAL. The implementer claimed
+  PASS-WITH-NOTE, which was incorrect — that label requires existing Tween code.
+  Observed failure (task-070, Finding 2): all independent contexts received
+  the highlight color in one loop with no delay. "Animates from selected module
+  outward" was PARTIAL — simultaneous, not outward.
+
+  ## RELOAD PATH TEST VERIFICATION
+
+  For any spec THEN-clause describing behavior "on reload", "smooth regrouping",
+  "when new extraction produces different groups", or "nodes animate to new
+  positions":
+
+  1. Find the test that the implementer maps to this clause.
+  2. Count how many times the primary build function (e.g., `build_from_graph()`)
+     is called in that test:
+       grep -c "build_from_graph\|build_from" <test_file>.gd
+  3. A test that calls the build function only ONCE cannot exercise the reload
+     path — the clause is PARTIAL.
+  4. A valid reload test must:
+     - Call build once with initial data.
+     - Record an anchor identity and its position.
+     - Call build again with DIFFERENT data.
+     - Assert the anchor's position changed AND the object identity is the same.
+  5. In headless mode the direct-assignment path is used (`anchor.position = new_pos`).
+     This IS testable. "Headless can't verify Tween" does NOT excuse the absence of
+     a two-call test — the position change is observable without Tween.
+
+  Observed failure (task-065): every test for the "smooth regrouping on data
+  change" scenario called `build_from_graph()` exactly once. The reload path
+  was never exercised. The clause was PARTIAL. The verifier provided the exact
+  test body needed; the fix required only adding one test function.
