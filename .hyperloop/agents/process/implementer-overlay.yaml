@@ -642,6 +642,77 @@ guidelines: |
   file that was also on main should show ZERO diff for the scene file, or only
   the intentional new changes — never a dangling `[ext_resource]` reference.
 
+  ## TASK DELIVERABLE ALIGNMENT — VERIFY BEFORE WRITING ANY CODE
+
+  The task description names a PRIMARY DELIVERABLE (e.g., "Godot Node Primitive
+  renderer", "Python extractor: scope extraction"). Before writing a single line of
+  code, answer: **Which files will this task create or modify, and do those files
+  match the component the task description names?**
+
+  Observed failure (task-029): the task said "Node Primitive renderer in Godot."
+  The implementer wrote Python extractor improvements (data-flow spine, edge weights)
+  and created zero Godot files. The entire implementation was wrong-deliverable.
+
+  **Mandatory deliverable check before coding:**
+
+  1. Read the task description. Identify the primary deliverable:
+     - "Godot [something]" → deliverable is `.gd` / `.tscn` files in `godot/`
+     - "Extractor: [something]" → deliverable is `.py` files in `extractor/`
+     - A task may span both components — confirm which parts.
+
+  2. If the deliverable is unclear, STOP and ask the orchestrator to clarify
+     before writing any code. Do NOT infer the deliverable from a related spec
+     requirement that happens to be unimplemented.
+
+  3. After implementation, confirm: do the files you created/modified match the
+     deliverable identified in step 1? If not, you have built the wrong thing.
+
+  A correct implementation of the wrong deliverable is always a FAIL.
+
+  ## NO VACUOUS ITERATION GUARDS IN TESTS
+
+  When a spec THEN-clause is categorical — "the spine MUST include", "at least
+  one entry MUST exist" — the test MUST assert the collection is non-empty with an
+  explicit failure message BEFORE iterating over it. Never use `if collection:` as
+  a guard for spec-required mandatory output.
+
+  Observed failure (task-029): `test_interprocedural_entries_have_required_keys`
+  used `if ip_entries:` before iterating. The test passed silently with zero
+  interprocedural entries — the MUST clause was never actually verified.
+
+  WRONG — passes vacuously when the extractor produces zero entries:
+    if ip_entries:
+        for ip in ip_entries:
+            assert "call_name" in ip
+
+  RIGHT — fails correctly when the extractor produces zero entries:
+    assert ip_entries, "a_func(x) calling b_func(x) must produce at least one entry"
+    for ip in ip_entries:
+        assert "call_name" in ip
+
+  Run `bash .hyperloop/checks/check-no-vacuous-iteration.sh` before submitting
+  and confirm exit 0.
+
+  ## FIXTURE ENTITY TYPE ALIGNMENT
+
+  When a spec scenario names a specific entity type (e.g., "a function
+  `validate_order`", "a class node", "a method node"), test fixtures MUST use
+  that EXACT entity type. Substituting `module` or `bounded_context` in place of
+  `function` or `class` does NOT cover the scenario — it tests a different code
+  path and leaves the named type completely unexercised.
+
+  Observed failure (task-029): spec required tests for `function`- and
+  `class`-type nodes; all existing tests used only `module` and `bounded_context`
+  fixtures. The function/class rendering paths were never covered.
+
+  Before marking any THEN-clause as COVERED, confirm:
+  1. What entity type does the spec scenario name? (e.g., `"type": "function"`)
+  2. Does the test fixture include an entry with that EXACT type value?
+  3. Does the assertion target the result for that specific type — not a fallback?
+
+  A test that passes only because the entity falls into an `else` branch (same
+  rendering as any unrecognized type) does NOT cover a named-type scenario.
+
   ## MUST-REQUIREMENT ENUMERATION — COMPLETE BEFORE ANY IMPLEMENTATION
 
   Before writing a single line of implementation code, enumerate EVERY requirement

@@ -426,6 +426,78 @@ guidelines: |
   pass" or "N tests green" unless you have run those checks yourself on the
   current branch state.
 
+  ## DELIVERABLE TYPE MISMATCH (run before reading any implementation code)
+
+  Before reviewing implementation quality, confirm the branch contains files of the
+  component the task spec requires. A branch that touches only Python when the task
+  is a Godot renderer has MISSING deliverable — do not review code quality.
+
+  Check:
+  1. Read the task description's primary deliverable (Godot renderer vs. Python
+     extractor vs. both).
+  2. Run `git diff --name-only main..HEAD` and classify each file by component:
+     - `godot/**` → Godot component
+     - `extractor/**` → Python extractor component
+     - `.hyperloop/**` → process only (not a deliverable)
+  3. If the task requires Godot files but the branch has zero `godot/` changes,
+     the entire deliverable is MISSING — issue FAIL immediately with the finding
+     "No Godot files were created or modified; the branch only touches [component]."
+  4. Similarly, if the task requires Python extractor work but the branch has
+     zero `extractor/` changes, issue FAIL with the equivalent finding.
+
+  Observed failure (task-029): task required a Godot Node Primitive renderer.
+  The branch had two commits touching only `extractor/extractor.py` and
+  `extractor/tests/test_extractor.py`. No `godot/` files existed. The correct
+  verdict was immediate FAIL — wrong deliverable — without reading Python code.
+
+  ## VACUOUS ITERATION GUARD DETECTION
+
+  When reviewing test coverage for a THEN-clause that says a collection MUST be
+  non-empty ("the spine MUST include…", "at least one entry"), check whether the
+  test actually fails when the collection is empty.
+
+  Run `bash .hyperloop/checks/check-no-vacuous-iteration.sh` and include its
+  complete output verbatim in your report.
+
+  Also manually audit: when a THEN-clause is categorical, grep the test body for
+  `if <var>:` before `for ... in <var>:`. This pattern passes silently with zero
+  entries and does NOT cover the mandatory-non-empty THEN-clause.
+
+  WRONG — passing vacuously:
+    if ip_entries:
+        for ip in ip_entries:
+            assert "call_name" in ip   # never runs when ip_entries == []
+
+  RIGHT — failing correctly:
+    assert ip_entries, "must produce at least one entry"
+    for ip in ip_entries:
+        assert "call_name" in ip
+
+  Mark any THEN-clause that requires a non-empty collection as PARTIAL (not
+  COVERED) when its test uses an `if collection:` guard before iteration.
+
+  ## PROXIMITY-HEURISTIC CHECK GATES — READ THE ACTUAL ASSERTION
+
+  When a check script uses proximity heuristics (e.g., "does the term 'weight'
+  appear within 25 lines of 'cross_context'?"), do NOT accept the heuristic's
+  positive result as conclusive. Read the actual test assertion to confirm it
+  asserts PRESENCE of the field — not ABSENCE.
+
+  Observed failure (task-063): `check-individual-edge-weight.sh` Gate 2 fired
+  positively on `test_individual_cross_context_edges_have_no_weight_field` because
+  both `"cross_context"` and `"weight"` appeared within 25 lines. The actual
+  assertion was `assert "weight" not in e` — an absence assertion, the opposite
+  of coverage. The Gate 2 heuristic produced a false positive.
+
+  For any check script that uses window/proximity matching:
+  1. Find the matched test function in the test file.
+  2. Read the assertion line. Does it assert `"field" in obj` (presence) or
+     `"field" not in obj` (absence)?
+  3. An absence assertion on a field that the spec requires to be PRESENT is
+     not coverage — it is a confirmation that the field is missing.
+  4. If the only matched test asserts absence, Gate 2 is a false positive. Mark
+     the requirement as MISSING and issue FAIL for the Gate 1 implementation gap.
+
   ## IMPLEMENTATION FILE VERIFICATION (run before reading any code)
 
   Run `bash .hyperloop/checks/check-branch-has-impl-files.sh` and include its

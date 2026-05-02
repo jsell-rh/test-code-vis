@@ -116,6 +116,9 @@ else
         "$TEST_FILE" 2>/dev/null || true)
 
     # Check 2: "cross_context" or "internal" and "weight" in proximity (25-line window)
+    # NOTE: the proximity hit must assert PRESENCE of weight ("weight" in e or e["weight"]),
+    # NOT absence ("weight" not in e / assert "weight" not in ...). A test that asserts
+    # the field is absent is the opposite of coverage — it is a false positive.
     PROXIMITY_HIT=""
     while IFS= read -r hit; do
         line_num=$(echo "$hit" | cut -d: -f1)
@@ -125,7 +128,14 @@ else
         WINDOW=$(sed -n "${START},${END}p" "$TEST_FILE" 2>/dev/null)
         if echo "$WINDOW" | grep -q '"weight"'; then
             # Exclude if the window only mentions aggregate
-            if ! echo "$WINDOW" | grep '"weight"' | grep -q 'aggregate'; then
+            if echo "$WINDOW" | grep '"weight"' | grep -q 'aggregate'; then
+                continue
+            fi
+            # Exclude if every "weight" line in the window is a NOT-IN assertion
+            # (asserting absence: `"weight" not in e` or `not in.*weight`)
+            WEIGHT_LINES=$(echo "$WINDOW" | grep '"weight"')
+            PRESENCE_LINES=$(echo "$WEIGHT_LINES" | grep -v 'not in\|not_in' || true)
+            if [ -n "$PRESENCE_LINES" ]; then
                 PROXIMITY_HIT="line $line_num"
                 break
             fi
