@@ -36,6 +36,8 @@ func _init() -> void:
 
 	# --- task-013: Godot 4.6 / Engine version scenario ---
 	_run_suite(preload("res://tests/test_godot_version.gd").new())
+	# --- task-013: Full godot-application.spec.md integration suite ---
+	_run_suite(preload("res://tests/test_godot_app_spec.gd").new())
 
 	# --- task-014: Spatial structure spec ---
 	_run_suite(preload("res://tests/test_spatial_structure.gd").new())
