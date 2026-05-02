@@ -762,6 +762,29 @@ guidelines: |
   Omitting one source because it "seemed less common" or "was not in the
   examples" is always a FAIL — the spec enumeration is exhaustive.
 
+  ## COUNT ACCUMULATION — DICT NOT SET
+
+  When a spec THEN-clause says each entity "carries the import count", "carries the
+  call count", or "carries the number of X between [a] and [b]", implement the
+  accumulator as `dict[key, int]` — NEVER as `set[key]`.
+
+  A `set` deduplicates without counting. `raw_edges.add((a, b, c))` records the
+  triple at most once regardless of how many times you call it — the occurrence
+  count is discarded. Only a `dict`-based counter accumulates correctly:
+    raw_edge_count: dict[tuple[str, str, str], int] = {}
+    raw_edge_count[key] = raw_edge_count.get(key, 0) + 1
+
+  Observed failure (task-034): `raw_edges: set[tuple[str, str, EdgeType]]` was used
+  in `build_dependency_edges()`. Each unique (source, target, type) triple was stored
+  once. When `weight` was required on individual edges, there was no count to use —
+  the set had discarded all occurrence data. Only aggregate edges (built separately)
+  had weight. Fix: replace the set with `dict[tuple, int]` before writing any
+  construction or emission code.
+
+  Self-check before writing any accumulation code: "Can two import statements between
+  the same source and target produce a weight > 1?" If yes, use `dict[key, int]`,
+  not `set[key]`.
+
   ## ALL-VARIANTS FIELD COVERAGE — "EACH EDGE" MEANS EVERY EDGE TYPE
 
   When a spec says a field applies to "each edge", "every edge", or "each [entity]",
