@@ -479,3 +479,66 @@ guidelines: |
   the branch did not touch it, apply the standard "pre-existing gap / not this
   task's remit" rule — but only when the branch made ZERO changes to that level's
   code path. If the branch touches shared LOD infrastructure, all levels are in scope.
+
+  ## BIDIRECTIONAL OPERATION AUDIT (collapse/expand, open/close, fold/unfold)
+
+  When a spec defines a forward operation AND its reverse, audit EACH direction
+  independently before assigning coverage status:
+
+  **Forward direction (collapse, close, fold):**
+  1. Does the implementation capture ALL state needed by the reverse?
+     Required: original positions, original edge endpoints, member list, any metrics.
+     Missing any of these means the reverse cannot work correctly — mark PARTIAL.
+  2. Does the implementation apply ALL side effects specified in the THEN-clauses?
+     (Node animation, edge re-routing, label creation, etc.)
+
+  **Reverse direction (expand, open, unfold):**
+  1. Does the implementation READ the captured state from the forward operation?
+     An expand that only calls `anchor.visible = true` WITHOUT restoring captured
+     positions and edge endpoints is PARTIAL — visibility alone is not restoration.
+  2. Does the implementation animate members BACK to their original positions
+     (using the values captured during the forward operation)?
+  3. Does the implementation restore edge endpoints to their original locations?
+
+  Mark as PARTIAL (not COVERED) whenever:
+  - State is captured during forward but not used during reverse.
+  - The reverse restores visibility without restoring position or edge endpoints.
+  - Original positions were not stored during forward, making correct reverse
+    mathematically impossible (not just untested).
+
+  Observed failure (task-019): `expand_cluster()` restored `anchor.visible = true`
+  for each member but contained no Tween position animation and no edge endpoint
+  restoration. The code comment inside the function explicitly acknowledged that
+  original positions were not stored. Both expand THEN-clauses were PARTIAL/MISSING.
+
+  ## EDGE RE-ROUTING COVERAGE AUDIT
+
+  When a spec THEN-clause uses the words "edge", "re-route", "reroute",
+  "formerly connected", "updated edges", or "point to [supernode/aggregate]":
+
+  1. Search the implementation files for edge re-routing code:
+       grep -n "edge.*supernode\|reroute\|_path_edge_entries\|endpoint.*supernode" \
+           godot/scripts/*.gd
+     If grep returns zero matches, ALL edge re-routing THEN-clauses are MISSING.
+     Do not mark any of them COVERED based on node-visual code alone.
+
+  2. Verify re-routing exists in BOTH directions:
+     - Collapse direction: edges that connected to cluster members now point to supernode.
+     - Expand direction: those same edges restored to original endpoints.
+     If only one direction is implemented, the other direction's THEN-clauses are MISSING.
+
+  3. Verify test coverage for edge re-routing:
+     - A valid test builds a fixture with edges that CROSS the cluster boundary.
+     - Calls collapse and asserts the edge endpoint position equals supernode position.
+     - Calls expand and asserts the edge endpoint returns to the original node position.
+     Tests that only assert supernode creation or member visibility do NOT cover
+     edge re-routing THEN-clauses.
+
+  4. Node-visual changes (supernode appearance, tinting, labels) are ORTHOGONAL to
+     edge re-routing. A perfect supernode implementation with zero edge re-routing
+     leaves all edge-related THEN-clauses MISSING.
+
+  Observed failure (task-019): four THEN-clauses across collapse and expand scenarios
+  explicitly described edge re-routing. The implementer built correct supernode visuals
+  and tinting. No edge re-routing code existed in either direction. Grep for rerouting
+  patterns in changed files returned zero matches. All four clauses were MISSING.

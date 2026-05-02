@@ -342,8 +342,21 @@ guidelines: |
 
   ## SUBMISSION GATES
 
-  1. `bash .hyperloop/checks/run-all-checks.sh` — must exit 0 before submitting
-  2. Never stage files under `.hyperloop/state/` — use `git add <file>` for specific files
+  Execute in this exact order immediately before writing your report:
+
+  1. Sync Point 2 — sync check scripts and verify rebase (see CHECK SYNC and
+     CHECK SYNC ≠ REBASE sections above for the full three-command sequence).
+  2. `bash .hyperloop/checks/run-all-checks.sh` — must exit 0.
+  3. `bash .hyperloop/checks/check-rebased-onto-main.sh` — run THIS AGAIN as
+     the FINAL command, after run-all-checks.sh passes. Main can advance between
+     your sync and your submission; this final check catches that race.
+     If it exits non-zero: rebase, re-run run-all-checks.sh, and re-run this
+     check before submitting.
+  4. Never stage files under `.hyperloop/state/` — use `git add <file>` for specific files.
+
+  Observed failure (task-013): branch was clean at all prior check points, but
+  main received 3 process-only commits after the implementer's last sync. The
+  branch was submitted without a final rebase check, causing FAIL on review.
 
   ## COORDINATE FRAME — PRODUCTION SOURCE CODE
 
@@ -774,3 +787,67 @@ guidelines: |
   If it exits non-zero the hash is not a commit. Re-run the `git log` command above
   and use its output instead. `check-spec-ref-valid.sh` enforces this mechanically
   and will FAIL your submission if a blob hash is present.
+
+  ## BIDIRECTIONAL OPERATIONS — COMPLETE STATE CAPTURE AND REVERSAL
+
+  When a spec defines a forward operation AND its reverse (collapse/expand,
+  open/close, fold/unfold, group/ungroup), you MUST implement both directions
+  as a unit. Before writing any code:
+
+  1. List EVERY piece of state the forward operation changes:
+     - Positions, visibility, parent-child relationships, edge endpoints, labels, etc.
+  2. For each changed state item, confirm:
+     - The forward operation CAPTURES the original value before changing it.
+     - The reverse operation RESTORES the original value using the captured state.
+  3. Edge endpoints are state. If collapse moves nodes, any edges that connected
+     to those nodes must have their endpoints updated — in BOTH directions.
+
+  Required pattern for state capture:
+    # During collapse — capture everything needed for expansion
+    _collapse_state[cluster_id] = {
+        "original_positions": { member_id: anchor.position, ... },
+        "original_edge_endpoints": { edge_id: { "from": pos_a, "to": pos_b }, ... },
+        "members": [...],
+        "supernode": supernode_ref,
+    }
+
+    # During expand — restore from captured state
+    var state = _collapse_state[cluster_id]
+    for member_id in state["members"]:
+        tween.tween_property(anchor, "position", state["original_positions"][member_id], ...)
+
+  Observed failure (task-019): `collapse_cluster()` captured centroid and members
+  but NOT original member positions or edge endpoints. `expand_cluster()` could only
+  restore visibility — position animation and edge restoration were impossible because
+  the data was never captured. The forward operation was incomplete from the moment
+  of implementation.
+
+  A forward operation that does not capture all state needed by its reverse is
+  always PARTIAL/FAIL — regardless of how well the visual side works.
+
+  ## EDGE/CONNECTION RE-ROUTING IS A DISTINCT IMPLEMENTATION REQUIREMENT
+
+  When a spec scenario involves collapsing, grouping, folding, or aggregating nodes:
+
+  1. BEFORE writing code, search every THEN-clause for the words:
+     "edge", "edges", "connection", "re-route", "reroute", "formerly connected",
+     "updated", "point to", "directed to".
+  2. If any such clause exists, edge re-routing is a SEPARATE implementation task
+     from node-visual changes. It requires:
+     - Iterating the rendered edge data structures (e.g., `_path_edge_entries`).
+     - Finding edges whose source OR target is a member of the collapsed/grouped set.
+     - Moving their endpoint (with Tween if in scene tree) to the new supernode/group.
+     - Storing original endpoints in `_collapse_state` so expansion can restore them.
+  3. Implementing the node-visual side (supernode appearance, tinting) WITHOUT
+     the edge-routing side is always PARTIAL/FAIL for every edge-related THEN-clause.
+
+  Edge re-routing THEN-clauses require two separate sets of tests:
+  - Collapse test: build fixture with edges spanning cluster boundary → collapse →
+    assert edge endpoint position matches supernode position.
+  - Expand test: collapse then expand → assert edge endpoint returns to
+    original node position.
+
+  Observed failure (task-019): `collapse_cluster()` created a visually correct
+  supernode with aggregate metrics, but zero edge re-routing code was written.
+  Grep for "edge.*supernode", "reroute", "_path_edge_entries" in changed files
+  returned zero matches. Four THEN-clauses (two per direction) were MISSING.
