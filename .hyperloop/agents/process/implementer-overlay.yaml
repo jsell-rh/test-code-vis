@@ -845,12 +845,12 @@ guidelines: |
     raw_edge_count: dict[tuple[str, str, str], int] = {}
     raw_edge_count[key] = raw_edge_count.get(key, 0) + 1
 
-  Observed failure (task-034): `raw_edges: set[tuple[str, str, EdgeType]]` was used
-  in `build_dependency_edges()`. Each unique (source, target, type) triple was stored
-  once. When `weight` was required on individual edges, there was no count to use —
-  the set had discarded all occurrence data. Only aggregate edges (built separately)
-  had weight. Fix: replace the set with `dict[tuple, int]` before writing any
-  construction or emission code.
+  Observed failure (task-034, task-108 round 10): `raw_edges: set[tuple[str, str, EdgeType]]`
+  was used in `build_dependency_edges()`. Each unique (source, target, type) triple was
+  stored once. When `weight` was required on individual edges, there was no count to use —
+  the set had discarded all occurrence data. Only aggregate edges (built separately) had
+  weight. Task-108 repeated this exact mistake across ten review cycles. Fix: replace the
+  set with `dict[tuple, int]` before writing any construction or emission code.
 
   Self-check before writing any accumulation code: "Can two import statements between
   the same source and target produce a weight > 1?" If yes, use `dict[key, int]`,
@@ -862,11 +862,11 @@ guidelines: |
   the field MUST be emitted on ALL distinct type variants — not just the most complex
   or aggregated one.
 
-  Blocking failure pattern (task-023): spec said "each edge carries the import count."
-  `build_dependency_edges()` emitted `weight` on `aggregate` edges only.
-  Individual `cross_context` and `internal` edges had no `weight` field and no
-  per-(source,target) import-count accumulator. `test_aggregate_edge_has_weight`
-  passed, giving false confidence. Individual edges were untested for this field.
+  Blocking failure pattern (task-023, task-108 round 10): spec said "each edge carries
+  the import count." `build_dependency_edges()` emitted `weight` on `aggregate` edges
+  only. Individual `cross_context` and `internal` edges had no `weight` field and no
+  per-(source,target) import-count accumulator. `test_aggregate_edge_has_weight` passed,
+  giving false confidence. Individual edges were untested for this field.
 
   **Before implementing any field that the spec requires on "each [entity]":**
 
@@ -879,6 +879,35 @@ guidelines: |
        - test_cross_context_edge_has_weight
        - test_internal_edge_has_weight
      A single test for one variant (e.g., aggregate) is PARTIAL — not COVERED.
+
+  ## ABSENCE ASSERTION ON REQUIRED FIELD — ACTIVE WRONG, NOT JUST MISSING COVERAGE
+
+  When a spec THEN-clause says a field MUST be present on every entity, writing
+  `assert "field" not in entity` is an anti-assertion: it passes precisely when the
+  field is ABSENT (the bug) and fails only when the field is correctly PRESENT (the fix).
+  This is worse than missing coverage — it actively validates the broken state.
+
+  `check-individual-edge-weight.sh` Gate 2 explicitly rejects proximity windows where
+  every "weight" mention is a NOT-IN assertion. A test like
+  `assert "weight" not in e` on a cross_context edge causes Gate 2 to FAIL — NOT pass.
+
+  Observed failure pattern (task-063 → reflected in task-108): prior rounds added a
+  test named `test_individual_cross_context_edges_have_no_weight_field` asserting absence.
+  The proximity heuristic fired on "cross_context"+"weight" but the assertion was wrong
+  direction. Gate 2 was updated to catch this; it will FAIL your submission.
+
+  **Required pattern for a required field test:**
+    cc_edges = [e for e in edges if e["type"] == "cross_context"]
+    assert cc_edges, "Expected at least one cross_context edge"
+    for e in cc_edges:
+        assert "weight" in e, f"cross_context edge missing weight: {e}"
+        assert e["weight"] >= 1, f"weight must be >= 1: {e}"
+
+  **Self-check before marking any variant's test COVERED:**
+  1. Find the assertion line in your test.
+  2. Does it contain `not in`? → It is an anti-assertion. Rewrite to assert presence.
+  3. Does it assert the field's VALUE (`e["weight"] >= 1`)? → Correct.
+  4. Does it assert the collection is non-empty before iterating? → Required.
 
   Run `bash .hyperloop/checks/check-individual-edge-weight.sh` before submitting
   when the task touches dependency edge construction.
