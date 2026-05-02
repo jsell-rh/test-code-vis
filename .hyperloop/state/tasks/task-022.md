@@ -2,14 +2,14 @@
 id: task-022
 title: Implement independence queryable property (click-to-highlight independent peers)
 spec_ref: specs/visualization/orthogonal-independence.spec.md@ca0ad7afad8d95361892fbfba84f55049cf288fd
-status: not_started
-phase: null
+status: in_progress
+phase: implement
 deps:
 - task-005
 - task-011
 - task-016
 round: 0
-branch: null
+branch: hyperloop/task-022
 pr: null
 pr_title: 'feat(godot): implement independence queryable property with animated highlight'
 pr_description: "## What and Why\n\nTask-016 makes independence visible passively\
