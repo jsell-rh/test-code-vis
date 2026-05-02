@@ -36,6 +36,57 @@ EdgeType = Literal[
 SymbolVisibility = Literal["public", "private"]
 SymbolKind = Literal["function", "class", "constant", "variable"]
 
+
+# ---------------------------------------------------------------------------
+# Annotation types (visual-primitives.spec.md § Purpose-Level Annotation)
+# ---------------------------------------------------------------------------
+
+
+class BeaconInfo(TypedDict):
+    """A recognized programming pattern attached to a node.
+
+    Spec: visual-primitives.spec.md § Requirement: Purpose-Level Annotation
+    / Scenario: Beacon recognition
+
+    Beacon ``pattern`` values are open-vocabulary strings — the LLM names what
+    it finds.  Unlike Badges (which have a closed fixed vocabulary), beacon
+    pattern names are NOT validated against any fixed list.  New patterns are
+    discovered without a schema change.
+    """
+
+    pattern: str
+    """Short canonical name of the recognized pattern.
+
+    Examples: ``'retry_loop'``, ``'accumulator'``, ``'observer_dispatch'``,
+    ``'circuit_breaker'``, ``'command_pattern'``, ``'repository_pattern'``.
+    Open vocabulary — the LLM names what it finds.
+    """
+
+    description: str
+    """One sentence explaining the specific instance of this pattern."""
+
+
+class InvariantInfo(TypedDict):
+    """A business rule or structural constraint enforced collectively by a node.
+
+    Spec: visual-primitives.spec.md § Requirement: Purpose-Level Annotation
+    / Scenario: Invariant annotation
+    """
+
+    rule: str
+    """One sentence stating the invariant in domain language.
+
+    Example: ``'Order cannot ship if payment is pending.'``
+    Must be non-empty.
+    """
+
+    enforced_by: list[str]
+    """Node IDs of the modules or functions that enforce this invariant.
+
+    May be empty when the enforcement path is unclear.
+    """
+
+
 BadgeType = Literal[
     "pure",
     "io",
@@ -255,6 +306,48 @@ class Node(TypedDict):
     When True, the renderer displays a power-rail indicator on this node.
     """
 
+    # ------------------------------------------------------------------
+    # Purpose-Level Annotation fields (visual-primitives.spec.md)
+    # These fields are populated by LLM-based annotation agents, NOT by
+    # the deterministic extractor pipeline.  They remain absent in purely
+    # extractor-produced outputs.
+    # ------------------------------------------------------------------
+
+    purpose_annotation: NotRequired[str | None]
+    """Human-readable sentence describing what this node is FOR, not what it does.
+
+    Spec: visual-primitives.spec.md § Requirement: Purpose-Level Annotation
+    / Scenario: LLM-generated purpose annotation
+
+    Present on ``'module'`` and ``'bounded_context'`` nodes only.
+    - string: authored purpose description.
+    - null: annotation key present but intentionally blank.
+    - absent: annotation has not been computed for this node.
+    """
+
+    beacons: NotRequired[list[BeaconInfo]]
+    """Recognized programming patterns attached to this node.
+
+    Spec: visual-primitives.spec.md § Requirement: Purpose-Level Annotation
+    / Scenario: Beacon recognition
+
+    May be present on any node type.  Absent when no beacon analysis has run.
+    Empty array when analysis ran but no patterns were recognized.
+    Each entry names an open-vocabulary pattern the LLM recognized in the
+    node's implementation.
+    """
+
+    invariants: NotRequired[list[InvariantInfo]]
+    """Business rules or structural constraints collectively enforced by this node.
+
+    Spec: visual-primitives.spec.md § Requirement: Purpose-Level Annotation
+    / Scenario: Invariant annotation
+
+    Present on ``'module'`` and ``'bounded_context'`` nodes only.
+    Absent when no invariant analysis has run.
+    Empty array when analysis ran but no invariants were identified.
+    """
+
 
 class Edge(TypedDict):
     """A directed dependency edge between two nodes."""
@@ -451,6 +544,99 @@ def validate_scene_graph(graph: object) -> None:
                 )
             if depth < 1:
                 raise ValueError(f"nodes[{i}]['depth'] must be >= 1, got {depth!r}")
+
+        # Validate optional 'purpose_annotation' (Purpose-Level Annotation).
+        # When present: must be a string or None.
+        # When absent: valid — annotation not yet computed.
+        if "purpose_annotation" in node:
+            pa = node["purpose_annotation"]
+            if pa is not None and not isinstance(pa, str):
+                raise ValueError(
+                    f"nodes[{i}]['purpose_annotation'] must be a string or null, "
+                    f"got {type(pa).__name__!r}"
+                )
+
+        # Validate optional 'beacons' (Purpose-Level Annotation / Beacon).
+        # When present: must be a list; each entry must have pattern (non-empty
+        # string) and description (string).  pattern is open-vocabulary — NOT
+        # validated against a fixed list.
+        # When absent: valid — beacon analysis has not run.
+        if "beacons" in node:
+            beacons = node["beacons"]
+            if not isinstance(beacons, list):
+                raise ValueError(
+                    f"nodes[{i}]['beacons'] must be a list, "
+                    f"got {type(beacons).__name__!r}"
+                )
+            for j, beacon in enumerate(beacons):
+                if not isinstance(beacon, dict):
+                    raise ValueError(
+                        f"nodes[{i}]['beacons'][{j}] must be a dict, "
+                        f"got {type(beacon).__name__!r}"
+                    )
+                if "pattern" not in beacon:
+                    raise ValueError(
+                        f"nodes[{i}]['beacons'][{j}] missing required key 'pattern'"
+                    )
+                if not isinstance(beacon["pattern"], str):
+                    raise ValueError(
+                        f"nodes[{i}]['beacons'][{j}]['pattern'] must be a string, "
+                        f"got {type(beacon['pattern']).__name__!r}"
+                    )
+                if not beacon["pattern"]:
+                    raise ValueError(
+                        f"nodes[{i}]['beacons'][{j}]['pattern'] must be non-empty"
+                    )
+                if "description" not in beacon:
+                    raise ValueError(
+                        f"nodes[{i}]['beacons'][{j}] missing required key 'description'"
+                    )
+                if not isinstance(beacon["description"], str):
+                    raise ValueError(
+                        f"nodes[{i}]['beacons'][{j}]['description'] must be a string, "
+                        f"got {type(beacon['description']).__name__!r}"
+                    )
+
+        # Validate optional 'invariants' (Purpose-Level Annotation / Invariant).
+        # When present: must be a list; each entry must have rule (non-empty
+        # string) and enforced_by (list of strings, may be empty).
+        # When absent: valid — invariant analysis has not run.
+        if "invariants" in node:
+            invariants = node["invariants"]
+            if not isinstance(invariants, list):
+                raise ValueError(
+                    f"nodes[{i}]['invariants'] must be a list, "
+                    f"got {type(invariants).__name__!r}"
+                )
+            for j, inv in enumerate(invariants):
+                if not isinstance(inv, dict):
+                    raise ValueError(
+                        f"nodes[{i}]['invariants'][{j}] must be a dict, "
+                        f"got {type(inv).__name__!r}"
+                    )
+                if "rule" not in inv:
+                    raise ValueError(
+                        f"nodes[{i}]['invariants'][{j}] missing required key 'rule'"
+                    )
+                if not isinstance(inv["rule"], str):
+                    raise ValueError(
+                        f"nodes[{i}]['invariants'][{j}]['rule'] must be a string, "
+                        f"got {type(inv['rule']).__name__!r}"
+                    )
+                if not inv["rule"]:
+                    raise ValueError(
+                        f"nodes[{i}]['invariants'][{j}]['rule'] must be non-empty"
+                    )
+                if "enforced_by" not in inv:
+                    raise ValueError(
+                        f"nodes[{i}]['invariants'][{j}] missing required key"
+                        " 'enforced_by'"
+                    )
+                if not isinstance(inv["enforced_by"], list):
+                    raise ValueError(
+                        f"nodes[{i}]['invariants'][{j}]['enforced_by'] must be a list,"
+                        f" got {type(inv['enforced_by']).__name__!r}"
+                    )
 
     for i, edge in enumerate(graph["edges"]):
         if not isinstance(edge, dict):
