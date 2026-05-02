@@ -496,3 +496,120 @@ func test_transitive_dependency_excludes_from_independent() -> void:
 		"'middle' is directly connected to ctx → must NOT be independent")
 	_check(not independent.has("leaf"),
 		"'leaf' is transitively connected to ctx via middle → must NOT be independent")
+
+
+# ===========================================================================
+# Requirement: Animated highlight transition architecture
+# ===========================================================================
+
+## AND the transition between default and independence-highlighted states is
+##     animated smoothly — headless path applies colours instantly (no Tween),
+##     verifying the else-branch of is_inside_tree() works correctly.
+func test_highlight_animation_headless_branch_applies_color() -> void:
+	_test_failed = false
+	# Outside a scene tree, is_inside_tree() returns false → instant path.
+	# Colours must still be applied correctly (same behaviour as before for tests).
+	var graph: Dictionary = _make_two_group_graph()
+	var nodes: Array = graph["nodes"]
+
+	var anchors: Dictionary = {}
+	for nd: Dictionary in nodes:
+		anchors[nd.get("id", "")] = _make_anchor(nd.get("id", ""))
+
+	var query := IndependenceQuery.new()
+	# Anchors are NOT in a scene tree here — is_inside_tree() is false.
+	# The else-branch in _apply_node_color must set the color immediately.
+	query.apply_independence_highlight("ctx.alpha", nodes, anchors)
+
+	# Verify headless (non-tree) path applied the colors correctly.
+	var alpha_color: Color = _get_color(anchors.get("ctx.alpha") as Node3D)
+	_check(alpha_color.r > 0.8 and alpha_color.g > 0.8,
+		"Headless else-branch: ctx.alpha must get SELECTED_COLOR (bright yellow); "
+		+ "got r=%.2f g=%.2f" % [alpha_color.r, alpha_color.g])
+
+	var gamma_color: Color = _get_color(anchors.get("ctx.gamma") as Node3D)
+	_check(gamma_color.g > 0.7 and gamma_color.r < 0.5,
+		"Headless else-branch: ctx.gamma must get INDEPENDENT_COLOR (green); "
+		+ "got r=%.2f g=%.2f" % [gamma_color.r, gamma_color.g])
+
+	var beta_color: Color = _get_color(anchors.get("ctx.beta") as Node3D)
+	_check(beta_color.r > 0.7,
+		"Headless else-branch: ctx.beta must get CODEPENDENT_COLOR (orange); "
+		+ "got r=%.2f" % beta_color.r)
+
+
+## BFS hop-distance computation returns correct distances from start node.
+## Spec: "the highlight animates in from the selected module outward" —
+## proportional delays require accurate hop distances.
+func test_compute_context_hop_distances_correct() -> void:
+	_test_failed = false
+	# Graph: ctx ─ middle ─ far; isolated has no edges.
+	var edges: Array = [
+		{"source": "ctx", "target": "middle", "type": "cross_context", "weight": 1},
+		{"source": "middle", "target": "far", "type": "cross_context", "weight": 1},
+	]
+
+	var query := IndependenceQuery.new()
+	var distances: Dictionary = query._compute_context_hop_distances("ctx", edges)
+
+	# ctx itself is at distance 0 (the start).
+	_check(distances.get("ctx", -1) == 0,
+		"Origin 'ctx' must be at hop distance 0; got %d" % distances.get("ctx", -1))
+
+	# middle is directly connected → 1 hop.
+	_check(distances.get("middle", -1) == 1,
+		"'middle' is 1 hop from 'ctx'; got %d" % distances.get("middle", -1))
+
+	# far is 2 hops away (ctx → middle → far).
+	_check(distances.get("far", -1) == 2,
+		"'far' is 2 hops from 'ctx' (via middle); got %d" % distances.get("far", -1))
+
+	# isolated has no edges → not reachable (absent from distances dict).
+	_check(not distances.has("isolated"),
+		"'isolated' has no edges → must be absent from hop distances")
+
+
+## Context highlight outward animation: headless path still applies colour
+## to ALL independent contexts regardless of hop distance (instant path).
+func test_context_highlight_headless_colors_all_independent() -> void:
+	_test_failed = false
+	# Graph: ctx → dep; iso_a and iso_b are isolated.
+	var nodes: Array = [
+		{"id": "ctx", "name": "Ctx", "type": "bounded_context", "parent": null,
+			"position": {"x": 0.0, "y": 0.0, "z": 0.0}, "size": 2.0},
+		{"id": "dep", "name": "Dep", "type": "bounded_context", "parent": null,
+			"position": {"x": 5.0, "y": 0.0, "z": 0.0}, "size": 1.5},
+		{"id": "iso_a", "name": "IsoA", "type": "bounded_context", "parent": null,
+			"position": {"x": -3.0, "y": 0.0, "z": 0.0}, "size": 1.0},
+		{"id": "iso_b", "name": "IsoB", "type": "bounded_context", "parent": null,
+			"position": {"x": -6.0, "y": 0.0, "z": 0.0}, "size": 1.0},
+	]
+	var edges: Array = [
+		{"source": "ctx", "target": "dep", "type": "cross_context", "weight": 2},
+	]
+
+	var anchors: Dictionary = {}
+	for nd: Dictionary in nodes:
+		anchors[nd.get("id", "")] = _make_anchor(nd.get("id", ""))
+
+	var query := IndependenceQuery.new()
+	# Anchors not in tree → headless instant path used for all.
+	var independent: Array = query.apply_context_independence_highlight(
+		"ctx", nodes, edges, anchors
+	)
+
+	_check(independent.has("iso_a"),
+		"'iso_a' must be identified as independent of 'ctx'")
+	_check(independent.has("iso_b"),
+		"'iso_b' must be identified as independent of 'ctx'")
+
+	# Both isolated contexts must get CONTEXT_INDEPENDENT_COLOR (cyan, high blue).
+	var iso_a_color: Color = _get_color(anchors.get("iso_a") as Node3D)
+	_check(iso_a_color.b > 0.7,
+		"'iso_a' headless path: must have CONTEXT_INDEPENDENT_COLOR (cyan, b>0.7); "
+		+ "got b=%.2f" % iso_a_color.b)
+
+	var iso_b_color: Color = _get_color(anchors.get("iso_b") as Node3D)
+	_check(iso_b_color.b > 0.7,
+		"'iso_b' headless path: must have CONTEXT_INDEPENDENT_COLOR (cyan, b>0.7); "
+		+ "got b=%.2f" % iso_b_color.b)

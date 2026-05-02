@@ -219,12 +219,61 @@ func find_context_independent_peers(
 	return independent
 
 
+## Compute BFS hop distances from start_id through context-level edges.
+##
+## Returns a Dictionary mapping context_id → hop count (int, 0 = start node).
+## Used to stagger outward highlight animations proportionally to graph distance.
+##
+## Args:
+##   start_id:   The bounded-context ID to BFS from.
+##   edges_data: Array of edge dicts (cross-context edges used for adjacency).
+func _compute_context_hop_distances(start_id: String, edges_data: Array) -> Dictionary:
+	# Build undirected adjacency: context ↔ neighbour (treat edges as bidirectional
+	# for outward distance — independence can be "further" in any direction).
+	var adj: Dictionary = {}  # context_id → Array of neighbour context IDs
+	for ed: Dictionary in edges_data:
+		var src: String = ed.get("source", "")
+		var tgt: String = ed.get("target", "")
+		if src.is_empty() or tgt.is_empty():
+			continue
+		var src_ctx: String = src.split(".")[0]  # strip module suffix if present
+		var tgt_ctx: String = tgt.split(".")[0]
+		if src_ctx == tgt_ctx:
+			continue  # internal edge — skip
+		if src_ctx not in adj:
+			adj[src_ctx] = []
+		if tgt_ctx not in (adj[src_ctx] as Array):
+			(adj[src_ctx] as Array).append(tgt_ctx)
+		if tgt_ctx not in adj:
+			adj[tgt_ctx] = []
+		if src_ctx not in (adj[tgt_ctx] as Array):
+			(adj[tgt_ctx] as Array).append(src_ctx)  # bidirectional
+
+	# BFS from start_id.
+	var distances: Dictionary = {}  # context_id → hop count
+	distances[start_id] = 0  # origin = 0 hops
+	var queue: Array = [start_id]
+	while not queue.is_empty():
+		var current: String = queue.pop_front()
+		var current_dist: int = distances[current]
+		for neighbour: String in adj.get(current, []):
+			if not distances.has(neighbour):
+				distances[neighbour] = current_dist + 1  # one hop further
+				queue.append(neighbour)
+
+	return distances
+
+
 ## Apply context-level independence highlighting.
 ##
 ## Spec: "THEN bounded contexts with no transitive dependency on context X
 ##   are highlighted as fully independent"
+##   "AND the highlight animates in from the selected module outward"
 ##
-## Highlights independent contexts with CONTEXT_INDEPENDENT_COLOR.
+## Independent contexts are highlighted with CONTEXT_INDEPENDENT_COLOR.
+## When inside the scene tree, highlights are staggered by hop distance from
+## context_id (delay = hop_distance * 0.15 s) so the animation propagates
+## outward.  Outside the tree (headless/tests) colours are applied instantly.
 ##
 ## Returns the Array of independent context IDs.
 func apply_context_independence_highlight(
@@ -237,9 +286,35 @@ func apply_context_independence_highlight(
 		context_id, nodes_data, edges_data
 	)
 
+	# Compute BFS hop distances for staggered outward animation.
+	var hop_distances: Dictionary = _compute_context_hop_distances(context_id, edges_data)
+	# hop_distances maps context_id → int distance from context_id via edges
+
 	for ctx_id: String in independent_contexts:
 		var anchor: Node3D = anchors.get(ctx_id) as Node3D
-		_apply_node_color(anchor, CONTEXT_INDEPENDENT_COLOR)
+		if anchor == null:
+			continue
+		if anchor.is_inside_tree():
+			# Animate outward: delay proportional to hop distance from selected ctx.
+			var hop: int = hop_distances.get(ctx_id, 0)  # default 0 if unreachable
+			var delay: float = hop * 0.15  # 0.15 s per hop — outward propagation
+			for child: Node in anchor.get_children():
+				if child is MeshInstance3D:
+					var mesh := child as MeshInstance3D
+					var mat := StandardMaterial3D.new()
+					var existing = mesh.get_active_material(0)
+					mat.albedo_color = (existing as StandardMaterial3D).albedo_color \
+						if existing != null and existing is StandardMaterial3D \
+						else Color.WHITE  # start = existing or white
+					mesh.material_override = mat
+					var tween := mesh.create_tween()  # tween owned by child node
+					tween.tween_interval(delay)  # stagger by hop distance
+					tween.tween_property(mesh, "material_override:albedo_color",
+						CONTEXT_INDEPENDENT_COLOR, 0.3)
+					break
+		else:
+			# Headless / unit-test path: instant, no delay.
+			_apply_node_color(anchor, CONTEXT_INDEPENDENT_COLOR)
 
 	return independent_contexts
 
@@ -250,12 +325,29 @@ func apply_context_independence_highlight(
 
 ## Apply a colour to the first MeshInstance3D child of an anchor.
 ## No-op if anchor is null or has no MeshInstance3D child.
+## When the anchor is inside the scene tree the colour change is animated via a
+## Tween (0.3 s) so the transition is smooth; outside the tree (unit tests,
+## headless) it is applied instantly.
 func _apply_node_color(anchor: Node3D, color: Color) -> void:
 	if anchor == null:
 		return
 	for child: Node in anchor.get_children():
 		if child is MeshInstance3D:
-			var mat := StandardMaterial3D.new()
-			mat.albedo_color = color
-			(child as MeshInstance3D).material_override = mat
+			var mesh := child as MeshInstance3D
+			if anchor.is_inside_tree():
+				# Animate color via material property tween (scene-tree path).
+				# Preserve current start color from existing material if present.
+				var mat := StandardMaterial3D.new()
+				var existing = mesh.get_active_material(0)
+				mat.albedo_color = (existing as StandardMaterial3D).albedo_color \
+					if existing != null and existing is StandardMaterial3D \
+					else Color.WHITE  # start = white → tweed to target color
+				mesh.material_override = mat
+				var tween := mesh.create_tween()  # tween owned by child node
+				tween.tween_property(mesh, "material_override:albedo_color", color, 0.3)
+			else:
+				# Instant assignment for headless / unit-test paths.
+				var mat := StandardMaterial3D.new()
+				mat.albedo_color = color
+				mesh.material_override = mat
 			break
