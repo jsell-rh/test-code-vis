@@ -2,8 +2,8 @@
 id: task-064
 title: Extractor — cluster detection (tightly-coupled module groups)
 spec_ref: specs/extraction/scene-graph-schema.spec.md@4ea7e33731b8eb0cd47c19012a9f7b5774420e21
-status: in_progress
-phase: merge
+status: complete
+phase: null
 deps:
 - task-061
 - task-003
