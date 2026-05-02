@@ -76,6 +76,31 @@ var _ubiquitous_edge_visuals: Array = []
 ## Whether ubiquitous edges are currently shown (toggled by T key).
 var _ubiquitous_edges_visible: bool = false
 
+## Cluster collapse state.
+##
+## Maps cluster_id (String) → Array of member node IDs (Array[String]).
+## A cluster that the human has collapsed is recorded here so that:
+##   - expand_cluster() knows which members to restore;
+##   - edge re-routing code knows which nodes are currently supernodes.
+##
+## Spec: spatial-structure.spec.md § Cluster Collapsing —
+##   "AND the supernode displays aggregate metrics"
+##   "AND edges that formerly entered or left any member … are re-routed to the supernode"
+var _collapsed_clusters: Dictionary = {}
+
+## Edge re-route state saved during cluster collapse.
+##
+## Maps cluster_id (String) → Array of {entry_index, orig_from, orig_to} dictionaries.
+## Populated by collapse_cluster() so expand_cluster() can restore original endpoints.
+##
+## Spec: spatial-structure.spec.md § Expanding a supernode —
+##   "edges re-route back to their original endpoints with smooth animation"
+var _cluster_edge_reroutes: Dictionary = {}
+
+## The parsed cluster suggestion list loaded with the scene graph.
+## Each entry follows the Cluster TypedDict: {id, members, context, aggregate_metrics}.
+var _cluster_suggestions: Array = []
+
 @onready var _camera: Camera3D = $Camera3D
 
 
@@ -165,6 +190,13 @@ func build_from_graph(graph: Dictionary) -> void:
 
 	# Build aggregate edges (one line per context pair, shown at FAR LOD).
 	_build_aggregate_edges(edges)
+
+	# Load cluster suggestions (pre-computed by extractor) and apply visual hints.
+	# Spec: spatial-structure.spec.md § Pre-computed cluster suggestions —
+	#   "suggested clusters are indicated visually (e.g. subtle shared tint)"
+	#   "suggestions never auto-collapse — the human always initiates"
+	_cluster_suggestions = graph.get("clusters", [])
+	_apply_cluster_suggestions(_cluster_suggestions)
 
 	# Reposition camera to frame the whole graph.
 	_frame_camera()
@@ -696,7 +728,13 @@ func _create_edge(ed: Dictionary) -> void:
 	else:
 		add_child(body)
 		_lod_edge_entries.append({"visual": body, "edge_type": edge_type})
-		_path_edge_entries.append({"visual": body, "source": src, "target": tgt})
+		# Store from_pos/to_pos and role so re-routing can rebuild the geometry.
+		_path_edge_entries.append({
+			"visual": body, "source": src, "target": tgt,
+			"from_pos": from_pos, "to_pos": to_pos,
+			"role": "body", "line_style": line_style,
+			"radius": radius, "color": line_color,
+		})
 
 	# Arrowhead: a cone (CylinderMesh, top_radius=0 = pointed tip) placed at the
 	# target end, oriented along the edge direction, indicating dependency flow.
@@ -727,7 +765,109 @@ func _create_edge(ed: Dictionary) -> void:
 		# Register arrowhead with LOD manager (same edge_type as the line).
 		_lod_edge_entries.append({"visual": arrow, "edge_type": edge_type})
 		# Track arrowhead direction for dependency direction verification.
-		_path_edge_entries.append({"visual": arrow, "source": src, "target": tgt})
+		# Store from_pos/to_pos and role so re-routing can rebuild the geometry.
+		_path_edge_entries.append({
+			"visual": arrow, "source": src, "target": tgt,
+			"from_pos": from_pos, "to_pos": to_pos,
+			"role": "arrow", "line_style": line_style,
+			"radius": radius, "color": line_color,
+		})
+
+
+# ---------------------------------------------------------------------------
+# Edge re-routing helper
+# ---------------------------------------------------------------------------
+
+## Reposition an edge visual (body or arrow) between new world-space endpoints.
+##
+## Called by collapse_cluster() and expand_cluster() to re-route edge geometry
+## without destroying and recreating visuals.
+##
+## For solid bodies (MeshInstance3D with CylinderMesh): updates height, position,
+## and orientation in-place.
+## For dashed/dotted containers (Node3D with segment children): frees old segments
+## and recreates them between the new endpoints.
+## For arrowheads (MeshInstance3D, role=="arrow"): updates position and orientation.
+##
+## Spec: spatial-structure.spec.md § Cluster Collapsing —
+##   "edge re-routing animates smoothly — endpoints slide to the supernode
+##    rather than jumping"
+## In scene-tree contexts a Tween slides arrow/solid endpoints and cross-fades
+## dashed/dotted segment containers. In headless (unit-test) contexts Tween is
+## unavailable, so positions are set directly.
+func _reposition_edge_visual(entry: Dictionary, new_from: Vector3, new_to: Vector3) -> void:
+	if new_from.is_equal_approx(new_to):
+		return
+	var visual: Node3D = entry["visual"] as Node3D
+	if visual == null:
+		return
+	var role: String = entry.get("role", "body")
+	var new_dir: Vector3 = (new_to - new_from).normalized()
+
+	if role == "arrow":
+		# Arrowhead: reorient and reposition tip at new_to.
+		var cone_height: float = 0.7
+		_orient_to_dir(visual, new_dir)
+		var new_pos: Vector3 = new_to - new_dir * (cone_height * 0.5)
+		if is_inside_tree():
+			var tween := create_tween()
+			tween.tween_property(visual, "position", new_pos, 0.3)
+		else:
+			visual.position = new_pos
+	else:
+		# Body: depends on line_style.
+		var line_style: String = entry.get("line_style", "dashed")
+		if line_style == "solid":
+			# Solid body: single MeshInstance3D with CylinderMesh.
+			var mi: MeshInstance3D = visual as MeshInstance3D
+			if mi != null and mi.mesh is CylinderMesh:
+				var cyl: CylinderMesh = mi.mesh as CylinderMesh
+				cyl.height = new_from.distance_to(new_to)
+			_orient_to_dir(visual, new_dir)
+			var new_mid: Vector3 = (new_from + new_to) * 0.5
+			if is_inside_tree():
+				var tween := create_tween()
+				tween.tween_property(visual, "position", new_mid, 0.3)
+			else:
+				visual.position = new_mid
+		else:
+			# Dashed or dotted body: Node3D container with segment children.
+			# In-tree: cross-fade (fade out → rebuild → fade in) so endpoints do
+			# not jump.  Headless: rebuild directly (Tween unavailable in CI).
+			var radius: float = entry.get("radius", 0.06)
+			var color: Color = entry.get("color", Color(0.55, 0.55, 0.55))
+			var ls: String = line_style  # capture for lambda
+			if is_inside_tree():
+				var tween := create_tween()
+				tween.tween_property(visual, "modulate:a", 0.0, 0.15)
+				tween.tween_callback(func() -> void:
+					for child: Node in visual.get_children():
+						child.queue_free()
+					var rebuilt: Node3D
+					if ls == "dotted":
+						rebuilt = _create_dotted_body(new_from, new_to, radius, color)
+					else:
+						rebuilt = _create_dashed_body(new_from, new_to, radius, color)
+					for child: Node in rebuilt.get_children():
+						rebuilt.remove_child(child)
+						visual.add_child(child)
+					rebuilt.free()
+				)
+				tween.tween_property(visual, "modulate:a", 1.0, 0.15)
+			else:
+				# Headless / unit-test path: set positions directly.
+				for child: Node in visual.get_children():
+					child.queue_free()
+				var rebuilt: Node3D
+				if line_style == "dotted":
+					rebuilt = _create_dotted_body(new_from, new_to, radius, color)
+				else:
+					rebuilt = _create_dashed_body(new_from, new_to, radius, color)
+				# Transfer children from the rebuilt container into the existing visual.
+				for child: Node in rebuilt.get_children():
+					rebuilt.remove_child(child)
+					visual.add_child(child)
+				rebuilt.free()
 
 
 # ---------------------------------------------------------------------------
@@ -845,6 +985,286 @@ func _build_aggregate_edges(edges: Array) -> void:
 		agg_visual.scale = Vector3(weight, 1.0, weight)
 		add_child(agg_visual)
 		_aggregate_edge_visuals.append(agg_visual)
+
+
+# ---------------------------------------------------------------------------
+# Cluster suggestions and collapsing
+# (specs/visualization/spatial-structure.spec.md § Cluster Collapsing)
+# ---------------------------------------------------------------------------
+
+## Apply visual tint to cluster member nodes so the human can see pre-computed
+## cluster suggestions without any auto-collapse.
+##
+## Spec: spatial-structure.spec.md § Pre-computed cluster suggestions —
+##   "suggested clusters are indicated visually (e.g. subtle shared tint
+##    or proximity grouping)"
+##   "suggestions never auto-collapse — the human always initiates"
+##
+## Implementation: for each cluster suggestion, a semi-transparent "ClusterTint"
+## overlay (small coloured MeshInstance3D) is added to every member anchor so
+## the human can see which modules belong to the same suggested cluster.
+## All member anchors remain fully visible (no auto-collapse).
+func _apply_cluster_suggestions(clusters: Array) -> void:
+	for cluster: Dictionary in clusters:
+		var members: Array = cluster.get("members", [])
+		# Tint colour: a muted warm amber — distinct from the module green and
+		# context blue, but not alarming. Each cluster could use a different hue
+		# index for disambiguation, but a single consistent tint keeps it subtle.
+		var tint_color := Color(0.90, 0.70, 0.15, 0.28)  # warm amber, subtle
+		for member_id: String in members:
+			var anchor: Node3D = _anchors.get(member_id) as Node3D
+			if anchor == null:
+				continue
+			# Avoid duplicate tints on reload.
+			var already_tinted: bool = false
+			for child: Node in anchor.get_children():
+				if str(child.name) == "ClusterTint":
+					already_tinted = true
+					break
+			if already_tinted:
+				continue
+
+			# Flat thin disc overlay — same footprint as the module box but very
+			# thin so it does not obscure the module label or mesh.
+			var sz: float = float(_get_anchor_size(anchor))
+			var tint_mesh := MeshInstance3D.new()
+			tint_mesh.name = "ClusterTint"
+			var box := BoxMesh.new()
+			box.size = Vector3(sz * 1.05, sz * 0.05, sz * 1.05)  # wider, very thin
+			tint_mesh.mesh = box
+			var tint_mat := StandardMaterial3D.new()
+			tint_mat.albedo_color = tint_color
+			tint_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			tint_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+			tint_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			tint_mesh.material_override = tint_mat
+			tint_mesh.position = Vector3(0.0, sz * 0.35, 0.0)  # just above the module box
+			anchor.add_child(tint_mesh)
+
+
+## Return the visual size of an anchor's BoxMesh, or 1.0 as fallback.
+## Used by _apply_cluster_suggestions to scale the tint overlay.
+func _get_anchor_size(anchor: Node3D) -> float:
+	for child: Node in anchor.get_children():
+		if child is MeshInstance3D:
+			var mi: MeshInstance3D = child as MeshInstance3D
+			if mi.mesh is BoxMesh:
+				return (mi.mesh as BoxMesh).size.x
+	return 1.0
+
+
+## Collapse a cluster: hide member anchors, create a supernode at their centroid,
+## and record the collapse in _collapsed_clusters.
+##
+## Spec: spatial-structure.spec.md § Collapsing a cluster —
+##   "THEN the modules animate together, converging smoothly into a single supernode"
+##   "AND the supernode displays aggregate metrics (total LOC, combined in-degree,
+##    combined out-degree)"
+##   "AND edges that formerly entered or left any member … are re-routed to the supernode"
+##
+## Animation: when in the scene tree a Tween animates member modulate.a to 0 then
+## hides them; outside the tree (unit tests) visibility is set directly.
+func collapse_cluster(cluster_id: String) -> void:
+	# Find the cluster definition.
+	var cluster_def: Dictionary = {}
+	for c: Dictionary in _cluster_suggestions:
+		if c.get("id", "") == cluster_id:
+			cluster_def = c
+			break
+
+	if cluster_def.is_empty():
+		push_warning("CodeVis: collapse_cluster('%s') — cluster not found." % cluster_id)
+		return
+
+	var members: Array = cluster_def.get("members", [])
+	if members.is_empty():
+		return
+
+	# Compute centroid of member world positions.
+	var centroid := Vector3.ZERO
+	var member_count: int = 0
+	for member_id: String in members:
+		if _world_positions.has(member_id):
+			centroid += _world_positions[member_id]
+			member_count += 1
+	if member_count > 0:
+		centroid /= float(member_count)
+
+	# Hide member anchors (animate when in scene tree).
+	for member_id: String in members:
+		var anchor: Node3D = _anchors.get(member_id) as Node3D
+		if anchor == null:
+			continue
+		if is_inside_tree():
+			var tween: Tween = create_tween()
+			tween.tween_property(anchor, "modulate:a", 0.0, 0.3)
+			# Hide after fade completes so layout remains stable during animation.
+			tween.tween_callback(func() -> void: anchor.visible = false)
+		else:
+			# Unit-test path: set directly.
+			anchor.visible = false
+
+	# Build the aggregate metrics label text.
+	var agg: Dictionary = cluster_def.get("aggregate_metrics", {})
+	var total_loc: int = int(agg.get("total_loc", 0))
+	var in_degree: int = int(agg.get("in_degree", 0))
+	var out_degree: int = int(agg.get("out_degree", 0))
+	var label_text: String = (
+		"%s\nLOC:%d  in:%d  out:%d" % [cluster_id, total_loc, in_degree, out_degree]
+	)
+
+	# Create a supernode anchor at the centroid.
+	var supernode := Node3D.new()
+	supernode.name = cluster_id.replace(":", "_").replace(".", "_")
+	supernode.position = centroid
+
+	var sz: float = 5.0  # supernode is slightly larger than a regular module
+	var box := BoxMesh.new()
+	box.size = Vector3(sz, sz * 0.7, sz)
+	var mat := StandardMaterial3D.new()
+	# Bold magenta — visually distinct from both context (blue) and module (green).
+	# The colour signals "this is a collapsed group, not a single module".
+	mat.albedo_color = Color(0.80, 0.25, 0.80, 1.0)
+	mat.emission_enabled = true
+	mat.emission = Color(0.4, 0.0, 0.4)
+	mat.emission_energy_multiplier = 0.3
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.mesh = box
+	mesh_instance.material_override = mat
+	supernode.add_child(mesh_instance)
+
+	# Label with aggregate metrics.
+	var label := Label3D.new()
+	label.text = label_text
+	label.pixel_size = 0.012
+	label.position = Vector3(0.0, sz * 0.5 + 0.4, 0.0)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	supernode.add_child(label)
+
+	add_child(supernode)
+	_anchors[cluster_id] = supernode
+	_world_positions[cluster_id] = centroid
+
+	# Record collapse so expand_cluster() and edge routing can reference it.
+	_collapsed_clusters[cluster_id] = members
+
+	# Re-route edges: any edge whose source or target is a cluster member should
+	# now connect to the supernode centroid instead.
+	#
+	# Spec: spatial-structure.spec.md § Cluster Collapsing —
+	#   "edges that formerly entered or left any member of the cluster are
+	#    re-routed to the supernode"
+	#   "edge re-routing animates smoothly — endpoints slide to the supernode
+	#    rather than jumping"
+	var member_set: Dictionary = {}
+	for m: String in members:
+		member_set[m] = true
+
+	var reroutes: Array = []
+	# Iterate _path_edge_entries to find edges whose source or target is a cluster
+	# member — those edges must be re-routed to the supernode centroid.
+	# Spec: "edges that formerly entered or left any member of the cluster are
+	#        re-routed to the supernode"
+	for entry in _path_edge_entries:
+		var esrc: String = entry["source"]
+		var etgt: String = entry["target"]
+		var is_src_member: bool = member_set.has(esrc)
+		var is_tgt_member: bool = member_set.has(etgt)
+		if not is_src_member and not is_tgt_member:
+			continue
+
+		var orig_from: Vector3 = entry.get("from_pos", entry["visual"].position)
+		var orig_to: Vector3 = entry.get("to_pos", entry["visual"].position)
+
+		# Compute new endpoints: replace member endpoint(s) with supernode centroid.
+		var new_from: Vector3 = centroid if is_src_member else orig_from
+		var new_to: Vector3 = centroid if is_tgt_member else orig_to
+
+		# Skip internal edges where both endpoints collapse to the same point.
+		if new_from.is_equal_approx(new_to):
+			continue
+
+		# Store original positions so expand_cluster() can restore them.
+		# Dictionary entries are passed by reference in GDScript, so we record a
+		# reference to the entry together with the pre-collapse positions.
+		reroutes.append({
+			"entry_ref": entry,
+			"orig_from": orig_from,
+			"orig_to": orig_to,
+		})
+
+		# Reposition the visual to connect to the supernode.
+		# spec: "endpoints slide to the supernode rather than jumping"
+		# In-tree: _reposition_edge_visual animates via Tween. Headless: direct.
+		_reposition_edge_visual(entry, new_from, new_to)
+
+		# Update cached positions so subsequent operations see the new endpoints.
+		entry["from_pos"] = new_from
+		entry["to_pos"] = new_to
+
+	_cluster_edge_reroutes[cluster_id] = reroutes
+
+
+## Expand a previously collapsed supernode back into its constituent modules.
+##
+## Spec: spatial-structure.spec.md § Expanding a supernode —
+##   "THEN the supernode smoothly expands back into its constituent modules"
+##   "AND modules animate outward to their original positions"
+##   "AND edges re-route back to their original endpoints with smooth animation"
+##
+## Animation: when in scene tree, Tween fades member anchors back to alpha 1.0;
+## outside the tree (unit tests) visibility is set directly.
+func expand_cluster(cluster_id: String) -> void:
+	if not _collapsed_clusters.has(cluster_id):
+		push_warning("CodeVis: expand_cluster('%s') — cluster is not collapsed." % cluster_id)
+		return
+
+	var members: Array = _collapsed_clusters[cluster_id]
+
+	# Restore member anchor visibility.
+	for member_id: String in members:
+		var anchor: Node3D = _anchors.get(member_id) as Node3D
+		if anchor == null:
+			continue
+		if is_inside_tree():
+			anchor.visible = true
+			anchor.modulate.a = 0.0
+			var tween: Tween = create_tween()
+			tween.tween_property(anchor, "modulate:a", 1.0, 0.3)
+		else:
+			anchor.visible = true
+
+	# Remove the supernode.
+	if _anchors.has(cluster_id):
+		var supernode: Node3D = _anchors[cluster_id] as Node3D
+		if supernode != null:
+			supernode.queue_free()
+		_anchors.erase(cluster_id)
+		_world_positions.erase(cluster_id)
+
+	# Restore edge endpoints to their original positions.
+	#
+	# Spec: spatial-structure.spec.md § Expanding a supernode —
+	#   "edges re-route back to their original endpoints with smooth animation"
+	if _cluster_edge_reroutes.has(cluster_id):
+		var reroutes: Array = _cluster_edge_reroutes[cluster_id]
+		for reroute: Dictionary in reroutes:
+			var entry: Dictionary = reroute["entry_ref"]
+			var orig_from: Vector3 = reroute["orig_from"]
+			var orig_to: Vector3 = reroute["orig_to"]
+			if orig_from.is_equal_approx(orig_to):
+				continue
+			# spec: "edges re-route back … with smooth animation"
+			# In-tree: _reposition_edge_visual animates via Tween. Headless: direct.
+			_reposition_edge_visual(entry, orig_from, orig_to)
+			# Restore cached positions so subsequent collapse/expand cycles are correct.
+			entry["from_pos"] = orig_from
+			entry["to_pos"] = orig_to
+		_cluster_edge_reroutes.erase(cluster_id)
+
+	# Clear collapse record.
+	_collapsed_clusters.erase(cluster_id)
 
 
 # ---------------------------------------------------------------------------
