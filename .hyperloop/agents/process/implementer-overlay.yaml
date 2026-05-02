@@ -935,6 +935,32 @@ guidelines: |
   A forward operation that does not capture all state needed by its reverse is
   always PARTIAL/FAIL — regardless of how well the visual side works.
 
+  ## POST-REBASE CHECK FAILURES — YOUR RESPONSIBILITY REGARDLESS OF AUTHORSHIP
+
+  After every `git rebase origin/main`, re-run `bash .hyperloop/checks/run-all-checks.sh`
+  from scratch. A rebase can bring in new check scripts that were not present at Sync
+  Point 2; those scripts may fail against pre-existing code you never touched.
+
+  **Observed failure (task-022):** `check-individual-edge-weight.sh` was added to main
+  2.5 hours after the implementation commit. Rebase brought in the check. `check-sync-
+  divergence-impact.sh` exited 0 (no stale scripts — the rebase made working tree match
+  main), but `check-individual-edge-weight.sh` failed against `build_dependency_edges()`
+  code from task-003. The implementer did not write the gap, but still had to fix it.
+
+  Protocol when a check fails on code you didn't write:
+
+  1. Confirm you didn't write the failing code:
+       git log main..HEAD -- <failing-file>   # returns nothing → not your commit
+  2. Include the root cause in your report (which task introduced the gap, when the
+     check was added to main) — this is useful context for the verifier.
+  3. Fix the gap anyway. The check suite is the submission contract. "I didn't write
+     this code" is NOT an exemption — every check must exit 0 before you submit.
+  4. Commit the fix with the current task's Task-Ref and Spec-Ref trailers.
+
+  Do NOT skip re-running `run-all-checks.sh` after a late rebase, even if your
+  implementation is complete. New checks added to main since your last sync will
+  only surface after the rebase brings them in.
+
   ## EDGE/CONNECTION RE-ROUTING IS A DISTINCT IMPLEMENTATION REQUIREMENT
 
   When a spec scenario involves collapsing, grouping, folding, or aggregating nodes:
