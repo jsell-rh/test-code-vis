@@ -4,6 +4,26 @@ Records cases where specs were reviewed but no tasks were created, with rational
 
 ---
 
+## 2026-05-02 — Full batch of 5 modified specs (reviewed five times, same day)
+
+All five specs present in `resolved-specs.json` with blob SHAs unchanged. No reopen
+conditions triggered. **No tasks created.**
+
+Fifth review confirmed each resolved entry, including the Badge and Port Primitive
+coverage under tasks 074–125 for `visual-primitives.spec.md`.
+
+| Spec | Blob SHA | Decision |
+|---|---|---|
+| `specs/core/system-purpose.spec.md` | `f1f52d80` (unchanged) | **No tasks. Permanently resolved.** |
+| `specs/core/visual-primitives.spec.md` | `82d048ec` (unchanged) | **No tasks. Permanently resolved.** |
+| `specs/extraction/scene-graph-schema.spec.md` | `4ea7e337` (unchanged) | **No tasks. Permanently resolved.** |
+| `specs/visualization/orthogonal-independence.spec.md` | `ca0ad7af` (unchanged) | **No tasks. Permanently resolved.** |
+| `specs/visualization/spatial-structure.spec.md` | `359dbcb1` (unchanged) | **No tasks. Permanently resolved.** |
+
+HEAD at fifth review: `9811fd86`
+
+---
+
 ## 2026-05-02 — Full batch of 5 modified specs (reviewed four times, same day)
 
 All five specs were already present in `resolved-specs.json` with blob SHAs unchanged
