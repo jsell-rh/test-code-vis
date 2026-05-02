@@ -792,8 +792,9 @@ func _create_edge(ed: Dictionary) -> void:
 ## Spec: spatial-structure.spec.md § Cluster Collapsing —
 ##   "edge re-routing animates smoothly — endpoints slide to the supernode
 ##    rather than jumping"
-## In headless (unit-test) contexts Tween is unavailable, so positions are set
-## directly. In scene-tree contexts a Tween slides the visual.
+## In scene-tree contexts a Tween slides arrow/solid endpoints and cross-fades
+## dashed/dotted segment containers. In headless (unit-test) contexts Tween is
+## unavailable, so positions are set directly.
 func _reposition_edge_visual(entry: Dictionary, new_from: Vector3, new_to: Vector3) -> void:
 	if new_from.is_equal_approx(new_to):
 		return
@@ -807,7 +808,12 @@ func _reposition_edge_visual(entry: Dictionary, new_from: Vector3, new_to: Vecto
 		# Arrowhead: reorient and reposition tip at new_to.
 		var cone_height: float = 0.7
 		_orient_to_dir(visual, new_dir)
-		visual.position = new_to - new_dir * (cone_height * 0.5)
+		var new_pos: Vector3 = new_to - new_dir * (cone_height * 0.5)
+		if is_inside_tree():
+			var tween := create_tween()
+			tween.tween_property(visual, "position", new_pos, 0.3)
+		else:
+			visual.position = new_pos
 	else:
 		# Body: depends on line_style.
 		var line_style: String = entry.get("line_style", "dashed")
@@ -818,24 +824,50 @@ func _reposition_edge_visual(entry: Dictionary, new_from: Vector3, new_to: Vecto
 				var cyl: CylinderMesh = mi.mesh as CylinderMesh
 				cyl.height = new_from.distance_to(new_to)
 			_orient_to_dir(visual, new_dir)
-			visual.position = (new_from + new_to) * 0.5
+			var new_mid: Vector3 = (new_from + new_to) * 0.5
+			if is_inside_tree():
+				var tween := create_tween()
+				tween.tween_property(visual, "position", new_mid, 0.3)
+			else:
+				visual.position = new_mid
 		else:
 			# Dashed or dotted body: Node3D container with segment children.
-			# Free the old segments and rebuild between the new endpoints.
-			for child: Node in visual.get_children():
-				child.queue_free()
+			# In-tree: cross-fade (fade out → rebuild → fade in) so endpoints do
+			# not jump.  Headless: rebuild directly (Tween unavailable in CI).
 			var radius: float = entry.get("radius", 0.06)
 			var color: Color = entry.get("color", Color(0.55, 0.55, 0.55))
-			var rebuilt: Node3D
-			if line_style == "dotted":
-				rebuilt = _create_dotted_body(new_from, new_to, radius, color)
+			var ls: String = line_style  # capture for lambda
+			if is_inside_tree():
+				var tween := create_tween()
+				tween.tween_property(visual, "modulate:a", 0.0, 0.15)
+				tween.tween_callback(func() -> void:
+					for child: Node in visual.get_children():
+						child.queue_free()
+					var rebuilt: Node3D
+					if ls == "dotted":
+						rebuilt = _create_dotted_body(new_from, new_to, radius, color)
+					else:
+						rebuilt = _create_dashed_body(new_from, new_to, radius, color)
+					for child: Node in rebuilt.get_children():
+						rebuilt.remove_child(child)
+						visual.add_child(child)
+					rebuilt.free()
+				)
+				tween.tween_property(visual, "modulate:a", 1.0, 0.15)
 			else:
-				rebuilt = _create_dashed_body(new_from, new_to, radius, color)
-			# Transfer children from the rebuilt container into the existing visual.
-			for child: Node in rebuilt.get_children():
-				rebuilt.remove_child(child)
-				visual.add_child(child)
-			rebuilt.free()
+				# Headless / unit-test path: set positions directly.
+				for child: Node in visual.get_children():
+					child.queue_free()
+				var rebuilt: Node3D
+				if line_style == "dotted":
+					rebuilt = _create_dotted_body(new_from, new_to, radius, color)
+				else:
+					rebuilt = _create_dashed_body(new_from, new_to, radius, color)
+				# Transfer children from the rebuilt container into the existing visual.
+				for child: Node in rebuilt.get_children():
+					rebuilt.remove_child(child)
+					visual.add_child(child)
+				rebuilt.free()
 
 
 # ---------------------------------------------------------------------------
@@ -1164,8 +1196,7 @@ func collapse_cluster(cluster_id: String) -> void:
 
 		# Reposition the visual to connect to the supernode.
 		# spec: "endpoints slide to the supernode rather than jumping"
-		# Tween-based animation for geometry rebuild is a future improvement;
-		# set positions directly (works correctly in both headless and in-tree modes).
+		# In-tree: _reposition_edge_visual animates via Tween. Headless: direct.
 		_reposition_edge_visual(entry, new_from, new_to)
 
 		# Update cached positions so subsequent operations see the new endpoints.
@@ -1225,8 +1256,7 @@ func expand_cluster(cluster_id: String) -> void:
 			if orig_from.is_equal_approx(orig_to):
 				continue
 			# spec: "edges re-route back … with smooth animation"
-			# Tween-based animation for geometry rebuild is a future improvement;
-			# set positions directly (works correctly in both headless and in-tree modes).
+			# In-tree: _reposition_edge_visual animates via Tween. Headless: direct.
 			_reposition_edge_visual(entry, orig_from, orig_to)
 			# Restore cached positions so subsequent collapse/expand cycles are correct.
 			entry["from_pos"] = orig_from
