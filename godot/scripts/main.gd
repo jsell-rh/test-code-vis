@@ -115,6 +115,32 @@ var _cluster_edge_reroutes: Dictionary = {}
 ## Each entry follows the Cluster TypedDict: {id, members, context, aggregate_metrics}.
 var _cluster_suggestions: Array = []
 
+## Route primitive visuals.
+##
+## Spec: visual-primitives.spec.md § Route Primitive —
+##   "a named, highlighted path through the graph representing a unit of work"
+##   "each Route has a distinct visual treatment (color, dash pattern)"
+##   "the direction of flow is apparent"
+##   "the entry point and terminus of the Route are visually distinct"
+##
+## Maps route index (int) → Array of Node3D visuals (highlight overlays, endpoint markers,
+## and name label) that represent the route.
+var _route_visuals: Array = []
+
+## Whether any routes are currently active.
+## When true, non-route edges are de-emphasised.
+var _routes_active: bool = false
+
+## Route colours keyed by classification string.
+## Spec §Scenario: Route classification — "each Route has a distinct visual treatment
+## (color, dash pattern) … at most 4 simultaneous Routes before visual overload."
+const ROUTE_COLORS: Dictionary = {
+	"happy_path": Color(0.10, 0.90, 0.20),   # bright green
+	"error_path":  Color(0.90, 0.15, 0.15),   # bright red
+	"fallback":    Color(0.90, 0.60, 0.10),   # amber
+	"default":     Color(0.20, 0.55, 0.95),   # bright blue
+}
+
 @onready var _camera: Camera3D = $Camera3D
 
 
@@ -197,6 +223,13 @@ func build_from_graph(graph: Dictionary) -> void:
 			vis.queue_free()
 		_ubiquitous_edge_visuals.clear()
 		_ubiquitous_edges_visible = false
+		# Clear route visuals on reload.
+		for route_vis_array: Array in _route_visuals:
+			for vis: Node3D in route_vis_array:
+				if is_instance_valid(vis):
+					vis.queue_free()
+		_route_visuals.clear()
+		_routes_active = false
 
 	# Create edge lines after all volumes exist.
 	for ed: Dictionary in edges:
@@ -211,6 +244,14 @@ func build_from_graph(graph: Dictionary) -> void:
 	#   "suggestions never auto-collapse — the human always initiates"
 	_cluster_suggestions = graph.get("clusters", [])
 	_apply_cluster_suggestions(_cluster_suggestions)
+
+	# Build Route primitive visuals from scene-graph routes list.
+	# Spec: visual-primitives.spec.md § Route Primitive —
+	#   "a named, highlighted path … representing a unit of work"
+	#   "each Route has a distinct visual treatment (color, dash pattern)"
+	#   "the direction of flow is apparent"
+	var routes: Array = graph.get("routes", [])
+	_build_routes(routes)
 
 	# Reposition camera to frame the whole graph.
 	_frame_camera()
@@ -1142,6 +1183,222 @@ func _get_anchor_size(anchor: Node3D) -> float:
 			if mi.mesh is BoxMesh:
 				return (mi.mesh as BoxMesh).size.x
 	return 1.0
+
+
+# ---------------------------------------------------------------------------
+# Route Primitive
+# Spec: visual-primitives.spec.md § Requirement: Route Primitive
+# ---------------------------------------------------------------------------
+
+## Build Route primitive visuals from the routes array in the scene graph.
+##
+## Each route has:
+##   name (String)           — label displayed along the path
+##   classification (String) — one of: happy_path, error_path, fallback
+##   segments (Array)        — Array of {source: String, target: String} dicts
+##
+## Rendering:
+##   - A bright highlighted overlay cylinder per segment (wider than the base edge)
+##   - A Label3D name tag placed at the midpoint of the first segment
+##   - A sphere endpoint marker at the entry node (first segment source)
+##   - A sphere endpoint marker at the terminus node (last segment target)
+##   - Non-route edges are de-emphasised (modulate.a = 0.3) when routes exist
+##
+## Spec §Scenario: Request path —
+##   "a Route is rendered as a highlighted, labeled path"
+##   "non-Route elements are de-emphasized"
+## Spec §Scenario: Route classification —
+##   "each Route has a distinct visual treatment (color, dash pattern)"
+## Spec §Scenario: Route direction —
+##   "the direction of flow is apparent (arrow heads)"
+##   "the entry point and terminus of the Route are visually distinct (landmark-style)"
+func _build_routes(routes: Array) -> void:
+	if routes.is_empty():
+		return
+
+	_routes_active = true
+
+	# Collect all (source, target) pairs that appear in any route.
+	var route_pairs: Array = []
+	for rt: Dictionary in routes:
+		for seg: Dictionary in rt.get("segments", []):
+			var pair: Array = [seg.get("source", ""), seg.get("target", "")]
+			if pair[0] != "" and pair[1] != "":
+				route_pairs.append(pair)
+
+	# De-emphasise all non-route edges: reduce alpha of their materials.
+	# Spec: "non-Route elements are de-emphasized"
+	for entry: Dictionary in _lod_edge_entries:
+		var visual: Node3D = entry["visual"] as Node3D
+		if visual == null:
+			continue
+		# Check if this edge is part of any route.
+		var in_route: bool = false
+		for pair: Array in route_pairs:
+			# Match by checking the _path_edge_entries source/target.
+			for pe: Dictionary in _path_edge_entries:
+				if pe["visual"] == visual and pe["source"] == pair[0] and pe["target"] == pair[1]:
+					in_route = true
+					break
+			if in_route:
+				break
+		if not in_route:
+			# De-emphasise by dimming: reduce albedo alpha on each segment child.
+			_set_visual_alpha(visual, 0.30)
+
+	# Render each route as a set of highlighted overlays.
+	for i: int in range(routes.size()):
+		var rt: Dictionary = routes[i]
+		var route_visuals_for_this: Array = []
+		var rt_name: String = rt.get("name", "Route %d" % i)
+		var classification: String = rt.get("classification", "default")
+		var color: Color = ROUTE_COLORS.get(classification, ROUTE_COLORS["default"])
+		var segments: Array = rt.get("segments", [])
+
+		if segments.is_empty():
+			continue
+
+		# Track midpoints for label placement.
+		var all_midpoints: Array = []
+
+		for seg: Dictionary in segments:
+			var src: String = seg.get("source", "")
+			var tgt: String = seg.get("target", "")
+			if not _world_positions.has(src) or not _world_positions.has(tgt):
+				continue
+			var from_pos: Vector3 = _world_positions[src]
+			var to_pos: Vector3 = _world_positions[tgt]
+			if from_pos.is_equal_approx(to_pos):
+				continue
+
+			var dir: Vector3 = (to_pos - from_pos).normalized()
+			var length: float = from_pos.distance_to(to_pos)
+			var mid: Vector3 = (from_pos + to_pos) * 0.5
+			all_midpoints.append(mid)
+
+			# Highlight overlay: a wider solid cylinder in the route colour.
+			# Radius is 2× base so the route stands out above the base edge.
+			var cyl := CylinderMesh.new()
+			cyl.top_radius = 0.18
+			cyl.bottom_radius = 0.18
+			cyl.height = length
+			cyl.radial_segments = 8
+
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = color
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			# Route highlights are slightly translucent so base edges remain visible.
+			mat.albedo_color.a = 0.75
+			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+			var overlay := MeshInstance3D.new()
+			overlay.name = "RouteHighlight_%s_%d" % [rt_name.replace(" ", "_"), i]
+			overlay.mesh = cyl
+			overlay.material_override = mat
+			_orient_to_dir(overlay, dir)
+			overlay.position = mid
+			add_child(overlay)
+			route_visuals_for_this.append(overlay)
+
+		# Place a Label3D at the midpoint of the route path.
+		# Spec: "the Route has a name"
+		if not all_midpoints.is_empty():
+			var label_pos: Vector3 = Vector3.ZERO
+			for mp: Vector3 in all_midpoints:
+				label_pos += mp
+			label_pos /= float(all_midpoints.size())
+			label_pos.y += 2.5  # float above the scene geometry
+
+			var lbl := Label3D.new()
+			lbl.name = "RouteLabel_%s" % rt_name.replace(" ", "_")
+			lbl.text = rt_name
+			lbl.font_size = 24
+			lbl.modulate = color
+			lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			lbl.pixel_size = 0.05
+			lbl.position = label_pos
+			add_child(lbl)
+			route_visuals_for_this.append(lbl)
+
+		# Entry marker: bright sphere at the first segment's source node.
+		# Spec: "the entry point and terminus of the Route are visually distinct (landmark-style)"
+		if not segments.is_empty():
+			var entry_id: String = (segments[0] as Dictionary).get("source", "")
+			if _world_positions.has(entry_id):
+				var entry_pos: Vector3 = _world_positions[entry_id]
+				var entry_marker := _create_route_endpoint_marker(
+					entry_pos, color, "RouteEntry_%s" % rt_name.replace(" ", "_")
+				)
+				add_child(entry_marker)
+				route_visuals_for_this.append(entry_marker)
+
+			# Terminus marker: bright sphere at the last segment's target node.
+			var last_seg: Dictionary = segments[segments.size() - 1] as Dictionary
+			var terminus_id: String = last_seg.get("target", "")
+			if _world_positions.has(terminus_id):
+				var term_pos: Vector3 = _world_positions[terminus_id]
+				var term_marker := _create_route_endpoint_marker(
+					term_pos, color, "RouteTerminus_%s" % rt_name.replace(" ", "_")
+				)
+				add_child(term_marker)
+				route_visuals_for_this.append(term_marker)
+
+		_route_visuals.append(route_visuals_for_this)
+
+
+## Create a landmark-style sphere marker for a Route entry or terminus.
+##
+## Spec §Scenario: Route direction —
+##   "the entry point and terminus of the Route are visually distinct (landmark-style)"
+func _create_route_endpoint_marker(pos: Vector3, color: Color, marker_name: String) -> MeshInstance3D:
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.60
+	sphere.height = 1.20
+	sphere.radial_segments = 12
+	sphere.rings = 6
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	# Emission makes the marker stand out like a landmark.
+	mat.emission_enabled = true
+	mat.emission = color
+	mat.emission_energy_multiplier = 0.60
+
+	var marker := MeshInstance3D.new()
+	marker.name = marker_name
+	marker.mesh = sphere
+	marker.material_override = mat
+	marker.position = pos + Vector3(0.0, 1.5, 0.0)  # float above the node
+	return marker
+
+
+## Set the albedo alpha on all MeshInstance3D children of a visual node.
+## Used to de-emphasise non-route edges when routes are active.
+func _set_visual_alpha(visual: Node3D, alpha: float) -> void:
+	# Direct MeshInstance3D (solid edges).
+	if visual is MeshInstance3D:
+		var mi: MeshInstance3D = visual as MeshInstance3D
+		if mi.material_override is StandardMaterial3D:
+			(mi.material_override as StandardMaterial3D).albedo_color.a = alpha
+		return
+	# Container node (dashed/dotted edges): update each segment child.
+	for child: Node in visual.get_children():
+		if child is MeshInstance3D:
+			var mi: MeshInstance3D = child as MeshInstance3D
+			if mi.material_override is StandardMaterial3D:
+				(mi.material_override as StandardMaterial3D).albedo_color.a = alpha
+
+
+## Expose the route visuals array for tests.
+## Each element is an Array of Node3D objects that represent one route.
+func get_route_visuals() -> Array:
+	return _route_visuals
+
+
+## Expose whether routes are currently active (for tests).
+func get_routes_active() -> bool:
+	return _routes_active
 
 
 ## Collapse a cluster: hide member anchors, create a supernode at their centroid,
