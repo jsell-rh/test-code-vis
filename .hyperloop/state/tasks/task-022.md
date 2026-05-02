@@ -8,7 +8,7 @@ deps:
 - task-005
 - task-011
 - task-016
-round: 1
+round: 2
 branch: hyperloop/task-022
 pr: https://github.com/jsell-rh/test-code-vis/pull/232
 pr_title: 'feat(godot): implement independence queryable property with animated highlight'
