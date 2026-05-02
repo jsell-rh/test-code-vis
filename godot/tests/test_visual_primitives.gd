@@ -807,6 +807,32 @@ func test_badge_vocabulary_deprecated() -> void:
 	_check(found, "'deprecated' badge must create a Badge_deprecated child")
 
 
+func test_badge_vocabulary_error_handling() -> void:
+	## The 'error_handling' badge type must render without error and create a Badge_error_handling child.
+	## spec §Scenario: Badge vocabulary — "at minimum: ... error_handling ..."
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	_vp.attach_primitives(_make_badge_node_data(["error_handling"]), anchor, 1.5)
+	var found: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "Badge_error_handling":
+			found = true
+	_check(found, "'error_handling' badge must create a Badge_error_handling child")
+
+
+func test_badge_vocabulary_entry_point() -> void:
+	## The 'entry_point' badge type must render without error and create a Badge_entry_point child.
+	## spec §Scenario: Badge vocabulary — "at minimum: ... entry_point ..."
+	_test_failed = false
+	var anchor: Node3D = _make_anchor()
+	_vp.attach_primitives(_make_badge_node_data(["entry_point"]), anchor, 1.5)
+	var found: bool = false
+	for child in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name) == "Badge_entry_point":
+			found = true
+	_check(found, "'entry_point' badge must create a Badge_entry_point child")
+
+
 # ---------------------------------------------------------------------------
 # Requirement: Landmark Primitive
 # Spec: visual-primitives.spec.md § Requirement: Landmark Primitive
