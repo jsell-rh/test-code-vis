@@ -1107,3 +1107,424 @@ func test_all_three_primitives_compose() -> void:
 		anchor.scale.x > 1.0,
 		"All-three node landmark scale must be > 1.0; got %.3f" % anchor.scale.x
 	)
+
+
+# ===========================================================================
+# Requirement: Tint Primitive
+# Spec: visual-primitives.spec.md § Requirement: Tint Primitive
+# "each context has a distinct desaturated fill color"
+# "palette is limited to 4-6 categorical colors"
+# "only ONE categorical dimension is encoded via Tint at a time"
+# ===========================================================================
+
+
+func test_tint_palette_has_4_to_6_colors() -> void:
+	## THEN the palette is limited to 4-6 categorical colors (preattentive discrimination limit).
+	## Spec §Tint Primitive / §Scenario: Domain tinting.
+	_test_failed = false
+	_check(
+		_vp.TINT_PALETTE.size() >= 4 and _vp.TINT_PALETTE.size() <= 6,
+		"TINT_PALETTE must have 4-6 entries; got %d" % _vp.TINT_PALETTE.size()
+	)
+
+
+func test_get_tint_returns_distinct_colors_for_adjacent_indices() -> void:
+	## GIVEN two adjacent bounded-context indices
+	## WHEN get_tint() is called for each
+	## THEN the returned colors are different (each context gets a distinct fill).
+	## Spec §Tint Primitive / §Scenario: Domain tinting — "distinct desaturated fill color".
+	_test_failed = false
+	var color_0: Color = _vp.get_tint(0)
+	var color_1: Color = _vp.get_tint(1)
+	_check(
+		color_0 != color_1,
+		"Tint indices 0 and 1 must produce different colors; both returned %s" % str(color_0)
+	)
+
+
+func test_get_tint_wraps_around_palette() -> void:
+	## GIVEN an index equal to the palette size
+	## WHEN get_tint() is called
+	## THEN the color wraps around to the first palette entry.
+	## Ensures the system handles more bounded contexts than palette slots gracefully.
+	_test_failed = false
+	var palette_size: int = _vp.TINT_PALETTE.size()
+	var color_0: Color = _vp.get_tint(0)
+	var color_wrap: Color = _vp.get_tint(palette_size)
+	_check(
+		color_0 == color_wrap,
+		"Tint index %d must wrap to same color as index 0; got %s vs %s" % [
+			palette_size, str(color_0), str(color_wrap)
+		]
+	)
+
+
+func test_tint_colors_are_desaturated() -> void:
+	## THEN each color is desaturated (no channel is fully saturated at 1.0 while others are 0.0).
+	## Spec §Tint Primitive / §Scenario: Domain tinting — "desaturated fill color".
+	## A desaturated color has relatively balanced RGB channels (max - min < 0.6).
+	_test_failed = false
+	for i: int in range(_vp.TINT_PALETTE.size()):
+		var c: Color = _vp.TINT_PALETTE[i]
+		var channel_range: float = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b))
+		_check(
+			channel_range < 0.6,
+			"Tint palette[%d] is too saturated (channel range %.2f ≥ 0.6): %s" % [
+				i, channel_range, str(c)
+			]
+		)
+
+
+func test_two_bounded_contexts_get_distinct_tint_colors() -> void:
+	## GIVEN two bounded contexts in a fixture
+	## WHEN the scene is built
+	## THEN each gets a distinct material albedo hue (different RGB from the palette).
+	## Spec §Tint Primitive — "each context has a distinct desaturated fill color".
+	_test_failed = false
+	var fixture: Dictionary = {
+		"nodes": [
+			{
+				"id": "ctx_a",
+				"name": "ContextA",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 5.0,
+			},
+			{
+				"id": "ctx_b",
+				"name": "ContextB",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 15.0, "y": 0.0, "z": 0.0},
+				"size": 5.0,
+			},
+		],
+		"edges": [],
+		"metadata": {},
+	}
+
+	var root := Main.new()
+	root.build_from_graph(fixture)
+	var anchors: Dictionary = root.get("_anchors")
+
+	var anchor_a: Node3D = anchors.get("ctx_a")
+	var anchor_b: Node3D = anchors.get("ctx_b")
+	_check(anchor_a != null, "ctx_a anchor must exist")
+	_check(anchor_b != null, "ctx_b anchor must exist")
+	if anchor_a == null or anchor_b == null:
+		root.free()
+		return
+
+	# Get the material on each context's MeshInstance3D child.
+	var mat_a: StandardMaterial3D = null
+	var mat_b: StandardMaterial3D = null
+	for child: Node in anchor_a.get_children():
+		if child is MeshInstance3D:
+			mat_a = (child as MeshInstance3D).material_override as StandardMaterial3D
+			break
+	for child: Node in anchor_b.get_children():
+		if child is MeshInstance3D:
+			mat_b = (child as MeshInstance3D).material_override as StandardMaterial3D
+			break
+
+	_check(mat_a != null, "ctx_a must have a StandardMaterial3D")
+	_check(mat_b != null, "ctx_b must have a StandardMaterial3D")
+	if mat_a == null or mat_b == null:
+		root.free()
+		return
+
+	# The RGB channels must differ (different categorical tint).
+	# Alpha may vary from public/private ratio — check only RGB.
+	var color_a: Color = mat_a.albedo_color
+	var color_b: Color = mat_b.albedo_color
+	var rgb_diff: float = (
+		abs(color_a.r - color_b.r)
+		+ abs(color_a.g - color_b.g)
+		+ abs(color_a.b - color_b.b)
+	)
+	_check(
+		rgb_diff > 0.01,
+		"Two bounded contexts must have distinct Tint colors; RGB diff = %.4f" % rgb_diff
+	)
+
+	root.free()
+
+
+# ===========================================================================
+# Requirement: Port Primitive
+# Spec: visual-primitives.spec.md § Requirement: Port Primitive
+# "a small visual element anchored to a Container's membrane"
+# "each Port is labeled with the function name"
+# "Ports are hidden at far zoom, fade in as the human zooms in"
+# ===========================================================================
+
+
+func _make_symbols_fixture(public_fn_names: Array, private_fn_names: Array) -> Array:
+	## Build a SymbolInfo list for use in fixture nodes.
+	var syms: Array = []
+	for name: String in public_fn_names:
+		syms.append({"name": name, "visibility": "public", "kind": "function"})
+	for name: String in private_fn_names:
+		syms.append({"name": name, "visibility": "private", "kind": "function"})
+	return syms
+
+
+func _make_port_fixture(public_fn_names: Array, private_fn_names: Array) -> Dictionary:
+	## Fixture: one bounded_context node with the given public/private function symbols.
+	return {
+		"nodes": [
+			{
+				"id": "ctx",
+				"name": "MyContext",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 5.0,
+				"symbols": _make_symbols_fixture(public_fn_names, private_fn_names),
+			},
+		],
+		"edges": [],
+		"metadata": {},
+	}
+
+
+func test_render_ports_creates_port_markers_for_public_functions() -> void:
+	## GIVEN a Container with 2 public functions
+	## WHEN render_ports() is called directly
+	## THEN 2 Port_ MeshInstance3D children exist on the anchor.
+	## Spec §Port Primitive / §Scenario: Port placement:
+	##   "4 Ports appear on its membrane" (generalized: N Ports for N public fns)
+	_test_failed = false
+	var anchor: Node3D = Node3D.new()
+	var symbols: Array = _make_symbols_fixture(["process_order", "get_status"], [])
+	var lod_entries: Array = []
+
+	_vp.render_ports(symbols, anchor, 5.0, lod_entries)
+
+	var port_count: int = 0
+	for child: Node in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name).begins_with("Port_"):
+			port_count += 1
+
+	_check(port_count == 2, "2 public functions → 2 Port_ MeshInstance3D markers; got %d" % port_count)
+	anchor.free()
+
+
+func test_render_ports_labels_carry_function_name() -> void:
+	## GIVEN a Container with a public function named "process_order"
+	## WHEN render_ports() is called
+	## THEN a Label3D child exists with text == "process_order".
+	## Spec §Port Primitive / §Scenario: Port placement: "each Port is labeled with the function name".
+	_test_failed = false
+	var anchor: Node3D = Node3D.new()
+	var symbols: Array = _make_symbols_fixture(["process_order"], [])
+	var lod_entries: Array = []
+
+	_vp.render_ports(symbols, anchor, 5.0, lod_entries)
+
+	var found_label: bool = false
+	for child: Node in anchor.get_children():
+		if child is Label3D and (child as Label3D).text == "process_order":
+			found_label = true
+			break
+
+	_check(found_label, "Port label must carry the function name 'process_order'")
+	anchor.free()
+
+
+func test_render_ports_private_functions_excluded() -> void:
+	## GIVEN a Container with 1 public and 2 private functions
+	## WHEN render_ports() is called
+	## THEN only 1 Port_ marker exists (private symbols are NOT ports).
+	## Spec §Port Primitive: ports represent PUBLIC interface points only.
+	_test_failed = false
+	var anchor: Node3D = Node3D.new()
+	var symbols: Array = _make_symbols_fixture(["public_fn"], ["_private_a", "_private_b"])
+	var lod_entries: Array = []
+
+	_vp.render_ports(symbols, anchor, 5.0, lod_entries)
+
+	var port_count: int = 0
+	for child: Node in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name).begins_with("Port_"):
+			port_count += 1
+
+	_check(port_count == 1, "Only public functions get Port markers; got %d (expected 1)" % port_count)
+	anchor.free()
+
+
+func test_render_ports_markers_are_sphere_meshes() -> void:
+	## GIVEN a Container with a public function
+	## WHEN render_ports() is called
+	## THEN the Port_ MeshInstance3D uses a SphereMesh.
+	_test_failed = false
+	var anchor: Node3D = Node3D.new()
+	var symbols: Array = _make_symbols_fixture(["handle_request"], [])
+	var lod_entries: Array = []
+
+	_vp.render_ports(symbols, anchor, 5.0, lod_entries)
+
+	var found_sphere: bool = false
+	for child: Node in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name).begins_with("Port_"):
+			found_sphere = (child as MeshInstance3D).mesh is SphereMesh
+			break
+
+	_check(found_sphere, "Port markers must use SphereMesh")
+	anchor.free()
+
+
+func test_render_ports_adds_lod_entries_for_near_visibility() -> void:
+	## GIVEN a Container with 2 public functions
+	## WHEN render_ports() is called
+	## THEN lod_entries contains at least 2 entries with node_type="port".
+	## Spec §Port Primitive / §Scenario: Port visibility at zoom levels:
+	##   "WHEN the zoom level is far THEN Ports are hidden"
+	##   "as the human zooms in, Ports fade in on the membrane"
+	_test_failed = false
+	var anchor: Node3D = Node3D.new()
+	var symbols: Array = _make_symbols_fixture(["fn_a", "fn_b"], [])
+	var lod_entries: Array = []
+
+	_vp.render_ports(symbols, anchor, 5.0, lod_entries)
+
+	# Each public function adds 2 entries: the sphere + the label.
+	# So 2 public fns → at least 2 entries with node_type="port".
+	var port_lod_count: int = 0
+	for entry: Dictionary in lod_entries:
+		if entry.get("node_type", "") == "port":
+			port_lod_count += 1
+
+	_check(
+		port_lod_count >= 2,
+		"render_ports must add ≥2 LOD entries with node_type='port'; got %d" % port_lod_count
+	)
+	anchor.free()
+
+
+func test_render_ports_no_ports_when_no_public_functions() -> void:
+	## GIVEN a Container with only private functions (no public)
+	## WHEN render_ports() is called
+	## THEN no Port_ children are added.
+	_test_failed = false
+	var anchor: Node3D = Node3D.new()
+	var symbols: Array = _make_symbols_fixture([], ["_internal", "_helper"])
+	var lod_entries: Array = []
+
+	_vp.render_ports(symbols, anchor, 5.0, lod_entries)
+
+	var port_count: int = 0
+	for child: Node in anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name).begins_with("Port_"):
+			port_count += 1
+
+	_check(port_count == 0, "No public functions → no Port_ markers; got %d" % port_count)
+	anchor.free()
+
+
+func test_ports_appear_in_built_scene_for_container_with_symbols() -> void:
+	## GIVEN a bounded_context node with 2 public functions in the scene graph
+	## WHEN build_from_graph() is called
+	## THEN Port_ children exist on the context anchor.
+	## Verifies that main.gd wires render_ports() into _create_volume().
+	_test_failed = false
+	var fixture: Dictionary = {
+		"nodes": [
+			{
+				"id": "ctx",
+				"name": "CtxWithPorts",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 5.0,
+				"symbols": [
+					{"name": "process_order", "visibility": "public", "kind": "function"},
+					{"name": "cancel_order", "visibility": "public", "kind": "function"},
+					{"name": "_validate", "visibility": "private", "kind": "function"},
+				],
+			},
+		],
+		"edges": [],
+		"metadata": {},
+	}
+
+	var root := Main.new()
+	root.build_from_graph(fixture)
+	var anchors: Dictionary = root.get("_anchors")
+
+	var ctx_anchor: Node3D = anchors.get("ctx")
+	_check(ctx_anchor != null, "ctx anchor must exist after build_from_graph")
+	if ctx_anchor == null:
+		root.free()
+		return
+
+	# Count Port_ MeshInstance3D children.
+	var port_count: int = 0
+	for child: Node in ctx_anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name).begins_with("Port_"):
+			port_count += 1
+
+	_check(
+		port_count == 2,
+		"Container with 2 public functions must have 2 Port_ mesh children; got %d" % port_count
+	)
+
+	root.free()
+
+
+func test_ports_hidden_at_far_lod_distance() -> void:
+	## GIVEN a scene with a Container that has ports
+	## WHEN FAR LOD is applied
+	## THEN port anchors are NOT visible (LOD hides them).
+	## Spec §Scenario: Port visibility at zoom levels:
+	##   "WHEN the zoom level is far THEN Ports are hidden"
+	_test_failed = false
+	var fixture: Dictionary = {
+		"nodes": [
+			{
+				"id": "ctx",
+				"name": "CtxFarPorts",
+				"type": "bounded_context",
+				"parent": null,
+				"position": {"x": 0.0, "y": 0.0, "z": 0.0},
+				"size": 5.0,
+				"symbols": [
+					{"name": "expose_api", "visibility": "public", "kind": "function"},
+				],
+			},
+		],
+		"edges": [],
+		"metadata": {},
+	}
+
+	var root := Main.new()
+	root.build_from_graph(fixture)
+
+	# Apply FAR LOD — should hide "port" node_type entries.
+	var lod: LodManager = root.get("_lod")
+	var node_entries: Array = root.get("_lod_node_entries")
+	var edge_entries: Array = root.get("_lod_edge_entries")
+	lod.update_lod(node_entries, edge_entries, LodManager.FAR_THRESHOLD + 20.0)
+
+	var anchors: Dictionary = root.get("_anchors")
+	var ctx_anchor: Node3D = anchors.get("ctx")
+	_check(ctx_anchor != null, "ctx anchor must exist")
+	if ctx_anchor == null:
+		root.free()
+		return
+
+	# Find Port_ children and verify they are hidden.
+	var all_ports_hidden: bool = true
+	var port_found: bool = false
+	for child: Node in ctx_anchor.get_children():
+		if child is MeshInstance3D and str((child as MeshInstance3D).name).begins_with("Port_"):
+			port_found = true
+			if (child as MeshInstance3D).visible:
+				all_ports_hidden = false
+
+	_check(port_found, "At least one Port_ child must exist")
+	if port_found:
+		_check(all_ports_hidden, "Port markers must be hidden at FAR LOD distance")
+
+	root.free()

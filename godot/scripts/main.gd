@@ -64,8 +64,14 @@ var _was_at_far_lod: bool = false
 ## Understanding overlay controller — activates alignment, quality, and impact overlays.
 var _understanding_overlay: UnderstandingOverlay = UnderstandingOverlay.new()
 
-## Visual primitives renderer — attaches badge, landmark, and power rail decorations.
+## Visual primitives renderer — attaches badge, landmark, power rail, port, and tint.
 var _visual_primitives: VisualPrimitives = VisualPrimitives.new()
+
+## Counter for auto-assigning categorical Tint colors to bounded contexts.
+## Spec: §Tint Primitive — each bounded context gets a distinct desaturated fill.
+## Reset to 0 at the start of each build_from_graph() call so colors are
+## consistently assigned regardless of how many times the scene is reloaded.
+var _bc_tint_counter: int = 0
 
 ## Tracks Node3D visuals for suppressed ubiquitous edges.
 ## These are created but hidden by default; toggled with the T key.
@@ -114,6 +120,11 @@ func build_from_graph(graph: Dictionary) -> void:
 	_graph = graph
 	var nodes: Array = graph.get("nodes", [])
 	var edges: Array = graph.get("edges", [])
+
+	# Reset Tint counter so bounded contexts receive consistent categorical colors
+	# on every call to build_from_graph() regardless of reload count.
+	# Spec §Tint Primitive — each bounded context gets a distinct desaturated fill.
+	_bc_tint_counter = 0
 
 	# Index raw node data for fast lookup.
 	var node_data_map: Dictionary = {}
@@ -351,7 +362,14 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 			var public_ratio: float = float(public_count) / float(symbols.size())
 			# Invert: high public ratio → porous (low alpha); low ratio → opaque (high alpha).
 			alpha = clampf(1.0 - public_ratio, 0.05, 0.55)
-		mat.albedo_color = Color(0.25, 0.45, 0.85, alpha)
+		# spec §Tint Primitive / §Scenario: Domain tinting:
+		#   "each context has a distinct desaturated fill color"
+		#   "palette is limited to 4-6 categorical colors"
+		# Auto-assign a categorical tint based on bounded_context creation order.
+		# Permeability alpha overlays on top so both channels remain independent.
+		var tint: Color = _visual_primitives.get_tint(_bc_tint_counter)
+		_bc_tint_counter += 1
+		mat.albedo_color = Color(tint.r, tint.g, tint.b, alpha)
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		# Show both sides so the translucent slab is visible from above and below.
 		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
@@ -380,6 +398,18 @@ func _create_volume(nd: Dictionary, parent_node: Node3D) -> void:
 	# Spec: visual-primitives.spec.md §Badge Primitive, §Landmark Primitive,
 	# §Power Rail Notation.
 	_visual_primitives.attach_primitives(nd, anchor, sz)
+
+	# Port Primitive — public function ports on Container membrane.
+	# Spec: visual-primitives.spec.md §Requirement: Port Primitive —
+	#   "a small visual element anchored to a Container's membrane"
+	#   "each Port is labeled with the function name"
+	# Only for bounded_context and module nodes with symbol data.
+	# Port visuals are registered in _lod_node_entries as "port" type so they
+	# are only visible at NEAR zoom level (hidden at FAR and MEDIUM).
+	if (is_context or node_type == "module") and not is_spec:
+		var port_symbols: Array = nd.get("symbols", [])
+		if port_symbols.size() > 0:
+			_visual_primitives.render_ports(port_symbols, anchor, sz, _lod_node_entries)
 
 
 ## Add a Power Rail indicator glyph to an anchor node.
