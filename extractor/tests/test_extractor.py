@@ -461,7 +461,6 @@ class TestDependencyExtraction:
             )
             assert e["weight"] >= 1, f"internal edge 'weight' must be >= 1: {e}"
 
-
     def test_cross_context_edge_weight_accumulates_for_multiple_imports(
         self, tmp_path: Path
     ) -> None:
