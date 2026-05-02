@@ -641,8 +641,6 @@ class TestClusterNoPosition:
 
     def test_cluster_typeddict_has_no_position_key(self) -> None:
         """The Cluster TypedDict does not define a position field."""
-        import inspect
-
         from extractor.schema import Cluster
 
         annotations = Cluster.__annotations__
