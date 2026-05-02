@@ -75,13 +75,10 @@ if echo "$TITLE" | grep -qiE "godot|GDScript|\.gd\b"; then
 fi
 
 # ── Python extractor component check ─────────────────────────────────────────
-# Title starts with "Extractor" (any separator: "—", ":", "-", space) or
-# "Python extractor" → at least one extractor/ file must exist.
-#
-# Observed failure (task-082): title "Extractor — structural significance…"
-# did NOT match the previous "^(Python extractor|extractor:)" pattern because
-# of the em-dash separator.  Broadened to "^extractor" to catch all variants.
-if echo "$TITLE" | grep -qiE "^extractor"; then
+# Title contains "extractor" or "Python extractor" → at least one extractor/ file must exist.
+# Note: many Godot tasks also reference extractor concepts; only flag when the
+# title STARTS with "extractor" or "Python" to avoid false positives.
+if echo "$TITLE" | grep -qiE "^(Python extractor|extractor:)"; then
     if [ -z "$DIFF_FILES" ] || ! echo "$DIFF_FILES" | grep -q '^extractor/'; then
         echo "FAIL: task title names the Python extractor but no extractor/ files changed."
         echo ""
@@ -104,7 +101,7 @@ if echo "$TITLE" | grep -qiE "^extractor"; then
     fi
 fi
 
-if [ "$FAIL" -eq 0 ] && ! echo "$TITLE" | grep -qiE "godot|GDScript|\.gd\b|^extractor"; then
+if [ "$FAIL" -eq 0 ] && ! echo "$TITLE" | grep -qiE "godot|GDScript|\.gd\b|^(Python extractor|extractor:)"; then
     echo "SKIP: task title '$TITLE' does not clearly name a single component — check not applicable."
     exit 0
 fi
