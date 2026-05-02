@@ -2872,12 +2872,15 @@ class TestDataFlowSpineExtraction:
         assert a_spines, "Spine for a_func must be emitted"
 
         ip_entries = [ip for spine in a_spines for ip in spine["interprocedural"]]
-        if ip_entries:
-            for ip in ip_entries:
-                assert "call_name" in ip, "Interprocedural entry must have 'call_name'"
-                assert "callee_param" in ip or "callee_return" in ip, (
-                    "Interprocedural entry must carry callee flow info"
-                )
+        assert ip_entries, (
+            "a_func(x) calls b_func(x) — the interprocedural spine MUST include "
+            "at least one entry linking A's argument to B's parameter/return"
+        )
+        for ip in ip_entries:
+            assert "call_name" in ip, "Interprocedural entry must have 'call_name'"
+            assert "callee_param" in ip or "callee_return" in ip, (
+                "Interprocedural entry must carry callee flow info"
+            )
 
     def test_interprocedural_does_not_exceed_one_level(self, tmp_path: Path) -> None:
         """Spec: 'the extractor does NOT trace deeper than one call level'.
