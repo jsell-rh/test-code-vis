@@ -437,28 +437,32 @@ func test_input_and_output_ports_on_opposing_faces() -> void:
 # ---------------------------------------------------------------------------
 
 func test_ports_have_alpha_zero_at_tier_0() -> void:
-	## At tier-0 (FAR) LOD: Port meshes and labels must have modulate.a == 0.
+	## At tier-0 (FAR) LOD: Port meshes and labels must have alpha == 0.
 	## Spec: "Port alpha = 0 at tier-0/tier-1"
+	##
+	## MeshInstance3D opacity: material_override.albedo_color.a (no modulate on 3D nodes)
+	## Label3D opacity:        modulate.a (Label3D supports modulate)
 	_test_failed = false
 	var anchor := Node3D.new()
 	var pr := PortRenderer.new()
 	pr.attach_ports(_make_context_node_4_public(), anchor, 4.0)
 
-	# Apply tier-0 (FAR) LOD — must not be inside scene tree so Tween is skipped.
+	# Apply tier-0 (FAR) LOD — not in scene tree so direct assignment is used (no Tween).
 	pr.set_lod_tier(PortRenderer.LOD_TIER_FAR)
 
 	for child: Node in anchor.get_children():
 		if child is MeshInstance3D and (child as MeshInstance3D).name.begins_with("Port_"):
+			var mat: StandardMaterial3D = (child as MeshInstance3D).material_override as StandardMaterial3D
 			_check(
-				(child as MeshInstance3D).modulate.a == 0.0,
-				"Port mesh must have modulate.a == 0 at tier-0 (FAR); got %.3f for %s" % [
-					(child as MeshInstance3D).modulate.a, child.name
+				mat != null and mat.albedo_color.a == 0.0,
+				"Port mesh material albedo_color.a must == 0 at tier-0 (FAR); got %.3f for %s" % [
+					mat.albedo_color.a if mat != null else -1.0, child.name
 				]
 			)
 		elif child is Label3D and (child as Label3D).name.begins_with("PortLabel_"):
 			_check(
 				(child as Label3D).modulate.a == 0.0,
-				"Port label must have modulate.a == 0 at tier-0 (FAR); got %.3f for %s" % [
+				"Port label modulate.a must == 0 at tier-0 (FAR); got %.3f for %s" % [
 					(child as Label3D).modulate.a, child.name
 				]
 			)
@@ -467,7 +471,7 @@ func test_ports_have_alpha_zero_at_tier_0() -> void:
 
 
 func test_ports_have_alpha_zero_at_tier_1() -> void:
-	## At tier-1 (MEDIUM) LOD: Port meshes and labels must have modulate.a == 0.
+	## At tier-1 (MEDIUM) LOD: Port meshes and labels must have alpha == 0.
 	## Spec: "Port alpha = 0 at tier-0/tier-1"
 	_test_failed = false
 	var anchor := Node3D.new()
@@ -478,16 +482,17 @@ func test_ports_have_alpha_zero_at_tier_1() -> void:
 
 	for child: Node in anchor.get_children():
 		if child is MeshInstance3D and (child as MeshInstance3D).name.begins_with("Port_"):
+			var mat: StandardMaterial3D = (child as MeshInstance3D).material_override as StandardMaterial3D
 			_check(
-				(child as MeshInstance3D).modulate.a == 0.0,
-				"Port mesh must have modulate.a == 0 at tier-1 (MEDIUM); got %.3f for %s" % [
-					(child as MeshInstance3D).modulate.a, child.name
+				mat != null and mat.albedo_color.a == 0.0,
+				"Port mesh material albedo_color.a must == 0 at tier-1 (MEDIUM); got %.3f for %s" % [
+					mat.albedo_color.a if mat != null else -1.0, child.name
 				]
 			)
 		elif child is Label3D and (child as Label3D).name.begins_with("PortLabel_"):
 			_check(
 				(child as Label3D).modulate.a == 0.0,
-				"Port label must have modulate.a == 0 at tier-1 (MEDIUM); got %.3f for %s" % [
+				"Port label modulate.a must == 0 at tier-1 (MEDIUM); got %.3f for %s" % [
 					(child as Label3D).modulate.a, child.name
 				]
 			)
@@ -496,10 +501,12 @@ func test_ports_have_alpha_zero_at_tier_1() -> void:
 
 
 func test_ports_have_alpha_gt_zero_at_tier_2() -> void:
-	## At tier-2 (NEAR) LOD: Port meshes and labels must have modulate.a > 0.
+	## At tier-2 (NEAR) LOD: Port meshes and labels must have alpha > 0.
 	## Spec: "Ports fade in on the membrane" at near distance.
-	## Note: when NOT in scene tree, set_lod_tier() sets modulate.a directly
-	## (no Tween), so we can assert the value immediately.
+	## Note: when NOT in scene tree, set_lod_tier() sets alpha directly (no Tween).
+	##
+	## MeshInstance3D opacity is tracked via material_override.albedo_color.a.
+	## Label3D opacity is tracked via modulate.a.
 	_test_failed = false
 	var anchor := Node3D.new()
 	var pr := PortRenderer.new()
@@ -511,17 +518,18 @@ func test_ports_have_alpha_gt_zero_at_tier_2() -> void:
 	for child: Node in anchor.get_children():
 		if child is MeshInstance3D and (child as MeshInstance3D).name.begins_with("Port_"):
 			found_any = true
+			var mat: StandardMaterial3D = (child as MeshInstance3D).material_override as StandardMaterial3D
 			_check(
-				(child as MeshInstance3D).modulate.a > 0.0,
-				"Port mesh must have modulate.a > 0 at tier-2 (NEAR); got %.3f for %s" % [
-					(child as MeshInstance3D).modulate.a, child.name
+				mat != null and mat.albedo_color.a > 0.0,
+				"Port mesh material albedo_color.a must > 0 at tier-2 (NEAR); got %.3f for %s" % [
+					mat.albedo_color.a if mat != null else -1.0, child.name
 				]
 			)
 		elif child is Label3D and (child as Label3D).name.begins_with("PortLabel_"):
 			found_any = true
 			_check(
 				(child as Label3D).modulate.a > 0.0,
-				"Port label must have modulate.a > 0 at tier-2 (NEAR); got %.3f for %s" % [
+				"Port label modulate.a must > 0 at tier-2 (NEAR); got %.3f for %s" % [
 					(child as Label3D).modulate.a, child.name
 				]
 			)
@@ -532,8 +540,9 @@ func test_ports_have_alpha_gt_zero_at_tier_2() -> void:
 
 
 func test_ports_start_invisible_before_lod_applied() -> void:
-	## Newly created Ports start with modulate.a == 0 before any LOD call.
-	## set_lod_tier() drives the first transition.
+	## Newly created Ports start with alpha == 0 before any LOD call.
+	## MeshInstance3D: material_override.albedo_color.a == 0 (via base_color a=0).
+	## Label3D:        modulate.a == 0.
 	_test_failed = false
 	var anchor := Node3D.new()
 	var pr := PortRenderer.new()
@@ -542,16 +551,17 @@ func test_ports_start_invisible_before_lod_applied() -> void:
 
 	for child: Node in anchor.get_children():
 		if child is MeshInstance3D and (child as MeshInstance3D).name.begins_with("Port_"):
+			var mat: StandardMaterial3D = (child as MeshInstance3D).material_override as StandardMaterial3D
 			_check(
-				(child as MeshInstance3D).modulate.a == 0.0,
-				"Port mesh must start with modulate.a == 0; got %.3f" % [
-					(child as MeshInstance3D).modulate.a
+				mat != null and mat.albedo_color.a == 0.0,
+				"Port mesh must start invisible (albedo_color.a == 0); got %.3f" % [
+					mat.albedo_color.a if mat != null else -1.0
 				]
 			)
 		elif child is Label3D and (child as Label3D).name.begins_with("PortLabel_"):
 			_check(
 				(child as Label3D).modulate.a == 0.0,
-				"Port label must start with modulate.a == 0; got %.3f" % [
+				"Port label must start invisible (modulate.a == 0); got %.3f" % [
 					(child as Label3D).modulate.a
 				]
 			)
