@@ -1,8 +1,8 @@
 ---
 id: task-035
-title: Implement Node Primitive renderer (labeled entities at tier-2 LOD)
+title: CLOSED — duplicate of task-029 (Node primitive renderer; improvements merged into task-029)
 spec_ref: "specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd"
-status: not-started
+status: closed
 phase: null
 deps: [task-011, task-014]
 round: 0

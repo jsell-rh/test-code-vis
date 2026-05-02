@@ -1,68 +1,134 @@
 ---
 id: task-025
-title: Implement type topology extraction (inheritance and has-a edges)
+title: Implement type topology extraction (inheritance, composition, and implements edges)
 spec_ref: "specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd"
 status: not-started
 phase: null
-deps: [task-003, task-007]
+deps: [task-002, task-003, task-006, task-007]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(extractor): add type topology extraction (inherits and has_a edges)"
+pr_title: "feat(extractor): implement type topology extraction (inherits, has_a, implements)"
 pr_description: |
   ## What and Why
 
-  This PR implements **Type Topology Extraction** as defined in `specs/core/visual-primitives.spec.md`
-  (Extraction Layer § Type Topology Extraction). The module graph (task-003) captures import-based
-  dependencies between modules. Type topology captures a finer-grained layer: the structural
-  relationships *between types* — inheritance chains and composition (has-a) relationships. This
-  data enriches the dependency graph used by the Godot renderer, enabling future views to show
-  "which types extend which" and "which types are composed into which" at near-zoom LOD.
+  Adds a type topology extraction pass to the Python extractor. This pass analyzes class
+  declarations in the AST to produce the directed graph of type relationships:
+
+  - **Inheritance** (`inherits`): class `PaymentProcessor(BaseProcessor)` →
+    edge `PaymentProcessor -> BaseProcessor` with type `inherits`
+  - **Composition** (`has_a`): class `Order` has an annotated field `payment: PaymentInfo` →
+    edge `Order -> PaymentInfo` with type `has_a`
+  - **Implementation** (`implements`): class implements a Protocol or ABC →
+    edge with type `implements`
+
+  The module graph (task-003) captures import-based dependencies between modules. Type topology
+  captures a finer-grained layer: the structural relationships *between types* — inheritance
+  chains, composition, and interface implementation. This data enriches the dependency graph
+  used by the Godot renderer, enabling views to show "which types extend which" and "which types
+  are composed into which" at near-zoom LOD (tier 2). Without this pass, the scene graph has no
+  record of how types relate to each other.
 
   ## Spec Requirements Satisfied
 
-  - For each class in the codebase: if it inherits from another class, an `inherits` edge is
-    emitted from the subclass to the base class.
-  - For each class with a field typed as another class: a `has_a` edge is emitted from the
-    containing class to the field type.
-  - Extraction is AST-only: class declarations, base class lists, and field type annotations
-    are parsed from source. No type inference or flow analysis is performed.
-  - The `edges` array in the scene graph JSON gains new entries with `"type": "inherits"` and
-    `"type": "has_a"`.
+  `specs/core/visual-primitives.spec.md` — Requirement: Type Topology Extraction
 
-  ## Schema Change
+  - `PaymentProcessor(BaseProcessor)` → edge
+    `{ source: "iam.domain.PaymentProcessor", target: "iam.domain.BaseProcessor", type: "inherits" }`
+  - Class `Order` with field `payment: PaymentInfo` → edge
+    `{ source: "iam.domain.Order", target: "iam.domain.PaymentInfo", type: "has_a" }`
+  - Only AST parsing of class declarations, field type annotations, and base class lists —
+    no type inference or flow analysis required.
+  - Dunder methods and class variables without type annotations are not emitted as `has_a`
+    edges (only explicitly typed field annotations are used).
 
-  The edge schema (task-007) is extended with two new `type` values:
+  ## Key Design Decisions
+
+  - **Inheritance detection**: walk `ast.ClassDef.bases` for each class node. Base class
+    names are resolved against the module's import graph to get fully qualified IDs. If a
+    base cannot be resolved (external library class), the edge is emitted with
+    `external: true` and the unresolved name as the target string.
+  - **Composition detection**: walk `ast.AnnAssign` nodes at class body scope to find
+    annotated field declarations (`field: Type`). The type annotation is parsed to extract
+    the type name(s) via the import graph. Generic types (e.g. `list[Order]`) extract the
+    inner type (`Order`).
+  - **Implementation detection**: Python ABCs and Protocols are treated as a subcase of
+    inheritance — any base class that is a `Protocol` subclass or `ABC` subclass emits an
+    `implements` edge rather than `inherits`. Detection uses the same base-class resolution
+    path with a known-ABC/Protocol seed list.
+  - **Edge deduplication**: if class A inherits from B AND has a field of type B, two edges
+    are emitted (one `inherits`, one `has_a`). These are semantically distinct and both valid.
+  - This pass runs after scope nesting (task-002) so class node IDs are established, and
+    after module graph extraction (task-003) so import resolution can use the cross-module map.
+
+  ## Schema Extension
+
+  Adds new edge objects to the existing `edges` array (task-007). New edge `type` values:
+
   ```json
-  { "source": "iam.domain.PaymentProcessor", "target": "iam.domain.BaseProcessor", "type": "inherits" }
-  { "source": "iam.domain.Order", "target": "iam.domain.PaymentInfo", "type": "has_a" }
+  { "source": "iam.domain.PaymentProcessor",
+    "target": "iam.domain.BaseProcessor",
+    "type": "inherits" }
+
+  { "source": "iam.domain.Order",
+    "target": "iam.domain.PaymentInfo",
+    "type": "has_a" }
+
+  { "source": "iam.domain.ConcreteRepo",
+    "target": "iam.domain.IRepository",
+    "type": "implements" }
+
+  { "source": "iam.domain.SomeClass",
+    "target": "django.db.models.Model",
+    "type": "inherits",
+    "external": true }
   ```
-  Node IDs for class-level sources/targets use dotted paths extending from their containing module.
+
+  The `external: true` flag signals that the target lives outside the extracted codebase and
+  should not be rendered as a node — only the edge is emitted.
 
   ## Files / Areas Affected
 
-  - `extractor/` — new analysis pass that walks class definitions and their base lists and
-    annotated field types to emit `inherits` and `has_a` edges.
-  - The extractor TypedDict / dataclass for edges may need to accommodate class-level node IDs
-    that are sub-entities of modules (if the schema registers class nodes, those come from
-    scope nesting — task-002).
-  - Scene graph JSON output gains new edge entries.
+  - `extractor/passes/type_topology.py` — new extraction pass; walks class declarations,
+    resolves base classes and field type annotations, emits typed edges
+  - `extractor/pipeline.py` — adds `type_topology` pass after `module_graph` and
+    `scope_nesting`; appends its edges to the scene graph edge list before serialization
+  - `extractor/schema.py` — adds `"inherits"`, `"has_a"`, `"implements"` to the enumerated
+    edge `type` values; adds optional `"external": bool` field on edges
+  - `extractor/tests/test_type_topology.py` — unit tests covering:
+    - single inheritance produces `inherits` edge
+    - multiple inheritance produces multiple `inherits` edges
+    - annotated field of a known type produces `has_a` edge
+    - untyped field (`x = None`) does NOT produce `has_a` edge
+    - generic field (`items: list[Order]`) produces `has_a` edge to `Order`
+    - class with no bases and no typed fields produces no edges
+    - external base class produces edge with `external: true`
+    - ABC/Protocol base class produces `implements` edge rather than `inherits`
 
   ## How to Verify
 
-  1. Run the extractor against kartograph.
-  2. Inspect `scene_graph.json` edges: find at least one `"type": "inherits"` and one
-     `"type": "has_a"` entry if kartograph has inheritance or composition.
-  3. Confirm the extractor test suite still passes (module graph edges still present).
-  4. Add a regression test: given a synthetic Python file with `class B(A): pass` and
-     `class C: x: A = None`, confirm edges `B->A (inherits)` and `C->A (has_a)` are emitted.
+  1. Run the extractor on `~/code/kartograph`.
+  2. Open the generated JSON; search for `"type": "inherits"` — confirm inheritance chains
+     appear for known kartograph class hierarchies.
+  3. Search for `"type": "has_a"` — confirm composition edges appear for classes with typed
+     field annotations.
+  4. Run `pytest extractor/tests/test_type_topology.py` — all tests green.
+  5. Confirm that external base classes (e.g. from `pydantic`, `sqlalchemy`) carry
+     `"external": true` in their edge objects.
 
   ## Caveats / Follow-up
 
-  - Only explicit annotations are analysed (e.g. `x: Foo`). Implicit types (e.g. `x = Foo()`)
-    are not extracted; this is consistent with the spec's "no type inference" constraint.
-  - Call graph extraction (task-026) is a peer task that also adds new edge types. These tasks
-    should be sequenced (026 depends on 025) to avoid concurrent TypedDict modifications.
-  - The Godot renderer does not yet render `inherits` or `has_a` edges distinctively; that is
-    a future rendering enhancement. These edges are present in the JSON for future use.
+  - Resolution is AST-only: aliased imports (`from foo import Bar as B`) and dynamic base
+    classes (`class Foo(get_base())`) may not resolve correctly. Document known limitations.
+  - `has_a` detection is limited to explicitly annotated class-body fields. Attributes
+    assigned in `__init__` (e.g. `self.payment = PaymentInfo()`) are NOT captured.
+  - Call graph extraction (task-026) is a peer task adding new edge types. task-026 depends
+    on this task to avoid concurrent schema modifications.
+  - **Retry note**: A prior attempt on branch `hyperloop/task-025` passed all checks except
+    `check-rebased-onto-main.sh` (branch forked before commit 61c9117a which deleted 3 test
+    functions from `extractor/tests/test_extractor.py`). The implementation was correct. The
+    fix is: `git rebase origin/main`, keeping main's version of `test_extractor.py` (which
+    drops the 3 deleted tests), then apply the task-025 changes on top. The branch
+    `hyperloop/task-025` on origin contains the completed implementation and may be reused
+    after rebasing.
 ---

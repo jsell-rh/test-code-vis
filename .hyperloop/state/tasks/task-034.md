@@ -1,8 +1,8 @@
 ---
 id: task-034
-title: Implement type topology extraction (inheritance, composition, has-a edges)
+title: CLOSED — duplicate of task-025 (type topology extraction; improvements merged into task-025)
 spec_ref: "specs/core/visual-primitives.spec.md@82d048ecde6d3209435ad2561c1384da93ba2cdd"
-status: not-started
+status: closed
 phase: null
 deps: [task-006]
 round: 0
