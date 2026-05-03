@@ -110,14 +110,31 @@ for i in "${!BANNED_IDS[@]}"; do
                 echo "  branch version (status: closed) — but the orchestrator assigned"
                 echo "  from ${STATE_BRANCH} which still shows in_progress."
                 echo ""
-                echo "  Fix (on ${STATE_BRANCH} branch):"
-                echo "    git checkout ${STATE_BRANCH}"
-                echo "    sed -i 's/^status:.*/status: closed/' ${TASK_PATH}"
-                echo "    sed -i 's/^spec_ref:.*/spec_ref: null/' ${TASK_PATH}"
-                echo "    git add ${TASK_PATH}"
-                echo "    git commit -m 'chore(tasks): permanently close banned task ${TASK_ID}'"
-                echo "    git push origin ${STATE_BRANCH}"
-                echo "    git checkout main"
+                # If the file is ABSENT from main (deleted there), use rm on state too.
+                # If the file is PRESENT on main (just closed there), use sed on state.
+                if [ ! -f "$TASK_PATH" ]; then
+                    echo "  NOTE: ${TASK_ID}.md is ABSENT from main (was deleted). The fix on"
+                    echo "  ${STATE_BRANCH} is to DELETE the file — not just close it — to keep"
+                    echo "  both branches consistent. (task-001 Round 3 root cause: file deleted"
+                    echo "  from main but hyperloop/state was never updated.)"
+                    echo ""
+                    echo "  Fix (on ${STATE_BRANCH} branch — DELETE the file):"
+                    echo "    git checkout ${STATE_BRANCH}"
+                    echo "    rm ${TASK_PATH}"
+                    echo "    git add ${TASK_PATH}"
+                    echo "    git commit -m 'chore(tasks): delete permanently banned ${TASK_ID} from state branch'"
+                    echo "    git push origin ${STATE_BRANCH}"
+                    echo "    git checkout main"
+                else
+                    echo "  Fix (on ${STATE_BRANCH} branch — CLOSE the file):"
+                    echo "    git checkout ${STATE_BRANCH}"
+                    echo "    sed -i 's/^status:.*/status: closed/' ${TASK_PATH}"
+                    echo "    sed -i 's/^spec_ref:.*/spec_ref: null/' ${TASK_PATH}"
+                    echo "    git add ${TASK_PATH}"
+                    echo "    git commit -m 'chore(tasks): permanently close banned task ${TASK_ID}'"
+                    echo "    git push origin ${STATE_BRANCH}"
+                    echo "    git checkout main"
+                fi
                 echo ""
                 TASK_FOUND_OPEN=1
             fi

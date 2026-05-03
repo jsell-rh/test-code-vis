@@ -98,6 +98,8 @@ guidelines: |
     git push origin hyperloop/state
     git checkout main
 
+  **DELETE FROM MAIN = DELETE FROM hyperloop/state — same session, same `git checkout`.** If you run `rm .hyperloop/state/tasks/<task-id>.md` on main, immediately do the same `rm` on `hyperloop/state` before switching back. Deleting from one branch and leaving the file on the other is the task-001 Round 3 root cause: the file was `rm`'d on main at commit `a64de325` but `hyperloop/state` was never updated, leaving `status: in_progress` there and causing a third re-assignment.
+
   **The cycle-start gate (`check-cycle-gate.sh`) now runs Step 1b which calls
   `check-banned-task-ids-closed.sh --run`.** This script checks BOTH branches
   and will exit 1 if any banned task ID is open on either.  Run it; fix any

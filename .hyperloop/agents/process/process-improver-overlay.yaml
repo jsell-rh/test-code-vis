@@ -39,6 +39,12 @@ guidelines: |
     git push origin hyperloop/state
     git checkout main
 
+  NOTE on fix commands from check-banned-task-ids-closed.sh: when the task file
+  is ABSENT from main (already deleted there), the script now prints DELETE (`rm`)
+  fix commands for hyperloop/state. When the file is PRESENT on main (just closed),
+  it prints CLOSE (`sed`) commands. Follow whichever the script prints — do not
+  substitute one for the other.
+
   Step 4 — Only THEN analyze patterns and write new overlay rules.
 
   Do NOT add another overlay rule documenting the required commands without
