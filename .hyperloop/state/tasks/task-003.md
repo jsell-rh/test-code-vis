@@ -1,6 +1,6 @@
 ---
 id: task-003
-title: Python extractor — import-based dependency extraction
+title: Import-based dependency extraction
 spec_ref: "specs/extraction/code-extraction.spec.md@045851f001a15374395b876d4cf9ccfc1a8fad2b"
 status: not-started
 phase: null
@@ -12,61 +12,52 @@ pr_title: "feat(extractor): extract import-based dependency edges between module
 pr_description: |
   ## What and Why
 
-  Adds the dependency-extraction stage to the Python extractor. After module
-  discovery (task-002) produces the node list, this task parses each file's
-  import statements and emits directed edges between modules.
-
-  Dependency edges are the primary structural signal for the 3D visualization:
-  they drive the coupling-aware layout in task-005, cluster detection in
-  task-006, and independence grouping in task-007. Without them, the rendered
-  scene is just a flat list of boxes.
+  Parses every Python source file in the target codebase and resolves import statements
+  to module nodes discovered in task-002. Emits `Edge` dicts (source, target, type) for
+  each module-to-module dependency. This is the data on which layout (task-004),
+  independence detection (task-005), aggregate edges (task-006), and cluster suggestions
+  (task-007) all depend.
 
   ## Spec Requirements Satisfied
 
   From `specs/extraction/code-extraction.spec.md`:
-  - **Dependency Extraction — Cross-context dependency**: identifies that (e.g.)
-    the `graph` context imports from `shared_kernel` and emits a directed edge
-    `graph → shared_kernel`.
-  - **Dependency Extraction — Internal dependency**: identifies
-    `iam.application.services → iam.domain` and emits an internal edge with
-    `type: "internal"`.
+
+  - **Dependency Extraction** — cross-context edges (`type: "cross_context"`) and internal
+    edges (`type: "internal"`) are both produced and are distinguishable by type.
 
   ## Key Design Decisions
 
-  - Uses Python `ast.parse` to extract `import X` and `from X import Y`
-    statements from each `.py` file without executing them.
-  - Resolves import targets against the discovered module tree; unresolved
-    (third-party or stdlib) imports are recorded but not emitted as edges.
-  - Each unique (source, target) module pair becomes one edge entry with
-    `weight` equal to the count of individual import statements referencing
-    that target. This weight feeds the aggregate-edge computation in task-006.
-  - Edge `type` is `"cross_context"` if source and target are in different
-    top-level packages, `"internal"` otherwise.
+  - Uses `ast.parse` from the Python stdlib — no third-party dependencies.
+  - Import resolution strategy: convert `from iam.domain import X` to the module id
+    `"iam.domain"` by matching against the discovered node set. Unresolved imports
+    (stdlib, third-party) are silently skipped.
+  - Edge granularity is at the **module** level (package nodes), not file level. Each
+    unique (source_module, target_module) pair produces exactly one `Edge` at this stage.
+    Weight counting (number of individual import statements) is deferred to task-006.
+  - `type` is `"cross_context"` when source and target belong to different top-level
+    bounded contexts; `"internal"` when they share the same bounded context.
+  - Edges where source == target (self-imports) are discarded.
+  - Edges are deduplicated: multiple files in the same module importing from the same
+    target produce one edge, not N.
 
   ## Files Affected
 
-  - `extractor/dependencies.py` — import-parsing and edge-emission logic
-  - `extractor/cli.py` — wired to call dependency extraction after discovery
-  - `extractor/tests/test_dependencies.py` — tests covering cross-context,
-    internal, and zero-dependency module cases
+  - `extractor/dependency.py` — new file:
+    `extract_dependencies(nodes: list[Node], root_path) -> list[Edge]`
+  - `extractor/tests/test_dependency.py` — unit tests with synthetic fixture packages
+    + integration test asserting at least one cross-context edge exists in kartograph
 
-  ## How to Verify
+  ## Verification
 
-  ```bash
-  python extractor/cli.py --target ~/code/kartograph --output /tmp/kg.json
-  python -c "
-  import json
-  d = json.load(open('/tmp/kg.json'))
-  print(f'{len(d[\"edges\"])} edges found')
-  print([e for e in d['edges'] if e['type'] == 'cross_context'][:3])
-  "
-  ```
-
-  `python -m pytest extractor/tests/test_dependencies.py`
+  1. `pytest extractor/tests/test_dependency.py` passes.
+  2. Running against kartograph: `graph → shared_kernel` edge exists with
+     `type: "cross_context"`.
+  3. Running against kartograph: `iam.application → iam.domain` edge exists with
+     `type: "internal"`.
 
   ## Caveats
 
-  Dynamic imports (`importlib.import_module(...)`) are not resolved — they
-  require execution and are outside the static-analysis scope of the prototype.
-  Star imports (`from X import *`) are recorded as a single edge with weight 1.
+  Dynamic imports (`importlib.import_module(...)`) are not detected. This is acceptable
+  for the prototype scope. Relative imports (`from . import X`) are resolved relative to
+  the file's own package.
 ---

@@ -1,79 +1,65 @@
 ---
 id: task-005
-title: Python extractor — coupling-aware pre-computed layout
-spec_ref: "specs/extraction/scene-graph-schema.spec.md@4ea7e33731b8eb0cd47c19012a9f7b5774420e21"
+title: Independence group detection and node annotation
+spec_ref: "specs/visualization/orthogonal-independence.spec.md@ca0ad7afad8d95361892fbfba84f55049cf288fd"
 status: not-started
 phase: null
-deps: [task-004]
+deps: [task-003]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(extractor): compute coupling-aware node positions for 3D layout"
+pr_title: "feat(extractor): detect structural independence groups and annotate nodes"
 pr_description: |
   ## What and Why
 
-  The Godot application renders nodes at positions stored in the scene graph.
-  Those positions must encode structural meaning: tightly coupled modules should
-  be spatially close, loosely coupled modules spatially distant. Without this,
-  the 3D space is positionally arbitrary and provides no comprehension benefit
-  over a flat list.
-
-  This task implements the layout algorithm in the extractor (not in Godot),
-  satisfying the schema requirement that Godot is a pure renderer: it reads
-  positions, it does not compute them.
+  Identifies which module nodes within each bounded context are structurally independent
+  of each other — sharing no direct or transitive internal dependencies. Each module is
+  annotated with an `independence_group` identifier so the Godot renderer can visually
+  separate orthogonal groups. This is the extractor-side half of the orthogonal
+  independence feature; the rendering half is task-020.
 
   ## Spec Requirements Satisfied
 
-  From `specs/extraction/scene-graph-schema.spec.md`:
-  - **Pre-Computed Layout**: each node's `position` field contains x, y, z
-    coordinates computed by a layout algorithm where tightly coupled nodes are
-    closer together.
-  - **Pre-Computed Layout — child positioning**: child nodes are positioned
-    within the spatial bounds of their parent.
+  From `specs/visualization/orthogonal-independence.spec.md`:
+
+  - **Independence Detection**: groups modules within each bounded context by connected
+    components in the internal dependency graph
+  - Each module node receives an `independence_group` field (e.g. `"iam:0"`, `"iam:1"`)
+  - Modules with no internal dependencies to any peer each form their own singleton group
+  - A fully-connected context produces a single group (`"ctx:0"`)
+
+  From `specs/extraction/scene-graph-schema.spec.md` (Node Schema scenario):
+
+  - `independence_group` field populated per the schema definition
 
   ## Key Design Decisions
 
-  - Layout algorithm: force-directed layout (e.g. Fruchterman-Reingold) on the
-    module graph. Edge weight (from task-003) serves as the attraction force.
-    Uses `networkx` for graph operations and force-directed layout, or a
-    stdlib-only implementation if the NFR "no deps beyond stdlib and ast" is
-    strictly applied. Decision: use `networkx` as it is a widely available
-    pure-Python library; the NFR permits tree-sitter as an example, indicating
-    minimal third-party deps are acceptable.
-  - Bounded contexts are laid out at the top level. Their children are then
-    positioned within the bounding box of their parent context using a
-    sub-layout pass.
-  - Y-axis is used for hierarchy depth (bounded contexts at y=0, inner modules
-    at y > 0), leaving the XZ plane for the top-down camera's primary view.
-  - Positions are normalized so the entire scene fits in a
-    [-50, 50] × [0, 10] × [-50, 50] bounding box.
+  - Algorithm: build an undirected graph of internal edges within each bounded context,
+    then find connected components using BFS/DFS. Each component becomes one group.
+  - Group ids use the format `"{context_id}:{component_index}"` where index is assigned
+    in order of discovery (largest component first so the primary group is always `:0`).
+  - Top-level bounded-context nodes receive `independence_group: null` (groups are a
+    within-context concept).
+  - The function mutates the `Node` dicts in-place and returns the updated list.
+  - Implemented in pure Python stdlib.
 
   ## Files Affected
 
-  - `extractor/layout.py` — force-directed layout implementation
-  - `extractor/cli.py` — wired after metrics, before write
-  - `extractor/tests/test_layout.py` — tests: tightly-coupled nodes closer
-    than loosely-coupled nodes; children within parent bounds
+  - `extractor/independence.py` — new file:
+    `assign_independence_groups(nodes: list[Node], edges: list[Edge]) -> list[Node]`
+  - `extractor/tests/test_independence.py` — tests: two isolated clusters produce two
+    groups; fully-connected context produces one group; singleton module is its own group
 
-  ## How to Verify
+  ## Verification
 
-  ```bash
-  python extractor/cli.py --target ~/code/kartograph --output /tmp/kg.json
-  python -c "
-  import json
-  d = json.load(open('/tmp/kg.json'))
-  # All positions should be non-zero after layout
-  zeros = [n for n in d['nodes'] if n['position'] == {'x':0,'y':0,'z':0}]
-  print('Nodes with zero position (should be 0 after layout):', len(zeros))
-  "
-  ```
-
-  `python -m pytest extractor/tests/test_layout.py`
+  1. `pytest extractor/tests/test_independence.py` passes.
+  2. Running against kartograph: at least one bounded context shows ≥2 independence groups
+     (or all are single groups — either is valid; the test asserts group ids are well-formed).
+  3. All module nodes have a non-null `independence_group` in the output JSON.
 
   ## Caveats
 
-  The prototype uses a top-down camera looking at the XZ plane, so layout
-  quality in X and Z is more important than Y separation. The layout does not
-  need to be aesthetically perfect — it needs to be structurally meaningful.
-  Beauty is a follow-up concern.
+  Independence is computed on **direct and transitive** internal edges only. Cross-context
+  edges are ignored for the within-context grouping calculation. If a bounded context has
+  zero internal edges, every module is its own singleton group.
 ---

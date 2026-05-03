@@ -1,75 +1,61 @@
 ---
 id: task-009
-title: Godot app — containment rendering and size encoding
+title: Godot JSON scene graph loader
 spec_ref: "specs/prototype/godot-application.spec.md@abc16ac365e3e44b8c942e9623dc64cd1cba7aed"
 status: not-started
 phase: null
-deps: [task-008, task-004]
+deps: [task-001]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(godot): render nested volumes with size proportional to complexity"
+pr_title: "feat(godot): load JSON scene graph file and parse into scene data structures"
 pr_description: |
   ## What and Why
 
-  Replaces the invisible `Node3D` stubs from task-008 with visible 3D geometry.
-  Bounded contexts become large translucent box volumes; their child modules
-  become smaller opaque volumes nested inside them. The size of each volume is
-  proportional to the node's `size` field (derived from LOC in task-004).
-
-  This produces the first visually meaningful render: a 3D map of kartograph's
-  package structure where "how big" and "what contains what" are immediately
-  apparent.
+  The Godot application's first responsibility is reading the JSON scene graph produced by
+  the extractor and making its data available to subsequent rendering nodes. This task
+  establishes the loader and the shared data model (GDScript Dictionaries/Arrays) that all
+  other Godot tasks consume. It is the Godot-side entry point and must be done before any
+  rendering work can begin.
 
   ## Spec Requirements Satisfied
 
   From `specs/prototype/godot-application.spec.md`:
-  - **Containment Rendering**: bounded context appears as a larger translucent
-    volume; child modules appear as smaller opaque volumes inside it; parent
-    boundary is visually distinct from children.
-  - **Size Encoding**: module with more code appears as a larger volume;
-    relative sizes are proportional to the LOC metric.
 
-  From `specs/prototype/prototype-scope.spec.md`:
-  - **Abstract Visual Language**: elements appear as labeled geometric volumes
-    (boxes); size reflects relative complexity; containment is shown by nesting.
+  - **JSON Scene Graph Loading**: reads JSON file, generates 3D volumes and connections
+    (this task covers the "reads the JSON file" portion; volume and connection generation
+    are in subsequent tasks)
+  - **Godot 4.6**: uses `FileAccess.get_as_text()` (Godot 4.6 API, not deprecated
+    `read_as_text()`)
 
   ## Key Design Decisions
 
-  - Bounded context nodes use a `BoxMesh` with semi-transparent material
-    (`StandardMaterial3D.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA`,
-    alpha ≈ 0.25). Module nodes use a `BoxMesh` with opaque material.
-  - Node size in 3D space: `scale = Vector3(size, size * 0.5, size)` where
-    `size` comes from the JSON. Bounded contexts scale up by a factor of 5 so
-    they visually contain their children (children are scaled within parent
-    bounds).
-  - Each volume has a `Label3D` child with the node `name`. Label faces the
-    camera via `Label3D.billboard = BaseMaterial3D.BILLBOARD_ENABLED`.
-  - Positions are read directly from JSON `position.x/y/z`; no re-computation.
-  - A `NodeRenderer.gd` script takes a node dict and returns a configured
-    `MeshInstance3D`.
+  - Loader is a GDScript autoload singleton (`SceneGraphLoader`) that exposes:
+    - `load_from_file(path: String) -> Dictionary` — returns parsed scene graph dict
+    - `nodes() -> Array[Dictionary]`
+    - `edges() -> Array[Dictionary]`
+    - `clusters() -> Array[Dictionary]`
+    - `metadata() -> Dictionary`
+  - JSON is parsed with `JSON.parse_string()` (Godot 4.6).
+  - On parse error, prints an error message and returns an empty graph (graceful degradation).
+  - Scene graph file path is configurable via a Godot Project Setting or an `@export`
+    variable on the main scene root — not hardcoded.
+  - No rendering logic in this file; it is a pure data loader.
 
   ## Files Affected
 
-  - `godot/scripts/NodeRenderer.gd`
-  - `godot/scripts/SceneGraphLoader.gd` — updated to call NodeRenderer
-  - `godot/scenes/Main.tscn` — updated scene tree
-  - `godot/tests/test_node_renderer.gd`
+  - `godot/autoload/SceneGraphLoader.gd` — new file: loader singleton
+  - `godot/tests/test_scene_graph_loader.gd` — GUT tests: valid JSON loads correctly;
+    malformed JSON does not crash; missing file returns empty graph
 
-  ## How to Verify
+  ## Verification
 
-  Launch the Godot application with kartograph's scene graph (produced by
-  task-004). Verify:
-  1. Bounded contexts appear as large translucent boxes.
-  2. Module nodes appear as smaller opaque boxes inside their parent context.
-  3. Module with the highest LOC appears visually larger than lower-LOC modules.
-  4. All nodes are labeled with their name.
-
-  `bash .hyperloop/checks/godot-compile.sh`
+  1. GUT tests pass (`check-godot-no-script-errors.sh`).
+  2. Application starts without script errors when given the kartograph `scene_graph.json`.
+  3. `SceneGraphLoader.nodes()` returns a non-empty Array after loading.
 
   ## Caveats
 
-  At this stage all volumes are white/grey — color differentiation (tinting by
-  bounded context) is a future enhancement. Edges are not yet rendered (task-010).
-  Camera defaults to Godot's origin until task-011 adds proper camera controls.
+  This task does not validate the JSON against the schema at runtime — it trusts the
+  extractor produced valid output. Schema validation can be added in a later hardening task.
 ---

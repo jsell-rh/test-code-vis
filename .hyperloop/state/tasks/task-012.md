@@ -1,71 +1,65 @@
 ---
 id: task-012
-title: Godot app — UX polish (pan, zoom-to-cursor, smooth movement)
-spec_ref: "specs/prototype/ux-polish.spec.md@b7fbdb12f3dc33c4ba4d8b09a229b44120c156ee"
+title: Text label rendering on node volumes
+spec_ref: "specs/prototype/godot-application.spec.md@abc16ac365e3e44b8c942e9623dc64cd1cba7aed"
 status: not-started
 phase: null
-deps: [task-011]
+deps: [task-010]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(godot): UX polish — pan, zoom-to-cursor, orbit-around-point, smooth transitions"
+pr_title: "feat(godot): attach readable Label3D text labels to all node volumes"
 pr_description: |
   ## What and Why
 
-  A prototype that is clunky to navigate cannot test whether spatial
-  representation creates understanding. This task upgrades the basic camera from
-  task-011 to match the quality bar described in the UX Polish spec: controls
-  that feel immediately natural without a tutorial.
+  Every structural element must display its name so the user can identify modules without
+  having to click or hover. Labels must remain readable across zoom levels. This task adds
+  a `Label3D` to each `NodeRenderer`, positioned above the volume and billboard-oriented
+  toward the camera.
 
   ## Spec Requirements Satisfied
 
-  From `specs/prototype/ux-polish.spec.md`:
-  - **Pan with Left Mouse Button**: LMB + drag pans in the drag direction.
-  - **Non-Inverted Movement**: drag left moves scene left (Google Maps convention).
-  - **Zoom Toward Mouse Cursor**: scroll zoom moves toward the world point under
-    the cursor, so the component under the cursor stays anchored.
-  - **Orbit Around Mouse Point**: RMB orbit rotates around the world point under
-    the cursor at orbit start, not the screen center.
-  - **Smooth Camera Movement**: all transitions use `lerp`/`move_toward` so
-    there is no snapping or jerking.
+  From `specs/prototype/godot-application.spec.md`:
+
+  - **Readable Labels**: all visible structural elements labeled with their names; label
+    remains readable at the current zoom level
+
+  From `specs/prototype/prototype-scope.spec.md`:
+
+  - Labeled geometric volumes
 
   ## Key Design Decisions
 
-  - **Pan**: on LMB drag, unproject the mouse delta from screen to world space
-    at the current camera distance and translate the rig in the opposite
-    direction (so the scene follows the pointer, not the rig).
-  - **Zoom-to-cursor**: on scroll, raycast from cursor to the scene plane (Y=0),
-    compute the world point, then move the rig position toward that point by
-    a fraction of the camera-distance change. Formula from standard "zoom to
-    point" camera techniques.
-  - **Orbit-around-point**: on RMB press, record the world point under the
-    cursor using a raycast. During subsequent mouse motion, orbit the rig
-    around that fixed world point (not the rig origin) by recomputing rig
-    position as `pivot + offset.rotated(...)`.
-  - **Smooth movement**: target positions/distances are set as goals; `_process`
-    lerps the actual camera state toward the goal with `delta * smoothing_factor`
-    (smoothing_factor ≈ 10.0 for responsiveness without overshoot).
+  - Use Godot 4's `Label3D` node (built-in, no custom shader needed).
+  - `billboard = FIXED_Y` so labels always face the camera but don't tilt as the camera
+    pitches — keeps labels upright during orbit.
+  - Label text = node `name` field (e.g. "IAM", "domain").
+  - Label is positioned at `Vector3(0, size/2 + 0.5, 0)` relative to the node volume
+    centre — just above the top face.
+  - Label font size is fixed in pixels but `pixel_size` is tuned so the label is readable
+    at typical viewing distances without being overwhelming. The `no_depth_test` flag is
+    set to prevent labels from being occluded by volumes.
+  - Bounded-context labels use a larger font size than module labels to convey hierarchy.
+  - LOD visibility (fading at distance) is handled separately in task-018; this task leaves
+    label `visible = true` unconditionally.
 
   ## Files Affected
 
-  - `godot/scripts/CameraRig.gd` — all UX behaviors added here
+  - `godot/scenes/NodeRenderer.tscn` — updated: `Label3D` child node added
+  - `godot/scenes/NodeRenderer.gd` — updated: sets `Label3D.text` from node name on
+    `_ready()`
+  - `godot/tests/test_labels.gd` — GUT tests: label text matches node name; label is
+    positioned above the mesh
 
-  ## How to Verify
+  ## Verification
 
-  1. LMB drag: scene follows the pointer in the same direction (not inverted).
-  2. Hover cursor over a specific context box, scroll in: that box stays centered
-     under the cursor during zoom.
-  3. Hover cursor over a context box, RMB drag: orbit is centered on that box,
-     not the world origin.
-  4. All movements are visibly smooth — no frame-to-frame snapping.
-
-  `bash .hyperloop/checks/godot-compile.sh`
+  1. GUT tests pass.
+  2. In the running app, all visible volumes show their name in text above the box.
+  3. Labels remain legible at the default top-down camera distance.
 
   ## Caveats
 
-  Smooth interpolation introduces a tiny lag behind input — this is intentional
-  and feels natural. If the smoothing feels too sluggish, reduce
-  `smoothing_factor`. The orbit-around-point requires a raycast hit against
-  visible geometry; if the cursor is over empty space, fall back to orbiting
-  around the current rig position.
+  `no_depth_test` on Label3D means labels render on top of everything, which can cause
+  visual clutter when many overlapping contexts are visible. Task-018 (LOD) will
+  selectively hide child-module labels at far zoom to reduce clutter.
 ---

@@ -1,86 +1,66 @@
 ---
 id: task-014
-title: Godot app — cluster collapsing UI
-spec_ref: "specs/visualization/spatial-structure.spec.md@359dbcb1d7f64009e6dd64084a8bcbb5fa325cb4"
+title: Camera controller with top-down default view
+spec_ref: "specs/prototype/godot-application.spec.md@abc16ac365e3e44b8c942e9623dc64cd1cba7aed"
 status: not-started
 phase: null
-deps: [task-013, task-006]
+deps: [task-009]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(godot): cluster collapse/expand with supernode and animated edge re-routing"
+pr_title: "feat(godot): implement top-down camera controller with pan, zoom, and orbit base"
 pr_description: |
   ## What and Why
 
-  Heavily interdependent modules within a bounded context produce visual noise:
-  many edges crisscrossing in a small area. Cluster collapsing lets the human
-  reduce this noise by merging a cluster into a single supernode that shows
-  aggregate metrics while still routing all external edges correctly.
-
-  The extractor (task-006) pre-computes cluster suggestions. This task makes
-  them interactive: the human can click a cluster indicator to collapse or
-  expand it.
+  The prototype's entire hypothesis depends on the user being able to navigate the 3D
+  space. This task establishes the camera, positions it in a top-down view that shows
+  the entire loaded system on startup, and creates the input-handling infrastructure that
+  pan (task-015), zoom (task-016), and orbit (task-017) build on.
 
   ## Spec Requirements Satisfied
 
-  From `specs/visualization/spatial-structure.spec.md`:
-  - **Cluster Collapsing — Collapsing a cluster**: modules animate together into
-    a supernode displaying aggregate metrics; external edges re-route to the
-    supernode with smooth animation.
-  - **Cluster Collapsing — Expanding a supernode**: supernode expands back to
-    constituent modules; edges re-route back to original endpoints.
-  - **Cluster Collapsing — Pre-computed cluster suggestions**: suggested clusters
-    are visually indicated (subtle shared tint); human can accept to collapse or
-    ignore; suggestions never auto-collapse.
-  - **Cluster Collapsing — Nested collapsing**: collapsing one cluster does not
-    affect others.
+  From `specs/prototype/godot-application.spec.md`:
+
+  - **Camera Controls — Top-down overview**: camera defaults to top-down view showing
+    the entire system when the application starts
+  - **Camera Controls — Zooming in**: camera moves closer on scroll; labels scale to
+    remain readable
+  - **Camera Controls — Orbiting**: camera rotates around focal point with intuitive
+    orientation
+  - **Godot 4.6**: uses Godot 4.6 Camera3D API
 
   ## Key Design Decisions
 
-  - Each suggested cluster (from `clusters` array) is rendered with a shared
-    subtle tint (yellow, alpha 0.15) on its member nodes — previously set up in
-    task-013.
-  - Clicking on any tinted cluster member triggers a collapse prompt (a simple
-    `ConfirmationDialog` or a click-again toggle — keep it simple for prototype).
-  - **Collapse animation**: all member nodes `Tween` their positions to the
-    cluster centroid over 0.4 seconds; then member `MeshInstance3D` nodes are
-    hidden and a supernode `MeshInstance3D` is shown at the centroid.
-  - **Supernode display**: `Label3D` shows cluster ID and aggregate metrics
-    (e.g. "auth-core | 1,240 LOC | in: 5 | out: 3").
-  - **Edge re-routing**: edges whose source or target is a cluster member have
-    their target endpoint `Tween`d to the supernode position. Uses a
-    `ClusterManager.gd` that tracks which nodes are collapsed and redirects
-    `EdgeRenderer` endpoint lookups.
-  - **Expand**: clicking the supernode reverses the animation; member nodes
-    reappear at their original positions; edges restore their original endpoints.
+  - Camera rig: a pivot `Node3D` (`CameraRig`) holds a `Camera3D` at a fixed offset.
+    Pan moves the rig; zoom changes the Camera3D's distance from the rig; orbit rotates
+    the rig.
+  - On `_ready()`, the rig is positioned at the centroid of all loaded nodes, at a height
+    that fits the entire scene in view (`Camera3D.fov` + bounding-box diagonal).
+  - Camera looks straight down at startup (`rotation_degrees.x = -90`).
+  - Input is routed through a single `CameraController` GDScript that reads
+    `InputEvent*` in `_input()` and delegates to three methods: `_handle_pan()`,
+    `_handle_zoom()`, `_handle_orbit()`. Task-015/016/017 fill in those methods.
+  - Stub implementations in this task: pan/zoom/orbit are no-ops that print a debug
+    message; the camera rig and default positioning are the deliverable here.
 
   ## Files Affected
 
-  - `godot/scripts/ClusterManager.gd`
-  - `godot/scripts/EdgeRenderer.gd` — endpoint redirection via ClusterManager
-  - `godot/scripts/NodeRenderer.gd` — cluster tint and supernode mesh
-  - `godot/scripts/SceneGraphLoader.gd` — reads `clusters` array and passes to
-    ClusterManager
-  - `godot/tests/test_cluster_manager.gd`
+  - `godot/scenes/CameraRig.tscn` + `CameraController.gd` — new: rig hierarchy and
+    input handler
+  - `godot/scenes/SceneRoot.tscn` — updated: CameraRig added as child
+  - `godot/tests/test_camera_default.gd` — GUT tests: camera starts in top-down
+    orientation; camera position centred on scene bounds
 
-  ## How to Verify
+  ## Verification
 
-  1. Launch with kartograph scene graph. Clusters (if any detected by task-006)
-     appear with subtle yellow tint.
-  2. Click a cluster member → animate to supernode; supernode shows aggregate
-     metrics; external edges re-route.
-  3. Click supernode → expand back; nodes return to original positions.
-  4. Collapse one cluster, verify adjacent clusters are unaffected.
-  5. Edges re-route and restore smoothly (no jumping).
-
-  `bash .hyperloop/checks/godot-compile.sh`
+  1. GUT tests pass.
+  2. On app start with kartograph scene graph, all bounded-context volumes are visible in
+     the viewport without needing to pan or zoom.
+  3. Camera looks straight down (pitch ≈ -90°).
 
   ## Caveats
 
-  If task-006 finds no clusters in kartograph (possible if coupling threshold is
-  too high), test with a lower threshold or a synthetic fixture. The interaction
-  model (click cluster member) is a prototype-grade UX — not polished for
-  production. The collapse/expand feature works independently of LOD state but
-  interacts: a collapsed cluster supernode participates in LOD opacity the same
-  way as any other node.
+  "Labels scale to remain readable" is a spec requirement for the zoom scenario; the actual
+  label-scale logic is implemented in task-018 (LOD) since it depends on distance
+  thresholds.
 ---

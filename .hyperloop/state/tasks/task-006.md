@@ -1,83 +1,66 @@
 ---
 id: task-006
-title: Python extractor — aggregate edges and cluster detection
+title: Aggregate cross-context edge computation with import weights
 spec_ref: "specs/extraction/scene-graph-schema.spec.md@4ea7e33731b8eb0cd47c19012a9f7b5774420e21"
 status: not-started
 phase: null
-deps: [task-004]
+deps: [task-003]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(extractor): emit aggregate edges and cluster suggestions"
+pr_title: "feat(extractor): emit aggregate cross-context edges with import-count weights"
 pr_description: |
   ## What and Why
 
-  Two related enrichment steps that prepare the scene graph for the Godot
-  application's LOD rendering (task-013) and cluster-collapsing UI (task-014):
-
-  1. **Aggregate edges**: at far zoom, the Godot app shows one thick edge per
-     context pair rather than many thin module-level edges. The extractor
-     pre-computes these with a combined weight so Godot doesn't have to.
-
-  2. **Cluster suggestions**: groups of tightly-coupled modules within a bounded
-     context that the human may choose to collapse into a single supernode.
-     Pre-computing them in the extractor keeps Godot a pure renderer.
+  The schema spec and spatial-structure spec both require two tiers of cross-context edges:
+  individual module-to-module edges (used at medium/near zoom) and aggregate
+  context-to-context edges (used at far zoom, with `weight` = total import count).
+  This task adds the weight counting and aggregate edge emission to the extractor output.
 
   ## Spec Requirements Satisfied
 
   From `specs/extraction/scene-graph-schema.spec.md`:
-  - **Edge Schema — Weighted edge / aggregate edge**: for each pair of bounded
-    contexts with at least one module-level edge between them, emits one
-    `type: "aggregate"` edge with `weight` equal to the sum of all individual
-    edge weights.
-  - **Cluster Schema — Cluster suggestion**: identifies module groups within a
-    context with mutual coupling above a threshold and emits them in `clusters`.
-  - **Cluster Schema — No clusters found**: emits an empty `clusters` array
-    when no pairs exceed the threshold.
+
+  - **Edge Schema — Weighted edge**: individual module-level edges carry `weight: 1`
+  - Aggregate edges have `source: "{context_A}"`, `target: "{context_B}"`,
+    `type: "aggregate"`, `weight: N` (total import statements from A into B)
+
+  From `specs/visualization/spatial-structure.spec.md` (Scale Through Zoom — Far scenario):
+
+  - Cross-context dependencies shown as single aggregate edges per context pair, with
+    weight indicating total import count
 
   ## Key Design Decisions
 
-  - Aggregate edges are added to the same `edges` array as module-level edges,
-    distinguished by `type: "aggregate"`. Godot uses `type` to decide which
-    edges to show at which zoom distance.
-  - Cluster detection: within each bounded context, build a subgraph of
-    module-level edges, compute pairwise coupling scores (number of edges
-    between each pair), and apply a configurable threshold (default: ≥ 3
-    edges between a pair). Modules sharing above-threshold coupling with any
-    cluster member are added to the cluster. This is a simple greedy grouping,
-    not Louvain — sufficient for the prototype scale (~50 modules).
-  - Cluster `aggregate_metrics` are computed as: `total_loc` = sum of member
-    LOC, `in_degree` = edges entering any member from outside the cluster,
-    `out_degree` = edges leaving any member to outside the cluster.
+  - Task-003 produces module-level edges with `weight: 1`. This task adds a post-pass that:
+    1. Groups cross-context module edges by (source_context, target_context) pair.
+    2. Sums individual module-edge weights to compute the aggregate weight.
+    3. Emits one additional `Edge` dict per unique context pair with `type: "aggregate"`.
+  - Individual module-level edges are **kept** (not replaced). Both tiers exist in the JSON.
+  - Aggregate edges use bounded-context node ids as source/target (e.g. `"iam"`, `"graph"`).
+  - If context A imports from context B via M module-pair edges, the aggregate edge has
+    `weight: M` (number of import relationships, not number of import statements in files;
+    file-level counting would require re-reading source at this stage).
 
   ## Files Affected
 
-  - `extractor/aggregate.py` — aggregate edge computation
-  - `extractor/clusters.py` — cluster detection logic
-  - `extractor/cli.py` — wired after metrics, before write
-  - `extractor/tests/test_aggregate.py`
-  - `extractor/tests/test_clusters.py`
+  - `extractor/aggregate.py` — new file:
+    `compute_aggregate_edges(nodes: list[Node], edges: list[Edge]) -> list[Edge]`
+    (returns the full edge list with aggregate edges appended)
+  - `extractor/tests/test_aggregate.py` — tests: aggregate edge weight equals sum of
+    individual cross-context edges; no aggregate edge for internal pairs
 
-  ## How to Verify
+  ## Verification
 
-  ```bash
-  python extractor/cli.py --target ~/code/kartograph --output /tmp/kg.json
-  python -c "
-  import json
-  d = json.load(open('/tmp/kg.json'))
-  agg = [e for e in d['edges'] if e['type'] == 'aggregate']
-  print('Aggregate edges:', len(agg))
-  print('Clusters:', len(d['clusters']))
-  for c in d['clusters']:
-      print(' ', c['id'], '->', c['members'])
-  "
-  ```
-
-  `python -m pytest extractor/tests/test_aggregate.py extractor/tests/test_clusters.py`
+  1. `pytest extractor/tests/test_aggregate.py` passes.
+  2. kartograph output JSON contains at least one edge with `type: "aggregate"` and
+     `weight > 1`.
+  3. Aggregate edges use bounded-context ids (no dots in source/target).
 
   ## Caveats
 
-  Cluster suggestions are advisory — Godot (task-014) uses them to offer visual
-  collapse hints but never auto-collapses. The coupling threshold is a prototype
-  constant; a future task could expose it as a CLI flag.
+  This design counts module-pair edges, not raw import-statement occurrences. The schema
+  spec example says "12 individual import statements" — if exact statement-count is
+  required in a future iteration, the dependency extractor (task-003) would need to be
+  enhanced to count per-file import occurrences.
 ---

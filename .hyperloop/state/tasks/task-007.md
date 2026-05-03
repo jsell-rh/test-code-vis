@@ -1,84 +1,63 @@
 ---
 id: task-007
-title: Python extractor — orthogonal independence group detection
-spec_ref: "specs/visualization/orthogonal-independence.spec.md@ca0ad7afad8d95361892fbfba84f55049cf288fd"
+title: Cluster suggestion computation (high-coupling module groups)
+spec_ref: "specs/extraction/scene-graph-schema.spec.md@4ea7e33731b8eb0cd47c19012a9f7b5774420e21"
 status: not-started
 phase: null
-deps: [task-004]
+deps: [task-003]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(extractor): detect orthogonal independence groups within bounded contexts"
+pr_title: "feat(extractor): compute cluster suggestions for tightly-coupled module groups"
 pr_description: |
   ## What and Why
 
-  Within a bounded context, some modules may be structurally independent of each
-  other — sharing no direct or transitive import relationship. Making this
-  independence visible in the 3D space (task-015) lets the human immediately
-  identify safe change boundaries and concurrent development opportunities.
-
-  The extractor performs the independence analysis and annotates each node with
-  an `independence_group` identifier. The Godot renderer (task-015) uses this
-  to spatially separate groups.
+  Identifies groups of modules within each bounded context that have high mutual coupling,
+  and writes them to the `clusters` array in the JSON output. Godot uses this data to
+  visually hint which groups the user might want to collapse into a supernode (task-023).
+  The extractor owns this computation; Godot only renders the suggestions.
 
   ## Spec Requirements Satisfied
 
-  From `specs/visualization/orthogonal-independence.spec.md`:
-  - **Independence Detection — Two independent module clusters**: given modules
-    {A,B} and {C,D} with no cross-group imports, identifies them as separate
-    independence groups and annotates each node with its group identifier.
-  - **Independence Detection — Fully connected context**: when every module
-    transitively depends on every other, the entire context is group "0" and
-    no spatial separation is applied.
-
   From `specs/extraction/scene-graph-schema.spec.md`:
-  - **Node Schema — independence_group**: the `independence_group` field (e.g.
-    `"iam:0"`, `"iam:1"`) is added to module nodes by this task.
+
+  - **Cluster Schema**: `clusters` array with entries containing `id`, `members`,
+    `context`, and `aggregate_metrics` (`total_loc`, `in_degree`, `out_degree`)
+  - Empty `clusters` array when no context has modules exceeding the coupling threshold
+  - `aggregate_metrics` computed from member node data
 
   ## Key Design Decisions
 
-  - Algorithm: connected-components analysis on the **undirected** version of
-    the intra-context dependency subgraph. Each connected component is one
-    independence group. (Undirected because independence is symmetric: A
-    depending on B means B's changes can affect A, so they are co-dependent
-    regardless of direction.)
-  - Group identifier format: `"{context_id}:{component_index}"` (e.g. `"iam:0"`).
-    Contexts with only one component assign `"iam:0"` to all members (single
-    group, no separation needed).
-  - Bounded context nodes themselves do not get an `independence_group` field
-    (only module-level nodes do).
-  - Uses `networkx.connected_components` on the undirected projection of the
-    intra-context subgraph.
+  - Coupling score between two module nodes = number of edges (in either direction) between
+    them. A pair is "tightly coupled" if their coupling score exceeds a threshold (default: 2).
+  - Cluster identification: build a graph of module pairs above threshold within each
+    context, then find connected components. Each component is one cluster suggestion.
+  - Singleton components (no pair exceeds threshold) are excluded — no cluster suggestion
+    emitted for isolated modules.
+  - Cluster `id` format: `"{context_id}:cluster_{index}"`.
+  - `aggregate_metrics`:
+    - `total_loc` = sum of `size` for all member nodes
+    - `in_degree` = number of edges entering the cluster from outside the cluster
+    - `out_degree` = number of edges leaving the cluster to outside the cluster
+  - Threshold is a module-level constant (not a CLI argument in this task); can be made
+    configurable in a follow-up.
 
   ## Files Affected
 
-  - `extractor/independence.py` — connected-components analysis
-  - `extractor/cli.py` — wired after dependency extraction, before write
-  - `extractor/tests/test_independence.py` — tests for two-group, one-group,
-    and single-module cases
+  - `extractor/clusters.py` — new file:
+    `compute_clusters(nodes: list[Node], edges: list[Edge]) -> list[Cluster]`
+  - `extractor/tests/test_clusters.py` — tests: high-coupling fixture produces at least
+    one cluster; low-coupling fixture produces empty list; aggregate_metrics correct
 
-  ## How to Verify
+  ## Verification
 
-  ```bash
-  python extractor/cli.py --target ~/code/kartograph --output /tmp/kg.json
-  python -c "
-  import json
-  d = json.load(open('/tmp/kg.json'))
-  groups = {}
-  for n in d['nodes']:
-      g = n.get('independence_group')
-      if g:
-          groups.setdefault(g, []).append(n['id'])
-  print('Independence groups:', list(groups.keys()))
-  "
-  ```
-
-  `python -m pytest extractor/tests/test_independence.py`
+  1. `pytest extractor/tests/test_clusters.py` passes.
+  2. kartograph output JSON has `"clusters"` key (even if `[]`).
+  3. If any cluster is present, its `members` array contains ≥2 module ids.
 
   ## Caveats
 
-  Independence is computed per bounded context, not globally. Two modules in
-  different bounded contexts are always "independent" by definition (different
-  contexts). Cross-context independence is a display concern handled at the
-  Godot level (task-015).
+  The coupling threshold (default 2) may need tuning for kartograph. If all clusters come
+  out empty, the visualizer renders no collapse suggestions — that is a valid output.
+  Threshold adjustment should be a follow-up task if needed.
 ---

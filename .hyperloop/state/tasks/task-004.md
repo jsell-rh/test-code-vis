@@ -1,73 +1,66 @@
 ---
 id: task-004
-title: Python extractor — complexity metrics and complete JSON output
-spec_ref: "specs/extraction/code-extraction.spec.md@045851f001a15374395b876d4cf9ccfc1a8fad2b"
+title: Force-directed layout algorithm for node positioning
+spec_ref: "specs/extraction/scene-graph-schema.spec.md@4ea7e33731b8eb0cd47c19012a9f7b5774420e21"
 status: not-started
 phase: null
-deps: [task-002, task-003]
+deps: [task-003]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(extractor): compute complexity metrics and write complete scene graph JSON"
+pr_title: "feat(extractor): compute pre-laid-out 3D positions via force-directed algorithm"
 pr_description: |
   ## What and Why
 
-  Completes the core extractor pipeline by (a) computing lines-of-code metrics
-  for each node and using them to set node `size`, and (b) writing the full
-  scene graph JSON to disk in the schema defined by task-001. After this task,
-  `extractor/cli.py --target ~/code/kartograph` produces a valid, loadable
-  scene graph.
-
-  The `size` field on each node is the signal the Godot renderer uses to scale
-  volumes proportionally (task-009). Without it, every box is the same size.
+  The schema spec requires that node positions be computed in the extractor — Godot renders
+  at the given coordinates without re-running any layout. This task implements the layout
+  algorithm that places tightly-coupled nodes closer together in 3D space and keeps child
+  nodes spatially contained within their parent's bounds.
 
   ## Spec Requirements Satisfied
 
-  From `specs/extraction/code-extraction.spec.md`:
-  - **Complexity Metrics — Module size**: counts total source lines (excluding
-    blank lines and comments) for each module node; result stored in
-    `metadata.loc` on the node and used to compute `size`.
-  - **JSON Scene Graph Output — Output format**: writes a conformant JSON file
-    with `nodes`, `edges`, `metadata`, and `clusters` (clusters left as `[]`
-    at this stage — populated by task-006).
+  From `specs/extraction/scene-graph-schema.spec.md`:
+
+  - **Pre-Computed Layout**: each node's `position` (x, y, z) is set by the extractor
+  - Tightly coupled nodes have smaller distances between them
+  - Child nodes are positioned within the spatial bounds of their parent
 
   ## Key Design Decisions
 
-  - `size` is normalized: the largest module in the codebase gets `size: 1.0`;
-    all others are scaled proportionally. A module with zero LOC (e.g. an
-    `__init__.py` with only imports) gets a minimum `size: 0.1`.
-  - `metadata` includes `source_path` (absolute) and `extracted_at` (UTC ISO-8601).
-  - Output path is supplied via `--output` flag; defaults to `./scene-graph.json`.
-  - The CLI exits non-zero with a clear message if `--target` does not exist or
-    contains no Python files.
+  - Two-level layout: (1) top-level force-directed layout for bounded-context nodes using
+    cross-context edge weights as attraction forces; (2) per-context local layout for
+    module nodes using internal edge weights as attraction forces.
+  - Uses a simple spring-repulsion model (Fruchterman–Reingold style) implemented in pure
+    Python — no third-party graph libraries. Stdlib `math` only.
+  - Y-axis is used as a vertical separation layer: bounded-context nodes sit at y=0,
+    child module nodes sit at y=1 (elevated) so they don't z-fight with the parent plane.
+  - Child node positions are expressed relative to the parent's position but stored as
+    absolute world coordinates in the JSON (Godot positions directly, no offset math
+    needed at render time).
+  - Bounded-context `size` (from LOC) scales the repulsion radius so larger contexts
+    occupy more space and do not overlap their neighbours.
+  - Iteration count is fixed (e.g. 300 iterations) with a cooling schedule — deterministic
+    layout for reproducible output given the same input graph.
 
   ## Files Affected
 
-  - `extractor/metrics.py` — LOC counting logic
-  - `extractor/writer.py` — JSON serialization with schema validation
-  - `extractor/cli.py` — final wiring: discovery → dependencies → metrics → write
-  - `extractor/tests/test_metrics.py` — LOC count tests
-  - `extractor/tests/test_writer.py` — round-trip JSON validity test
+  - `extractor/layout.py` — new file:
+    `compute_layout(nodes: list[Node], edges: list[Edge]) -> list[Node]`
+    (returns nodes with `position` fields populated)
+  - `extractor/tests/test_layout.py` — tests: coupled nodes closer than uncoupled nodes;
+    child positions within parent bounds
 
-  ## How to Verify
+  ## Verification
 
-  ```bash
-  python extractor/cli.py --target ~/code/kartograph --output /tmp/kg.json
-  python -c "
-  import json, sys
-  d = json.load(open('/tmp/kg.json'))
-  assert 'nodes' in d and 'edges' in d and 'metadata' in d and 'clusters' in d
-  sizes = [n['size'] for n in d['nodes']]
-  assert max(sizes) == 1.0, f'max size should be 1.0, got {max(sizes)}'
-  print('OK:', len(d['nodes']), 'nodes,', len(d['edges']), 'edges')
-  "
-  ```
-
-  `python -m pytest extractor/tests/`
+  1. `pytest extractor/tests/test_layout.py` passes.
+  2. After layout, all child node positions are within their parent node's bounding box
+     (parent_pos ± parent_size/2 in x and z).
+  3. Two nodes with an edge are closer than two nodes with no edge (on a controlled fixture).
 
   ## Caveats
 
-  Positions remain `{x:0, y:0, z:0}` placeholder — task-005 computes layout.
-  `clusters` array is empty — task-006 populates it.
-  `independence_group` is absent from nodes — task-007 adds it.
+  Force-directed layout is non-trivial to tune. The prototype uses fixed iteration count
+  and spring constants; a future task can expose these as CLI parameters.
+  Independence group separation (spatial gap between orthogonal groups) is handled in
+  task-005 after group assignment, not here.
 ---

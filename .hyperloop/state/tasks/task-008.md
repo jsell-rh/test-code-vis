@@ -1,73 +1,70 @@
 ---
 id: task-008
-title: Godot app — project setup and scene graph loading
-spec_ref: "specs/prototype/godot-application.spec.md@abc16ac365e3e44b8c942e9623dc64cd1cba7aed"
+title: JSON output writer and extractor CLI entry point
+spec_ref: "specs/extraction/code-extraction.spec.md@045851f001a15374395b876d4cf9ccfc1a8fad2b"
 status: not-started
 phase: null
-deps: [task-001]
+deps: [task-002, task-003, task-004, task-005, task-006, task-007]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(godot): project scaffold and JSON scene graph loader"
+pr_title: "feat(extractor): wire pipeline stages into CLI and write JSON scene graph"
 pr_description: |
   ## What and Why
 
-  Establishes the Godot 4.6 project and implements the core loader that reads
-  a JSON scene graph file and instantiates 3D node objects for each entry. This
-  is the foundation every other Godot task builds on.
-
-  The loader only needs the schema (task-001) to be defined — it can be
-  developed and tested against the hand-crafted fixture from task-001 before
-  the real extractor output is available.
+  Wires together all extractor pipeline stages (discovery, dependency, layout, independence,
+  aggregate edges, clusters) into a single CLI entry point that accepts a codebase path,
+  runs all stages in sequence, and writes the complete JSON scene graph file. This is the
+  deliverable the Godot application loads.
 
   ## Spec Requirements Satisfied
 
-  From `specs/prototype/godot-application.spec.md`:
-  - **JSON Scene Graph Loading**: reads the JSON file at startup, iterates
-    `nodes` and `edges` arrays, instantiates 3D objects, positions them at
-    the coordinates in the JSON.
-  - **Godot 4.6**: project uses Godot 4.6.x engine; all API calls use the
-    4.6 API (e.g. `FileAccess.get_as_text()`, not deprecated methods).
+  From `specs/extraction/code-extraction.spec.md`:
 
-  From `specs/prototype/nfr.spec.md`:
-  - Desktop platform (Linux/Fedora), native application, GDScript only.
+  - **JSON Scene Graph Output**: writes JSON with `nodes`, `edges`, `metadata`, `clusters`
+  - Output is consumable by Godot without transformation
+  - Spec Extraction is **not** implemented (excluded per prototype-scope.spec.md § Not In Scope)
+
+  From `specs/extraction/scene-graph-schema.spec.md`:
+
+  - **Metadata**: `source_path` and `extracted_at` timestamp in metadata object
 
   ## Key Design Decisions
 
-  - Project lives in `godot/` directory with a `project.godot` file targeting
-    Godot 4.6.
-  - `Main.gd` is the root autoload script. On `_ready()` it calls
-    `SceneGraphLoader.load(path)`.
-  - `SceneGraphLoader.gd` uses `FileAccess.open()` / `get_as_text()` to read
-    the JSON, then `JSON.parse_string()` to deserialize. For each node entry
-    it instantiates a generic `Node3D` (visualization comes in task-009).
-  - The scene graph path is configurable via a project setting or a command-line
-    `--scene-graph <path>` argument so it can be pointed at different extractions.
-  - Uses the fixture from `schema/kartograph-fixture.json` for development
-    testing until the extractor produces real output.
+  - Entry point: `python -m extractor <codebase_path> [--output <path>]`
+    Default output: `scene_graph.json` in the current directory.
+  - Pipeline sequence:
+    1. `discovery.discover_modules(root)` → nodes with LOC
+    2. `dependency.extract_dependencies(nodes, root)` → edges
+    3. `independence.assign_independence_groups(nodes, edges)` → annotated nodes
+    4. `aggregate.compute_aggregate_edges(nodes, edges)` → full edge list
+    5. `clusters.compute_clusters(nodes, edges)` → clusters list
+    6. `layout.compute_layout(nodes, edges)` → nodes with positions
+    7. Assemble `SceneGraph` dict and write JSON with `json.dump(indent=2)`.
+  - `metadata.extracted_at` is an ISO-8601 UTC timestamp string.
+  - The output JSON is pretty-printed (indent=2) for human readability during debugging.
+  - Exit code 0 on success, 1 on any unhandled exception (with error message to stderr).
 
   ## Files Affected
 
-  - `godot/project.godot`
-  - `godot/scenes/Main.tscn`
-  - `godot/scripts/Main.gd`
-  - `godot/scripts/SceneGraphLoader.gd`
-  - `godot/tests/test_loader.gd` — GUT or gdUnit4 test verifying node count
-    after loading the fixture
+  - `extractor/__main__.py` — new file: CLI argument parsing and pipeline orchestration
+  - `extractor/tests/test_cli.py` — integration test: run against kartograph path, assert
+    output JSON is valid, contains expected top-level keys, and all node ids are non-empty
+  - `extractor/tests/test_pipeline_wiring.py` — ensures all pipeline stages are called
+    (import-time check that no stage is accidentally omitted)
 
-  ## How to Verify
+  ## Verification
 
-  ```bash
-  godot --headless --path godot/ res://scenes/Main.tscn \
-    -- --scene-graph ../../schema/kartograph-fixture.json
-  # Should exit 0 and print the count of loaded nodes to stdout.
-  ```
-
-  Godot compile check: `bash .hyperloop/checks/godot-compile.sh`
+  1. `python -m extractor ~/code/kartograph --output /tmp/scene_graph.json` exits 0.
+  2. Output JSON has top-level keys: `nodes`, `edges`, `metadata`, `clusters`.
+  3. `nodes` contains entries for `iam`, `graph`, `management`, `query`, `shared_kernel`,
+     `infrastructure`.
+  4. All nodes have non-null `position` with numeric `x`, `y`, `z`.
+  5. `metadata.source_path` equals the resolved input path.
 
   ## Caveats
 
-  No visual rendering yet — nodes are invisible `Node3D` objects. task-009
-  adds the mesh geometry. task-011 adds the camera. The scene will be a black
-  window until those tasks are complete.
+  This task completes the extraction pipeline. Godot tasks (task-009 onward) can now
+  be developed against a real `scene_graph.json`. The check script
+  `check-pipeline-wiring.sh` should be run as part of CI for this task.
 ---

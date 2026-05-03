@@ -1,86 +1,68 @@
 ---
 id: task-013
-title: Godot app — level-of-detail rendering (far/medium/near)
-spec_ref: "specs/visualization/spatial-structure.spec.md@359dbcb1d7f64009e6dd64084a8bcbb5fa325cb4"
+title: Dependency edge renderer (directed lines between node volumes)
+spec_ref: "specs/prototype/godot-application.spec.md@abc16ac365e3e44b8c942e9623dc64cd1cba7aed"
 status: not-started
 phase: null
-deps: [task-010, task-006]
+deps: [task-010]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(godot): level-of-detail rendering with smooth LOD transitions"
+pr_title: "feat(godot): render dependency edges as directed lines between node volumes"
 pr_description: |
   ## What and Why
 
-  At far zoom the scene should tell a story about bounded contexts and their
-  relationships — not overwhelm the viewer with every module-level edge. At
-  medium zoom the internal structure of a bounded context should become visible.
-  At close zoom all detail is present.
-
-  Without LOD, the scene is either too busy at overview distance or too sparse
-  at detail distance. LOD makes each zoom level semantically complete.
+  Dependencies between modules must be visible as spatial connections. Without this,
+  the visualization conveys structure (where things are) but not coupling (what depends
+  on what). This is one of the two primary data points the prototype hypothesis depends on.
 
   ## Spec Requirements Satisfied
 
-  From `specs/visualization/spatial-structure.spec.md`:
-  - **Scale Through Zoom — Far**: bounded contexts visible as labeled volumes;
-    only aggregate edges (one per context pair) are shown; individual
-    module-level edges are hidden.
-  - **Scale Through Zoom — Medium**: internal modules fade in within context
-    volumes; inter-module edges appear; aggregate edges dissolve into module
-    edges.
-  - **Scale Through Zoom — Near**: all edges and annotations visible; no
-    pop-in.
-  - **Scale Through Zoom — Smooth transitions**: elements fade via animated
-    opacity, never snap to visibility.
+  From `specs/prototype/godot-application.spec.md`:
 
-  From `specs/extraction/scene-graph-schema.spec.md`:
-  - **Edge Schema — aggregate edge**: aggregate edges (pre-computed in task-006)
-    are used at far distance; individual edges at medium/near.
+  - **Dependency Rendering**: edge from graph context to shared_kernel drawn as a line;
+    direction of dependency is visually indicated
+
+  From `specs/prototype/prototype-scope.spec.md`:
+
+  - Dependencies between contexts visible as connections; direction discernible
 
   ## Key Design Decisions
 
-  - LOD is driven by camera distance to the scene centroid (not per-node
-    distance), keeping the thresholds simple and stable.
-  - Three distance bands: FAR (> 60 units), MEDIUM (20–60 units), NEAR (< 20).
-  - Nodes: in FAR mode, module-level nodes have `modulate.a` lerped to 0;
-    bounded context nodes remain fully visible. In MEDIUM/NEAR, module nodes
-    fade back in.
-  - Edges: aggregate edges (`type == "aggregate"`) visible in FAR/MEDIUM;
-    individual edges visible in MEDIUM/NEAR. In the MEDIUM band, both are
-    partially visible and cross-faded (aggregate fading out as individual
-    fades in).
-  - An `LODController.gd` singleton observes `Camera3D.global_position` each
-    frame and updates a `current_lod` (FAR/MEDIUM/NEAR) when the camera
-    crosses a threshold. Node/Edge renderers subscribe to `current_lod`
-    changes and tween their opacity.
-  - Cluster suggestions (from task-006 `clusters` array) are indicated in FAR
-    mode by a subtle shared tint (slight yellow overlay) on member nodes —
-    see task-014 for the interactive collapse feature.
+  - Use `ImmediateMesh` (or `MeshInstance3D` with `ArrayMesh` line primitives) in Godot 4
+    to draw line segments between node centre positions.
+  - Each edge is a `EdgeRenderer` node: a line from `source` node centre to `target`
+    node centre. An arrowhead (small cone `MeshInstance3D` at the target end, oriented
+    along the line direction) indicates dependency direction.
+  - Edge colour: cross-context edges in orange; internal edges in a muted grey. This
+    provides at-a-glance cross/internal distinction without interaction.
+  - Edges are children of a dedicated `EdgesRoot` node in the scene tree, not children
+    of individual `NodeRenderer` nodes, so they can update their endpoints if nodes are
+    ever repositioned (task-020, task-022).
+  - All edges start with `visible = true`; LOD task-018 will set visibility based on
+    distance.
+  - Aggregate edges (type `"aggregate"`) are drawn the same way at this stage; the LOD
+    task (task-019) adds the switching logic between aggregate and individual edges.
 
   ## Files Affected
 
-  - `godot/scripts/LODController.gd`
-  - `godot/scripts/NodeRenderer.gd` — opacity tween logic added
-  - `godot/scripts/EdgeRenderer.gd` — aggregate vs individual visibility
-  - `godot/tests/test_lod.gd`
+  - `godot/scenes/EdgeRenderer.tscn` + `EdgeRenderer.gd` — new: draws one directed line
+    with arrowhead
+  - `godot/scenes/EdgesRoot.gd` — new: iterates `SceneGraphLoader.edges()`, instantiates
+    `EdgeRenderer` for each, resolves source/target node positions from the scene
+  - `godot/tests/test_edge_renderer.gd` — GUT tests: edge endpoints match source/target
+    node positions; arrowhead orientation correct; cross-context vs internal colour
 
-  ## How to Verify
+  ## Verification
 
-  1. At far zoom: only bounded context boxes and aggregate edges are visible.
-  2. Zoom in slowly: module boxes and inter-module edges fade in smoothly —
-     no pop-in.
-  3. Continue zooming: all edges visible at close range.
-  4. Zoom out: elements fade out smoothly without flickering.
-
-  `bash .hyperloop/checks/godot-compile.sh`
-  `bash .hyperloop/checks/check-lod-level-tests.sh`
-  `bash .hyperloop/checks/check-lod-opacity-animation.sh`
+  1. GUT tests pass.
+  2. In the running app, visible lines connect the IAM and graph bounded context volumes.
+  3. Arrow direction points from dependent (e.g. `graph`) toward dependency (e.g.
+     `shared_kernel`).
 
   ## Caveats
 
-  Distance thresholds (60, 20 units) are calibrated for kartograph's scene
-  scale. If the layout places nodes very far apart or very close together, these
-  thresholds may need tuning. The LOD system does not handle first-person
-  navigation (out of scope per prototype-scope.spec.md line 95).
+  `ImmediateMesh` is rebuilt each frame if positions change. For the static prototype,
+  edges are built once on scene load. If smooth animation is needed (tasks-019, 022),
+  the `EdgeRenderer` will need an update method that rebuilds its mesh.
 ---

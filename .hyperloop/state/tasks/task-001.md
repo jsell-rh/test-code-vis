@@ -1,6 +1,6 @@
 ---
 id: task-001
-title: Define JSON scene graph schema
+title: Define JSON scene graph schema (TypedDicts + documentation)
 spec_ref: "specs/extraction/scene-graph-schema.spec.md@4ea7e33731b8eb0cd47c19012a9f7b5774420e21"
 status: not-started
 phase: null
@@ -8,58 +8,59 @@ deps: []
 round: 0
 branch: null
 pr: null
-pr_title: "feat: define JSON scene graph schema (nodes, edges, metadata, clusters)"
+pr_title: "feat: define JSON scene graph schema as Python TypedDicts"
 pr_description: |
   ## What and Why
 
-  This PR establishes the JSON scene graph schema — the sole interface contract
-  between the Python extractor and the Godot application. Neither component may
-  have direct knowledge of the other; the JSON file is their only communication
-  channel.
-
-  Defining the schema first unlocks parallel development: the extractor team can
-  build toward the schema while the Godot team can write a loader against it
-  using a hand-crafted fixture.
+  Establishes the JSON scene graph as the sole interface contract between the Python
+  extractor and the Godot application. Every subsequent extraction and rendering task
+  depends on this schema being stable and well-defined. Defining it once, in code,
+  prevents both sides from drifting.
 
   ## Spec Requirements Satisfied
 
-  From `specs/extraction/scene-graph-schema.spec.md`:
-  - **Schema Structure** — top-level fields: `nodes`, `edges`, `metadata`, `clusters`
-  - **Node Schema** — `id`, `name`, `type`, `position` (x/y/z), `size`, `parent`
-    (nullable), `independence_group` (optional)
-  - **Edge Schema** — `source`, `target`, `type`, `weight` (optional); aggregate
-    edges with `type: "aggregate"` for far-distance rendering
-  - **Metadata** — `source_path`, `extracted_at` (ISO-8601 timestamp)
-  - **Cluster Schema** — `id`, `members`, `context`, `aggregate_metrics`
+  Implements all fields required by `specs/extraction/scene-graph-schema.spec.md`:
+
+  - **Schema Structure**: top-level `nodes`, `edges`, `metadata`, `clusters` arrays/objects
+  - **Node Schema**: `id`, `name`, `type`, `position` (x/y/z), `size`, `parent`,
+    optional `independence_group`
+  - **Edge Schema**: `source`, `target`, `type`, optional `weight`
+  - **Metadata**: `source_path`, `extracted_at` timestamp
+  - **Cluster Schema**: `id`, `members`, `context`, `aggregate_metrics`
     (`total_loc`, `in_degree`, `out_degree`)
+
+  One schema field is explicitly **not** implemented in this task:
+  - `cascade_depth` — excluded per prototype-scope.spec.md § Not In Scope (failure cascade
+    analysis is a deferred capability, not part of the prototype)
 
   ## Key Design Decisions
 
-  - Schema is defined as a Python `TypedDict` hierarchy in
-    `extractor/schema.py` so both the extractor (writer) and any future
-    validation tooling (reader) can import it.
-  - A JSON Schema file (`schema/scene-graph.schema.json`) is also provided for
-    Godot-side validation and documentation.
-  - A minimal fixture `schema/kartograph-fixture.json` is included with
-    hand-authored sample data covering all node types, edge types, and a
-    cluster entry. Used by Godot task-008 to bootstrap loader development.
+  - Implemented as Python `TypedDict` classes in `extractor/schema.py` so the extractor
+    has a single authoritative type source. Godot reads the JSON directly and does not
+    share this file.
+  - Position coordinates are always `float`; the extractor owns layout computation.
+  - `independence_group` is `str | None` — `None` for nodes where group assignment has
+    not yet been computed (e.g. top-level bounded-context nodes).
+  - `weight` on edges defaults to 1 when omitted; aggregate edges carry an explicit
+    integer weight.
 
   ## Files Affected
 
-  - `extractor/schema.py` — TypedDict definitions
-  - `schema/scene-graph.schema.json` — JSON Schema (for tooling/docs)
-  - `schema/kartograph-fixture.json` — minimal test fixture
+  - `extractor/schema.py` — new file: TypedDicts for SceneGraph, Node, Edge, Metadata,
+    Cluster, AggregateMetrics
+  - `extractor/tests/test_schema.py` — basic structural tests (required field presence,
+    optional field defaulting)
 
-  ## How to Verify
+  ## Verification
 
-  1. `python -c "import extractor.schema"` — no errors.
-  2. `python -m pytest extractor/tests/test_schema.py` — schema field
-     coverage tests pass.
-  3. The fixture validates against the JSON Schema.
+  1. `pytest extractor/tests/test_schema.py` passes with no warnings.
+  2. `mypy extractor/schema.py --strict` reports no errors.
+  3. All downstream tasks can import `from extractor.schema import Node, Edge, ...`
+     without modification.
 
   ## Caveats
 
-  Cascade depth fields (cascade/blast-radius analysis) are explicitly excluded
-  — that feature is out of scope for the prototype per
-  `specs/prototype/prototype-scope.spec.md` lines 89-91.
+  The `aggregate_metrics` sub-object inside `Cluster` uses a nested TypedDict.
+  If the Godot loader needs to support optional schema versions, a `version` field
+  should be added to `Metadata` in a follow-up.
 ---

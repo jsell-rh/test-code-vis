@@ -1,92 +1,61 @@
 ---
 id: task-015
-title: Godot app — orthogonal independence spatial separation and highlight
-spec_ref: "specs/visualization/orthogonal-independence.spec.md@ca0ad7afad8d95361892fbfba84f55049cf288fd"
+title: UX — pan with left mouse button (non-inverted)
+spec_ref: "specs/prototype/ux-polish.spec.md@b7fbdb12f3dc33c4ba4d8b09a229b44120c156ee"
 status: not-started
 phase: null
-deps: [task-009, task-007]
+deps: [task-014]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(godot): render independence groups with spatial gaps and queryable highlight"
+pr_title: "feat(godot): implement non-inverted LMB pan for camera controller"
 pr_description: |
   ## What and Why
 
-  When two groups of modules within a bounded context share no dependencies,
-  that independence is a first-class architectural fact: changes to one group
-  cannot affect the other. Making this visible without interaction — through
-  spatial separation alone — lets the human immediately identify safe change
-  boundaries at a glance.
-
-  The extractor (task-007) annotates each module node with an
-  `independence_group` identifier. This task uses those identifiers to:
-  1. Separate groups spatially within their parent context volume.
-  2. Let the human click a module to highlight which peers are independent of it.
+  If panning is inverted or unresponsive, users cannot place specific architectural areas
+  into view — the prototype's navigability hypothesis fails immediately. This task
+  implements intuitive drag-to-pan: hold left mouse button and drag; the scene moves in
+  the same direction as the drag (Google Maps convention).
 
   ## Spec Requirements Satisfied
 
-  From `specs/visualization/orthogonal-independence.spec.md`:
-  - **Spatial Separation of Independent Groups**: groups occupy distinct spatial
-    regions within the context's volume; a visible gap separates them; modules
-    within each group remain coupled-close.
-  - **Independence as Queryable Property — Selecting a module shows its
-    independent peers**: clicking module A highlights all modules in other
-    independence groups (safe to change) and visually distinguishes A's own
-    group members as "co-dependent".
-  - **Independence as Queryable Property — Cross-context independence** (partial):
-    bounded contexts with no transitive dependency on the selected context are
-    also highlighted.
+  From `specs/prototype/ux-polish.spec.md`:
+
+  - **Pan with Left Mouse Button**: left mouse button + drag pans the view
+  - **Non-Inverted Movement**: dragging left moves the view left (non-inverted in
+    the Maps sense — content you drag toward follows your cursor)
 
   ## Key Design Decisions
 
-  - **Spatial gap**: the layout from task-005 already clusters nodes by
-    coupling. This task adds a post-load adjustment: within each bounded context,
-    compute the centroid of each independence group and apply a push-apart
-    offset (≈ 20% of context diameter) so groups are visibly separated. This
-    is a Godot-side position adjustment — it modifies the rendered positions but
-    does not rewrite the JSON.
-  - **Gap visual cue**: a thin dashed plane (using `ImmediateMesh` or a
-    semi-transparent `CSGBox3D` slab) is drawn between independence groups
-    within each bounded context to make the boundary explicit.
-  - **Click interaction**: `InputEventMouseButton` LEFT on a module node
-    triggers `IndependenceHighlighter.gd`. It reads `independence_group` from
-    the node's metadata, then:
-    - Dims all nodes to 40% opacity.
-    - Lights up the selected module's group to 100% with a neutral (white) tint.
-    - Lights up other independence groups with a green tint (independent = safe).
-    - Clicking again or pressing Escape restores default state.
-  - Cross-context highlight: bounded context nodes with no edge paths reaching
-    the selected context are also tinted green. (Simple reachability check on
-    the loaded edge graph.)
-  - Smooth animated transitions for all opacity and tint changes using `Tween`.
+  - Implemented inside `CameraController._handle_pan()` (stub from task-014).
+  - On `InputEventMouseButton` with `MOUSE_BUTTON_LEFT` pressed, set a `_panning` flag.
+  - On `InputEventMouseMotion` while `_panning`, translate the camera rig by
+    `(-delta.x, 0, -delta.y) * pan_speed` in the camera's local XZ plane.
+  - Pan speed is proportional to camera height (zoom level) so pan distance is consistent
+    regardless of zoom: `pan_speed = camera_distance * pan_sensitivity_constant`.
+  - Direction: dragging right → camera rig moves in +X (scene appears to move left, which
+    reveals content to the right of the current view). This matches the spec's "dragging
+    left reveals content to the right" description.
+  - Movement is immediate (no lerp) for responsiveness; smooth deceleration (momentum)
+    is out of scope for the prototype.
 
   ## Files Affected
 
-  - `godot/scripts/IndependenceHighlighter.gd`
-  - `godot/scripts/SceneGraphLoader.gd` — post-load independence group
-    separation applied here
-  - `godot/scripts/NodeRenderer.gd` — selection/highlight state added
-  - `godot/tests/test_independence_highlighter.gd`
+  - `godot/scenes/CameraController.gd` — updated: `_handle_pan()` implementation,
+    `_panning` flag, pan speed calculation
+  - `godot/tests/test_camera_pan.gd` — GUT tests: camera position changes in expected
+    direction for positive x-delta; camera position changes in expected direction for
+    positive y-delta; direction is non-inverted
 
-  ## How to Verify
+  ## Verification
 
-  1. Load kartograph scene graph. Verify that contexts with multiple detected
-     independence groups (from task-007 output) show a visible spatial gap
-     and divider plane between groups.
-  2. Click any module node: dimming and green-tinting animate in smoothly.
-     Modules in other groups are green (independent); modules in the same group
-     are white (co-dependent).
-  3. Bounded contexts not reachable from the selected module are also green.
-  4. Click again or press Escape: all nodes return to default state smoothly.
-
-  `bash .hyperloop/checks/godot-compile.sh`
+  1. GUT tests pass.
+  2. In the running app: hold LMB, drag right → bounded contexts move left (correct).
+  3. Hold LMB, drag up → bounded contexts move up (correct).
 
   ## Caveats
 
-  If task-007 finds no independence groups in kartograph (all modules transitively
-  connected), no gap is shown — this is correct behavior per the spec. Use a
-  synthetic fixture with known independent groups to verify the feature. The
-  cross-context reachability check is a simple BFS on loaded edges (not a full
-  transitive-closure computation) for prototype performance; it is sufficient
-  at kartograph scale.
+  "Smooth pan proportional to drag speed" (smooth pan scenario in ux-polish spec) is
+  satisfied by immediate response — movement is already proportional to drag speed because
+  delta is accumulated per frame. No additional smoothing is needed.
 ---

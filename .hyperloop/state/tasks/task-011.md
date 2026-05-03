@@ -1,74 +1,69 @@
 ---
 id: task-011
-title: Godot app — top-down camera with basic orbit and zoom
+title: Containment rendering (nested translucent parent / opaque children)
 spec_ref: "specs/prototype/godot-application.spec.md@abc16ac365e3e44b8c942e9623dc64cd1cba7aed"
 status: not-started
 phase: null
-deps: [task-008]
+deps: [task-010]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(godot): top-down camera with orbit and zoom controls"
+pr_title: "feat(godot): render containment relationships as nested translucent/opaque volumes"
 pr_description: |
   ## What and Why
 
-  The 3D visualization is only useful if the human can navigate it. This task
-  adds the camera with its default top-down view and the basic interaction modes:
-  zoom (scroll wheel) and orbit (right mouse button drag). Pan (left mouse
-  button) and the UX-polish behaviors (zoom-to-cursor, orbit-around-point,
-  smooth interpolation) are added in task-012.
-
-  This task can be developed in parallel with task-009 and task-010 since it
-  only depends on the project scaffold (task-008).
+  Child nodes (modules) must appear visually inside their parent node (bounded context).
+  The parent is shown as a larger semi-transparent volume so the children remain visible
+  through it, making the containment hierarchy immediately readable. This is a key
+  visual affordance of the prototype — if containment is not visible, the user cannot
+  understand the architectural layering.
 
   ## Spec Requirements Satisfied
 
   From `specs/prototype/godot-application.spec.md`:
-  - **Camera Controls — Top-down overview**: camera defaults to a top-down
-    position showing the entire scene on startup.
-  - **Camera Controls — Zooming in**: scroll moves the camera closer; internal
-    structure becomes visible at close range; labels remain readable.
-  - **Camera Controls — Orbiting**: right-mouse drag rotates around the focal
-    point; "up stays up" (gimbal-lock-free orbit).
 
-  From `specs/prototype/prototype-scope.spec.md`:
-  - **Navigation**: pan, zoom, rotate; smooth transitions between overview and
-    detail levels.
+  - **Containment Rendering**: bounded context = larger translucent volume; child modules =
+    smaller opaque volumes inside; parent boundary visually distinct from children
+
+  From `specs/visualization/spatial-structure.spec.md` (Structure as Persistent Geography):
+
+  - Each structural element occupies a distinct region; boundaries between elements are
+    visually clear; structural relationships expressed spatially
 
   ## Key Design Decisions
 
-  - Camera is a `Camera3D` child of a `CameraRig` `Node3D`. The rig separates
-    the focal point (rig position) from camera distance (rig's camera child Z
-    offset). This is the standard Godot orbit pattern.
-  - On startup the rig is positioned at the centroid of all loaded nodes, and
-    the camera is elevated 80 units on the Y axis looking straight down
-    (`rotation_degrees = Vector3(-90, 0, 0)`).
-  - **Zoom**: `InputEventMouseButton` WHEEL_UP/DOWN adjusts `camera_distance`
-    (clamped 5–200 units). Basic (non-smooth, non-cursor-centered) at this
-    stage — smoothing added in task-012.
-  - **Orbit**: `InputEventMouseMotion` with right-button held adjusts rig
-    `rotation_degrees.y` (yaw) and a pitch offset. Pitch is clamped
-    [-89°, 0°] to prevent flipping.
+  - Bounded-context volumes use a `StandardMaterial3D` with `transparency = ALPHA` and
+    `albedo_color.a ≈ 0.25`. Each bounded context gets a distinct hue (palette of 6+
+    colours cycling) so contexts are distinguishable.
+  - Module (child) volumes use fully opaque materials, using a slightly lighter shade of
+    their parent's hue.
+  - Godot scene tree hierarchy: `SceneRoot → BoundedContextNode → ModuleNode`. Child nodes
+    are Godot scene-tree children of their parent, so transforms compose naturally.
+  - Parent volume is sized to fully contain all its children with a margin. The extractor
+    layout guarantees child positions are within parent bounds (task-004), but Godot adds
+    a visual padding margin of ~10% to the parent's visual box size.
+  - Existing `NodeRenderer` from task-010 is extended (not replaced): a `parent` property
+    is set, and the material variant (translucent vs opaque) is selected based on node type.
 
   ## Files Affected
 
-  - `godot/scripts/CameraRig.gd`
-  - `godot/scenes/Main.tscn` — CameraRig added to scene tree
+  - `godot/scenes/NodeRenderer.gd` — updated: material selection based on node type,
+    parent-scoped colour palette
+  - `godot/scenes/SceneRoot.gd` — updated: parenting logic (child MeshInstance3D nodes
+    are re-parented to their parent NodeRenderer after all nodes are instantiated)
+  - `godot/tests/test_containment.gd` — GUT tests: child node has parent id matching
+    NodeRenderer parent; bounded context material is translucent; module material is opaque
 
-  ## How to Verify
+  ## Verification
 
-  Launch the application:
-  1. Default view shows all nodes from above.
-  2. Scroll wheel moves the camera closer/farther.
-  3. Right-mouse drag orbits around the scene center without the up vector
-     flipping.
-
-  `bash .hyperloop/checks/godot-compile.sh`
+  1. GUT tests pass.
+  2. In the running app, the IAM bounded context box is visually transparent and contains
+     visible module boxes inside it.
+  3. Distinct bounded contexts have distinct colours.
 
   ## Caveats
 
-  Zoom is centered on screen center at this stage. Zoom-to-cursor and
-  orbit-around-point are implemented in task-012. Pan (left mouse button) is
-  also task-012. The camera may feel slightly sluggish without the smooth
-  interpolation added in task-012.
+  Translucent volumes in Godot 4 require `transparency = ALPHA` and can interact poorly
+  with depth sorting when volumes overlap. Use `render_priority` or `no_depth_test` if
+  z-fighting is observed between parent and child volumes.
 ---
