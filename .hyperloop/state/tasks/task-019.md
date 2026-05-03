@@ -1,70 +1,66 @@
 ---
 id: task-019
-title: Aggregate edge LOD — smooth transition between aggregate and module-level edges
-spec_ref: "specs/visualization/spatial-structure.spec.md@359dbcb1d7f64009e6dd64084a8bcbb5fa325cb4"
+title: Godot 4.6 project configuration and API compliance
+spec_ref: "specs/prototype/godot-application.spec.md@abc16ac365e3e44b8c942e9623dc64cd1cba7aed"
 status: not-started
 phase: null
-deps: [task-013, task-018]
+deps: []
 round: 0
 branch: null
 pr: null
-pr_title: "feat(godot): smoothly transition aggregate cross-context edges to per-module edges at medium zoom"
+pr_title: "chore(godot): configure project for Godot 4.6.x and audit GDScript API usage"
 pr_description: |
   ## What and Why
 
-  At far zoom the user sees one thick edge per context pair (aggregate), communicating
-  the existence and strength of coupling. As they zoom in, individual module-level edges
-  reveal exactly which modules are coupled. The transition between these two representations
-  must be smooth — aggregate edges dissolve as individual edges emerge — so the user
-  experiences a continuous reveal rather than a mode switch.
+  The godot-application spec now explicitly mandates Godot 4.6.x as the engine version
+  and requires that every GDScript API call be valid for the Godot 4.6 API (e.g.
+  `FileAccess.get_as_text()` rather than the deprecated `read_as_text()`). Without a
+  locked engine version and a clean API audit, later implementers may unknowingly write
+  code for the wrong API, causing runtime errors that are invisible until the app is
+  launched in the correct Godot build.
+
+  This task establishes the project configuration baseline and produces an API compliance
+  report so all subsequent Godot tasks can target a known, tested version.
 
   ## Spec Requirements Satisfied
 
-  From `specs/visualization/spatial-structure.spec.md`:
+  From `specs/prototype/godot-application.spec.md`:
 
-  - **Scale Through Zoom — Far**: single aggregate edge per context pair shown; individual
-    edges not visible
-  - **Scale Through Zoom — Medium**: aggregate cross-context edges "smoothly dissolve into
-    their constituent module-level edges"
-  - **Smooth Transitions**: "aggregate edges morph smoothly into individual edges (or
-    vice versa) rather than switching discretely"
+  - **Godot 4.6**: project MUST be built using Godot 4.6.x with GDScript; all API calls
+    MUST be compatible with the Godot 4.6 API.
 
   ## Key Design Decisions
 
-  - Aggregate `EdgeRenderer` (type `"aggregate"`) and individual module-level
-    `EdgeRenderer` nodes exist side-by-side in the scene (both created by task-013).
-  - `LODController` (task-018) drives the fade:
-    - FAR: aggregate edges alpha=1, individual cross-context edges alpha=0
-    - MEDIUM: crossfade — aggregate alpha fades from 1→0 as individual alpha fades 0→1
-    - NEAR: aggregate edges alpha=0, individual edges alpha=1
-  - Crossfade is driven by the same normalized distance value from task-018 so the two
-    fade curves are complementary (aggregate + individual alpha ≈ 1 throughout).
-  - Aggregate edge line thickness (if supported by Godot 4's shader/material) is scaled
-    by `weight` so heavier coupling is visually prominent at far zoom.
-  - When weight data is not available (edge weight = 1), aggregate edges use standard
-    thickness.
+  - Ensure `godot/project.godot` sets `config/features` to include "4.6" and
+    `config_version = 5`.
+  - Audit all existing `.gd` files in `godot/` for deprecated pre-4.6 API patterns:
+    - `read_as_text()` → `get_as_text()`
+    - `File.new()` → `FileAccess.open()`
+    - Any `_ready`/signal patterns that changed between 4.x minor versions
+  - Fix any identified violations in-place.
+  - Add a CI check (`checks/godot-fileaccess-tested.sh` already exists) to catch
+    regressions; if the check does not cover all known deprecated patterns, extend it.
+  - Document the minimum Godot binary version required in `godot/README.md` (or a top-
+    level comment in `project.godot`) so contributors know which binary to download.
 
   ## Files Affected
 
-  - `godot/autoload/LODController.gd` — updated: emit aggregate-specific LOD values
-    (or reuse `lod_changed` with a `progress` float parameter)
-  - `godot/scenes/EdgeRenderer.gd` — updated: respond to LOD progress signal; tween
-    alpha based on edge type (aggregate vs individual cross-context)
-  - `godot/tests/test_aggregate_lod.gd` — GUT tests: at FAR aggregate alpha=1 and
-    individual cross-context alpha=0; at NEAR vice versa; at threshold progress=0.5
-    both are partial
+  - `godot/project.godot` — version config locked to 4.6.x
+  - `godot/**/*.gd` — any files where deprecated API calls are found and corrected
+  - `godot/tests/test_api_compat.gd` (new) — GUT test that verifies at least one
+    `FileAccess.get_as_text()` call pattern compiles and runs, confirming the engine
+    is 4.6-compatible at test time
 
   ## Verification
 
-  1. GUT tests pass (`check-aggregate-edge-impl.sh`, `check-individual-edge-weight.sh`).
-  2. In the running app: zoom from maximum to close distance on IAM — a single thick
-    orange line (aggregate) fades out as multiple thinner lines (individual) fade in.
-  3. No discrete jump in edge visibility.
+  1. `godot/project.godot` inspection shows Godot 4.6.x feature tag.
+  2. `grep -r "read_as_text\|File.new()" godot/` returns no results.
+  3. GUT tests pass under Godot 4.6.x binary.
+  4. `checks/godot-fileaccess-tested.sh` exits 0.
 
   ## Caveats
 
-  Godot 4's `ImmediateMesh` does not natively support line thickness. If thick aggregate
-  edges are desired, use a tube `MeshInstance3D` (cylinder scaled to line length) or a
-  custom shader. The prototype may use uniform line thickness and rely on colour or
-  `weight` label to indicate coupling strength.
+  This task does not change any gameplay logic or scene structure — it is purely a
+  configuration and compliance audit. If a future spec change requires moving to 4.7+,
+  a new task should be opened; do not amend this one.
 ---

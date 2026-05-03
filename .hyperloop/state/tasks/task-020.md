@@ -1,70 +1,75 @@
 ---
 id: task-020
-title: Independence group spatial separation rendering
+title: Independence group spatial separation in Godot renderer
 spec_ref: "specs/visualization/orthogonal-independence.spec.md@ca0ad7afad8d95361892fbfba84f55049cf288fd"
 status: not-started
 phase: null
-deps: [task-011]
+deps: [task-005, task-009, task-010]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(godot): render independence groups in distinct spatial regions with visible gap"
+pr_title: "feat(godot): render independence groups with visible spatial gaps"
 pr_description: |
   ## What and Why
 
-  When two module groups within a bounded context share no dependencies, showing them
-  spatially adjacent makes them look coupled. Separating them with a visible gap makes
-  independence obvious without requiring the user to read labels or click anything.
-  This is "independence as first-class visual concept" from the orthogonal-independence spec.
+  Independence is a first-class structural concept: knowing that two groups of modules
+  cannot affect each other is just as important as knowing how they are connected. The
+  extractor (task-005) already annotates each node with an `independence_group` identifier
+  and the layout algorithm (task-004) positions nodes so coupled nodes cluster together.
+  However, the visual gap between independent groups must be rendered explicitly so users
+  can perceive independence at a glance — without having to query the data.
+
+  This task makes the Godot renderer honour the `independence_group` field: modules in
+  different groups are visually separated by a spatial gap within their parent bounded
+  context volume.
 
   ## Spec Requirements Satisfied
 
   From `specs/visualization/orthogonal-independence.spec.md`:
 
   - **Spatial Separation of Independent Groups**: groups occupy distinct spatial regions
-    within the context's volume; a visible gap separates them; modules within each group
-    remain close to each other
-  - **Smooth regrouping on data change**: when a new scene graph is loaded with different
-    independence groups, nodes animate smoothly to new positions (slide, don't jump)
+    within the context volume; a visible gap separates the groups; modules within each
+    group remain close to each other (coupling-aware layout still applies within groups).
 
   ## Key Design Decisions
 
-  - The extractor's layout (task-004/005) already positions modules with independence-aware
-    spacing (layout respects group separation). Godot reads those positions from JSON and
-    renders at them — no re-layout in Godot.
-  - To make the gap *visible*, each independence group within a bounded context gets a
-    subtle translucent background plane (`MeshInstance3D` with `PlaneMesh` at y=0.05)
-    tinted with a group-specific colour inside the parent's bounding box. This acts as a
-    "floor tile" for the group, distinct from the parent's background.
-  - Group tint colours cycle through a fixed palette; groups within the same context use
-    adjacent palette entries.
-  - Smooth regrouping: when `SceneGraphLoader` reloads a new JSON (future feature;
-    scaffold for it now), `NodeRenderer` runs a `Tween` on each node's position from old
-    to new. The group background plane also tweens its bounds. Duration ~0.5s.
-  - The reload trigger is out of scope for this prototype task; only the animation
-    infrastructure is scaffolded.
+  - The extractor's layout (task-004) already encodes group separation in the `position`
+    fields of nodes; the `independence_group` field is the authoritative tag.
+  - In the Godot scene loader (task-009), after placing all nodes, group sibling nodes by
+    their `independence_group` value within each parent bounded context.
+  - Draw a subtle visual separator (e.g. a thin translucent plane or a gap in the floor
+    texture) between groups if the gap between their bounding boxes exceeds a threshold.
+    The separator should be visually lighter than the node volumes so it reads as
+    "breathing room" rather than a barrier.
+  - The gap is already embedded in positions from the extractor; the renderer just needs
+    to NOT collapse it (do not re-layout nodes in Godot).
+  - Smooth regrouping on scene graph reload: if a new JSON is loaded (e.g. developer
+    reruns the extractor), nodes whose `independence_group` changed animate smoothly to
+    new positions using a `Tween`. This is a secondary deliverable; the primary is the
+    static rendering.
 
   ## Files Affected
 
-  - `godot/scenes/IndependenceGroupPlane.tscn` + `IndependenceGroupPlane.gd` — new:
-    background plane for one independence group
-  - `godot/scenes/NodeRenderer.gd` — updated: `independence_group` field used to look up
-    group plane; group plane created per unique group id within context
-  - `godot/tests/test_independence_rendering.gd` — GUT tests: two distinct groups have
-    separate planes; group planes are within parent context bounds; nodes in different
-    groups have spatial separation > nodes in same group
+  - `godot/scenes/SceneLoader.gd` — group sibling nodes by independence_group after
+    placing all nodes in a context; identify group boundaries
+  - `godot/scenes/IndependenceGapRenderer.gd` (new) — draws the visual separator plane
+    between groups within a bounded context volume
+  - `godot/tests/test_independence_gap.gd` — GUT tests: nodes in different groups have
+    a measured spatial gap above threshold; nodes in same group are not separated by the
+    renderer; separator plane is instantiated between distinct groups
 
   ## Verification
 
   1. GUT tests pass.
-  2. In the running app: within the IAM context, if the extractor outputs ≥2 groups,
-    a visible colour-coded background separates them.
-  3. Modules with the same `independence_group` value are visually clustered together.
+  2. Load kartograph scene graph: IAM context should show any independent module groups
+     separated by a visible gap. If all IAM modules are mutually dependent the gap
+     renderer is a no-op (no separator drawn) — verify this case too.
+  3. Inspect `independence_group` values in the JSON and confirm they match the visual
+     grouping on screen.
 
   ## Caveats
 
-  If kartograph's IAM context has only one independence group (all modules transitively
-  coupled), no separation will appear — the background plane covers the entire context,
-  which is correct behaviour. The test should handle this case by using a fixture with
-  a known two-group structure.
+  The smooth-regrouping-on-reload scenario is a secondary deliverable. If time-boxed,
+  deliver static rendering first and mark reload animation as a follow-up. The primary
+  requirement is that a freshly loaded scene shows the correct gaps.
 ---

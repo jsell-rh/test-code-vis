@@ -1,79 +1,85 @@
 ---
 id: task-022
-title: Cluster collapse/expand UI with animated edge re-routing
+title: Level-of-detail edge rendering with animated opacity transitions
 spec_ref: "specs/visualization/spatial-structure.spec.md@359dbcb1d7f64009e6dd64084a8bcbb5fa325cb4"
 status: not-started
 phase: null
-deps: [task-013]
+deps: [task-009, task-013]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(godot): collapse/expand cluster groups into supernodes with animated edge re-routing"
+pr_title: "feat(godot): LOD edge rendering — aggregate at far, individual at medium/near"
 pr_description: |
   ## What and Why
 
-  Heavily interdependent modules create visual noise that hides the big picture. Collapsing
-  them into a single supernode lets the user temporarily simplify a context to see its
-  external interface clearly. The operation must be fully reversible and animated — a
-  sudden visual change breaks the user's spatial mental model.
+  At overview distance, showing every individual import-level edge produces a visual
+  hairball that makes the scene unreadable. Conversely, only showing aggregate edges
+  when zoomed in loses the structural detail that makes the tool valuable. The spatial-
+  structure spec defines three LOD bands (far, medium, near) with explicit rules for
+  which edges and nodes are visible at each distance, and requires that all transitions
+  are animated with opacity rather than instant visibility changes.
+
+  This task implements the LOD system in the Godot renderer, driven by camera distance
+  to each bounded context.
 
   ## Spec Requirements Satisfied
 
   From `specs/visualization/spatial-structure.spec.md`:
 
-  - **Cluster Collapsing — Collapse**: modules animate together converging into a single
-    supernode; supernode shows aggregate metrics (total LOC, combined in/out-degree); edges
-    entering/leaving any cluster member are re-routed to the supernode; re-routing animates
-    (endpoints slide to supernode)
-  - **Cluster Collapsing — Expand**: supernode smoothly expands back into constituent
-    modules; modules animate to original positions; edges re-route back with animation
-  - **Cluster Collapsing — Nested collapsing**: collapsing one cluster leaves others
-    untouched; uncollapsed modules stay in place; their edges update if they pointed to
-    the now-collapsed cluster
+  - **Far**: bounded contexts as distinct volumes; only aggregate cross-context edges
+    (one per context pair, weight-encoded); individual module-level edges not visible.
+  - **Medium**: internal modules fade in within context volume; inter-module edges appear
+    with animated opacity; aggregate cross-context edges smoothly dissolve into their
+    constituent module-level edges.
+  - **Near**: all edges, annotations, and metrics visible; transition from medium to near
+    is continuous (no pop-in).
+  - **Smooth transitions**: elements fade in/out with animated opacity; aggregate edges
+    morph into individual edges (and vice versa) rather than switching discretely.
 
   ## Key Design Decisions
 
-  - Trigger: double-click on a `NodeRenderer` that belongs to a cluster (determined by
-    `SceneGraphLoader.clusters()` membership). First click selects; second click collapses.
-    A collapsed supernode double-click expands.
-  - Supernode: a new `NodeRenderer` is created at the centroid of the collapsing cluster's
-    member positions. Size is proportional to `aggregate_metrics.total_loc`. Label is
-    "↗ {context}:{cluster_index}" (collapsed indicator prefix).
-  - Collapse animation (`Tween`, ~0.4s): member nodes animate position → centroid, then
-    `visible = false`. Supernode fades in from alpha=0 to 1.
-  - Edge re-routing: `EdgeRenderer` nodes whose source or target is a collapsing member
-    update their endpoint to the supernode position, animated over the same ~0.4s.
-  - Expand animation: reverse — supernode fades out, members fade in and animate back to
-    stored original positions. Edges re-route back.
-  - State: `CollapseController` (autoload) tracks which clusters are collapsed, stores
-    original member positions, and manages supernode lifecycle.
-  - Nested collapsing: multiple clusters in the same context collapse independently.
-    `CollapseController` tracks collapsed state per cluster id.
+  - Define three distance thresholds as exported constants: `FAR_THRESHOLD`,
+    `MEDIUM_THRESHOLD`. Camera distance to a bounded context centroid determines its
+    LOD band. Each bounded context manages its own LOD independently (so you can be in
+    "medium" for IAM while still in "far" for graph).
+  - At FAR: hide all child module nodes and all individual edges within and between
+    contexts; show aggregate edges (type = "aggregate" from task-006's JSON output).
+  - At MEDIUM: fade in child module nodes using a `Tween` on their `modulate.a`;
+    cross-context aggregate edges simultaneously tween opacity out while constituent
+    module-level edges tween in.
+  - At NEAR: ensure all annotations (labels, metric badges) are fully visible.
+  - All opacity tweens use a shared `LodTween` helper that prevents competing tweens
+    on the same property.
+  - The scene graph JSON already contains both aggregate and individual edges (from
+    task-006); the LOD system selects which to render — it does not recompute edges.
 
   ## Files Affected
 
-  - `godot/autoload/CollapseController.gd` — new: collapse state machine, centroid
-    calculation, supernode creation/destruction
-  - `godot/scenes/NodeRenderer.gd` — updated: double-click detection, collapse trigger
-  - `godot/scenes/EdgeRenderer.gd` — updated: `reroute_endpoint(node_id, new_pos)` method
-    with Tween for smooth endpoint slide
-  - `godot/tests/test_collapse.gd` — GUT tests: after collapse, member nodes invisible
-    and supernode visible; after expand, vice versa; edge endpoints updated correctly;
-    nested collapse does not disturb uncollapsed clusters
+  - `godot/scenes/LodController.gd` (new) — per-bounded-context LOD state machine;
+    computes camera distance each frame; fires tween transitions on band change
+  - `godot/scenes/EdgeRenderer.gd` — updated: expose `set_opacity(v, duration)` method
+    used by LodController; differentiate aggregate vs individual edge types
+  - `godot/scenes/NodeVolume.gd` — expose `set_opacity(v, duration)` for child module
+    fade-in/out
+  - `godot/tests/test_lod.gd` — GUT tests: at FAR distance, aggregate edges are visible
+    and individual edges have opacity 0; at MEDIUM, child modules have opacity > 0 and
+    < 1 during transition; at NEAR, all elements have opacity 1; band transitions trigger
+    tweens not instant visibility changes
 
   ## Verification
 
-  1. GUT tests pass (`check-edge-rerouting-wired.sh`).
-  2. In the running app (if kartograph has any suggested clusters): double-clicking a
-    cluster member group collapses it into a supernode showing LOC/degree metrics.
-  3. All edges that connected to cluster members now connect to the supernode.
-  4. Double-clicking the supernode expands back; original layout restored.
-  5. Collapsing one cluster does not affect other visible modules.
+  1. GUT tests pass with mocked camera distances.
+  2. Load kartograph scene: zoom out fully → only bounded context volumes and aggregate
+     edges visible. Zoom in slowly toward IAM → internal modules fade in, aggregate
+     cross-context edge from IAM fades out while individual module edges fade in.
+  3. No elements snap to visibility; all transitions are visually smooth.
+  4. Each bounded context transitions independently (zoom into IAM without affecting
+     graph context's LOD band).
 
   ## Caveats
 
-  If `SceneGraphLoader.clusters()` is empty (no clusters above threshold for kartograph),
-  this feature has nothing to act on — the test suite uses a synthetic fixture with a
-  known cluster. The double-click threshold should distinguish from a single selection
-  click (task-021).
+  The aggregate edge type ("aggregate") must be present in the JSON produced by task-006.
+  If task-006 has not been completed, the implementer should mock aggregate edges for
+  testing and add an integration check once task-006 lands. The LOD system should
+  gracefully degrade (show all edges) if no aggregate edges are present in the JSON.
 ---

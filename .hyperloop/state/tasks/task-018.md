@@ -1,74 +1,66 @@
 ---
 id: task-018
-title: Level-of-detail opacity animation (far/medium/near distance thresholds)
-spec_ref: "specs/visualization/spatial-structure.spec.md@359dbcb1d7f64009e6dd64084a8bcbb5fa325cb4"
+title: UX — smooth camera movement (interpolated zoom animation)
+spec_ref: "specs/prototype/ux-polish.spec.md@b7fbdb12f3dc33c4ba4d8b09a229b44120c156ee"
 status: not-started
 phase: null
-deps: [task-010, task-013]
+deps: [task-015, task-016, task-017]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(godot): implement LOD opacity transitions at far/medium/near distance thresholds"
+pr_title: "feat(godot): smooth interpolated zoom animation for camera controller"
 pr_description: |
   ## What and Why
 
-  At far zoom, showing individual module volumes and all edges creates visual noise that
-  overwhelms the user. At near zoom, hiding edges loses critical context. Level-of-detail
-  (LOD) makes each zoom level tell a semantically complete story: far shows architecture,
-  medium shows context internals, near shows full detail. Elements must fade with animated
-  opacity — never popping in or out — to keep spatial continuity.
-
-  **Scope note**: `spatial-structure.spec.md` contains one requirement excluded from the
-  prototype (see prototype-scope.spec.md § Not In Scope). This task implements only the
-  LOD/zoom-level requirements (Scale Through Zoom, Smooth Transitions) from that spec.
+  Instant camera jumps feel jarring and make it hard for the user to maintain spatial
+  orientation. The ux-polish spec explicitly requires that zoom is "animated smoothly
+  (interpolated), not instantaneous". This PR wraps the zoom delta computed in task-016
+  in a lerp/tween so the camera glides to its target distance rather than snapping.
+  Pan movement (task-015) is already smooth by virtue of per-frame proportional delta;
+  this task verifies that and, if needed, adds inertia dampening.
 
   ## Spec Requirements Satisfied
 
-  From `specs/visualization/spatial-structure.spec.md`:
+  From `specs/prototype/ux-polish.spec.md`:
 
-  - **Scale Through Zoom — Far**: only bounded-context volumes + labels visible; module
-    volumes and internal edges invisible; single aggregate edge per context pair visible
-  - **Scale Through Zoom — Medium**: internal module volumes and per-module edges fade in
-    with animated opacity as camera approaches a context
-  - **Scale Through Zoom — Near**: all edges, annotations, and metrics visible; no detail
-    is hidden
-  - **Smooth Transitions**: elements fade via animated opacity, never appear/disappear
-    instantly; transition is continuous as user zooms
+  - **Smooth Camera Movement — Smooth zoom**: zoom is animated smoothly (interpolated),
+    not instantaneous.
+  - **Smooth Camera Movement — Smooth pan**: pan movement is smooth and proportional to
+    drag speed (verify that task-015's implementation already satisfies this; add
+    dampening only if it does not).
 
   ## Key Design Decisions
 
-  - LOD controller: a GDScript autoload (`LODController`) monitors camera height each
-    frame and classifies the current view as `FAR`, `MEDIUM`, or `NEAR` based on two
-    configurable distance thresholds.
-  - On threshold crossing, `LODController` emits a signal `lod_changed(level)`.
-  - `NodeRenderer` (task-010) subscribes to `lod_changed` and runs a `Tween` on each
-    node's `albedo_color.a` to animate visibility in/out over ~0.3s.
-  - Module nodes: `visible = false` at FAR (alpha 0); fade to alpha 1 at MEDIUM/NEAR.
-  - Module labels: hidden at FAR, visible at MEDIUM/NEAR.
-  - Internal edges (type `"internal"`): hidden at FAR; visible at MEDIUM/NEAR.
-  - The transition is continuous (not snapping to three discrete states) — camera distance
-    is mapped to a normalized [0,1] value within each band, and alpha is interpolated.
-  - Aggregate-edge switching is handled separately in task-019.
+  - Introduce a `_zoom_target` float that receives the discrete scroll delta each wheel
+    event; in `_process()`, lerp the camera's actual distance toward `_zoom_target` at a
+    configurable `zoom_lerp_speed` (default ≈ 10.0 * delta for ~100 ms settle time).
+  - The cursor-anchor geometry from task-016 still applies: the lerp operates on the
+    scalar distance while the anchor offset is maintained by translating the camera rig.
+  - Do NOT add lerp to pan: per-frame drag delta is inherently smooth; adding lerp would
+    introduce lag that violates "proportional to drag speed".
+  - Orbit motion (task-017) is also per-frame and does not need additional lerp.
+  - Export `zoom_lerp_speed` as a Godot `@export` so it can be tuned in the editor
+    without code changes.
 
   ## Files Affected
 
-  - `godot/autoload/LODController.gd` — new: camera distance monitor, `lod_changed`
-    signal, threshold constants
-  - `godot/scenes/NodeRenderer.gd` — updated: subscribe to `lod_changed`, tween alpha
-  - `godot/scenes/EdgeRenderer.gd` — updated: subscribe to `lod_changed`, show/hide
-    internal edges
-  - `godot/tests/test_lod.gd` — GUT tests: FAR hides module nodes; MEDIUM shows them;
-    NEAR shows all; transitions use Tween (not instant)
+  - `godot/scenes/CameraController.gd` — added `_zoom_target`, lerp in `_process()`,
+    `@export zoom_lerp_speed`
+  - `godot/tests/test_camera_smooth.gd` — GUT tests: after a scroll event, camera
+    distance after one frame is strictly between old and new target (lerp in progress);
+    camera distance converges to target within N frames; pan delta test confirms
+    proportional response (no lerp lag)
 
   ## Verification
 
-  1. GUT tests pass (`check-lod-level-tests.sh`).
-  2. In the running app: zoom to maximum distance → module boxes disappear with a fade.
-  3. Zoom in toward IAM → IAM's module children fade in smoothly.
-  4. No elements snap to visibility.
+  1. GUT tests pass.
+  2. In the running app: scroll wheel → camera glides smoothly to new distance (no snap);
+     drag to pan → movement feels immediate and proportional (no lag).
+  3. Adjust `zoom_lerp_speed` in the editor and observe effect without code changes.
 
   ## Caveats
 
-  Per-node `Tween` creation on every LOD transition may create many concurrent tweens.
-  Cancel existing tweens before starting new ones to prevent alpha jitter.
+  Task-018 does not change the orbit or pan implementations; those are governed by their
+  own tasks. If the UX review finds pan also needs dampening, a follow-up task should be
+  opened rather than expanding this one's scope.
 ---

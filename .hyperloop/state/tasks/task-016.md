@@ -1,6 +1,6 @@
 ---
 id: task-016
-title: UX — scroll-wheel zoom toward mouse cursor
+title: UX — zoom toward mouse cursor
 spec_ref: "specs/prototype/ux-polish.spec.md@b7fbdb12f3dc33c4ba4d8b09a229b44120c156ee"
 status: not-started
 phase: null
@@ -8,58 +8,53 @@ deps: [task-014]
 round: 0
 branch: null
 pr: null
-pr_title: "feat(godot): implement scroll-wheel zoom aimed at world point under cursor"
+pr_title: "feat(godot): zoom toward mouse cursor on scroll wheel"
 pr_description: |
   ## What and Why
 
-  Zooming toward the center of the screen is disorienting: the thing you want to examine
-  drifts away from your cursor as you zoom. Zooming toward the cursor keeps your point
-  of interest anchored, matching the user's intuitive model from maps and design tools.
-  This is a significant UX differentiator for the prototype.
+  Zoom that always pulls toward the screen centre feels wrong: if you position your cursor
+  over a specific bounded context and scroll in, the context drifts away from the cursor.
+  This PR makes scroll-wheel zoom target the world point under the cursor, keeping that
+  point anchored during the zoom. This is the standard behaviour users expect from
+  map applications and is required by the ux-polish spec.
 
   ## Spec Requirements Satisfied
 
   From `specs/prototype/ux-polish.spec.md`:
 
-  - **Zoom Toward Mouse Cursor**: scroll zoom aims at the world-space point under the
-    cursor; the component under the cursor stays under the cursor during the zoom
-
-  From `specs/prototype/godot-application.spec.md`:
-
-  - **Camera Controls — Zooming in**: camera moves closer on scroll; internal structure
-    becomes visible as camera approaches (visibility is task-018's concern)
+  - **Zoom Toward Mouse Cursor**: scrolling in zooms toward the point under the cursor;
+    the component under the cursor stays under the cursor throughout the zoom.
+  - **Zoom Out**: scrolling out zooms away from the point under the cursor.
 
   ## Key Design Decisions
 
-  - On `InputEventMouseButton` WHEEL_UP/DOWN, cast a ray from the camera through the
-    mouse cursor to find the world-space hit point on the ground plane (y=0).
-  - Compute the vector from the camera rig to the hit point. Move the rig a fraction of
-    that vector toward (or away from) the hit point. This naturally keeps the hit point
-    stationary relative to the screen.
-  - Zoom formula: `new_rig_pos = rig_pos + (hit_point - rig_pos) * zoom_factor`
-    where `zoom_factor ≈ 0.15` for zoom-in and `-0.15` for zoom-out.
-  - Camera height (distance) is clamped to `[min_zoom, max_zoom]` to prevent going below
-    the ground plane or zooming out infinitely.
-  - Smooth zoom animation (spec: "zoom is animated smoothly") is implemented via a
-    `Tween` that interpolates `rig_pos` to the target position over ~0.15s.
+  - On `InputEventMouseWheel`, ray-cast from the camera through the cursor to find the
+    world-space hit point on the XZ ground plane (y = 0).
+  - Shift the camera's position along the vector from current position toward the hit
+    point by the zoom delta fraction.
+  - Clamp camera distance to a min/max range to prevent clipping or infinite zoom-out.
+  - Implemented inside `CameraController._handle_zoom()` (extending the stub from
+    task-014); the pan and orbit logic from task-015 are not modified.
+  - Pan sensitivity recalculation (height-based) already set in task-015 automatically
+    stays correct after zoom because it reads the live camera height each frame.
 
   ## Files Affected
 
-  - `godot/scenes/CameraController.gd` — updated: `_handle_zoom()` implementation with
-    ray cast, hit point calculation, tween-based animation
-  - `godot/tests/test_camera_zoom.gd` — GUT tests: zooming in reduces camera height;
-    camera rig moves toward hit point not screen center; zoom is clamped at min/max
+  - `godot/scenes/CameraController.gd` — updated `_handle_zoom()`: ray-cast to ground
+    plane, cursor-anchored zoom shift, distance clamp
+  - `godot/tests/test_camera_zoom.gd` — GUT tests: zooming in moves camera toward the
+    pre-cursor world point; zooming out moves camera away from that point; cursor world
+    point does not shift during zoom (within floating-point tolerance)
 
   ## Verification
 
   1. GUT tests pass.
-  2. In the running app: position cursor over the IAM volume, scroll in → IAM stays
-    under the cursor and grows; IAM does not drift.
-  3. Scroll out from a zoomed-in position → view zooms out from cursor point.
+  2. In the running app: position cursor over IAM context, scroll in → IAM stays under
+     cursor; scroll out → IAM stays under cursor.
+  3. No other camera axes are disturbed by scroll events.
 
   ## Caveats
 
-  Ray casting to the ground plane (y=0) works for the top-down prototype. If the camera
-  tilts significantly during orbit, the ground plane ray cast may miss; a fallback
-  distance-based approach can be added in that case.
+  Smooth (interpolated) zoom animation is addressed separately in task-018. This task
+  delivers correct geometry; task-018 adds the lerp wrapper.
 ---
