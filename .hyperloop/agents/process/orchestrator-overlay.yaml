@@ -309,6 +309,7 @@ guidelines: |
 
   | Task # | Reason | Combined mis-assignments |
   |--------|--------|--------------------------|
+  | task-001 | scene-graph-schema.spec.md — spec fully implemented on main (build_scene_graph + all TypedDicts); 2x STOP PROTOCOL; task was not added to BANNED_IDS after Round 1, allowing Round 2 | 2 |
   | task-024 | moldable-views.spec.md (scope-prohibited) | 8 |
   | task-028 | understanding-modes.spec.md (scope-prohibited + body prohibition) | 9 |
   | task-031 | understanding-modes.spec.md (scope-prohibited) | 6 |
@@ -658,6 +659,34 @@ guidelines: |
   was not-started. All three Port scenarios (placement, direction, LOD visibility)
   were MISSING. The verifier classified the gaps as DEPENDENCY-BLOCKED.
   Correct fix: assign task-038 first; re-assign task-076 after task-038 is done.
+
+  ---
+
+  ## STOP PROTOCOL — ROUND 1 REQUIRES IMMEDIATE BANNED_IDS REGISTRATION
+
+  After ANY STOP PROTOCOL Round 1 verdict, execute ALL THREE actions before closing
+  the session — not just two of them:
+
+    1. Close the task on BOTH branches (main + hyperloop/state).
+    2. Add the task ID to BANNED_IDS in check-banned-task-ids-closed.sh.
+    3. Delete the task file from BOTH branches (rm + git add + commit + push).
+
+  BANNED_IDS registration (step 2) is the mechanical gate that prevents Round 2
+  regardless of branch state. check-banned-task-ids-closed.sh is branch-state-
+  independent — it cannot be defeated by branch resets or by closing only one branch.
+
+  Observed failure (task-001, Round 2): task was closed on main after Round 1 but
+  NOT added to BANNED_IDS and NOT deleted from hyperloop/state. The orchestrator
+  read from hyperloop/state (status: in_progress) and re-assigned, producing Round 2.
+  check-stop-protocol-repeat.sh skipped (branch had zero commits above main — reset
+  after Round 1). check-banned-task-ids-closed.sh would have caught it, but task-001
+  was not in BANNED_IDS.
+
+  How to add a task to BANNED_IDS (append to check-banned-task-ids-closed.sh):
+    BANNED_IDS entry:   "task-NNN"
+    BANNED_REASONS entry: "<spec file> (spec fully on main; Nx STOP PROTOCOL)"
+    Commit: "fix(checks): add task-NNN to BANNED_IDS — Nx STOP PROTOCOL"
+    Push immediately: git push origin main
 
   ---
 

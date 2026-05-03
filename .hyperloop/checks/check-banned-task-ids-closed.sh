@@ -42,6 +42,7 @@ STATE_BRANCH="hyperloop/state"
 
 # ── Permanently banned task IDs (append-only) ────────────────────────────────
 declare -a BANNED_IDS=(
+    "task-001"
     "task-021"
     "task-024"
     "task-028"
@@ -49,6 +50,7 @@ declare -a BANNED_IDS=(
     "task-078"
 )
 declare -a BANNED_REASONS=(
+    "scene-graph-schema.spec.md (spec fully implemented on main; 2x STOP PROTOCOL; branch-reset defeated check-stop-protocol-repeat.sh — task-001 was not added to BANNED_IDS after Round 1)"
     "data-flow.spec.md (scope-prohibited; 2 mis-assignments)"
     "moldable-views.spec.md (scope-prohibited; 8 mis-assignments)"
     "understanding-modes.spec.md (scope-prohibited; 9 mis-assignments as task-028)"
