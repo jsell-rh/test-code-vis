@@ -1,8 +1,8 @@
 ---
 id: task-021
 title: Independence queryable property — selection and orthogonal highlight
-spec_ref: "specs/visualization/orthogonal-independence.spec.md@ca0ad7afad8d95361892fbfba84f55049cf288fd"
-status: not-started
+spec_ref: null
+status: closed
 phase: null
 deps: [task-020]
 round: 0
