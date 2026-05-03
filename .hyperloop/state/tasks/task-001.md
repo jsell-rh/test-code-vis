@@ -5,7 +5,7 @@ spec_ref: specs/extraction/scene-graph-schema.spec.md@4ea7e33731b8eb0cd47c19012a
 status: in_progress
 phase: implement
 deps: []
-round: 0
+round: 1
 branch: hyperloop/task-001
 pr: null
 pr_title: 'feat: define JSON scene graph schema (nodes, edges, metadata, clusters)'
