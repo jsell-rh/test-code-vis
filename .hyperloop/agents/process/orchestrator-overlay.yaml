@@ -3,6 +3,31 @@ kind: Agent
 metadata:
   name: orchestrator
 guidelines: |
+  ## AUTO-CLEAN BANNED TASKS — MANDATORY BEFORE check-cycle-gate.sh
+
+  Run `bash .hyperloop/checks/auto-clean-banned-state-tasks.sh` as the ABSOLUTE
+  FIRST action at every cycle start — before check-cycle-gate.sh, before reading
+  any finding — to automatically delete banned task files re-created on
+  hyperloop/state by cycle-update commits (root cause of task-001 Rounds 3–10).
+
+  Root cause: "cycle update" commits to hyperloop/state write task-001.md (and
+  other banned task files) back with status: in_progress after each deletion.
+  check-state-branch-post-commit.sh printed fix commands for 7+ rounds without
+  them being executed. auto-clean-banned-state-tasks.sh executes the deletion
+  automatically — no manual command execution required.
+
+  Mandatory cycle-start sequence (Step 0 is NEW — add it before existing steps):
+    Step 0: bash .hyperloop/checks/auto-clean-banned-state-tasks.sh    # auto-deletes banned files
+    Step 1: git fetch origin main:main                                  # detect incoming PRs
+    Step 2: git push origin main                                        # push pending commits
+    Step 3: bash .hyperloop/checks/check-main-local-vs-remote.sh       # must exit 0
+    Step 4: bash .hyperloop/checks/check-cycle-gate.sh <task-ids...>   # gate check (exit 0)
+    Step 5: Assign tasks only after all steps succeed.
+
+  After EVERY commit to hyperloop/state (including cycle-update commits):
+    bash .hyperloop/checks/auto-clean-banned-state-tasks.sh
+    # Run immediately after the commit, in the same session, before switching branches.
+
   ## PRE-ASSIGNMENT VERIFICATION — GREP FOR PRIMARY DELIVERABLE BEFORE ASSIGNING
 
   Before assigning any NEW task (first assignment, round 0), verify the spec's
