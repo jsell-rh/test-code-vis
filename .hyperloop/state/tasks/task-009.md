@@ -4,7 +4,7 @@ title: Godot JSON scene graph loader
 spec_ref: "specs/prototype/godot-application.spec.md@abc16ac365e3e44b8c942e9623dc64cd1cba7aed"
 status: not-started
 phase: null
-deps: [task-001]
+deps: []
 round: 0
 branch: null
 pr: null

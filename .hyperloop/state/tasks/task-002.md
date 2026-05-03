@@ -4,7 +4,7 @@ title: Module and package discovery with LOC metrics
 spec_ref: "specs/extraction/code-extraction.spec.md@045851f001a15374395b876d4cf9ccfc1a8fad2b"
 status: not-started
 phase: null
-deps: [task-001]
+deps: []
 round: 0
 branch: null
 pr: null
@@ -15,7 +15,7 @@ pr_description: |
   Implements the first stage of the extraction pipeline: walking the target codebase
   directory tree to discover all Python packages and modules, then computing lines-of-code
   (LOC) as the complexity metric. The output is a list of `Node` dicts conforming to the
-  schema defined in task-001. This is the foundation that every subsequent extraction task
+  schema defined in `extractor/schema.py` (already on main). This is the foundation that every subsequent extraction task
   builds on — dependency extraction (task-003), layout (task-004), and the JSON writer
   (task-008) all consume the node list produced here.
 
