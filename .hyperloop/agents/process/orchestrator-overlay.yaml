@@ -304,6 +304,25 @@ guidelines: |
 
   ---
 
+  ## PER-TASK PRE-ASSIGNMENT GATE — mandatory at assignment time, not just cycle start
+
+  Before assigning any individual task (whether from findings OR from the hyperloop/state
+  queue), run:
+
+    bash .hyperloop/checks/check-pre-assignment.sh <task-id>
+
+  If it exits 1: do NOT assign the task — execute the printed fix commands first.
+
+  Root cause (task-001 Round 8): check-cycle-gate.sh passed at cycle start. The
+  subsequent cycle-update commit re-introduced task-001 on hyperloop/state.
+  The orchestrator then picked task-001 from the queue and assigned it — AFTER the
+  cycle gate had already passed. No per-task check fired at assignment time.
+  check-pre-assignment.sh checks BANNED_IDS + orphan-file + scope + STOP PROTOCOL
+  history at the moment of each assignment, catching queue changes that happen
+  between cycle-start and task selection.
+
+  ---
+
   ## PERMANENTLY BANNED TASK NUMBERS
 
   The following task numbers are permanently closed and MUST NOT be reused, re-assigned,
@@ -311,7 +330,7 @@ guidelines: |
 
   | Task # | Reason | Combined mis-assignments |
   |--------|--------|--------------------------|
-  | task-001 | scene-graph-schema.spec.md — spec fully implemented on main (build_scene_graph + all TypedDicts); 7x STOP PROTOCOL; Round 2: task not added to BANNED_IDS after Round 1; Rounds 3–7: orchestrator cycle-update commits RE-CREATED task-001.md on hyperloop/state after each process-improver deletion; check-state-branch-post-commit.sh added after Round 7 to catch re-introductions immediately post-commit | 7 |
+  | task-001 | scene-graph-schema.spec.md — spec fully implemented on main (build_scene_graph + all TypedDicts); 8x STOP PROTOCOL; Round 2: not added to BANNED_IDS after Round 1; Rounds 3–8: orchestrator cycle-update commits RE-CREATED task-001.md on hyperloop/state after each process-improver deletion; check-state-branch-post-commit.sh added after Round 7 (not sufficient alone); check-pre-assignment.sh added after Round 8 to gate at assignment time | 8 |
   | task-024 | moldable-views.spec.md (scope-prohibited) | 8 |
   | task-028 | understanding-modes.spec.md (scope-prohibited + body prohibition) | 9 |
   | task-031 | understanding-modes.spec.md (scope-prohibited) | 6 |
