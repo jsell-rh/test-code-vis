@@ -1,0 +1,1265 @@
+{
+  "nodes": [
+    {
+      "id": "extraction",
+      "name": "Extraction",
+      "type": "bounded_context",
+      "position": {
+        "x": 20.0,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "size": 2.3783979009481375,
+      "parent": null,
+      "metrics": {
+        "loc": 238
+      }
+    },
+    {
+      "id": "graph",
+      "name": "Graph",
+      "type": "bounded_context",
+      "position": {
+        "x": 1.2246467991473533e-15,
+        "y": 0.0,
+        "z": 20.0
+      },
+      "size": 3.80057962156913,
+      "parent": null,
+      "metrics": {
+        "loc": 6317
+      }
+    },
+    {
+      "id": "iam",
+      "name": "Iam",
+      "type": "bounded_context",
+      "position": {
+        "x": -20.0,
+        "y": 0.0,
+        "z": 2.4492935982947065e-15
+      },
+      "size": 4.150510832907967,
+      "parent": null,
+      "metrics": {
+        "loc": 14141
+      }
+    },
+    {
+      "id": "infrastructure",
+      "name": "Infrastructure",
+      "type": "bounded_context",
+      "position": {
+        "x": -14.14213562373095,
+        "y": 0.0,
+        "z": 14.142135623730951
+      },
+      "size": 3.611510887126656,
+      "parent": null,
+      "metrics": {
+        "loc": 4087
+      }
+    },
+    {
+      "id": "ingestion",
+      "name": "Ingestion",
+      "type": "bounded_context",
+      "position": {
+        "x": -3.673940397442059e-15,
+        "y": 0.0,
+        "z": -20.0
+      },
+      "size": 3.096214585346405,
+      "parent": null,
+      "metrics": {
+        "loc": 1247
+      }
+    },
+    {
+      "id": "management",
+      "name": "Management",
+      "type": "bounded_context",
+      "position": {
+        "x": -14.142135623730955,
+        "y": 0.0,
+        "z": -14.14213562373095
+      },
+      "size": 3.7942788657213993,
+      "parent": null,
+      "metrics": {
+        "loc": 6226
+      }
+    },
+    {
+      "id": "query",
+      "name": "Query",
+      "type": "bounded_context",
+      "position": {
+        "x": 14.142135623730947,
+        "y": 0.0,
+        "z": -14.142135623730955
+      },
+      "size": 3.3467440546048484,
+      "parent": null,
+      "metrics": {
+        "loc": 2221
+      }
+    },
+    {
+      "id": "shared_kernel",
+      "name": "Shared Kernel",
+      "type": "bounded_context",
+      "position": {
+        "x": 14.142135623730951,
+        "y": 0.0,
+        "z": 14.14213562373095
+      },
+      "size": 3.699924402742476,
+      "parent": null,
+      "metrics": {
+        "loc": 5010
+      }
+    },
+    {
+      "id": "extraction.domain",
+      "name": "Domain",
+      "type": "module",
+      "position": {
+        "x": 2.2950000000000004,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "size": 1.851258348719075,
+      "parent": "extraction",
+      "metrics": {
+        "loc": 70
+      },
+      "independence_group": "extraction:0"
+    },
+    {
+      "id": "extraction.infrastructure",
+      "name": "Infrastructure",
+      "type": "module",
+      "position": {
+        "x": -0.6750000000000003,
+        "y": 0.0,
+        "z": 1.8186004967338198e-16
+      },
+      "size": 2.0681858617461617,
+      "parent": "extraction",
+      "metrics": {
+        "loc": 116
+      },
+      "independence_group": "extraction:1"
+    },
+    {
+      "id": "extraction.ports",
+      "name": "Ports",
+      "type": "module",
+      "position": {
+        "x": -2.2950000000000004,
+        "y": 0.0,
+        "z": 2.8105644040431757e-16
+      },
+      "size": 1.6232492903979003,
+      "parent": "extraction",
+      "metrics": {
+        "loc": 41
+      },
+      "independence_group": "extraction:1"
+    },
+    {
+      "id": "graph.application",
+      "name": "Application",
+      "type": "module",
+      "position": {
+        "x": 4.5,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "size": 3.0572856444182146,
+      "parent": "graph",
+      "metrics": {
+        "loc": 1140
+      },
+      "independence_group": "graph:0"
+    },
+    {
+      "id": "graph.domain",
+      "name": "Domain",
+      "type": "module",
+      "position": {
+        "x": 1.3905764746872635,
+        "y": 0.0,
+        "z": 4.2797543233281905
+      },
+      "size": 2.7134905430939424,
+      "parent": "graph",
+      "metrics": {
+        "loc": 516
+      },
+      "independence_group": "graph:0"
+    },
+    {
+      "id": "graph.infrastructure",
+      "name": "Infrastructure",
+      "type": "module",
+      "position": {
+        "x": -3.640576474687263,
+        "y": 0.0,
+        "z": 2.6450336353161297
+      },
+      "size": 3.5277587525209713,
+      "parent": "graph",
+      "metrics": {
+        "loc": 3370
+      },
+      "independence_group": "graph:0"
+    },
+    {
+      "id": "graph.ports",
+      "name": "Ports",
+      "type": "module",
+      "position": {
+        "x": -3.640576474687264,
+        "y": 0.0,
+        "z": -2.645033635316129
+      },
+      "size": 2.8790958795000723,
+      "parent": "graph",
+      "metrics": {
+        "loc": 756
+      },
+      "independence_group": "graph:0"
+    },
+    {
+      "id": "graph.presentation",
+      "name": "Presentation",
+      "type": "module",
+      "position": {
+        "x": 1.3905764746872626,
+        "y": 0.0,
+        "z": -4.279754323328191
+      },
+      "size": 2.4941545940184424,
+      "parent": "graph",
+      "metrics": {
+        "loc": 311
+      },
+      "independence_group": "graph:0"
+    },
+    {
+      "id": "iam.application",
+      "name": "Application",
+      "type": "module",
+      "position": {
+        "x": 5.4,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "size": 3.620968435644289,
+      "parent": "iam",
+      "metrics": {
+        "loc": 4177
+      },
+      "independence_group": "iam:0"
+    },
+    {
+      "id": "iam.dependencies",
+      "name": "Dependencies",
+      "type": "module",
+      "position": {
+        "x": 2.7000000000000006,
+        "y": 0.0,
+        "z": 4.676537180435969
+      },
+      "size": 3.117602691690084,
+      "parent": "iam",
+      "metrics": {
+        "loc": 1310
+      },
+      "independence_group": "iam:0"
+    },
+    {
+      "id": "iam.domain",
+      "name": "Domain",
+      "type": "module",
+      "position": {
+        "x": -2.699999999999999,
+        "y": 0.0,
+        "z": 4.676537180435969
+      },
+      "size": 3.346157302232008,
+      "parent": "iam",
+      "metrics": {
+        "loc": 2218
+      },
+      "independence_group": "iam:0"
+    },
+    {
+      "id": "iam.infrastructure",
+      "name": "Infrastructure",
+      "type": "module",
+      "position": {
+        "x": -5.4,
+        "y": 0.0,
+        "z": 6.613092715395707e-16
+      },
+      "size": 3.5240064455573723,
+      "parent": "iam",
+      "metrics": {
+        "loc": 3341
+      },
+      "independence_group": "iam:0"
+    },
+    {
+      "id": "iam.ports",
+      "name": "Ports",
+      "type": "module",
+      "position": {
+        "x": -2.7000000000000024,
+        "y": 0.0,
+        "z": -4.676537180435967
+      },
+      "size": 2.736396502276642,
+      "parent": "iam",
+      "metrics": {
+        "loc": 544
+      },
+      "independence_group": "iam:0"
+    },
+    {
+      "id": "iam.presentation",
+      "name": "Presentation",
+      "type": "module",
+      "position": {
+        "x": 2.7000000000000006,
+        "y": 0.0,
+        "z": -4.676537180435969
+      },
+      "size": 3.4068806700491243,
+      "parent": "iam",
+      "metrics": {
+        "loc": 2551
+      },
+      "independence_group": "iam:0"
+    },
+    {
+      "id": "infrastructure.database",
+      "name": "Database",
+      "type": "module",
+      "position": {
+        "x": 2.7,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "size": 2.7916906490201177,
+      "parent": "infrastructure",
+      "metrics": {
+        "loc": 618
+      },
+      "independence_group": "infrastructure:0"
+    },
+    {
+      "id": "infrastructure.observability",
+      "name": "Observability",
+      "type": "module",
+      "position": {
+        "x": -1.3499999999999994,
+        "y": 0.0,
+        "z": 2.3382685902179845
+      },
+      "size": 2.5763413502057926,
+      "parent": "infrastructure",
+      "metrics": {
+        "loc": 376
+      },
+      "independence_group": "infrastructure:0"
+    },
+    {
+      "id": "infrastructure.outbox",
+      "name": "Outbox",
+      "type": "module",
+      "position": {
+        "x": -1.3500000000000012,
+        "y": 0.0,
+        "z": -2.3382685902179836
+      },
+      "size": 2.9599948383284156,
+      "parent": "infrastructure",
+      "metrics": {
+        "loc": 911
+      },
+      "independence_group": "infrastructure:0"
+    },
+    {
+      "id": "ingestion.application",
+      "name": "Application",
+      "type": "module",
+      "position": {
+        "x": 3.6,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "size": 2.0681858617461617,
+      "parent": "ingestion",
+      "metrics": {
+        "loc": 116
+      },
+      "independence_group": "ingestion:0"
+    },
+    {
+      "id": "ingestion.domain",
+      "name": "Domain",
+      "type": "module",
+      "position": {
+        "x": 2.2043642384652358e-16,
+        "y": 0.0,
+        "z": 3.6
+      },
+      "size": 1.8808135922807911,
+      "parent": "ingestion",
+      "metrics": {
+        "loc": 75
+      },
+      "independence_group": "ingestion:0"
+    },
+    {
+      "id": "ingestion.infrastructure",
+      "name": "Infrastructure",
+      "type": "module",
+      "position": {
+        "x": -3.6,
+        "y": 0.0,
+        "z": 4.4087284769304716e-16
+      },
+      "size": 2.957128197676813,
+      "parent": "ingestion",
+      "metrics": {
+        "loc": 905
+      },
+      "independence_group": "ingestion:0"
+    },
+    {
+      "id": "ingestion.ports",
+      "name": "Ports",
+      "type": "module",
+      "position": {
+        "x": -6.613092715395707e-16,
+        "y": 0.0,
+        "z": -3.6
+      },
+      "size": 2.1643528557844367,
+      "parent": "ingestion",
+      "metrics": {
+        "loc": 145
+      },
+      "independence_group": "ingestion:0"
+    },
+    {
+      "id": "management.application",
+      "name": "Application",
+      "type": "module",
+      "position": {
+        "x": 5.4,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "size": 3.2301933788690453,
+      "parent": "management",
+      "metrics": {
+        "loc": 1698
+      },
+      "independence_group": "management:0"
+    },
+    {
+      "id": "management.dependencies",
+      "name": "Dependencies",
+      "type": "module",
+      "position": {
+        "x": 2.7000000000000006,
+        "y": 0.0,
+        "z": 4.676537180435969
+      },
+      "size": 2.1583624920952493,
+      "parent": "management",
+      "metrics": {
+        "loc": 143
+      },
+      "independence_group": "management:0"
+    },
+    {
+      "id": "management.domain",
+      "name": "Domain",
+      "type": "module",
+      "position": {
+        "x": -2.699999999999999,
+        "y": 0.0,
+        "z": 4.676537180435969
+      },
+      "size": 3.1309766916056168,
+      "parent": "management",
+      "metrics": {
+        "loc": 1351
+      },
+      "independence_group": "management:0"
+    },
+    {
+      "id": "management.infrastructure",
+      "name": "Infrastructure",
+      "type": "module",
+      "position": {
+        "x": -5.4,
+        "y": 0.0,
+        "z": 6.613092715395707e-16
+      },
+      "size": 3.2638726768652235,
+      "parent": "management",
+      "metrics": {
+        "loc": 1835
+      },
+      "independence_group": "management:0"
+    },
+    {
+      "id": "management.ports",
+      "name": "Ports",
+      "type": "module",
+      "position": {
+        "x": -2.7000000000000024,
+        "y": 0.0,
+        "z": -4.676537180435967
+      },
+      "size": 2.4941545940184424,
+      "parent": "management",
+      "metrics": {
+        "loc": 311
+      },
+      "independence_group": "management:0"
+    },
+    {
+      "id": "management.presentation",
+      "name": "Presentation",
+      "type": "module",
+      "position": {
+        "x": 2.7000000000000006,
+        "y": 0.0,
+        "z": -4.676537180435969
+      },
+      "size": 2.9464522650130727,
+      "parent": "management",
+      "metrics": {
+        "loc": 883
+      },
+      "independence_group": "management:0"
+    },
+    {
+      "id": "query.application",
+      "name": "Application",
+      "type": "module",
+      "position": {
+        "x": 4.5,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "size": 2.7481880270062002,
+      "parent": "query",
+      "metrics": {
+        "loc": 559
+      },
+      "independence_group": "query:0"
+    },
+    {
+      "id": "query.domain",
+      "name": "Domain",
+      "type": "module",
+      "position": {
+        "x": 1.3905764746872635,
+        "y": 0.0,
+        "z": 4.2797543233281905
+      },
+      "size": 2.1846914308175984,
+      "parent": "query",
+      "metrics": {
+        "loc": 152
+      },
+      "independence_group": "query:0"
+    },
+    {
+      "id": "query.infrastructure",
+      "name": "Infrastructure",
+      "type": "module",
+      "position": {
+        "x": -3.640576474687263,
+        "y": 0.0,
+        "z": 2.6450336353161297
+      },
+      "size": 2.927370363039023,
+      "parent": "query",
+      "metrics": {
+        "loc": 845
+      },
+      "independence_group": "query:0"
+    },
+    {
+      "id": "query.ports",
+      "name": "Ports",
+      "type": "module",
+      "position": {
+        "x": -3.640576474687264,
+        "y": 0.0,
+        "z": -2.645033635316129
+      },
+      "size": 2.2430380486862944,
+      "parent": "query",
+      "metrics": {
+        "loc": 174
+      },
+      "independence_group": "query:0"
+    },
+    {
+      "id": "query.presentation",
+      "name": "Presentation",
+      "type": "module",
+      "position": {
+        "x": 1.3905764746872626,
+        "y": 0.0,
+        "z": -4.279754323328191
+      },
+      "size": 2.5352941200427703,
+      "parent": "query",
+      "metrics": {
+        "loc": 342
+      },
+      "independence_group": "query:0"
+    },
+    {
+      "id": "shared_kernel.auth",
+      "name": "Auth",
+      "type": "module",
+      "position": {
+        "x": 4.590000000000001,
+        "y": 0.0,
+        "z": 0.0
+      },
+      "size": 2.5646660642520893,
+      "parent": "shared_kernel",
+      "metrics": {
+        "loc": 366
+      },
+      "independence_group": "shared_kernel:0"
+    },
+    {
+      "id": "shared_kernel.authorization",
+      "name": "Authorization",
+      "type": "module",
+      "position": {
+        "x": 2.5377804732935942,
+        "y": 0.0,
+        "z": 2.824637853396607
+      },
+      "size": 3.289811839117621,
+      "parent": "shared_kernel",
+      "metrics": {
+        "loc": 1948
+      },
+      "independence_group": "shared_kernel:1"
+    },
+    {
+      "id": "shared_kernel.graph_primitives",
+      "name": "Graph Primitives",
+      "type": "module",
+      "position": {
+        "x": -0.7827804732935939,
+        "y": 0.0,
+        "z": 1.745722199308646
+      },
+      "size": 2.3344537511509307,
+      "parent": "shared_kernel",
+      "metrics": {
+        "loc": 215
+      },
+      "independence_group": "shared_kernel:2"
+    },
+    {
+      "id": "shared_kernel.job_package",
+      "name": "Job Package",
+      "type": "module",
+      "position": {
+        "x": -0.7827804732935948,
+        "y": 0.0,
+        "z": -1.7457221993086454
+      },
+      "size": 2.9777236052888476,
+      "parent": "shared_kernel",
+      "metrics": {
+        "loc": 949
+      },
+      "independence_group": "shared_kernel:3"
+    },
+    {
+      "id": "shared_kernel.middleware",
+      "name": "Middleware",
+      "type": "module",
+      "position": {
+        "x": 2.5377804732935934,
+        "y": 0.0,
+        "z": -2.824637853396607
+      },
+      "size": 2.8853612200315117,
+      "parent": "shared_kernel",
+      "metrics": {
+        "loc": 767
+      },
+      "independence_group": "shared_kernel:4"
+    },
+    {
+      "id": "shared_kernel.outbox",
+      "name": "Outbox",
+      "type": "module",
+      "position": {
+        "x": -0.702219526706406,
+        "y": 0.0,
+        "z": 2.824637853396607
+      },
+      "size": 2.7909884750888154,
+      "parent": "shared_kernel",
+      "metrics": {
+        "loc": 617
+      },
+      "independence_group": "shared_kernel:1"
+    }
+  ],
+  "edges": [
+    {
+      "source": "extraction",
+      "target": "shared_kernel",
+      "type": "cross_context"
+    },
+    {
+      "source": "extraction.infrastructure",
+      "target": "extraction.ports",
+      "type": "internal"
+    },
+    {
+      "source": "graph",
+      "target": "iam",
+      "type": "cross_context"
+    },
+    {
+      "source": "graph",
+      "target": "infrastructure",
+      "type": "cross_context"
+    },
+    {
+      "source": "graph",
+      "target": "shared_kernel",
+      "type": "cross_context"
+    },
+    {
+      "source": "graph.application",
+      "target": "graph.domain",
+      "type": "internal"
+    },
+    {
+      "source": "graph.application",
+      "target": "graph.ports",
+      "type": "internal"
+    },
+    {
+      "source": "graph.infrastructure",
+      "target": "graph.domain",
+      "type": "internal"
+    },
+    {
+      "source": "graph.infrastructure",
+      "target": "graph.ports",
+      "type": "internal"
+    },
+    {
+      "source": "graph.ports",
+      "target": "graph.domain",
+      "type": "internal"
+    },
+    {
+      "source": "graph.presentation",
+      "target": "graph.application",
+      "type": "internal"
+    },
+    {
+      "source": "graph.presentation",
+      "target": "graph.domain",
+      "type": "internal"
+    },
+    {
+      "source": "iam",
+      "target": "infrastructure",
+      "type": "cross_context"
+    },
+    {
+      "source": "iam",
+      "target": "shared_kernel",
+      "type": "cross_context"
+    },
+    {
+      "source": "iam.application",
+      "target": "iam.domain",
+      "type": "internal"
+    },
+    {
+      "source": "iam.application",
+      "target": "iam.ports",
+      "type": "internal"
+    },
+    {
+      "source": "iam.dependencies",
+      "target": "iam.application",
+      "type": "internal"
+    },
+    {
+      "source": "iam.dependencies",
+      "target": "iam.domain",
+      "type": "internal"
+    },
+    {
+      "source": "iam.dependencies",
+      "target": "iam.infrastructure",
+      "type": "internal"
+    },
+    {
+      "source": "iam.dependencies",
+      "target": "iam.ports",
+      "type": "internal"
+    },
+    {
+      "source": "iam.domain",
+      "target": "iam.ports",
+      "type": "internal"
+    },
+    {
+      "source": "iam.infrastructure",
+      "target": "iam.domain",
+      "type": "internal"
+    },
+    {
+      "source": "iam.infrastructure",
+      "target": "iam.ports",
+      "type": "internal"
+    },
+    {
+      "source": "iam.ports",
+      "target": "iam.domain",
+      "type": "internal"
+    },
+    {
+      "source": "iam.presentation",
+      "target": "iam.application",
+      "type": "internal"
+    },
+    {
+      "source": "iam.presentation",
+      "target": "iam.dependencies",
+      "type": "internal"
+    },
+    {
+      "source": "iam.presentation",
+      "target": "iam.domain",
+      "type": "internal"
+    },
+    {
+      "source": "iam.presentation",
+      "target": "iam.ports",
+      "type": "internal"
+    },
+    {
+      "source": "infrastructure",
+      "target": "graph",
+      "type": "cross_context"
+    },
+    {
+      "source": "infrastructure",
+      "target": "iam",
+      "type": "cross_context"
+    },
+    {
+      "source": "infrastructure",
+      "target": "query",
+      "type": "cross_context"
+    },
+    {
+      "source": "infrastructure",
+      "target": "shared_kernel",
+      "type": "cross_context"
+    },
+    {
+      "source": "infrastructure.database",
+      "target": "infrastructure.observability",
+      "type": "internal"
+    },
+    {
+      "source": "infrastructure.outbox",
+      "target": "infrastructure.database",
+      "type": "internal"
+    },
+    {
+      "source": "ingestion",
+      "target": "shared_kernel",
+      "type": "cross_context"
+    },
+    {
+      "source": "ingestion.application",
+      "target": "ingestion.ports",
+      "type": "internal"
+    },
+    {
+      "source": "ingestion.infrastructure",
+      "target": "ingestion.domain",
+      "type": "internal"
+    },
+    {
+      "source": "ingestion.infrastructure",
+      "target": "ingestion.ports",
+      "type": "internal"
+    },
+    {
+      "source": "management",
+      "target": "iam",
+      "type": "cross_context"
+    },
+    {
+      "source": "management",
+      "target": "infrastructure",
+      "type": "cross_context"
+    },
+    {
+      "source": "management",
+      "target": "shared_kernel",
+      "type": "cross_context"
+    },
+    {
+      "source": "management.application",
+      "target": "management.domain",
+      "type": "internal"
+    },
+    {
+      "source": "management.application",
+      "target": "management.ports",
+      "type": "internal"
+    },
+    {
+      "source": "management.dependencies",
+      "target": "management.application",
+      "type": "internal"
+    },
+    {
+      "source": "management.dependencies",
+      "target": "management.infrastructure",
+      "type": "internal"
+    },
+    {
+      "source": "management.infrastructure",
+      "target": "management.domain",
+      "type": "internal"
+    },
+    {
+      "source": "management.infrastructure",
+      "target": "management.ports",
+      "type": "internal"
+    },
+    {
+      "source": "management.ports",
+      "target": "management.domain",
+      "type": "internal"
+    },
+    {
+      "source": "management.presentation",
+      "target": "management.application",
+      "type": "internal"
+    },
+    {
+      "source": "management.presentation",
+      "target": "management.dependencies",
+      "type": "internal"
+    },
+    {
+      "source": "management.presentation",
+      "target": "management.domain",
+      "type": "internal"
+    },
+    {
+      "source": "management.presentation",
+      "target": "management.ports",
+      "type": "internal"
+    },
+    {
+      "source": "query",
+      "target": "graph",
+      "type": "cross_context"
+    },
+    {
+      "source": "query",
+      "target": "infrastructure",
+      "type": "cross_context"
+    },
+    {
+      "source": "query",
+      "target": "shared_kernel",
+      "type": "cross_context"
+    },
+    {
+      "source": "query.application",
+      "target": "query.domain",
+      "type": "internal"
+    },
+    {
+      "source": "query.application",
+      "target": "query.ports",
+      "type": "internal"
+    },
+    {
+      "source": "query.infrastructure",
+      "target": "query.domain",
+      "type": "internal"
+    },
+    {
+      "source": "query.infrastructure",
+      "target": "query.ports",
+      "type": "internal"
+    },
+    {
+      "source": "query.ports",
+      "target": "query.domain",
+      "type": "internal"
+    },
+    {
+      "source": "query.presentation",
+      "target": "query.application",
+      "type": "internal"
+    },
+    {
+      "source": "query.presentation",
+      "target": "query.domain",
+      "type": "internal"
+    },
+    {
+      "source": "query.presentation",
+      "target": "query.ports",
+      "type": "internal"
+    },
+    {
+      "source": "shared_kernel.outbox",
+      "target": "shared_kernel.authorization",
+      "type": "internal"
+    },
+    {
+      "source": "extraction",
+      "target": "shared_kernel",
+      "type": "aggregate",
+      "weight": 1
+    },
+    {
+      "source": "graph",
+      "target": "iam",
+      "type": "aggregate",
+      "weight": 2
+    },
+    {
+      "source": "graph",
+      "target": "infrastructure",
+      "type": "aggregate",
+      "weight": 4
+    },
+    {
+      "source": "graph",
+      "target": "shared_kernel",
+      "type": "aggregate",
+      "weight": 9
+    },
+    {
+      "source": "iam",
+      "target": "infrastructure",
+      "type": "aggregate",
+      "weight": 8
+    },
+    {
+      "source": "iam",
+      "target": "shared_kernel",
+      "type": "aggregate",
+      "weight": 15
+    },
+    {
+      "source": "infrastructure",
+      "target": "shared_kernel",
+      "type": "aggregate",
+      "weight": 6
+    },
+    {
+      "source": "ingestion",
+      "target": "shared_kernel",
+      "type": "aggregate",
+      "weight": 5
+    },
+    {
+      "source": "management",
+      "target": "iam",
+      "type": "aggregate",
+      "weight": 4
+    },
+    {
+      "source": "management",
+      "target": "infrastructure",
+      "type": "aggregate",
+      "weight": 6
+    },
+    {
+      "source": "management",
+      "target": "shared_kernel",
+      "type": "aggregate",
+      "weight": 11
+    },
+    {
+      "source": "query",
+      "target": "graph",
+      "type": "aggregate",
+      "weight": 1
+    },
+    {
+      "source": "query",
+      "target": "infrastructure",
+      "type": "aggregate",
+      "weight": 2
+    },
+    {
+      "source": "query",
+      "target": "shared_kernel",
+      "type": "aggregate",
+      "weight": 5
+    }
+  ],
+  "metadata": {
+    "source_path": "/home/jsell/code/kartograph/src/api",
+    "timestamp": "2026-05-01T20:23:01.668716+00:00"
+  },
+  "clusters": [
+    {
+      "id": "extraction:cluster_0",
+      "members": [
+        "extraction.infrastructure",
+        "extraction.ports"
+      ],
+      "context": "extraction",
+      "aggregate_metrics": {
+        "total_loc": 157,
+        "in_degree": 0,
+        "out_degree": 0
+      }
+    },
+    {
+      "id": "graph:cluster_0",
+      "members": [
+        "graph.application",
+        "graph.domain",
+        "graph.infrastructure",
+        "graph.ports",
+        "graph.presentation"
+      ],
+      "context": "graph",
+      "aggregate_metrics": {
+        "total_loc": 6093,
+        "in_degree": 0,
+        "out_degree": 0
+      }
+    },
+    {
+      "id": "iam:cluster_0",
+      "members": [
+        "iam.application",
+        "iam.dependencies",
+        "iam.domain",
+        "iam.infrastructure",
+        "iam.ports",
+        "iam.presentation"
+      ],
+      "context": "iam",
+      "aggregate_metrics": {
+        "total_loc": 14141,
+        "in_degree": 0,
+        "out_degree": 0
+      }
+    },
+    {
+      "id": "infrastructure:cluster_0",
+      "members": [
+        "infrastructure.database",
+        "infrastructure.observability",
+        "infrastructure.outbox"
+      ],
+      "context": "infrastructure",
+      "aggregate_metrics": {
+        "total_loc": 1905,
+        "in_degree": 0,
+        "out_degree": 0
+      }
+    },
+    {
+      "id": "ingestion:cluster_0",
+      "members": [
+        "ingestion.application",
+        "ingestion.domain",
+        "ingestion.infrastructure",
+        "ingestion.ports"
+      ],
+      "context": "ingestion",
+      "aggregate_metrics": {
+        "total_loc": 1241,
+        "in_degree": 0,
+        "out_degree": 0
+      }
+    },
+    {
+      "id": "management:cluster_0",
+      "members": [
+        "management.application",
+        "management.dependencies",
+        "management.domain",
+        "management.infrastructure",
+        "management.ports",
+        "management.presentation"
+      ],
+      "context": "management",
+      "aggregate_metrics": {
+        "total_loc": 6221,
+        "in_degree": 0,
+        "out_degree": 0
+      }
+    },
+    {
+      "id": "query:cluster_0",
+      "members": [
+        "query.application",
+        "query.domain",
+        "query.infrastructure",
+        "query.ports",
+        "query.presentation"
+      ],
+      "context": "query",
+      "aggregate_metrics": {
+        "total_loc": 2072,
+        "in_degree": 0,
+        "out_degree": 0
+      }
+    },
+    {
+      "id": "shared_kernel:cluster_0",
+      "members": [
+        "shared_kernel.authorization",
+        "shared_kernel.outbox"
+      ],
+      "context": "shared_kernel",
+      "aggregate_metrics": {
+        "total_loc": 2565,
+        "in_degree": 0,
+        "out_degree": 0
+      }
+    }
+  ]
+}

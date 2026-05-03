@@ -1,0 +1,99 @@
+---
+verdict: fail
+---
+# STOP PROTOCOL — Round 6+ (task-001 permanently banned; spec fully implemented on origin/main)
+
+## Summary
+
+task-001 is permanently banned. The spec `specs/extraction/scene-graph-schema.spec.md`
+is already fully implemented on origin/main. The re-assignment loop continues because
+task-001.md was deleted from main but NOT from the hyperloop/state branch, causing the
+orchestrator to keep re-assigning this banned task. No implementation code was written.
+
+## Sync Point 1
+
+- git fetch origin main: OK
+- git checkout origin/main -- .hyperloop/checks/: OK
+- git checkout origin/main -- .hyperloop/agents/process/: OK
+- check-checks-in-sync.sh: SKIP (not on task branch — running from worktree)
+- check-rebased-onto-main.sh: SKIP (not on task branch — running from worktree)
+
+## STOP PROTOCOL Check Results
+
+### check-banned-task-ids-closed.sh --run (EXIT 1 — FAIL)
+
+  BANNED TASK OPEN [task-001] — hyperloop/state branch status='in_progress'
+  Reason: scene-graph-schema.spec.md (spec fully implemented on main; 5x STOP
+  PROTOCOL; Rounds 3-5: file deleted from main but not from hyperloop/state —
+  orchestrator cycle updates re-added as in_progress; orphan-task-file check
+  added to cycle gate after Round 5)
+  This is the source of the re-assignment loop.
+  The orchestrator reads task state from hyperloop/state, NOT from main.
+  task-001.md is ABSENT from main (was deleted). The fix on hyperloop/state
+  is to DELETE the file — not just close it.
+
+  RESULT: BANNED TASK IDS ARE OPEN — RE-ASSIGNMENT LOOP RISK DETECTED.
+
+### check-primary-deliverable-not-on-main.sh build_scene_graph (EXIT 1 — FAIL)
+
+  STOP PROTOCOL CANDIDATE — PRIMARY DELIVERABLE ALREADY ON ORIGIN/MAIN
+  Function 'def build_scene_graph' found at:
+  origin/main:extractor/extractor.py:1729:def build_scene_graph(src_path: Path) -> SceneGraph:
+
+### check-stop-protocol-repeat.sh task-001 (EXIT 1 — FAIL)
+
+  FAIL: task-001 has no STOP PROTOCOL findings in branch worker-result.yaml commits
+  (branch commits may be intake-only, not prior implementation rounds),
+  but the orchestrator-overlay on origin/main documents prior STOP PROTOCOL
+  history for this task. Prior rounds may have been on a reset branch.
+  REQUIRED ORCHESTRATOR ACTION — retire or redesign task-001.
+  DO NOT re-assign this task unchanged.
+
+### check-assigned-spec-in-scope.sh specs/extraction/scene-graph-schema.spec.md (EXIT 0)
+
+  OK: spec does not match any prohibited feature. Assignment appears in-scope.
+  (This passing check does NOT override the three FAIL checks above.)
+
+## Git Branch State
+
+git log --oneline origin/main..HEAD: (empty — zero commits ahead of origin/main)
+No implementation code was authored on this branch.
+
+## Root Cause of Re-Assignment Loop
+
+The re-assignment loop root cause is a branch divergence between main and hyperloop/state:
+
+1. task-001.md was DELETED from origin/main (correctly marking it as done/banned).
+2. task-001.md was NOT deleted from the hyperloop/state branch — it remains present
+   there with status='in_progress'.
+3. The orchestrator reads task state from hyperloop/state, NOT from main.
+4. Each orchestrator cycle re-assigns task-001 because hyperloop/state shows it open.
+5. check-no-prohibited-tasks-open.sh passes because it checks main, not hyperloop/state.
+6. The loop repeats indefinitely until the file is DELETED from hyperloop/state.
+
+## No Implementation Code Was Written
+
+Zero new commits were authored on this branch above the pre-existing intake commit.
+Only read-only check scripts were executed. The worker-result.yaml is NOT staged.
+
+## Recommended Orchestrator Actions
+
+IMMEDIATE REQUIRED ACTIONS (in order):
+
+1. DELETE task-001.md from the hyperloop/state branch:
+     git checkout hyperloop/state
+     rm .hyperloop/state/tasks/task-001.md
+     git add .hyperloop/state/tasks/task-001.md
+     git commit -m 'chore(tasks): delete permanently banned task-001 from state branch'
+     git push origin hyperloop/state
+     git checkout main
+
+2. Verify the fix resolves the loop:
+     bash .hyperloop/checks/check-banned-task-ids-closed.sh --run
+   This must exit 0 before assigning any new task.
+
+3. Do NOT re-assign task-001 in any form. The spec (scene-graph-schema.spec.md)
+   is already fully implemented on main at extractor/extractor.py:1729.
+
+4. Any future work on this spec area requires a new task ID with a new, narrowly-scoped
+   spec covering only what is genuinely missing (if anything is missing at all).
