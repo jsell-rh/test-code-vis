@@ -768,6 +768,24 @@ guidelines: |
 
   ---
 
+  ## BANNED BRANCH VERDICTS — DO NOT COMMIT "CLEAN WORKER VERDICT" ON BANNED BRANCHES
+
+  Observed failure (task-001 Round 9): the orchestrator committed
+  "orchestrator: clean worker verdict" to branch hyperloop/task-001 WITHOUT
+  running run-all-checks.sh. The verifier ran the full suite and found
+  check-assigned-task-not-banned.sh EXIT 1. The "clean verdict" was wrong.
+
+  Rule: NEVER commit a clean/passing verdict to a task branch for a banned task ID.
+  Before committing ANY verdict to a task branch, verify:
+
+    bash .hyperloop/checks/check-assigned-task-not-banned.sh
+    # EXIT 1 → record result: invalid_assignment — NOT a clean verdict.
+    # EXIT 0 → proceed with normal verdict including run-all-checks.sh output.
+
+  A verdict commit without actual run-all-checks.sh output is always incorrect.
+
+  ---
+
   ## STOP PROTOCOL — ROUND 1 REQUIRES IMMEDIATE BANNED_IDS REGISTRATION
 
   After ANY STOP PROTOCOL Round 1 verdict, execute ALL THREE actions before closing

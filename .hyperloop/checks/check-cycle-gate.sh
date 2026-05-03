@@ -48,6 +48,7 @@ ORPHAN_CHECK=".hyperloop/checks/check-state-branch-orphan-task-files.sh"
 RETRY_GATE=".hyperloop/checks/check-retry-not-scope-prohibited.sh"
 STOP_REPEAT_CHECK=".hyperloop/checks/check-stop-protocol-repeat.sh"
 MAIN_SYNC=".hyperloop/checks/check-main-local-vs-remote.sh"
+AUTO_CLEAN=".hyperloop/checks/auto-clean-banned-state-tasks.sh"
 
 if [ ! -f "$QUEUE_AUDIT" ]; then
     echo "ERROR: Queue audit script not found: $QUEUE_AUDIT"
@@ -68,6 +69,42 @@ if [ ! -f "$RETRY_GATE" ]; then
 fi
 
 GATE_FAILED=0
+
+# ── Step 0A: Auto-heal banned task files on hyperloop/state (always runs) ────
+# Root cause (task-001 Rounds 3–9): cycle-update commits re-create banned task
+# files on hyperloop/state after each process-improver deletion. The detection
+# checks (Steps 1b, 1e) correctly exit 1 when banned files are present, but
+# the orchestrator must then manually run fix commands — which they haven't been
+# running. This step auto-deletes banned files BEFORE the detection checks run,
+# so the gate is self-healing: banned files are removed automatically rather than
+# requiring the orchestrator to execute multi-step commands.
+#
+# Observed failure (task-001 Round 9): auto-clean only fired during verifier's
+# run-all-checks.sh (too late — assignment had already happened). Adding it here
+# ensures it fires when the orchestrator runs the cycle gate, BEFORE reading the
+# queue and assigning tasks.
+echo "========================================================================"
+echo "CYCLE-START GATE — Step 0A: Auto-heal banned task files on hyperloop/state"
+echo "========================================================================"
+echo ""
+echo "  Self-healing step: deletes banned task files re-introduced by cycle-update"
+echo "  commits. Runs before queue checks so detection steps see a clean state."
+echo ""
+
+if [ -f "$AUTO_CLEAN" ]; then
+    if ! bash "$AUTO_CLEAN"; then
+        echo ""
+        echo "  WARNING: auto-clean encountered a git error. Continuing — manual cleanup"
+        echo "  may be required if Step 1b or 1e fails below."
+    else
+        echo "  Auto-heal complete."
+    fi
+else
+    echo "  SKIP: auto-clean-banned-state-tasks.sh not found — sync checks from main."
+    echo "    git fetch origin main:main && git checkout main -- .hyperloop/checks/"
+fi
+
+echo ""
 
 # ── Step 0: Main/origin sync check (orchestrator only — when task IDs supplied) ─
 # Run-all-checks.sh calls this with no args (queue audit only). Checking main sync
