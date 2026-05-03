@@ -50,7 +50,7 @@ declare -a BANNED_IDS=(
     "task-078"
 )
 declare -a BANNED_REASONS=(
-    "scene-graph-schema.spec.md (spec fully implemented on main; 5x STOP PROTOCOL; Rounds 3-5: file deleted from main but not from hyperloop/state — orchestrator cycle updates re-added as in_progress; orphan-task-file check added to cycle gate after Round 5)"
+    "scene-graph-schema.spec.md (spec fully implemented on main; 7x STOP PROTOCOL; Rounds 3-7: orchestrator cycle-update commits RE-CREATED task-001.md on hyperloop/state after each process-improver deletion; check-state-branch-post-commit.sh added after Round 7)"
     "data-flow.spec.md (scope-prohibited; 2 mis-assignments)"
     "moldable-views.spec.md (scope-prohibited; 8 mis-assignments)"
     "understanding-modes.spec.md (scope-prohibited; 9 mis-assignments as task-028)"

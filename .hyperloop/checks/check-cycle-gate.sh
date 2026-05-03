@@ -176,6 +176,34 @@ fi
 
 echo ""
 
+# ── Step 1e: Post-commit banned-task re-introduction check ────────────────────
+# Catches banned tasks re-created by cycle-update commits (task-001 Rounds 3–7).
+POST_COMMIT_CHECK=".hyperloop/checks/check-state-branch-post-commit.sh"
+echo "========================================================================"
+echo "CYCLE-START GATE — Step 1e: Banned task re-introduction check"
+echo "========================================================================"
+echo ""
+echo "  Detects banned task files re-created on hyperloop/state by cycle updates."
+echo "  Root cause: task-001 STOP PROTOCOL Rounds 3–7 — cycle update commits wrote"
+echo "  task-001.md back to hyperloop/state after each process-improver deletion."
+echo ""
+
+if [ -f "$POST_COMMIT_CHECK" ]; then
+    if ! bash "$POST_COMMIT_CHECK"; then
+        echo ""
+        echo "  BANNED TASK RE-INTRODUCED — delete the file from hyperloop/state immediately"
+        echo "  (see fix commands above) then re-run this gate."
+        GATE_FAILED=1
+    else
+        echo "  Post-commit check passed — no banned task files on hyperloop/state."
+    fi
+else
+    echo "  SKIP: check-state-branch-post-commit.sh not found — sync checks from main."
+    echo "    git fetch origin main:main && git checkout main -- .hyperloop/checks/"
+fi
+
+echo ""
+
 # ── Step 2: Per-finding retry gate ───────────────────────────────────────────
 if [ "$#" -gt 0 ]; then
     echo "========================================================================"

@@ -311,7 +311,7 @@ guidelines: |
 
   | Task # | Reason | Combined mis-assignments |
   |--------|--------|--------------------------|
-  | task-001 | scene-graph-schema.spec.md — spec fully implemented on main (build_scene_graph + all TypedDicts); 5x STOP PROTOCOL; Round 2: task not added to BANNED_IDS after Round 1; Rounds 3–5: file deleted from main but not from hyperloop/state — orchestrator cycle updates re-added as in_progress; check-state-branch-orphan-task-files.sh added to cycle gate (Step 1d) after Round 5 | 5 |
+  | task-001 | scene-graph-schema.spec.md — spec fully implemented on main (build_scene_graph + all TypedDicts); 7x STOP PROTOCOL; Round 2: task not added to BANNED_IDS after Round 1; Rounds 3–7: orchestrator cycle-update commits RE-CREATED task-001.md on hyperloop/state after each process-improver deletion; check-state-branch-post-commit.sh added after Round 7 to catch re-introductions immediately post-commit | 7 |
   | task-024 | moldable-views.spec.md (scope-prohibited) | 8 |
   | task-028 | understanding-modes.spec.md (scope-prohibited + body prohibition) | 9 |
   | task-031 | understanding-modes.spec.md (scope-prohibited) | 6 |
@@ -680,6 +680,38 @@ guidelines: |
     4. Implementer triggers STOP PROTOCOL again (feature already on main).
 
   Prevention: Step 1d catches orphans before any assignment can happen.
+
+  ---
+
+  ## ⚠⚠ CYCLE UPDATE — MANDATORY POST-COMMIT CHECK AFTER EVERY hyperloop/state WRITE ⚠⚠
+
+  After EVERY commit to hyperloop/state — including "cycle update" commits that
+  write multiple task files — immediately run:
+
+    bash .hyperloop/checks/check-state-branch-post-commit.sh
+
+  If it exits 1: delete the re-introduced banned task files on hyperloop/state
+  IN THE SAME SESSION before switching back to main.  Use the exact fix commands
+  it prints.
+
+  Root cause (task-001 Rounds 3–7): The cycle update process writes task files
+  to hyperloop/state from internal state that includes banned/deleted tasks.
+  This re-creates task files that the process-improver had deleted.  Evidence:
+
+    41bbaa01 chore(tasks): delete permanently banned task-001 (Round 7)
+    b29e1e42 orchestrator: cycle update ← RE-CREATED task-001.md as status: in_progress
+    54d86ba2 chore(tasks): delete permanently banned task-001 (Round 6)
+    085fbd0d orchestrator: cycle update ← RE-CREATED task-001.md again
+    ... (same pattern × 3 more rounds)
+
+  The cycle-start gate (Step 1d orphan check) catches the re-introduction at the
+  START of the next cycle — but only if it is run.  Running check-state-branch-
+  post-commit.sh IMMEDIATELY after a cycle update catches re-introductions in the
+  SAME SESSION, before the cycle gate is needed.
+
+  Both checks must pass before any task is assigned:
+    1. After each hyperloop/state commit: bash .hyperloop/checks/check-state-branch-post-commit.sh
+    2. At cycle start:                   bash .hyperloop/checks/check-cycle-gate.sh <task-ids>
 
   ---
 
