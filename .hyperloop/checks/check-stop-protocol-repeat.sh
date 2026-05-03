@@ -77,8 +77,11 @@ if [ "$COMMITS_ABOVE" -eq 0 ]; then
     # consulted. Round 5 was re-assigned and produced the identical outcome.
     OVERLAY_PATH=".hyperloop/agents/process/orchestrator-overlay.yaml"
     OVERLAY_CONTENT=$(git show "origin/main:${OVERLAY_PATH}" 2>/dev/null || true)
+    # Use here-string (<<<) instead of echo|grep to avoid SIGPIPE under pipefail.
+    # grep -q exits 0 on first match, closing the pipe early; echo then gets SIGPIPE
+    # (exit 141), which pipefail promotes to the pipeline exit status — a false negative.
     if [ -n "$OVERLAY_CONTENT" ] && \
-       echo "$OVERLAY_CONTENT" | grep -qP "${TASK_ID}[^\\n]*STOP PROTOCOL|STOP PROTOCOL[^\\n]*${TASK_ID}"; then
+       grep -qP "${TASK_ID}[^\\n]*STOP PROTOCOL|STOP PROTOCOL[^\\n]*${TASK_ID}" <<< "$OVERLAY_CONTENT"; then
         echo "FAIL: ${TASK_ID} branch has zero commits above origin/main (reset after prior round),"
         echo "  but the orchestrator-overlay on origin/main documents prior STOP PROTOCOL history"
         echo "  for this task. Branch resets erase branch commit history but not overlay records."
@@ -109,6 +112,31 @@ done < <(git log "origin/main..${REMOTE_BRANCH}" --format="%H" \
     -- "${RESULT_FILE}" 2>/dev/null)
 
 if [ "$STOP_COUNT" -eq 0 ]; then
+    # Fallback: branch may have commits above main that are intake-only
+    # (no worker-result.yaml), so the worker-result.yaml scan above finds nothing.
+    # Check the orchestrator-overlay for documented prior STOP PROTOCOL history.
+    #
+    # Observed gap (task-001, Round 6): branch had 1 intake commit above main
+    # (no worker-result.yaml), so COMMITS_ABOVE=1 and the zero-commits fallback
+    # was never reached. The overlay documented "5x STOP PROTOCOL" for task-001
+    # but was not consulted. The script returned "OK" — a false negative — while
+    # check-banned-task-ids-closed.sh correctly caught the issue via BANNED_IDS.
+    OVERLAY_PATH=".hyperloop/agents/process/orchestrator-overlay.yaml"
+    OVERLAY_CONTENT=$(git show "origin/main:${OVERLAY_PATH}" 2>/dev/null || true)
+    # Use here-string (<<<) instead of echo|grep to avoid SIGPIPE under pipefail.
+    # grep -q exits 0 on first match, closing the pipe early; echo then gets SIGPIPE
+    # (exit 141), which pipefail promotes to the pipeline exit status — a false negative.
+    if [ -n "$OVERLAY_CONTENT" ] && \
+       grep -qP "${TASK_ID}[^\\n]*STOP PROTOCOL|STOP PROTOCOL[^\\n]*${TASK_ID}" <<< "$OVERLAY_CONTENT"; then
+        echo "FAIL: ${TASK_ID} has no STOP PROTOCOL findings in branch worker-result.yaml commits"
+        echo "  (branch commits may be intake-only, not prior implementation rounds),"
+        echo "  but the orchestrator-overlay on origin/main documents prior STOP PROTOCOL"
+        echo "  history for this task. Prior rounds may have been on a reset branch."
+        echo ""
+        echo "  REQUIRED ORCHESTRATOR ACTION — retire or redesign ${TASK_ID}."
+        echo "  DO NOT re-assign this task unchanged."
+        exit 1
+    fi
     echo "OK: No prior STOP PROTOCOL findings in ${TASK_ID} remote branch history."
     exit 0
 fi
