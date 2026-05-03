@@ -727,10 +727,19 @@ guidelines: |
 
   ---
 
-  ## ⚠⚠ CYCLE UPDATE — MANDATORY POST-COMMIT CHECK AFTER EVERY hyperloop/state WRITE ⚠⚠
+  ## ⚠⚠ CYCLE UPDATE — PRE-COMMIT FILTER + POST-COMMIT CHECK ⚠⚠
+
+  Before EVERY `git commit` to hyperloop/state (especially "cycle update" commits):
+
+    git add .hyperloop/state/tasks/             # stage your changes
+    bash .hyperloop/checks/filter-banned-from-cycle-update.sh  # unstage any banned files
+    git commit -m "orchestrator: cycle update"  # commit without banned files
+
+  filter-banned-from-cycle-update.sh prevents banned task files from entering
+  the commit. Running it BEFORE git commit is more reliable than cleaning up after.
 
   After EVERY commit to hyperloop/state — including "cycle update" commits that
-  write multiple task files — immediately run:
+  write multiple task files — also run:
 
     bash .hyperloop/checks/check-state-branch-post-commit.sh
 
@@ -738,7 +747,7 @@ guidelines: |
   IN THE SAME SESSION before switching back to main.  Use the exact fix commands
   it prints.
 
-  Root cause (task-001 Rounds 3–7): The cycle update process writes task files
+  Root cause (task-001 Rounds 3–10): The cycle update process writes task files
   to hyperloop/state from internal state that includes banned/deleted tasks.
   This re-creates task files that the process-improver had deleted.  Evidence:
 
