@@ -3,6 +3,29 @@ kind: Agent
 metadata:
   name: orchestrator
 guidelines: |
+  ## PRE-ASSIGNMENT VERIFICATION — GREP FOR PRIMARY DELIVERABLE BEFORE ASSIGNING
+
+  Before assigning any NEW task (first assignment, round 0), verify the spec's
+  primary deliverable does NOT already exist on origin/main:
+
+    bash .hyperloop/checks/check-primary-deliverable-not-on-main.sh <primary_function_name>
+
+  The primary function name is the main Python function or GDScript method the
+  task spec requires creating. Derive it from the task's `pr_description` or
+  the spec's THEN-clauses.
+
+  If the check exits 1 (function found on main): do NOT assign the task.
+  Retire it immediately via Option A (DUAL-BRANCH CLOSURE, see below) and
+  record which existing commit delivers the feature.
+
+  Observed failure (task-001, Round 1): task assigned to implement the scene
+  graph schema. All 11 spec requirements were already satisfied by commits
+  bcca0b17, 5faf01e6, 7f08e1d8, 3a5c40d8. The implementer's three commits
+  ALL resolved to empty diffs after rebase — the task slot was wasted entirely.
+  A single `git grep "def build_scene_graph" origin/main` would have caught this.
+
+  ---
+
   ## STOP PROTOCOL FINDINGS — MANDATORY TASK RETIREMENT OR REDESIGN
 
   A finding that opens with "STOP PROTOCOL: Feature already on origin/main" means

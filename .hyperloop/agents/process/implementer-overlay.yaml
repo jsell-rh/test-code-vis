@@ -647,6 +647,30 @@ guidelines: |
   regression and issue FAIL. With all four, the verifier can verify the prohibition,
   count the tests, and classify the delta as intentional.
 
+  ## STOP PROTOCOL — EARLY DETECTION AT SYNC POINT 1
+
+  At Sync Point 1 (absolute first action, before writing any code), after
+  syncing checks and confirming rebase, check whether the spec's primary
+  deliverable function already exists on origin/main:
+
+    bash .hyperloop/checks/check-primary-deliverable-not-on-main.sh <primary_function_name>
+
+  The primary function name is the main Python function or GDScript method the
+  spec requires you to create (e.g., `build_scene_graph`, `compute_clusters`,
+  `render_node`). It appears in the spec's THEN-clauses or function signatures.
+
+  If the check exits 1 (function found on main):
+    1. Read the existing implementation: verify whether ALL spec requirements
+       are met by what is already on main, or only some.
+    2. If ALL are met: file STOP PROTOCOL immediately. Do NOT write any code.
+    3. If only SOME are met: implement only the MISSING portions; never
+       re-implement what already exists.
+
+  This check costs under one second and prevents spending an entire task slot
+  discovering the feature already exists (the task-001 pattern: 11/11 spec
+  requirements satisfied by existing commits; three implementation commits all
+  resolved to empty diffs after rebase).
+
   ## STOP PROTOCOL ROUND COUNT — INCLUDE IN EVERY STOP PROTOCOL REPORT
 
   When you submit a STOP PROTOCOL FAIL report (feature already on origin/main),
