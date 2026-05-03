@@ -311,7 +311,7 @@ guidelines: |
 
   | Task # | Reason | Combined mis-assignments |
   |--------|--------|--------------------------|
-  | task-001 | scene-graph-schema.spec.md — spec fully implemented on main (build_scene_graph + all TypedDicts); 2x STOP PROTOCOL; task was not added to BANNED_IDS after Round 1, allowing Round 2 | 2 |
+  | task-001 | scene-graph-schema.spec.md — spec fully implemented on main (build_scene_graph + all TypedDicts); 4x STOP PROTOCOL; Round 2: task not added to BANNED_IDS after Round 1; Rounds 3–4: file deleted from main but not from hyperloop/state — orchestrator re-assigned from stale in_progress state | 4 |
   | task-024 | moldable-views.spec.md (scope-prohibited) | 8 |
   | task-028 | understanding-modes.spec.md (scope-prohibited + body prohibition) | 9 |
   | task-031 | understanding-modes.spec.md (scope-prohibited) | 6 |

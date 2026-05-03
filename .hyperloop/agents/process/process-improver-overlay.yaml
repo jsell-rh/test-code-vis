@@ -83,6 +83,16 @@ guidelines: |
 
     git fetch origin main:main          # detect incoming PR merges
     git push origin main                # push all commits immediately
+    bash .hyperloop/checks/check-banned-task-ids-closed.sh --run  # must exit 0
     bash .hyperloop/checks/check-main-not-diverged.sh   # must exit 0
 
-  The session is NOT complete until check-main-not-diverged.sh exits 0.
+  The session is NOT complete until BOTH scripts exit 0.
+
+  check-banned-task-ids-closed.sh --run is the session-end companion to
+  check-process-improver-preflight.sh: the preflight catches problems at spawn;
+  this final check confirms closures actually landed on both branches before the
+  session ends. Observed gap (task-001 Round 4): a prior process-improver session
+  received the preflight's fix commands, documented them in overlay text, and
+  closed without executing them — leaving task-001 open on hyperloop/state for
+  another re-assignment cycle. Running this check at session end makes that gap
+  detectable within the same session that caused it.
