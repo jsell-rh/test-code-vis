@@ -2,11 +2,11 @@
 id: task-001
 title: Define JSON scene graph schema
 spec_ref: specs/extraction/scene-graph-schema.spec.md@4ea7e33731b8eb0cd47c19012a9f7b5774420e21
-status: not_started
-phase: null
+status: in_progress
+phase: implement
 deps: []
 round: 0
-branch: null
+branch: hyperloop/task-001
 pr: null
 pr_title: 'feat: define JSON scene graph schema (nodes, edges, metadata, clusters)'
 pr_description: "## What and Why\n\nThis PR establishes the JSON scene graph schema\
