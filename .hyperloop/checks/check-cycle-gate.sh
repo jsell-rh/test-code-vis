@@ -44,6 +44,7 @@ set -uo pipefail
 QUEUE_AUDIT=".hyperloop/checks/check-no-prohibited-tasks-open.sh"
 BAN_CHECK=".hyperloop/checks/check-banned-task-ids-closed.sh"
 STATE_SCAN=".hyperloop/checks/check-state-branch-prohibited-tasks.sh"
+ORPHAN_CHECK=".hyperloop/checks/check-state-branch-orphan-task-files.sh"
 RETRY_GATE=".hyperloop/checks/check-retry-not-scope-prohibited.sh"
 STOP_REPEAT_CHECK=".hyperloop/checks/check-stop-protocol-repeat.sh"
 MAIN_SYNC=".hyperloop/checks/check-main-local-vs-remote.sh"
@@ -145,6 +146,31 @@ if [ -f "$STATE_SCAN" ]; then
     fi
 else
     echo "  SKIP: check-state-branch-prohibited-tasks.sh not found — sync checks from main."
+    echo "    git fetch origin main:main && git checkout main -- .hyperloop/checks/"
+fi
+
+echo ""
+echo "========================================================================"
+echo "CYCLE-START GATE — Step 1d: Orphan task file check"
+echo "========================================================================"
+echo ""
+echo "  Detects task files present on hyperloop/state but ABSENT from main."
+echo "  These arise when a task is deleted from main without being deleted"
+echo "  from hyperloop/state — causing re-assignment loops for closed tasks."
+echo "  Root cause: task-001 STOP PROTOCOL Rounds 3, 4, and 5."
+echo ""
+
+if [ -f "$ORPHAN_CHECK" ]; then
+    if ! bash "$ORPHAN_CHECK" --run; then
+        echo ""
+        echo "  ORPHAN CHECK FAILED — task files on hyperloop/state absent from main."
+        echo "  Delete every orphan file from hyperloop/state (see fix commands above)."
+        GATE_FAILED=1
+    else
+        echo "  Orphan check passed — all task files on hyperloop/state present on main."
+    fi
+else
+    echo "  SKIP: check-state-branch-orphan-task-files.sh not found — sync checks from main."
     echo "    git fetch origin main:main && git checkout main -- .hyperloop/checks/"
 fi
 

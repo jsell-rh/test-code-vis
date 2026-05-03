@@ -32,6 +32,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BAN_CHECK="${SCRIPT_DIR}/check-banned-task-ids-closed.sh"
 STATE_SCAN="${SCRIPT_DIR}/check-state-branch-prohibited-tasks.sh"
+ORPHAN_CHECK="${SCRIPT_DIR}/check-state-branch-orphan-task-files.sh"
 
 FAILED=0
 
@@ -75,8 +76,29 @@ fi
 
 echo ""
 echo "========================================================================"
+echo "PROCESS-IMPROVER PREFLIGHT — Step 3: Orphan task file check"
+echo "========================================================================"
+echo ""
+echo "  Detects task files present on hyperloop/state but ABSENT from main."
+echo "  These arise when a task is deleted from main without being deleted"
+echo "  from hyperloop/state — causing re-assignment loops for closed tasks."
+echo "  (Root cause of task-001 STOP PROTOCOL Rounds 3, 4, and 5.)"
+echo ""
+
+if [ -f "$ORPHAN_CHECK" ]; then
+    if ! bash "$ORPHAN_CHECK" --run; then
+        echo ""
+        echo "  *** ORPHAN TASK FILES ON HYPERLOOP/STATE — DELETE BEFORE PROCEEDING ***"
+        FAILED=1
+    fi
+else
+    echo "  SKIP: check-state-branch-orphan-task-files.sh not found — sync from main."
+fi
+
+echo ""
+echo "========================================================================"
 if [ "$FAILED" -eq 1 ]; then
-    echo "RESULT: PREFLIGHT FAILED — open banned/prohibited tasks detected."
+    echo "RESULT: PREFLIGHT FAILED — open banned/prohibited/orphan tasks detected."
     echo ""
     echo "  REQUIRED: Execute every fix command printed above."
     echo "  THEN: Re-run this preflight to confirm exit 0."

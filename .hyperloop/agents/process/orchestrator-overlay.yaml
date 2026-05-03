@@ -311,7 +311,7 @@ guidelines: |
 
   | Task # | Reason | Combined mis-assignments |
   |--------|--------|--------------------------|
-  | task-001 | scene-graph-schema.spec.md — spec fully implemented on main (build_scene_graph + all TypedDicts); 4x STOP PROTOCOL; Round 2: task not added to BANNED_IDS after Round 1; Rounds 3–4: file deleted from main but not from hyperloop/state — orchestrator re-assigned from stale in_progress state | 4 |
+  | task-001 | scene-graph-schema.spec.md — spec fully implemented on main (build_scene_graph + all TypedDicts); 5x STOP PROTOCOL; Round 2: task not added to BANNED_IDS after Round 1; Rounds 3–5: file deleted from main but not from hyperloop/state — orchestrator cycle updates re-added as in_progress; check-state-branch-orphan-task-files.sh added to cycle gate (Step 1d) after Round 5 | 5 |
   | task-024 | moldable-views.spec.md (scope-prohibited) | 8 |
   | task-028 | understanding-modes.spec.md (scope-prohibited + body prohibition) | 9 |
   | task-031 | understanding-modes.spec.md (scope-prohibited) | 6 |
@@ -661,6 +661,25 @@ guidelines: |
   was not-started. All three Port scenarios (placement, direction, LOD visibility)
   were MISSING. The verifier classified the gaps as DEPENDENCY-BLOCKED.
   Correct fix: assign task-038 first; re-assign task-076 after task-038 is done.
+
+  ---
+
+  ## CYCLE-START GATE Step 1d — ORPHAN TASK FILE CHECK
+
+  check-cycle-gate.sh Step 1d now runs check-state-branch-orphan-task-files.sh.
+  This detects task files present on hyperloop/state but ABSENT from main —
+  the specific pattern that caused task-001 STOP PROTOCOL Rounds 3, 4, and 5.
+
+  If Step 1d exits 1: execute the printed DELETE fix commands IMMEDIATELY.
+  Do NOT assign any task until Step 1d exits 0.
+
+  Root cause pattern:
+    1. Task file deleted from main (permanent closure).
+    2. hyperloop/state NOT updated — orphan file remains with status: in_progress.
+    3. Orchestrator writes "cycle update" to hyperloop/state, re-assigning the orphan task.
+    4. Implementer triggers STOP PROTOCOL again (feature already on main).
+
+  Prevention: Step 1d catches orphans before any assignment can happen.
 
   ---
 
