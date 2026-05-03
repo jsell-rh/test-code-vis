@@ -330,7 +330,7 @@ guidelines: |
 
   | Task # | Reason | Combined mis-assignments |
   |--------|--------|--------------------------|
-  | task-001 | scene-graph-schema.spec.md — spec fully implemented on main (build_scene_graph + all TypedDicts); 8x STOP PROTOCOL; Round 2: not added to BANNED_IDS after Round 1; Rounds 3–8: orchestrator cycle-update commits RE-CREATED task-001.md on hyperloop/state after each process-improver deletion; check-state-branch-post-commit.sh added after Round 7 (not sufficient alone); check-pre-assignment.sh added after Round 8 to gate at assignment time | 8 |
+  | task-001 | scene-graph-schema.spec.md — spec fully implemented on main (build_scene_graph + all TypedDicts); 9x STOP PROTOCOL; Round 2: not added to BANNED_IDS after Round 1; Rounds 3–9: orchestrator cycle-update commits RE-CREATED task-001.md on hyperloop/state after each process-improver deletion; check-state-branch-post-commit.sh added after Round 7 (not sufficient alone); check-pre-assignment.sh added after Round 8; check-assigned-task-not-banned.sh added after Round 9 (fires automatically in run-all-checks.sh suite) | 9 |
   | task-024 | moldable-views.spec.md (scope-prohibited) | 8 |
   | task-028 | understanding-modes.spec.md (scope-prohibited + body prohibition) | 9 |
   | task-031 | understanding-modes.spec.md (scope-prohibited) | 6 |

@@ -26,6 +26,29 @@ guidelines: |
   - Direction/sign derivation arrows must be inline `#` comments INSIDE the function body, not `##` docstrings above it
   - "Relative to parent" positions require tests where parent is at NON-ZERO world position AND the assertion is a direct equality check (`child["position"]["x"] == local_offset`), NOT a proximity check (`dist < radius`) — proximity passes for both absolute and relative storage
 
+  ## MANDATORY FIRST ACTION — VERIFY TASK IS NOT BANNED
+
+  Before creating your branch, before writing any code, before running Sync
+  Point 1 — run this one command with the task ID you were assigned:
+
+    bash .hyperloop/checks/check-pre-assignment.sh <your-task-id>
+
+  If it exits 1: STOP immediately.  Do NOT create the branch.  Do NOT write
+  any code.  File a worker-result.yaml with:
+
+    result: invalid_assignment
+    reason: <task-id> failed check-pre-assignment.sh (banned / scope-prohibited / STOP PROTOCOL)
+
+  The run-all-checks.sh suite also includes check-assigned-task-not-banned.sh,
+  which fires automatically if your branch matches hyperloop/<task-id> and that
+  ID is in the permanently banned list.  If run-all-checks.sh exits 1 on the
+  banned-task check at Sync Point 1: file the same invalid_assignment report.
+
+  Root cause (task-001 Round 9): the orchestrator assigned a permanently banned
+  task without running check-pre-assignment.sh.  The implementer correctly filed
+  a STOP PROTOCOL report.  Running check-pre-assignment.sh first produces a
+  cleaner INVALID ASSIGNMENT signal without requiring full STOP PROTOCOL analysis.
+
   ## BRANCH HYGIENE — ALWAYS FORK FROM MAIN
 
   Your working branch MUST be created directly from main. Never fork a task

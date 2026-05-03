@@ -59,7 +59,7 @@ STOP_REPEAT=".hyperloop/checks/check-stop-protocol-repeat.sh"
 
 # ── Permanently banned task IDs (keep in sync with check-banned-task-ids-closed.sh) ──
 BANNED_IDS=(
-    "task-001"
+    "task-001"  # 9x STOP PROTOCOL
     "task-021"
     "task-024"
     "task-028"

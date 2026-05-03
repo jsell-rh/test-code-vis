@@ -42,7 +42,7 @@ TASKS_DIR=".hyperloop/state/tasks"
 
 # ── Permanently banned task IDs (keep in sync with check-banned-task-ids-closed.sh) ──
 BANNED_IDS=(
-    "task-001"  # 8x STOP PROTOCOL — cycle-update re-creates this file; check-pre-assignment.sh added after Round 8
+    "task-001"  # 9x STOP PROTOCOL — cycle-update re-creates this file; check-assigned-task-not-banned.sh added after Round 9
     "task-021"
     "task-024"
     "task-028"
